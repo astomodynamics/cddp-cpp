@@ -15,6 +15,10 @@ include_directories(../include/cddp)
 add_executable(cddp_dynamics_tests DynamicalSystemTests.cpp)
 target_link_libraries(cddp_dynamics_tests PRIVATE Eigen3::Eigen)
 
+# ---- ObjectiveFunctionTests ----
+add_executable(cddp_objective_tests 
+    ObjectiveFunctionTests.cpp)
+
 # ---- CDDPTests ----
 add_executable(cddp_problem_tests 
     CDDPProblemTests.cpp
