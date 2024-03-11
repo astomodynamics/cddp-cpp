@@ -12,7 +12,14 @@ struct CDDPOptions {
     double cost_tolerance = 1e-4;         // Tolerance for changes in cost function
     double grad_tolerance = 1e-6;         // Tolerance for cost gradient magnitude
     int max_iterations = 100; 
-    double backtracking_range = 0.5;      // Range for line search backtracking (0, 1]
+    int max_line_search_iterations = 11; // Maximum iterations for line search
+    double backtracking_coeff = 1.0;      // Maximum step size for line search backtracking
+    double backtracking_min = 0.5;    // Coefficient for line search backtracking
+    double backtracking_factor = std::pow(10, -3);  // Factor for line search backtracking
+
+    // Active Set Method Options
+    int active_set_max_iterations = 100;  // Maximum iterations for active set method
+    double active_set_tolerance = 1e-6;   // Tolerance for active set
     double initial_lambda = 1.0;          // Initial regularization parameter
     double initial_dlambda = 1.0;         // Initial step for lambda update
     double lambda_scaling_factor = 10.0;  // Factor for scaling lambda up or down
@@ -33,9 +40,35 @@ public:
     void setTimeStep(double dt);
     void setCostMatrices(const Eigen::MatrixXd& Q, const Eigen::MatrixXd& R, const Eigen::MatrixXd& Qf); 
     void setOptions(const CDDPOptions& opts);
+    void setInitialTrajectory(const Eigen::MatrixXd& X, const Eigen::MatrixXd& U);
 
     // Solver methods
-    std::vector<Eigen::VectorXd> solve(); 
+    Eigen::MatrixXd solve(); 
+    bool solveForwardPass();
+
+    // update methods
+    // void updateControl();
+    // void updateTrajectory();
+    // void updateValueFunction();
+    // void updateCost();
+    // void updateQFunction();
+    // void updateValueFunctionDerivative();
+    // void updateValueFunctionHessian();
+    // void updateCostChange();
+    // void updateGradientNorm();
+    // void updateLambda();
+    // void updateActiveSet();
+
+    // updateControl();
+
+    // Getters
+    // Eigen::MatrixXd getTrajectory() { return X; }
+    // Eigen::MatrixXd getControlSequence() { return U; }
+    // double getCost() { return J; }
+    // std::vector<double> getValueFunction() { return V; }
+    // std::vector<Eigen::VectorXd> getValueFunctionDerivative() { return V_X; }
+    // std::vector<Eigen::MatrixXd> getValueFunctionHessian() { return V_XX; }
+
 
     
     
@@ -57,7 +90,15 @@ private:
     Eigen::MatrixXd X;
     Eigen::MatrixXd U;
 
-    // Value function matrices
+    // Intermediate cost
+    double J;
+
+    // Intermediate value function
+    std::vector<double> V;
+    std::vector<Eigen::VectorXd> V_X;
+    std::vector<Eigen::MatrixXd> V_XX;
+
+    // Q-function matrices
     std::vector<Eigen::MatrixXd> Q_UU;
     std::vector<Eigen::MatrixXd> Q_UX;
     std::vector<Eigen::VectorXd> Q_U; 

@@ -1,4 +1,6 @@
+#include <iostream>
 #include "cddp_core/CDDPProblem.hpp" 
+
 
 namespace cddp {
 
@@ -9,18 +11,26 @@ CDDPProblem::CDDPProblem(cddp::DynamicalSystem* system, const Eigen::VectorXd& i
     goal_state(initialState), // Pre-allocate goal to initialState 
     horizon(horizon),
     dt(timestep),
-    X(system->state_size, horizon + 1), // Pre-allocate trajectories
-    U(system->control_size, horizon)
+    X(system->state_size_, horizon + 1), // Pre-allocate trajectories
+    U(system->control_size_, horizon)
 {
     // Initialize Cost Matrices (assuming dimensions)
-    Q.resize(system->state_size, system->state_size);
-    R.resize(system->control_size, system->control_size);
-    Qf.resize(system->state_size, system->state_size);
+    Q.resize(system->state_size_, system->state_size_);
+    R.resize(system->control_size_, system->control_size_);
+    Qf.resize(system->state_size_, system->state_size_);
     
-    // Initialize Value Function Matrices (assuming dimensions)
-    Q_UU.resize(horizon, Eigen::MatrixXd::Zero(system->control_size, system->control_size));
-    Q_UX.resize(horizon, Eigen::MatrixXd::Zero(system->control_size, system->state_size));
-    Q_U.resize(horizon, Eigen::VectorXd::Zero(system->control_size));
+    // Initialize Intermediate Cost
+    J = 0.0;
+
+    // Initialize Intermediate value function
+    V.resize(horizon + 1, 0.0);
+    V_X.resize(horizon + 1, Eigen::VectorXd::Zero(system->state_size_));
+    V_XX.resize(horizon + 1, Eigen::MatrixXd::Zero(system->state_size_, system->state_size_));
+
+    // Initialize Q-function Matrices
+    Q_UU.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->control_size_));
+    Q_UX.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->state_size_));
+    Q_U.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
 }
 
 // Setup Methods
@@ -37,8 +47,8 @@ void CDDPProblem::setHorizon(int T) {
     horizon = T;
     
     // Resize X, U, Q_UU, Q_UX, Q_U accordingly 
-    X.resize(dynamics->state_size, horizon + 1); 
-    U.resize(dynamics->control_size, horizon);
+    X.resize(dynamics->state_size_, horizon + 1); 
+    U.resize(dynamics->control_size_, horizon);
 
     Q_UU.resize(horizon);
     Q_UX.resize(horizon);
@@ -59,13 +69,111 @@ void CDDPProblem::setOptions(const CDDPOptions& opts) {
     options = opts;
 }
 
+
+void CDDPProblem::setInitialTrajectory(const Eigen::MatrixXd& X, const Eigen::MatrixXd& U) {
+    this->X = X;
+    this->U = U;
+
+    // Raise error if dimensions do not match
+    if (X.cols() != horizon + 1 || X.rows() != dynamics->state_size_) {
+        throw std::invalid_argument("X dimensions do not match the horizon and state size");
+    }
+}
+
+
 // Solve (Outline)
-std::vector<Eigen::VectorXd> CDDPProblem::solve() {
-    // ... CDDP Iteration Loop ...
-    // return U.col(0); 
+Eigen::MatrixXd CDDPProblem::solve() {
+    // 1. Initialization
+    // initializeTrajectory();
+    // initializeCost();
 
+    // 2. Main CDDP Iterative Loop
+    for (int iter = 0; iter < options.max_iterations; ++iter) {
+        // 3. Backward 
+        // solveBackwardPass();
+        
+        // 4. Forward Pass
+        solveForwardPass();
 
+        std::cout << "Iteration: " << iter << std::endl;
 
+        // 5 Convergence Check
+
+    }
+
+    // 6. Return Optimal Control Sequence
+    return U;
+}
+
+// Forward Pass (Unconstrained)
+bool CDDPProblem::solveForwardPass() {
+    double alpha = options.backtracking_coeff;
+
+    // Line-search loop 
+    for (int i = 0; i < options.max_line_search_iterations; ++i) {
+        Eigen::VectorXd x = initial_state;
+        Eigen::MatrixXd X_new = X;
+        Eigen::MatrixXd U_new = U;
+        double J_new = 0.0;
+        double dJ = 0.0;
+        double expected_dV = 0.0;
+
+        // 1. Simulate forward
+        for (int j = 0; j < horizon; ++j) {
+            Eigen::VectorXd delta_x = x - X_new.col(j);
+
+            // Cholesky decomposition of Q_uu
+            // Eigen::MatrixXd Q_L( Q_UU[j].llt().matrixL() );
+
+            // Check if Q_UU is positive definite
+            // if (Q_L.isZero()) {
+            //     std::cout << "Q_UU is not positive definite" << std::endl;
+            //     break;
+            // }
+
+            // Placeholder
+            Eigen::MatrixXd Q_uu = Eigen::MatrixXd::Identity(dynamics->control_size_, dynamics->control_size_);
+
+            // Eigen::MatrixXd Q_L( Q_uu.llt().matrixL() );
+
+            // Feedfoward and Feedback Gains Calculation
+            Eigen::MatrixXd k = Q_UU[j].inverse() * Q_U[j];
+            Eigen::MatrixXd K = Q_UU[j].inverse() * Q_UX[j];
+        
+            Eigen::VectorXd delta_u =  alpha * k + K * delta_x; // Feed-forward and Feedback control law   
+
+            U_new.col(j) += delta_u;       // Update control 
+            x = dynamics->getDynamics(x, U_new.col(j)); // Simulate forward 
+            X_new.col(j + 1) = x;          // Update trajectory
+            J_new += dynamics->calculateCost(x, U_new.col(j)); // Update cost
+        }
+        J_new += dynamics->calculateFinalCost(x); // Final cost
+
+        // 2. Calculate Cost Improvement
+        dJ = J - J_new;
+
+        // 3. Calculate Expected Improvement
+        // for (int j = 0; j < horizon; ++j) {
+        //     Eigen::VectorXd delta_x = X_new.col(j) - X.col(j);
+        //     expected_dV += V_X[j].dot(delta_x) + 0.5 * delta_x.transpose() * V_XX[j] * delta_x;
+        // }
+
+        // 4. Check Improvement
+        if (dJ > 0) {
+            X = X_new;
+            U = U_new;
+            J = J_new;
+            // V = V_new;
+            // V_X = V_X_new;
+            // V_XX = V_XX_new;
+            return true;
+        }
+
+        // 5. Backtracking
+        alpha = std::min(alpha * options.backtracking_factor, options.backtracking_min);
+
+        return true;
+    }
 }
 
 // // Backward Pass (Outline)
@@ -98,17 +206,5 @@ std::vector<Eigen::VectorXd> CDDPProblem::solve() {
 //     }
 // }
 
-// // Forward Pass (Unconstrained)
-// void CDDPProblem::solveForwardPass() {
-//     Eigen::VectorXd x = initial_state;
 
-//     for (int i = 0; i < horizon; ++i) {
-//         Eigen::VectorXd delta_x = x - x_trajectories.col(i);
-//         Eigen::VectorXd delta_u =  K * delta_x + k; // Simplified calculation for unconstrained
-
-//         u_trajectories.col(i) += delta_u;       // Update control (might add a line search here later)
-//         x = dynamics->getDynamics(x, u_trajectories.col(i)); // Simulate forward 
-//         x_trajectories.col(i + 1) = x;          // Update trajectory
-//     }
-// }
 } // namespace cddp 
