@@ -19,12 +19,14 @@ conda install -c conda-forge osqp-eigen
 ```
 
 
-## Usage
-* `mkdir build; cd build`
-* `cmake ..` 
-* `make`
-
-
+## Installation
+```bash
+git clone https://github.com/astomodynamics/CDDP-cpp 
+mkdir build
+cd build
+cmake ..
+make
+```
 
 ## References
 
