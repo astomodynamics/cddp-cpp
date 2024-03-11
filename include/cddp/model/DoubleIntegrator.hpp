@@ -30,33 +30,24 @@ public:
     }
 
     
-    Eigen::MatrixXd getDynamicsJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
-        Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_size_, state_size_);
+    std::vector<Eigen::MatrixXd> getDynamicsJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
+        std::vector<Eigen::MatrixXd> jacobians;
+        Eigen::MatrixXd A = Eigen::MatrixXd::Zero(state_size_, state_size_);
+        A.block(0, 2, 2, 2) = Eigen::MatrixXd::Identity(2, 2);
         Eigen::MatrixXd B = Eigen::MatrixXd::Zero(state_size_, control_size_);
-
-        Eigen::MatrixXd combined_jacobian(state_size_, state_size_ + control_size_);
-
-        // Insert A and B into the combined matrix
-        combined_jacobian.block(0, 0, state_size_, state_size_) = A;
-        combined_jacobian.block(0, state_size_, state_size_, control_size_) = B;
-        return combined_jacobian;
+        B.block(2, 0, 2, 2) = Eigen::MatrixXd::Identity(2, 2);
+        jacobians.push_back(A);
+        jacobians.push_back(B);
+        return jacobians;
     }
 
-    Eigen::MatrixXd getDynamicsHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
-        // Assuming the Hessian is mostly zeros for a double integrator
+    std::vector<Eigen::MatrixXd> getDynamicsHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
+        std::vector<Eigen::MatrixXd> hessians;
         Eigen::MatrixXd hessian = Eigen::MatrixXd::Zero(state_size_, state_size_ + control_size_);
-        return hessian;
-    }
-
-    double calculateCost(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
-       // Your implementation here
-        return 0.0;
-   }
-
-   double calculateFinalCost(const Eigen::VectorXd &state) override {
-       // Your implementation here
-       return 0.0;
-   }
+        hessians.push_back(hessian);
+        hessians.push_back(hessian);
+        return hessians;
+    }   
 };
     
 }  // namespace cddp
