@@ -15,15 +15,17 @@ if (APPLE)
 else ()
     include_directories(${EIGEN3_INCLUDE_DIR})
 endif()
-# include_directories(Eigen3::Eigen)
 
 # Find the OSQP library
-# find_package(OSQP REQUIRED)
+find_package(osqp REQUIRED)
 
-# find_package(OSQP-eigen REUIRED)
+# Find the OsqpEigen library
+find_package(OsqpEigen REQUIRED)
 
-# Create the executable
-add_executable(cddp test/test_eigen.cpp)
+# Eigen test
+add_executable(cddp_eigen_test test/test_eigen.cpp)
+target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 
-# Link the Eigen3 library to the executable
-target_link_libraries(cddp Eigen3::Eigen)
+# OSQP test
+add_executable(cddp_osqp_test test/test_osqp.cpp)
+target_link_libraries(cddp_osqp_test PRIVATE osqp::osqp OsqpEigen::OsqpEigen) 
