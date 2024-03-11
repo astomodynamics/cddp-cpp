@@ -25,7 +25,9 @@ bool testBasicCDDP() {
     Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(state_dim, state_dim);
     Eigen::MatrixXd R =  0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim); 
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim); 
-    cddp_solver.setCostMatrices(Q, R, Qf);
+    // cddp_solver.setCostMatrices(Q, R, Qf);
+
+    // QuadraticCost objective(Q, R, Qf, goal_state);
 
     CDDPOptions opts;
     // Set options if needed
@@ -40,6 +42,8 @@ bool testBasicCDDP() {
     goal_state << 0, 0, 0, 0;
     cddp_solver.setGoalState(goal_state);
 
+    QuadraticCost objective(Q, R, Qf, goal_state);
+
     // Set initial state if needed
     // cddp_solver.setInitialState(initialState);
 
@@ -48,6 +52,9 @@ bool testBasicCDDP() {
     
     // Set time step if needed
     // cddp_solver.setTimeStep(dt);
+
+    
+
 
     // Set initial trajectory if needed
     Eigen::MatrixXd X = Eigen::MatrixXd::Zero(state_dim, horizon + 1);

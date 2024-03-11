@@ -15,7 +15,12 @@ public:
     int integration_type_;
 
     DubinsCar(int state_dim, int control_dim, double timestep, int integration_type) :
-        DynamicalSystem(state_dim, control_dim, timestep, integration_type) {}
+        DynamicalSystem(state_dim, control_dim, timestep, integration_type) {
+            state_size_ = state_dim;
+            control_size_ = control_dim;
+            timestep_ = timestep;
+            integration_type_ = integration_type;
+        }
 
     Eigen::VectorXd dynamics(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
         Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(state_size_);
@@ -26,6 +31,7 @@ public:
     }
 
     std::vector<Eigen::MatrixXd> getDynamicsJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
+        std::vector<Eigen::MatrixXd> jacobians;
         Eigen::MatrixXd A = Eigen::MatrixXd::Zero(state_size_, state_size_);
         A(0, 2) = -control(0) * sin(state(2));
         A(1, 2) = control(0) * cos(state(2));
@@ -34,10 +40,6 @@ public:
         B(0, 0) = cos(state(2));
         B(1, 0) = sin(state(2));
         B(2, 1) = 1;
-
-        std::vector<Eigen::MatrixXd> jacobians;
-        Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_size_, state_size_);
-        Eigen::MatrixXd B = Eigen::MatrixXd::Zero(state_size_, control_size_);
 
         jacobians.push_back(A);
         jacobians.push_back(B);

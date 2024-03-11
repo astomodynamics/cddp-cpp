@@ -153,9 +153,9 @@ bool CDDPProblem::solveForwardPass() {
             U_new.col(j) += delta_u;       // Update control 
             x = dynamics_->getDynamics(x, U_new.col(j)); // Simulate forward 
             X_new.col(j + 1) = x;          // Update trajectory
-            J_new += dynamics_->calculateCost(x, U_new.col(j)); // Update cost
+            J_new += objective_->calculateRunningCost(x, U_new.col(j)); // Running cost
         }
-        J_new += dynamics_->calculateFinalCost(x); // Final cost
+        J_new += objective_->calculateFinalCost(x); // Final cost
 
         // 2. Calculate Cost Improvement
         dJ = J_ - J_new;
