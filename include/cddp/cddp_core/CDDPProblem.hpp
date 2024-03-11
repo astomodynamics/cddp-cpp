@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "model/DynamicalSystem.hpp" 
+#include "cddp_core/Objective.hpp" 
 
 namespace cddp {
 
@@ -39,12 +40,15 @@ public:
     void setHorizon(int T);
     void setTimeStep(double dt);
     void setCostMatrices(const Eigen::MatrixXd& Q, const Eigen::MatrixXd& R, const Eigen::MatrixXd& Qf); 
+    void setCostFunction(const Eigen::MatrixXd& Q, const Eigen::MatrixXd& R, const Eigen::MatrixXd& Qf);
     void setOptions(const CDDPOptions& opts);
     void setInitialTrajectory(const Eigen::MatrixXd& X, const Eigen::MatrixXd& U);
+    void setObjective(std::unique_ptr<Objective> objective);
 
     // Solver methods
     Eigen::MatrixXd solve(); 
     bool solveForwardPass();
+    // bool solveBackwardPass();
 
     // update methods
     // void updateControl();
@@ -69,39 +73,39 @@ public:
     // std::vector<Eigen::VectorXd> getValueFunctionDerivative() { return V_X; }
     // std::vector<Eigen::MatrixXd> getValueFunctionHessian() { return V_XX; }
 
-
-    
-    
-
 private:
     // Problem Data
-    DynamicalSystem* dynamics;
-    Eigen::VectorXd initial_state;
-    Eigen::VectorXd goal_state;
-    int horizon;
-    double dt;  // Time step
+    DynamicalSystem* dynamics_;
+    Eigen::VectorXd initial_state_;
+    Eigen::VectorXd goal_state_;
+    int horizon_;
+    double dt_;  // Time step
     
-    // Cost Matrices
-    Eigen::MatrixXd Q;
-    Eigen::MatrixXd R;
-    Eigen::MatrixXd Qf;
+    // // Cost Matrices
+    // Eigen::MatrixXd Q;
+    // Eigen::MatrixXd R;
+    // Eigen::MatrixXd Qf;
 
     // Intermediate trajectories
-    Eigen::MatrixXd X;
-    Eigen::MatrixXd U;
+    Eigen::MatrixXd X_;
+    Eigen::MatrixXd U_;
 
     // Intermediate cost
-    double J;
+    double J_;
+
+    // Feedforward and feedback gains
+    std::vector<Eigen::VectorXd> k_;
+    std::vector<Eigen::MatrixXd> K_;
 
     // Intermediate value function
-    std::vector<double> V;
-    std::vector<Eigen::VectorXd> V_X;
-    std::vector<Eigen::MatrixXd> V_XX;
+    std::vector<double> V_;
+    std::vector<Eigen::VectorXd> V_X_;
+    std::vector<Eigen::MatrixXd> V_XX_;
 
     // Q-function matrices
-    std::vector<Eigen::MatrixXd> Q_UU;
-    std::vector<Eigen::MatrixXd> Q_UX;
-    std::vector<Eigen::VectorXd> Q_U; 
+    std::vector<Eigen::MatrixXd> Q_UU_;
+    std::vector<Eigen::MatrixXd> Q_UX_;
+    std::vector<Eigen::VectorXd> Q_U_; 
 
     // Helper methods
     // void forwardPass();
@@ -116,7 +120,10 @@ private:
     // void printIteration(int iter, double cost, double grad_norm, double lambda);
 
     // Options
-    CDDPOptions options;
+    CDDPOptions options_;
+
+    std::unique_ptr<Objective> objective_; // Store a cost function
+    // std::vector<std::unique_ptr<Constraint>> constraints_; // Store multiple constraints
 };
 
 
