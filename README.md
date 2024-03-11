@@ -3,9 +3,8 @@
 
 
 ## Requirements
-* Eigen (Linear Algebra Library in CPP)
+* [Eigen]<https://formulae.brew.sh/formula/eigen> (Linear Algebra Library in CPP)
     
-    https://formulae.brew.sh/formula/eigen
 ```bash
 sudo apt-get install libeigen3-dev # For Ubuntu
 brew install eigen # For macOS
