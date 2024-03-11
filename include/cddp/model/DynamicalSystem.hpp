@@ -34,35 +34,23 @@ public:
         } 
     }
         
-    virtual Eigen::MatrixXd getDynamicsJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) {
+    virtual std::vector<Eigen::MatrixXd> getDynamicsJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) {
+
+        std::vector<Eigen::MatrixXd> jacobians;
         Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_size_, state_size_);
         Eigen::MatrixXd B = Eigen::MatrixXd::Zero(state_size_, control_size_);
 
-        Eigen::MatrixXd combined_jacobian(state_size_, state_size_ + control_size_);
-
-        // Insert A and B into the combined matrix
-        combined_jacobian.block(0, 0, state_size_-1, state_size_-1) = A;
-        combined_jacobian.block(0, state_size_, state_size_-1, control_size_-1) = B;
-        return combined_jacobian;
+        jacobians.push_back(A);
+        jacobians.push_back(B);
+        return jacobians;
     };
 
-    virtual Eigen::MatrixXd getDynamicsHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) = 0;
+    virtual std::vector<Eigen::MatrixXd> getDynamicsHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) = 0;
 
 
+    // Optional methods
     virtual Eigen::MatrixXd getTrajectory(const Eigen::VectorXd &initialState, const std::vector<Eigen::VectorXd> &controlSeq, int num_steps) {}; 
-
-    // Optional virtual methods
-    virtual void setCostMatrices(const Eigen::MatrixXd &Q, const Eigen::MatrixXd &R) {} 
-    virtual double calculateCost(const Eigen::VectorXd &state, const Eigen::VectorXd &control) = 0;
-    virtual void calculateCostGradietn(const Eigen::VectorXd &state, const Eigen::VectorXd &control, Eigen::VectorXd &cost_gradient) {}
-
-    virtual void calculateCostHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control, Eigen::MatrixXd &cost_hessian) {}
     
-    virtual void setFinalCostMatrix(const Eigen::MatrixXd &Qf) {}  
-    virtual double calculateFinalCost(const Eigen::VectorXd &state) = 0;
-    virtual void calculateFinalCostGradient(const Eigen::VectorXd &state, Eigen::VectorXd &final_cost_gradient) {}
-
-    virtual void calculateFinalCostHessian(const Eigen::VectorXd &state, Eigen::MatrixXd &final_cost_hessian) {}
     
     virtual void setGoal(const Eigen::VectorXd &goal) {}
 
