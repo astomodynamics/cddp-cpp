@@ -20,14 +20,17 @@ bool testBasicCDDP() {
     DoubleIntegrator system(state_dim, control_dim, dt, integration_type); // Your DoubleIntegrator instance
     CDDPProblem cddp_solver(&system, initialState, horizon, dt);
     
+    // Set goal state if needed
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0, 0, 0, 0;
+    cddp_solver.setGoalState(goal_state);
 
     // Simple Cost Matrices 
     Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(state_dim, state_dim);
     Eigen::MatrixXd R =  0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim); 
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim); 
-    // cddp_solver.setCostMatrices(Q, R, Qf);
-
-    // QuadraticCost objective(Q, R, Qf, goal_state);
+    QuadraticCost objective(Q, R, Qf, goal_state);
+    cddp_solver.setObjective(std::make_unique<QuadraticCost>(objective));
 
     CDDPOptions opts;
     // Set options if needed
@@ -35,14 +38,7 @@ bool testBasicCDDP() {
     // opts.cost_tolerance = 1e-6;
     // opts.grad_tolerance = 1e-8;
     // opts.print_iterations = false;
-    // cddp_solver.setOptions(opts);
-
-    // Set goal state if needed
-    Eigen::VectorXd goal_state(state_dim);
-    goal_state << 0, 0, 0, 0;
-    cddp_solver.setGoalState(goal_state);
-
-    QuadraticCost objective(Q, R, Qf, goal_state);
+    cddp_solver.setOptions(opts);
 
     // Set initial state if needed
     // cddp_solver.setInitialState(initialState);

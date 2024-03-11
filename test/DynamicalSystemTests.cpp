@@ -1,7 +1,7 @@
 
 #include <iostream>
 #include <cassert> // For basic assertions
-#include "cddp/model/DynamicalSystem.hpp"
+#include "cddp/cddp_core/DynamicalSystem.hpp"
 #include "cddp/model/DoubleIntegrator.hpp"
 #include "cddp/model/DubinsCar.hpp"
 
