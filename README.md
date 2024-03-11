@@ -11,7 +11,7 @@ brew install eigen # For macOS
 
 ```
 
-* [OSQP](https://osqp.org/)
+* [OSQP](https://osqp.org/) (QP solver) and [OSQP-Eigen](https://robotology.github.io/osqp-eigen/) (C++ OSQP Wrapper)
 ```bash
 conda install -c conda-forge osqp
 conda install -c conda-forge osqp-eigen
