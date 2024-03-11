@@ -6,7 +6,7 @@
 
 // Test case for the transition function of the DoubleIntegrator
 bool testDoubleIntegratorTransition() {
-    cddp::DoubleIntegrator system(4, 2, 0.1);
+    cddp::DoubleIntegrator system(4, 2, 0.1, 0);
 
     Eigen::VectorXd state(4);
     state << 1, 2, 0.5, -0.2; 
@@ -16,7 +16,6 @@ bool testDoubleIntegratorTransition() {
 
     Eigen::VectorXd expected_next_state(4);
     expected_next_state << 1.05, 1.98, 0.6, -0.25; 
-
     Eigen::VectorXd next_state = system.getDynamics(state, control);
 
     // Simple assertion: Could be more sophisticated
