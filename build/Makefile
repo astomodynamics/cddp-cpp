@@ -48,10 +48,10 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = /usr/local/Cellar/cmake/3.28.1/bin/cmake
+CMAKE_COMMAND = /usr/local/Cellar/cmake/3.28.3/bin/cmake
 
 # The command to remove a file.
-RM = /usr/local/Cellar/cmake/3.28.1/bin/cmake -E rm -f
+RM = /usr/local/Cellar/cmake/3.28.3/bin/cmake -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
@@ -68,7 +68,7 @@ CMAKE_BINARY_DIR = /Users/astomodynamics/GitHub/DDP-cpp/build
 # Special rule for the target edit_cache
 edit_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running CMake cache editor..."
-	/usr/local/Cellar/cmake/3.28.1/bin/ccmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+	/usr/local/Cellar/cmake/3.28.3/bin/ccmake -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
 .PHONY : edit_cache
 
 # Special rule for the target edit_cache
@@ -78,7 +78,7 @@ edit_cache/fast: edit_cache
 # Special rule for the target rebuild_cache
 rebuild_cache:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Running CMake to regenerate build system..."
-	/usr/local/Cellar/cmake/3.28.1/bin/cmake --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
+	/usr/local/Cellar/cmake/3.28.3/bin/cmake --regenerate-during-build -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR)
 .PHONY : rebuild_cache
 
 # Special rule for the target rebuild_cache
@@ -117,24 +117,50 @@ depend:
 .PHONY : depend
 
 #=============================================================================
-# Target rules for targets named ddp_cpp
+# Target rules for targets named cddp
 
 # Build rule for target.
-ddp_cpp: cmake_check_build_system
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 ddp_cpp
-.PHONY : ddp_cpp
+cddp: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 cddp
+.PHONY : cddp
 
 # fast build rule for target.
-ddp_cpp/fast:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddp_cpp.dir/build.make CMakeFiles/ddp_cpp.dir/build
-.PHONY : ddp_cpp/fast
+cddp/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/cddp.dir/build.make CMakeFiles/cddp.dir/build
+.PHONY : cddp/fast
+
+#=============================================================================
+# Target rules for targets named cddp_dynamics_tests
+
+# Build rule for target.
+cddp_dynamics_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 cddp_dynamics_tests
+.PHONY : cddp_dynamics_tests
+
+# fast build rule for target.
+cddp_dynamics_tests/fast:
+	$(MAKE) $(MAKESILENT) -f test/CMakeFiles/cddp_dynamics_tests.dir/build.make test/CMakeFiles/cddp_dynamics_tests.dir/build
+.PHONY : cddp_dynamics_tests/fast
+
+#=============================================================================
+# Target rules for targets named cddp_problem_tests
+
+# Build rule for target.
+cddp_problem_tests: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 cddp_problem_tests
+.PHONY : cddp_problem_tests
+
+# fast build rule for target.
+cddp_problem_tests/fast:
+	$(MAKE) $(MAKESILENT) -f test/CMakeFiles/cddp_problem_tests.dir/build.make test/CMakeFiles/cddp_problem_tests.dir/build
+.PHONY : cddp_problem_tests/fast
 
 test/test_eigen.o: test/test_eigen.cpp.o
 .PHONY : test/test_eigen.o
 
 # target to build an object file
 test/test_eigen.cpp.o:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddp_cpp.dir/build.make CMakeFiles/ddp_cpp.dir/test/test_eigen.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/cddp.dir/build.make CMakeFiles/cddp.dir/test/test_eigen.cpp.o
 .PHONY : test/test_eigen.cpp.o
 
 test/test_eigen.i: test/test_eigen.cpp.i
@@ -142,7 +168,7 @@ test/test_eigen.i: test/test_eigen.cpp.i
 
 # target to preprocess a source file
 test/test_eigen.cpp.i:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddp_cpp.dir/build.make CMakeFiles/ddp_cpp.dir/test/test_eigen.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/cddp.dir/build.make CMakeFiles/cddp.dir/test/test_eigen.cpp.i
 .PHONY : test/test_eigen.cpp.i
 
 test/test_eigen.s: test/test_eigen.cpp.s
@@ -150,7 +176,7 @@ test/test_eigen.s: test/test_eigen.cpp.s
 
 # target to generate assembly for a file
 test/test_eigen.cpp.s:
-	$(MAKE) $(MAKESILENT) -f CMakeFiles/ddp_cpp.dir/build.make CMakeFiles/ddp_cpp.dir/test/test_eigen.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/cddp.dir/build.make CMakeFiles/cddp.dir/test/test_eigen.cpp.s
 .PHONY : test/test_eigen.cpp.s
 
 # Help Target
@@ -161,7 +187,9 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
-	@echo "... ddp_cpp"
+	@echo "... cddp"
+	@echo "... cddp_dynamics_tests"
+	@echo "... cddp_problem_tests"
 	@echo "... test/test_eigen.o"
 	@echo "... test/test_eigen.i"
 	@echo "... test/test_eigen.s"

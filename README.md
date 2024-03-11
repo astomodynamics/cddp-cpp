@@ -1,14 +1,30 @@
-# DDP-cpp
-Implementation of iLQR (Iterative Linear Quadratic Regulator) algorithm for trajectory optimization, based on [Yuval Tassa's Matlab implementation](https://www.mathworks.com/matlabcentral/fileexchange/52069-ilqg-ddp-trajectory-optimization).
+# Constrained Differential Dynamic Programming (CDDP) solver in C++
+
+
+
+## Requirements
+* Eigen (Linear Algebra Library in CPP)
+    
+    https://formulae.brew.sh/formula/eigen
+```bash
+sudo apt-get install libeigen3-dev # For Ubuntu
+brew install eigen # For macOS
+
+```
+
+* OSQP 
+```bash
+conda install -c conda-forge osqp
+conda install -c conda-forge osqp-eigen
+```
 
 
 ## Usage
-
-* Install eigen or download into `include` (https://eigen.tuxfamily.org/index.php?title=Main_Page#Download)
 * `mkdir build; cd build`
 * `cmake ..` 
 * `make`
-* Define a dynamics and cost model based on Model (see double_integrator example), or run with `./run_iLQR acrobot`
+
+
 
 ## References
 
