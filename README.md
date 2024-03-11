@@ -11,7 +11,7 @@ brew install eigen # For macOS
 
 ```
 
-* OSQP 
+* [OSQP](https://osqp.org/)
 ```bash
 conda install -c conda-forge osqp
 conda install -c conda-forge osqp-eigen
