@@ -1,3 +1,7 @@
-/Users/astomodynamics/GitHub/DDP-cpp/build/CMakeFiles/ddp_cpp.dir
+/Users/astomodynamics/GitHub/DDP-cpp/build/CMakeFiles/cddp.dir
 /Users/astomodynamics/GitHub/DDP-cpp/build/CMakeFiles/edit_cache.dir
 /Users/astomodynamics/GitHub/DDP-cpp/build/CMakeFiles/rebuild_cache.dir
+/Users/astomodynamics/GitHub/DDP-cpp/build/test/CMakeFiles/cddp_dynamics_tests.dir
+/Users/astomodynamics/GitHub/DDP-cpp/build/test/CMakeFiles/cddp_problem_tests.dir
+/Users/astomodynamics/GitHub/DDP-cpp/build/test/CMakeFiles/edit_cache.dir
+/Users/astomodynamics/GitHub/DDP-cpp/build/test/CMakeFiles/rebuild_cache.dir
