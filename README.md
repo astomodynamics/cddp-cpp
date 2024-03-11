@@ -3,7 +3,7 @@
 
 
 ## Requirements
-* [Eigen]<https://formulae.brew.sh/formula/eigen> (Linear Algebra Library in CPP)
+* [Eigen](https://formulae.brew.sh/formula/eigen) (Linear Algebra Library in CPP)
     
 ```bash
 sudo apt-get install libeigen3-dev # For Ubuntu
