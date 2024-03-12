@@ -19,6 +19,13 @@ endif()
 # Find the OSQP library
 find_package(osqp REQUIRED)
 
+include(FetchContent)
+FetchContent_Declare(
+  OsqpEigen
+  GIT_REPOSITORY https://github.com/robotology/osqp-eigen.git
+)
+FetchContent_MakeAvailable(OsqpEigen)
+
 # Find the OsqpEigen library
 find_package(OsqpEigen REQUIRED)
 
