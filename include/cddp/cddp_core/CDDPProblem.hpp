@@ -21,14 +21,15 @@ struct CDDPOptions {
     // Active Set Method Options
     int active_set_max_iterations = 100;  // Maximum iterations for active set method
     double active_set_tolerance = 1e-6;   // Tolerance for active set
-    double initial_lambda = 1.0;          // Initial regularization parameter
-    double initial_dlambda = 1.0;         // Initial step for lambda update
-    double lambda_scaling_factor = 10.0;  // Factor for scaling lambda up or down
-    double max_lambda = 1e10;             // Upper bound for lambda 
-    double min_lambda = 1e-6;             // Lower bound for lambda
+    double active_set_coeff = 1.0;        // Coefficient for active set method
+    double trust_region_coeff = 1.0;      // Coefficient for trust region method
     int regularization_type = 0;          // 0 or 1 for different regularization types
+    double regularization_x = 1e-6;       // Regularization for state
+    double regularization_u = 1e-6;       // Regularization for control
     double regularization_tolerance = 1e-6; // Tolerance for regularization
-
+    double regularization_factor = 10.0;  // Factor for regularization
+    double regularization_max = 1e6;      // Maximum regularization
+    double regularization_min = 1e-6;     // Minimum regularization
     bool print_iterations = true;         // Option for debug printing 
 };
 
@@ -47,6 +48,12 @@ public:
     void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U);
     void initializeCost();
     void setObjective(std::unique_ptr<Objective> objective);
+    Eigen::VectorXd getInitialState() { return initial_state_; }
+    Eigen::VectorXd getGoalState() { return goal_state_; }
+    int getHorizon() { return horizon_; }
+    double getTimeStep() { return dt_; }
+    std::vector<Eigen::VectorXd> getTrajectory() { return X_; }
+    std::vector<Eigen::VectorXd> getControlSequence() { return U_; }
 
     // Solver methods
     std::vector<Eigen::VectorXd> solve(); 
