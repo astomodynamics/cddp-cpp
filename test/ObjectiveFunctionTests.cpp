@@ -25,6 +25,7 @@ void testQuadraticCost() {
     int state_dim = 2;
     int control_dim = 1;
     int horizon = 5;
+    double dt = 0.1;
 
     Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(state_dim, state_dim);
     Eigen::MatrixXd R = Eigen::MatrixXd::Identity(control_dim, control_dim) * 0.1; 
@@ -32,7 +33,7 @@ void testQuadraticCost() {
     Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
 
     // Instantiate QuadraticCost object
-    QuadraticCost cost_fn(Q, R, Qf, goal_state);
+    QuadraticCost cost_fn(Q, R, Qf, goal_state, dt);
 
     // Example state and control
     Eigen::VectorXd x(state_dim);
@@ -41,16 +42,16 @@ void testQuadraticCost() {
     u << 0.8;
 
     // Test running cost 
-    double expected_running_cost = ((x - goal_state).transpose() * Q * (x - goal_state))[0] + (u.transpose() * R * u)[0];
+    double expected_running_cost = ((x - goal_state).transpose() * Q * (x - goal_state))[0] + (u.transpose() * R * u)[0] * dt;
     double calculated_running_cost = cost_fn.calculateRunningCost(x, u);
     assert(std::abs(calculated_running_cost - expected_running_cost) < 1e-6);
 
     // Test running cost gradient
-    std::vector<Eigen::VectorXd> grad = cost_fn.calculateRunningCostGradient(x, u);
-    Eigen::VectorXd expected_grad_x = 2 * Q * (x - goal_state); 
-    Eigen::VectorXd expected_grad_u = 2 * R * u; 
-    assert(compareVectors(grad[0], expected_grad_x));
-    assert(compareVectors(grad[1], expected_grad_u));
+    CostGradientPair grad = cost_fn.calculateRunningCostGradient(x, u);
+    Eigen::VectorXd expected_grad_x = 2 * Q * (x - goal_state) * dt; 
+    Eigen::VectorXd expected_grad_u = 2 * R * u * dt; 
+    assert(compareVectors(grad.l_x, expected_grad_x));
+    assert(compareVectors(grad.l_u, expected_grad_u));
 }
 
 }  // namespace cddp (optional)
