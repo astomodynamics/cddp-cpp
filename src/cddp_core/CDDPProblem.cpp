@@ -1,6 +1,6 @@
 #include <iostream>
 #include "cddp_core/CDDPProblem.hpp" 
-
+#include "OsqpEigen/OsqpEigen.h"
 
 namespace cddp {
 
@@ -68,9 +68,6 @@ void CDDPProblem::setTimeStep(double timestep) {
 void CDDPProblem::setOptions(const CDDPOptions& opts) {
     options_ = opts;
 }
-
-
-
 
 void CDDPProblem::setObjective(std::unique_ptr<Objective> objective) {
     objective_ = std::move(objective);
@@ -142,15 +139,14 @@ std::vector<Eigen::VectorXd> CDDPProblem::solve() {
     // 1. Initialization
     // initializeTrajectory();
     initializeCost();
-    double J_old = J_;
-    double J = J_;
-    double gradientNorm = 0.0;
-    double lambda = 0.0;
+    double J = std::numeric_limits<double>::infinity();
+    double gradientNorm = std::numeric_limits<double>::infinity();
 
     // 2. Main CDDP Iterative Loop
     for (int iter = 0; iter < options_.max_iterations; ++iter) {
 std::cout << "Iteration: " << iter << std::endl;
 std::cout << "Cost " << J_ << std::endl;
+        double J_old = J;
         // 3. Backward 
         bool backward_pass_done = solveBackwardPass();
         
@@ -158,7 +154,7 @@ std::cout << "Cost " << J_ << std::endl;
             std::cout << "Backward Pass Failed" << std::endl;
             break;
         }
-        
+
         // 4. Forward Pass
         bool forward_pass_done = solveForwardPass();
 
@@ -194,7 +190,8 @@ std::cout << "Cost " << J_ << std::endl;
 // Forward Pass
 bool CDDPProblem::solveForwardPass() {
     double alpha = options_.backtracking_coeff;
-
+    // instantiate the solver
+    OsqpEigen::Solver solver;
     // Line-search loop 
     for (int j = 0; j < options_.max_line_search_iterations; ++j) {
         Eigen::VectorXd x = initial_state_;
@@ -221,6 +218,7 @@ bool CDDPProblem::solveForwardPass() {
             X_new.at(i + 1) = x;          // Update trajectory
         }
         J_new += objective_->calculateFinalCost(X_new.back()); // Final cost
+std::cout << "J_new: " << J_new << std::endl;
 
         // 2. Calculate Cost Improvement
         dJ = J_ - J_new;
@@ -282,9 +280,11 @@ bool CDDPProblem::solveBackwardPass() {
         Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_XX_.at(i+1) * A;
         Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_XX_.at(i+1) * A;
         Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_XX_.at(i+1) * B;
+// std::cout << "Q_xx: " << Q_xx << std::endl;
+// std::cout << "Q_uu: " << Q_uu << std::endl;
 
         // Symmetrize Hessian
-        Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
+// Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
         // Check eigenvalues of Q_uu
         Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
@@ -294,12 +294,12 @@ bool CDDPProblem::solveBackwardPass() {
             break;
         }
 
-        // TODO: Regularization
-        // if (options_.regularization_type == 0) {
-        //     Q_uu += options_.regularization_factor * Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
-        // } else if (options_.regularization_type == 1) {
-        //     Q_uu += options_.regularization_factor * Q_uu.maxCoeff() * Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
-        // }
+// TODO: Regularization
+// if (options_.regularization_type == 0) {
+//     Q_uu += options_.regularization_factor * Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
+// } else if (options_.regularization_type == 1) {
+//     Q_uu += options_.regularization_factor * Q_uu.maxCoeff() * Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
+// }
 
         // Feedback Gain Calculation 
         Eigen::MatrixXd K = -Q_uu.inverse() * Q_ux;
@@ -318,7 +318,7 @@ bool CDDPProblem::solveBackwardPass() {
         V_X_.at(i) = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
         V_XX_.at(i) = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
         // Symmetrize Hessian
-        V_XX_.at(i) = 0.5 * (V_XX_.at(i) + V_XX_.at(i).transpose());
+// V_XX_.at(i) = 0.5 * (V_XX_.at(i) + V_XX_.at(i).transpose());
         V_.at(i) = cost + V_X_.at(i).transpose() * (x - goal_state_) + 0.5 * (x - goal_state_).transpose() * V_XX_.at(i) * (x - goal_state_);
     }
     return true;
