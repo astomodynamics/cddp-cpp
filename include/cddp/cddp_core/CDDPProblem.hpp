@@ -4,7 +4,7 @@
 #include <Eigen/Dense>
 #include <vector>
 
-#include "model/DynamicalSystem.hpp" 
+#include "cddp_core/DynamicalSystem.hpp" 
 #include "cddp_core/Objective.hpp" 
 
 namespace cddp {
@@ -16,7 +16,7 @@ struct CDDPOptions {
     int max_line_search_iterations = 11; // Maximum iterations for line search
     double backtracking_coeff = 1.0;      // Maximum step size for line search backtracking
     double backtracking_min = 0.5;    // Coefficient for line search backtracking
-    double backtracking_factor = std::pow(10, -3);  // Factor for line search backtracking
+    double backtracking_factor = std::pow(2, -2);  // Factor for line search backtracking
 
     // Active Set Method Options
     int active_set_max_iterations = 100;  // Maximum iterations for active set method
@@ -27,6 +27,8 @@ struct CDDPOptions {
     double max_lambda = 1e10;             // Upper bound for lambda 
     double min_lambda = 1e-6;             // Lower bound for lambda
     int regularization_type = 0;          // 0 or 1 for different regularization types
+    double regularization_tolerance = 1e-6; // Tolerance for regularization
+
     bool print_iterations = true;         // Option for debug printing 
 };
 
@@ -42,13 +44,14 @@ public:
     void setCostMatrices(const Eigen::MatrixXd& Q, const Eigen::MatrixXd& R, const Eigen::MatrixXd& Qf); 
     void setCostFunction(const Eigen::MatrixXd& Q, const Eigen::MatrixXd& R, const Eigen::MatrixXd& Qf);
     void setOptions(const CDDPOptions& opts);
-    void setInitialTrajectory(const Eigen::MatrixXd& X, const Eigen::MatrixXd& U);
+    void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U);
+    void initializeCost();
     void setObjective(std::unique_ptr<Objective> objective);
 
     // Solver methods
-    Eigen::MatrixXd solve(); 
+    std::vector<Eigen::VectorXd> solve(); 
     bool solveForwardPass();
-    // bool solveBackwardPass();
+    bool solveBackwardPass();
 
     // update methods
     // void updateControl();
@@ -80,15 +83,10 @@ private:
     Eigen::VectorXd goal_state_;
     int horizon_;
     double dt_;  // Time step
-    
-    // // Cost Matrices
-    // Eigen::MatrixXd Q;
-    // Eigen::MatrixXd R;
-    // Eigen::MatrixXd Qf;
 
     // Intermediate trajectories
-    Eigen::MatrixXd X_;
-    Eigen::MatrixXd U_;
+    std::vector<Eigen::VectorXd> X_;
+    std::vector<Eigen::VectorXd> U_;
 
     // Intermediate cost
     double J_;
@@ -108,15 +106,6 @@ private:
     std::vector<Eigen::VectorXd> Q_U_; 
 
     // Helper methods
-    // void forwardPass();
-    // void backwardPass();
-    // void updateControlSequence();
-    // void updateTrajectory();
-    // void updateValueFunction();
-    // double calculateCost();
-    // double calculateFinalCost();
-    // double calculateCostChange();
-    // double calculateGradientNorm();
     // void printIteration(int iter, double cost, double grad_norm, double lambda);
 
     // Options
