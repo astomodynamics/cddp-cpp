@@ -10,10 +10,12 @@ CDDPProblem::CDDPProblem(cddp::DynamicalSystem* system, const Eigen::VectorXd& i
     initial_state_(initialState), 
     goal_state_(initialState), // Pre-allocate goal to initialState 
     horizon_(horizon),
-    dt_(timestep),
-    X_(system->state_size_, horizon + 1), // Pre-allocate trajectories
-    U_(system->control_size_, horizon)
+    dt_(timestep)
 {
+    // Initialize Trajectory
+    X_.resize(horizon + 1, initial_state_);
+    U_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
+
     // Initialize Intermediate Cost
     J_ = 0.0;
 
@@ -34,7 +36,7 @@ CDDPProblem::CDDPProblem(cddp::DynamicalSystem* system, const Eigen::VectorXd& i
 // Setup Methods
 void CDDPProblem::setInitialState(const Eigen::VectorXd& x0) {
     initial_state_ = x0;
-    X_.col(0) = x0; // Update initial trajectory state
+    X_[0] = x0; // Update initial trajectory state
 }
 
 void CDDPProblem::setGoalState(const Eigen::VectorXd& goal) {
@@ -45,12 +47,12 @@ void CDDPProblem::setHorizon(int T) {
     horizon_ = T;
     
     // Resize X, U, Q_UU, Q_UX, Q_U accordingly 
-    X_.resize(dynamics_->state_size_, horizon_ + 1); 
-    U_.resize(dynamics_->control_size_, horizon_);
+    X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(dynamics_->state_size_)); 
+    U_.resize(horizon_, Eigen::VectorXd::Zero(dynamics_->state_size_));
 
-    Q_UU_.resize(horizon_);
-    Q_UX_.resize(horizon_);
-    Q_U_.resize(horizon_);
+    Q_UU_.resize(horizon_, Eigen::MatrixXd::Zero(dynamics_->control_size_, dynamics_->control_size_));
+    Q_UX_.resize(horizon_, Eigen::MatrixXd::Zero(dynamics_->control_size_, dynamics_->state_size_));
+    Q_U_.resize(horizon_, Eigen::VectorXd::Zero(dynamics_->control_size_));
 }
 
 void CDDPProblem::setTimeStep(double timestep) {
@@ -68,97 +70,164 @@ void CDDPProblem::setOptions(const CDDPOptions& opts) {
 }
 
 
-void CDDPProblem::setInitialTrajectory(const Eigen::MatrixXd& X, const Eigen::MatrixXd& U) {
+
+
+void CDDPProblem::setObjective(std::unique_ptr<Objective> objective) {
+    objective_ = std::move(objective);
+}
+
+void CDDPProblem::setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) {
     this->X_ = X;
     this->U_ = U;
 
     // Raise error if dimensions do not match
-    if (X.cols() != horizon_ + 1 || X.rows() != dynamics_->state_size_) {
+    if (X.size() != horizon_ + 1 || X[0].size() != dynamics_->state_size_) {
         throw std::invalid_argument("X dimensions do not match the horizon and state size");
     }
 }
 
-void CDDPProblem::setObjective(std::unique_ptr<Objective> objective) {
-    objective_ = std::move(objective);
+void CDDPProblem::initializeCost() {
+    J_ = 0.0;
+    for (int i = 0; i < horizon_; ++i) {
+        J_ += objective_->calculateRunningCost(X_.at(i), U_.at(i));
+    }
+    J_ += objective_->calculateFinalCost(X_.back());
+
 }
 
 // void CDDPProblem::addConstraint(std::unique_ptr<Constraint> constraint) {
 //     constraints_.push_back(std::move(constraint));
 // }
 
+// Print Methods
+// Print iteration information
 
-// Solve (Outline)
-Eigen::MatrixXd CDDPProblem::solve() {
+// void CDDPProblem::printTrajectory() {
+//     std::cout << "Trajectory: " << std::endl;
+//     for (int i = 0; i < horizon_ + 1; ++i) {
+//         std::cout << X_.at(i).transpose() << std::endl;
+//     }
+// }
+
+// void CDDPProblem::printControlSequence() {
+//     std::cout << "Control Sequence: " << std::endl;
+//     for (int i = 0; i < horizon_; ++i) {
+//         std::cout << U_.at(i).transpose() << std::endl;
+//     }
+// }
+
+// void CDDPProblem::printCost() {
+//     std::cout << "Cost: " << J_ << std::endl;
+// }
+
+// void CDDPProblem::printValueFunction() {
+//     std::cout << "Value Function: " << std::endl;
+//     for (int i = 0; i < horizon_ + 1; ++i) {
+//         std::cout << V_.at(i) << std::endl;
+//     }
+// }
+
+// void CDDPProblem::printValueFunctionDerivative() {
+//     std::cout << "Value Function Derivative: " << std::endl;
+//     for (int i = 0; i < horizon_ + 1; ++i) {
+//         std::cout << V_X_.at(i).transpose() << std::endl;
+//     }
+// }
+
+
+
+
+// CDDP Solver
+std::vector<Eigen::VectorXd> CDDPProblem::solve() {
     // 1. Initialization
     // initializeTrajectory();
-    // initializeCost();
+    initializeCost();
+    double J_old = J_;
+    double J = J_;
+    double gradientNorm = 0.0;
+    double lambda = 0.0;
 
     // 2. Main CDDP Iterative Loop
     for (int iter = 0; iter < options_.max_iterations; ++iter) {
+std::cout << "Iteration: " << iter << std::endl;
+std::cout << "Cost " << J_ << std::endl;
         // 3. Backward 
-        // solveBackwardPass();
+        bool backward_pass_done = solveBackwardPass();
         
+        if (!backward_pass_done) {
+            std::cout << "Backward Pass Failed" << std::endl;
+            break;
+        }
+std::cout << "k last: " << k_.back().transpose() << std::endl;
+std::cout << "K last: " << K_.back() << std::endl;
         // 4. Forward Pass
-        solveForwardPass();
+        bool forward_pass_done = solveForwardPass();
 
-        std::cout << "Iteration: " << iter << std::endl;
+        if (!forward_pass_done) {
+            std::cout << "Forward Pass Failed" << std::endl;
+            break;
+        }
+
+        J = J_;
 
         // 5 Convergence Check
+        if (std::abs(J_old - J) < options_.cost_tolerance) {
+            std::cout << "Converged" << std::endl;
+            break;
+        }
+        // if (gradientNorm < options_.grad_tolerance) {
+        //     std::cout << "Converged" << std::endl;
+        //     break;
+        // }
+
+        // 6. Print Iteration Information
+        // printIteration(iter, cost, gradientNorm, lambda);
+
 
     }
 
     // 6. Return Optimal Control Sequence
-    Eigen::MatrixXd U(dynamics_->control_size_, horizon_);
-    return U;
+    // place holder 
+    return U_;
 
 }
 
-// Forward Pass (Unconstrained)
+// Forward Pass
 bool CDDPProblem::solveForwardPass() {
     double alpha = options_.backtracking_coeff;
 
     // Line-search loop 
-    for (int i = 0; i < options_.max_line_search_iterations; ++i) {
+    for (int j = 0; j < options_.max_line_search_iterations; ++j) {
         Eigen::VectorXd x = initial_state_;
-        Eigen::MatrixXd X_new = X_;
-        Eigen::MatrixXd U_new = U_;
+        std::vector<Eigen::VectorXd> X_new = X_;
+        std::vector<Eigen::VectorXd> U_new = U_;
         double J_new = 0.0;
         double dJ = 0.0;
         double expected_dV = 0.0;
 
         // 1. Simulate forward
-        for (int j = 0; j < horizon_; ++j) {
-            Eigen::VectorXd delta_x = x - X_new.col(j);
+        for (int i= 0; i < horizon_; ++i) {
+            Eigen::VectorXd delta_x = x - X_new.at(i);
 
             // Cholesky decomposition of Q_uu
-            // Eigen::MatrixXd Q_L( Q_UU[j].llt().matrixL() );
-
-            // Check if Q_UU is positive definite
-            // if (Q_L.isZero()) {
-            //     std::cout << "Q_UU is not positive definite" << std::endl;
-            //     break;
-            // }
-
-            // Placeholder
-            Eigen::MatrixXd Q_uu = Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
-
-            // Eigen::MatrixXd Q_L( Q_uu.llt().matrixL() );
+            Eigen::MatrixXd Q_L( Q_UU_.at(i).llt().matrixL() );
 
             // Feedfoward and Feedback Gains Calculation
-            Eigen::MatrixXd k = Q_UU_[j].inverse() * Q_U_[j];
-            Eigen::MatrixXd K = Q_UU_[j].inverse() * Q_UX_[j];
-        
-            Eigen::VectorXd delta_u =  alpha * k + K * delta_x; // Feed-forward and Feedback control law   
+            Eigen::VectorXd delta_u =  alpha * k_.at(i) + K_.at(i) * delta_x; // Feed-forward and Feedback control law
 
-            U_new.col(j) += delta_u;       // Update control 
-            x = dynamics_->getDynamics(x, U_new.col(j)); // Simulate forward 
-            X_new.col(j + 1) = x;          // Update trajectory
-            J_new += objective_->calculateRunningCost(x, U_new.col(j)); // Running cost
+            U_new.at(i) += delta_u;       // Update control 
+
+            J_new += objective_->calculateRunningCost(x, U_new.at(i)); // Running cost
+            x = dynamics_->getDynamics(x, U_new.at(i)); // Simulate forward 
+            X_new.at(i + 1) = x;          // Update trajectory
         }
-        J_new += objective_->calculateFinalCost(x); // Final cost
+        J_new += objective_->calculateFinalCost(X_new.back()); // Final cost
 
         // 2. Calculate Cost Improvement
         dJ = J_ - J_new;
+    
+std::cout << "x final: " << X_new.back().transpose() << std::endl;
+std::cout << "dJ: " << dJ << ", J: " << J_ << ", J_new: " << J_new << std::endl;
 
         // 3. Calculate Expected Improvement
         // for (int j = 0; j < horizon; ++j) {
@@ -171,81 +240,94 @@ bool CDDPProblem::solveForwardPass() {
             X_ = X_new;
             U_ = U_new;
             J_ = J_new;
-            // V = V_new;
-            // V_X = V_X_new;
-            // V_XX = V_XX_new;
             return true;
         }
 
         // 5. Backtracking
         alpha = std::min(alpha * options_.backtracking_factor, options_.backtracking_min);
-
-        return true;
+// std::cout << "alpha: " << alpha << std::endl;
     }
+    return false;
 }
 
-// bool CDDPProblem::solveBackwardPass() {
-//     // Eigen::MatrixXd A = dynamics->getDynamicsHessian(X.col(horizon), Eigen::VectorXd::Zero(dynamics->control_size)); // Assuming zero control for final time step Hessian
-//     // Eigen::VectorXd b = dynamics->getDynamicsJacobian(X.col(horizon), Eigen::VectorXd::Zero(dynamics->control_size)).transpose() * (Qf * (X.col(horizon) - goal_state)); // Assuming zero control for final time step gradient 
+bool CDDPProblem::solveBackwardPass() {
+    // Initialize final value function
+    V_.back() = objective_->calculateFinalCost(X_.back());
+    V_X_.back() = objective_->calculateFinalCostGradient(X_.back());
+    V_XX_.back() = objective_->calculateFinalCostHessian(X_.back());
 
-//     V[horizon] = dynamics->calculateFinalCost(X.col(horizon)); // Final cost
-//     V_X[horizon] = dynamics->calculateFinalCostGradient(X.col(horizon)); // Final cost gradient
-//     V_XX[horizon] = dynamics->calculateFinalCostHessian(X.col(horizon)); // Final cost Hessian
+    // Solve Backward Ricatti Equation
+    for (int i = horizon_ - 1; i >= 0; --i) {
+        const Eigen::VectorXd& x = X_.at(i);
+        const Eigen::VectorXd& u = U_.at(i);
 
-//     for (int i = horizon - 1; i >= 0; --i) {
-//         // const Eigen::VectorXd&  x = X.col(i);
-//         // const Eigen::VectorXd&  u = U.col(i);
+        // Calculate Dynamics Jacobians
+        std::vector<Eigen::MatrixXd> jacobians = dynamics_->getDynamicsJacobian(x, u);
+        Eigen::MatrixXd f_x = jacobians[0];
+        Eigen::MatrixXd f_u = jacobians[1];
 
-//         // // Q function calculations (Replace with your system-specific expressions)
-//         // Eigen::MatrixXd Q_xx = dynamics->calculateCostHessian(x, u) + dynamics->getDynamicsJacobian(x, u).transpose() * A * dynamics->getDynamicsJacobian(x, u);
-//         // Eigen::MatrixXd Q_ux = dynamics->getDynamicsJacobian(x, u).transpose() * A; 
-//         // Eigen::VectorXd Q_x = dynamics->calculateCostGradient(x, u) + dynamics->getDynamicsJacobian(x, u).transpose() * b;
-//         // // ... (Similar for Q_uu, Q_u) ...
+        // Calculate discrete time dynamics
+        Eigen::MatrixXd A = Eigen::MatrixXd::Identity(dynamics_->state_size_, dynamics_->state_size_) + dt_ * f_x;
+        Eigen::MatrixXd B = dt_ * f_u;
 
-//         // // Feedback Gain Calculation (Simplified for unconstrained)
-//         // Eigen::MatrixXd K = -Q_uu.inverse() * Q_ux;
-//         // Eigen::VectorXd k = -Q_uu.inverse() * Q_u;
+        // Calculate cost gradients and Hessians
+        CostGradientPair  gradients = objective_->calculateRunningCostGradient(x, u);
+        Eigen::VectorXd l_x = gradients.l_x;
+        Eigen::VectorXd l_u = gradients.l_u;
 
-//         // // Store Value Function Matrices
-//         // Q_UU[i] = Q_uu;
-//         // Q_UX[i] = Q_ux;
-//         // Q_U[i] = Q_u;
+        CostHessianTrio hessians = objective_->calculateRunningCostHessian(x, u);
+        Eigen::MatrixXd l_xx = hessians.l_xx;
+        Eigen::MatrixXd l_ux = hessians.l_ux;
+        Eigen::MatrixXd l_uu = hessians.l_uu;
+        
+        // Q function calculations (iLQR based)
+        Eigen::MatrixXd Q_x = l_x + A.transpose() * V_X_.at(i+1);
+        Eigen::MatrixXd Q_u = l_u + B.transpose() * V_X_.at(i+1);
+        Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_XX_.at(i+1) * A;
+        Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_XX_.at(i+1) * A;
+        Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_XX_.at(i+1) * B;
 
-//         // // Update A and b (Backward propagation)
-//         // A = Q_xx + K.transpose() * Q_uu * K + K.transpose() * Q_ux + Q_ux.transpose() * K;
-//         // b = Q_x + K.transpose() * Q_uu * k + K.transpose() * Q_u + Q_ux.transpose() * k;
-    // }
-// }
+        // Symmetrize Hessian
+        // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
-// // Backward Pass (Outline)
-// void CDDPProblem::solveBackwardPass() {
-//     Eigen::MatrixXd A = dynamics->getDynamicsHessian(x_trajectories.col(horizon), Eigen::VectorXd::Zero(dynamics->control_size)); // Assuming zero control for final time step Hessian
-//     Eigen::VectorXd b = dynamics->getDynamicsJacobian(x_trajectories.col(horizon), Eigen::VectorXd::Zero(dynamics->control_size)).transpose() * (Q_f * (x_trajectories.col(horizon) - goal_state)); // Assuming zero control for final time step gradient 
+        // Check eigenvalues of Q_uu
+        Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
+        Eigen::VectorXd eigenvalues = es.eigenvalues().real();
+        if (eigenvalues.minCoeff() <= 0) {
+            std::cout << "Q_uu is not positive definite" << std::endl;
+            break;
+        }
 
-//     for (int i = horizon - 1; i >= 0; --i) {
-//         const Eigen::VectorXd&  x = x_trajectories.col(i);
-//         const Eigen::VectorXd&  u = u_trajectories.col(i);
+        // TODO: Regularization
+        // if (options_.regularization_type == 0) {
+        //     Q_uu += options_.regularization_factor * Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
+        // } else if (options_.regularization_type == 1) {
+        //     Q_uu += options_.regularization_factor * Q_uu.maxCoeff() * Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
+        // }
 
-//         // Q function calculations (Replace with your system-specific expressions)
-//         Eigen::MatrixXd Q_xx = dynamics->calculateCostHessian(x, u) + dynamics->getDynamicsJacobian(x, u).transpose() * A * dynamics->getDynamicsJacobian(x, u);
-//         Eigen::MatrixXd Q_ux = dynamics->getDynamicsJacobian(x, u).transpose() * A; 
-//         Eigen::VectorXd Q_x = dynamics->calculateCostGradient(x, u) + dynamics->getDynamicsJacobian(x, u).transpose() * b;
-//         // ... (Similar for Q_uu, Q_u) ...
+        // Feedback Gain Calculation 
+        Eigen::MatrixXd K = -Q_uu.inverse() * Q_ux;
+        Eigen::VectorXd k = -Q_uu.inverse() * Q_u;
 
-//         // Feedback Gain Calculation (Simplified for unconstrained)
-//         Eigen::MatrixXd K = -Q_uu.inverse() * Q_ux;
-//         Eigen::VectorXd k = -Q_uu.inverse() * Q_u;
+    std::cout << "K: " << K << " at " << i << std::endl;
+    std::cout << "k: " << k.transpose() << " at " << i << std::endl;
+        
+        // Store Q-Function Matrices
+        Q_UU_.at(i) = Q_uu;
+        Q_UX_.at(i) = Q_ux;
+        Q_U_.at(i) = Q_u;
 
-//         // Store Value Function Matrices
-//         Q_UU[i] = Q_uu;
-//         Q_UX[i] = Q_ux;
-//         Q_U[i] = Q_u;
+        k_.at(i) = k;
+        K_.at(i) = K;
 
-//         // Update A and b (Backward propagation)
-//         A = Q_xx + K.transpose() * Q_uu * K + K.transpose() * Q_ux + Q_ux.transpose() * K;
-//         b = Q_x + K.transpose() * Q_uu * k + K.transpose() * Q_u + Q_ux.transpose() * k;
-//     }
-// }
-
-
-} // namespace cddp 
+        // Update Value Function
+        double cost = objective_->calculateRunningCost(x, u);
+        V_X_.at(i) = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
+        V_XX_.at(i) = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
+        // Symmetrize Hessian
+        V_XX_.at(i) = 0.5 * (V_XX_.at(i) + V_XX_.at(i).transpose());
+        V_.at(i) = cost + V_X_.at(i).transpose() * (x - goal_state_) + 0.5 * (x - goal_state_).transpose() * V_XX_.at(i) * (x - goal_state_);
+    }
+    return true;
+}
+}  // namespace cddp

@@ -52,15 +52,15 @@ public:
 
     double calculateRunningCost(const Eigen::VectorXd& x, const Eigen::VectorXd& u) const override {
         double cost = 0.0; // Initialize cost to 0
-        cost += ((x - goal_state_).transpose() * Q_ * (x - goal_state_)).value() * timestep_;
-        cost += (u.transpose() * R_ * u).value() * timestep_;
+        cost += 0.0 * ((x - goal_state_).transpose() * Q_ * (x - goal_state_)).value() * timestep_;
+        cost += 0.0 * (u.transpose() * R_ * u).value() * timestep_;
         return cost;
     }
 
     CostGradientPair  calculateRunningCostGradient(const Eigen::VectorXd& x, const Eigen::VectorXd& u) const override {
         CostGradientPair  gradients;
-        Eigen::VectorXd l_x = 2 * Q_ * (x - goal_state_) * timestep_;
-        Eigen::VectorXd l_u = 2 * R_ * u * timestep_;
+        Eigen::VectorXd l_x = Q_ * (x - goal_state_) * timestep_;
+        Eigen::VectorXd l_u = R_ * u * timestep_;
         gradients.l_x = l_x;
         gradients.l_u = l_u;
         return gradients;
@@ -68,9 +68,9 @@ public:
 
     CostHessianTrio calculateRunningCostHessian(const Eigen::VectorXd& x, const Eigen::VectorXd& u) const override {
         CostHessianTrio hessians;
-        Eigen::MatrixXd l_xx = 2 * Q_ * timestep_;
+        Eigen::MatrixXd l_xx = Q_ * timestep_;
         Eigen::MatrixXd l_ux = Eigen::MatrixXd::Zero(R_.rows(), Q_.rows());
-        Eigen::MatrixXd l_uu = 2 * R_ * timestep_;
+        Eigen::MatrixXd l_uu = R_ * timestep_;
         hessians.l_xx = l_xx;
         hessians.l_ux = l_ux;
         hessians.l_uu = l_uu;
@@ -78,15 +78,19 @@ public:
     }
 
     double calculateFinalCost(const Eigen::VectorXd& x) const override {
-        return ((x - goal_state_).transpose() * Qf_ * (x - goal_state_))[0];
+std::cout << "x: " << x << std::endl;
+std::cout << "goal_state_: " << goal_state_ << std::endl;
+std::cout << "Qf_: " << Qf_ << std::endl;
+
+        return 0.5 * ((x - goal_state_).transpose() * Qf_ * (x - goal_state_)).value();
     }
 
     Eigen::VectorXd calculateFinalCostGradient(const Eigen::VectorXd& x) const override {
-        return 2 * Qf_ * (x - goal_state_);
+        return Qf_ * (x - goal_state_);
     }
 
     Eigen::MatrixXd calculateFinalCostHessian(const Eigen::VectorXd& x) const override {
-        return 2 * Qf_;
+        return Qf_;
     }
 };
 }  // namespace cddp
