@@ -78,10 +78,6 @@ public:
     }
 
     double calculateFinalCost(const Eigen::VectorXd& x) const override {
-std::cout << "x: " << x << std::endl;
-std::cout << "goal_state_: " << goal_state_ << std::endl;
-std::cout << "Qf_: " << Qf_ << std::endl;
-
         return 0.5 * ((x - goal_state_).transpose() * Qf_ * (x - goal_state_)).value();
     }
 
