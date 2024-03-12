@@ -158,8 +158,7 @@ std::cout << "Cost " << J_ << std::endl;
             std::cout << "Backward Pass Failed" << std::endl;
             break;
         }
-std::cout << "k last: " << k_.back().transpose() << std::endl;
-std::cout << "K last: " << K_.back() << std::endl;
+        
         // 4. Forward Pass
         bool forward_pass_done = solveForwardPass();
 
@@ -226,9 +225,6 @@ bool CDDPProblem::solveForwardPass() {
         // 2. Calculate Cost Improvement
         dJ = J_ - J_new;
     
-std::cout << "x final: " << X_new.back().transpose() << std::endl;
-std::cout << "dJ: " << dJ << ", J: " << J_ << ", J_new: " << J_new << std::endl;
-
         // 3. Calculate Expected Improvement
         // for (int j = 0; j < horizon; ++j) {
         //     Eigen::VectorXd delta_x = X_new.col(j) - X.col(j);
@@ -288,7 +284,7 @@ bool CDDPProblem::solveBackwardPass() {
         Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_XX_.at(i+1) * B;
 
         // Symmetrize Hessian
-        // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
+        Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
         // Check eigenvalues of Q_uu
         Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
@@ -309,9 +305,6 @@ bool CDDPProblem::solveBackwardPass() {
         Eigen::MatrixXd K = -Q_uu.inverse() * Q_ux;
         Eigen::VectorXd k = -Q_uu.inverse() * Q_u;
 
-    std::cout << "K: " << K << " at " << i << std::endl;
-    std::cout << "k: " << k.transpose() << " at " << i << std::endl;
-        
         // Store Q-Function Matrices
         Q_UU_.at(i) = Q_uu;
         Q_UX_.at(i) = Q_ux;
