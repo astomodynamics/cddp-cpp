@@ -1,66 +1,62 @@
 #include <iostream> 
 #include <Eigen/Dense>
 #include "cddp_core/CDDPProblem.hpp"
-#include "model/DoubleIntegrator.hpp"  
+#include "model/DubinsCar.hpp"
 
 using namespace cddp;
 
 // Simple Test Function
 bool testBasicCDDP() {
-    int state_dim = 4; 
+    int state_dim = 3; 
     int control_dim = 2; 
-    double dt = 0.1;
-    int horizon = 10;
+    double dt = 0.05;
+    int horizon = 100;
     int integration_type = 0; // 0 for Euler, 1 for Heun, 2 for RK3, 3 for RK4
 
     // Problem Setup
     Eigen::VectorXd initialState(state_dim);
-    initialState << 1, 0, 0.5, -0.1; // Initial state
+    initialState << 0.0, 0.0, M_PI/4; // Initial state
 
-    DoubleIntegrator system(state_dim, control_dim, dt, integration_type); // Your DoubleIntegrator instance
+    DubinsCar system(state_dim, control_dim, dt, integration_type); // Your DoubleIntegrator instance
     CDDPProblem cddp_solver(&system, initialState, horizon, dt);
     
     // Set goal state if needed
     Eigen::VectorXd goal_state(state_dim);
-    goal_state << 0, 0, 0, 0;
+    goal_state << 2.0, 2.0, M_PI/4;
     cddp_solver.setGoalState(goal_state);
 
     // Simple Cost Matrices 
-    Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Eigen::MatrixXd R =  0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim); 
-    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim); 
-    QuadraticCost objective(Q, R, Qf, goal_state);
+    Eigen::MatrixXd Q(state_dim, state_dim);
+    Q << 0e-1, 0, 0, 
+         0, 0e-1, 0, 
+         0, 0, 0e-3;
+    Eigen::MatrixXd R(control_dim, control_dim);
+    R << 1e+0, 0, 
+         0, 1e+0; 
+    Eigen::MatrixXd Qf(state_dim, state_dim);
+    Qf << 50, 0, 0, 
+          0, 50, 0, 
+          0, 0, 10; 
+    QuadraticCost objective(Q, R, Qf, goal_state, dt);
     cddp_solver.setObjective(std::make_unique<QuadraticCost>(objective));
 
     CDDPOptions opts;
     // Set options if needed
-    // opts.max_iterations = 100;
+    opts.max_iterations = 1;
     // opts.cost_tolerance = 1e-6;
     // opts.grad_tolerance = 1e-8;
     // opts.print_iterations = false;
     cddp_solver.setOptions(opts);
 
-    // Set initial state if needed
-    // cddp_solver.setInitialState(initialState);
-
-    // Set horizon if needed
-    // cddp_solver.setHorizon(horizon);
-    
-    // Set time step if needed
-    // cddp_solver.setTimeStep(dt);
-
-    
 
 
     // Set initial trajectory if needed
-    Eigen::MatrixXd X = Eigen::MatrixXd::Zero(state_dim, horizon + 1);
-    Eigen::MatrixXd U = Eigen::MatrixXd::Zero(control_dim, horizon);
+    std::vector<Eigen::VectorXd> X = std::vector<Eigen::VectorXd>(horizon + 1, initialState);
+    std::vector<Eigen::VectorXd> U = std::vector<Eigen::VectorXd>(horizon, Eigen::VectorXd::Zero(state_dim));
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve!
-    // Eigen::MatrixXd optimal_control_seq = cddp_solver.solve();
-
-    // (Add assertions: Check if the returned sequence has the correct length, etc.)
+    std::vector<Eigen::VectorXd> U_sol = cddp_solver.solve();
 
     // std::cout << "Optimal control (first step):\n" << optimal_control_seq[0] << std::endl;
 
