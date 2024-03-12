@@ -52,8 +52,8 @@ public:
 
     double calculateRunningCost(const Eigen::VectorXd& x, const Eigen::VectorXd& u) const override {
         double cost = 0.0; // Initialize cost to 0
-        cost += 0.0 * ((x - goal_state_).transpose() * Q_ * (x - goal_state_)).value() * timestep_;
-        cost += 0.0 * (u.transpose() * R_ * u).value() * timestep_;
+        cost += 0.5 * ((x - goal_state_).transpose() * Q_ * (x - goal_state_)).value() * timestep_;
+        cost += 0.5 * (u.transpose() * R_ * u).value() * timestep_;
         return cost;
     }
 
