@@ -51,7 +51,7 @@ public:
 
 
     // Optional methods
-    virtual Eigen::MatrixXd getTrajectory(const Eigen::VectorXd &initialState, const std::vector<Eigen::VectorXd> &controlSeq, int num_steps) {}; 
+    virtual std::vector<Eigen::VectorXd> getTrajectory(const Eigen::VectorXd &initialState, const std::vector<Eigen::VectorXd> &controlSeq, int num_steps) {}; 
     
     
     virtual void setGoal(const Eigen::VectorXd &goal) {}
