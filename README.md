@@ -10,19 +10,19 @@ $$
 $$
 
 $$
-\mathrm{s.t.~}  \mathbf{x}{k+1}& = \mathbf{f}(\mathbf{x}_k,\mathbf{u}_k) 
+\mathrm{s.t.~}  \mathbf{x}{k+1} = \mathbf{f}(\mathbf{x}_k,\mathbf{u}_k) 
 $$
 
 $$
-\mathbf{g}(\mathbf{x}_k,\mathbf{u})_k\leq 
+\quad \mathbf{g}(\mathbf{x}_k,\mathbf{u})_k\leq 0
 $$
 
 $$
-\mathbf{x}_0 = \mathbf{x}_{\mathrm{init}} 
+\quad \mathbf{x}_0 = \mathbf{x}_{\mathrm{init}} 
 $$
 
 $$
-&k = 0,1,\cdots N-1
+\quad k = 0,1,\cdots N-1
 $$
 
 This library is still under construction. 
