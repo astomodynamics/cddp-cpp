@@ -7,10 +7,11 @@ The CDDP library solves problems in the form:
 
 $$
 \begin{align}
-\min_{\mathbf{U}} J(\mathbf{x}0, \mathbf{U}) = \phi(\mathbf{x}N) + \sum{k=0}^{N-1} \ell(\mathbf{x}_k,\mathbf{u}k) \\
-\mathrm{s.t.~}  \mathbf{x}{k+1} = \mathbf{f}(\mathbf{x}_k,\mathbf{u}_k) , \mathbf{g}(\mathbf{x}_k,\mathbf{u})_k\leq \\
-\mathbf{x}0 = \mathbf{x}{\mathrm{init}}  \\
-k = 0,1,\cdots N-1
+\min_{\mathbf{U}} &J(\mathbf{x}_0, \mathbf{U}) = \phi(\mathbf{x}_N) + \sum{k=0}^{N-1} \ell(\mathbf{x}_k,\mathbf{u}_k) \\
+\mathrm{s.t.~}  \mathbf{x}{k+1}& = \mathbf{f}(\mathbf{x}_k,\mathbf{u}_k) \\
+&\mathbf{g}(\mathbf{x}_k,\mathbf{u})_k\leq \\
+&\mathbf{x}_0 = \mathbf{x}_{\mathrm{init}}  \\
+&k = 0,1,\cdots N-1
 \end{align}
 $$
 
