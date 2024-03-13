@@ -5,7 +5,7 @@ This is an optimal control solver library using constrained differential dynamic
 
 This library is still under construction. 
 
-**Author: Tomohiro Sasaki ** 
+**Author: Tomohiro Sasaki** 
 
 ## Installation
 ### Requirements
