@@ -47,11 +47,11 @@ void testQuadraticCost() {
     assert(std::abs(calculated_running_cost - expected_running_cost) < 1e-6);
 
     // Test running cost gradient
-    CostGradientPair grad = cost_fn.calculateRunningCostGradient(x, u);
+    std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> grads = cost_fn.calculateRunningCostGradient(x, u);
     Eigen::VectorXd expected_grad_x = 2 * Q * (x - goal_state) * dt; 
     Eigen::VectorXd expected_grad_u = 2 * R * u * dt; 
-    assert(compareVectors(grad.l_x, expected_grad_x));
-    assert(compareVectors(grad.l_u, expected_grad_u));
+    assert(compareVectors(std::get<0>(grads), expected_grad_x));
+    assert(compareVectors(std::get<1>(grads), expected_grad_u));
 }
 
 }  // namespace cddp (optional)

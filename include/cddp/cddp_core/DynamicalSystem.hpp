@@ -34,18 +34,20 @@ public:
         } 
     }
         
-    virtual std::vector<Eigen::MatrixXd> getDynamicsJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) {
-
-        std::vector<Eigen::MatrixXd> jacobians;
+    virtual std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> getDynamicsJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) {
         Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_size_, state_size_);
         Eigen::MatrixXd B = Eigen::MatrixXd::Zero(state_size_, control_size_);
-
-        jacobians.push_back(A);
-        jacobians.push_back(B);
-        return jacobians;
+        
+        return std::make_tuple(A, B);
     };
 
-    virtual std::vector<Eigen::MatrixXd> getDynamicsHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) = 0;
+    virtual std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> getDynamicsHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) {
+        Eigen::MatrixXd A = Eigen::MatrixXd::Zero(state_size_, state_size_ + control_size_);
+        Eigen::MatrixXd B = Eigen::MatrixXd::Zero(state_size_, state_size_ + control_size_);
+        Eigen::MatrixXd C = Eigen::MatrixXd::Zero(state_size_, state_size_ + control_size_);
+        
+        return std::make_tuple(A, B, C);
+    };
 
 
     // Optional methods

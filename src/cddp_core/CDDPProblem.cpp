@@ -1,6 +1,9 @@
 #include <iostream>
+#include <vector>
+#include <Eigen/Dense>
+#include <Eigen/Sparse>
 #include "cddp_core/CDDPProblem.hpp" 
-
+#include "OsqpEigen/OsqpEigen.h"
 
 namespace cddp {
 
@@ -68,9 +71,6 @@ void CDDPProblem::setTimeStep(double timestep) {
 void CDDPProblem::setOptions(const CDDPOptions& opts) {
     options_ = opts;
 }
-
-
-
 
 void CDDPProblem::setObjective(std::unique_ptr<Objective> objective) {
     objective_ = std::move(objective);
@@ -142,15 +142,14 @@ std::vector<Eigen::VectorXd> CDDPProblem::solve() {
     // 1. Initialization
     // initializeTrajectory();
     initializeCost();
-    double J_old = J_;
-    double J = J_;
-    double gradientNorm = 0.0;
-    double lambda = 0.0;
+    double J = std::numeric_limits<double>::infinity();
+    double gradientNorm = std::numeric_limits<double>::infinity();
 
     // 2. Main CDDP Iterative Loop
     for (int iter = 0; iter < options_.max_iterations; ++iter) {
 std::cout << "Iteration: " << iter << std::endl;
 std::cout << "Cost " << J_ << std::endl;
+        double J_old = J;
         // 3. Backward 
         bool backward_pass_done = solveBackwardPass();
         
@@ -158,8 +157,7 @@ std::cout << "Cost " << J_ << std::endl;
             std::cout << "Backward Pass Failed" << std::endl;
             break;
         }
-std::cout << "k last: " << k_.back().transpose() << std::endl;
-std::cout << "K last: " << K_.back() << std::endl;
+
         // 4. Forward Pass
         bool forward_pass_done = solveForwardPass();
 
@@ -175,6 +173,7 @@ std::cout << "K last: " << K_.back() << std::endl;
             std::cout << "Converged" << std::endl;
             break;
         }
+        
         // if (gradientNorm < options_.grad_tolerance) {
         //     std::cout << "Converged" << std::endl;
         //     break;
@@ -194,27 +193,91 @@ std::cout << "K last: " << K_.back() << std::endl;
 
 // Forward Pass
 bool CDDPProblem::solveForwardPass() {
-    double alpha = options_.backtracking_coeff;
+    double trust_region_radius = options_.trust_region_radius;
+    bool is_feasible = false;
 
-    // Line-search loop 
-    for (int j = 0; j < options_.max_line_search_iterations; ++j) {
-        Eigen::VectorXd x = initial_state_;
+    // Temporary Control Bounds
+    Eigen::VectorXd temp_control_max(dynamics_->control_size_);
+    temp_control_max << 5.0, M_PI;
+    Eigen::VectorXd temp_control_min(dynamics_->control_size_);
+    temp_control_min << -5.0, -M_PI;
+    int iter = 0;
+    
+    // Trust Region Loop
+    while (is_feasible == false) {
+        double J_new = 0.0;
+        double dJ = 0.0;            
+        double expected_dV = 0.0;
+
         std::vector<Eigen::VectorXd> X_new = X_;
         std::vector<Eigen::VectorXd> U_new = U_;
-        double J_new = 0.0;
-        double dJ = 0.0;
-        double expected_dV = 0.0;
+        Eigen::VectorXd x = initial_state_;
+        X_new.front() = x;
 
         // 1. Simulate forward
         for (int i= 0; i < horizon_; ++i) {
-            Eigen::VectorXd delta_x = x - X_new.at(i);
+            // Deviation from nominal trajectory
+            Eigen::VectorXd delta_x = x - X_.at(i);
+            
+            // Extract Q-Function Matrices
+            Eigen::MatrixXd Q_ux = Q_UX_.at(i);
+            Eigen::MatrixXd Q_uu = Q_UU_.at(i);
+            Eigen::VectorXd Q_u = Q_U_.at(i);
 
-            // Cholesky decomposition of Q_uu
-            Eigen::MatrixXd Q_L( Q_UU_.at(i).llt().matrixL() );
+            // Create QP problem
+            Eigen::SparseMatrix<double> P(Q_uu.rows(), Q_uu.cols()); // Hessian of QP objective
+            int numNonZeros = Q_uu.nonZeros(); 
+            P.reserve(numNonZeros);
+            for (int i = 0; i < Q_uu.rows(); ++i) {
+                for (int j = 0; j < Q_uu.cols(); ++j) {
+                    if (Q_uu(i, j) != 0) {
+                        P.insert(i, j) = Q_uu(i, j);
+                    }
+                }
+            }
+            P.makeCompressed(); // Important for efficient storage and operations
 
-            // Feedfoward and Feedback Gains Calculation
-            Eigen::VectorXd delta_u =  alpha * k_.at(i) + K_.at(i) * delta_x; // Feed-forward and Feedback control law
+            Eigen::VectorXd q = Q_ux * delta_x + Q_u; // Gradient of QP objective
 
+            // Create constraints
+            Eigen::SparseMatrix<double> A(dynamics_->control_size_, dynamics_->control_size_);
+            A.setIdentity();
+            A.makeCompressed();
+
+            // Lower and upper bounds
+            Eigen::VectorXd lb = trust_region_radius * (temp_control_min - U_.at(i));
+            Eigen::VectorXd ub = trust_region_radius * (temp_control_max - U_.at(i));
+
+            // Initialize QP solver
+            OsqpEigen::Solver solver;
+            solver.settings()->setWarmStart(true);
+            solver.settings()->setVerbosity(false);
+            // solver.settings()->setAlpha(1.0); // Change alpha parameter
+
+            // Populate the data
+            solver.data()->setNumberOfVariables(dynamics_->control_size_);
+            solver.data()->setNumberOfConstraints(dynamics_->control_size_);
+            solver.data()->setHessianMatrix(P);
+            solver.data()->setGradient(q);
+            solver.data()->setLinearConstraintsMatrix(A);
+            solver.data()->setLowerBound(lb);
+            solver.data()->setUpperBound(ub);
+
+            // Solve the QP problem
+            solver.initSolver();
+            solver.solveProblem();
+
+            // Get the solution
+            Eigen::VectorXd delta_u = solver.getSolution();
+
+            if (solver.getStatus() == OsqpEigen::Status::Solved) {
+                is_feasible = true;
+            } else {
+                trust_region_radius *= options_.trust_region_factor;
+                break;
+            }
+
+            // Eigen::VectorXd delta_u = Eigen::VectorXd::Zero(dynamics_->control_size_);
             U_new.at(i) += delta_u;       // Update control 
 
             J_new += objective_->calculateRunningCost(x, U_new.at(i)); // Running cost
@@ -225,27 +288,22 @@ bool CDDPProblem::solveForwardPass() {
 
         // 2. Calculate Cost Improvement
         dJ = J_ - J_new;
-    
-std::cout << "x final: " << X_new.back().transpose() << std::endl;
-std::cout << "dJ: " << dJ << ", J: " << J_ << ", J_new: " << J_new << std::endl;
 
+    
         // 3. Calculate Expected Improvement
         // for (int j = 0; j < horizon; ++j) {
         //     Eigen::VectorXd delta_x = X_new.col(j) - X.col(j);
         //     expected_dV += V_X[j].dot(delta_x) + 0.5 * delta_x.transpose() * V_XX[j] * delta_x;
         // }
 
-        // 4. Check Improvement
+        // Check Improvement
         if (dJ > 0) {
             X_ = X_new;
             U_ = U_new;
             J_ = J_new;
             return true;
         }
-
-        // 5. Backtracking
-        alpha = std::min(alpha * options_.backtracking_factor, options_.backtracking_min);
-// std::cout << "alpha: " << alpha << std::endl;
+        iter += 1;
     }
     return false;
 }
@@ -262,23 +320,23 @@ bool CDDPProblem::solveBackwardPass() {
         const Eigen::VectorXd& u = U_.at(i);
 
         // Calculate Dynamics Jacobians
-        std::vector<Eigen::MatrixXd> jacobians = dynamics_->getDynamicsJacobian(x, u);
-        Eigen::MatrixXd f_x = jacobians[0];
-        Eigen::MatrixXd f_u = jacobians[1];
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> jacobians = dynamics_->getDynamicsJacobian(x, u);
+        Eigen::MatrixXd f_x = std::get<0>(jacobians);
+        Eigen::MatrixXd f_u = std::get<1>(jacobians);
 
         // Calculate discrete time dynamics
         Eigen::MatrixXd A = Eigen::MatrixXd::Identity(dynamics_->state_size_, dynamics_->state_size_) + dt_ * f_x;
         Eigen::MatrixXd B = dt_ * f_u;
 
         // Calculate cost gradients and Hessians
-        CostGradientPair  gradients = objective_->calculateRunningCostGradient(x, u);
-        Eigen::VectorXd l_x = gradients.l_x;
-        Eigen::VectorXd l_u = gradients.l_u;
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> gradients = objective_->calculateRunningCostGradient(x, u);
+        Eigen::VectorXd l_x = std::get<0>(gradients);
+        Eigen::VectorXd l_u = std::get<1>(gradients);
 
-        CostHessianTrio hessians = objective_->calculateRunningCostHessian(x, u);
-        Eigen::MatrixXd l_xx = hessians.l_xx;
-        Eigen::MatrixXd l_ux = hessians.l_ux;
-        Eigen::MatrixXd l_uu = hessians.l_uu;
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> hessians = objective_->calculateRunningCostHessian(x, u);
+        Eigen::MatrixXd l_xx = std::get<0>(hessians);
+        Eigen::MatrixXd l_ux = std::get<1>(hessians);
+        Eigen::MatrixXd l_uu = std::get<2>(hessians);
         
         // Q function calculations (iLQR based)
         Eigen::MatrixXd Q_x = l_x + A.transpose() * V_X_.at(i+1);
@@ -286,9 +344,11 @@ bool CDDPProblem::solveBackwardPass() {
         Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_XX_.at(i+1) * A;
         Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_XX_.at(i+1) * A;
         Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_XX_.at(i+1) * B;
+// std::cout << "Q_xx: " << Q_xx << std::endl;
+// std::cout << "Q_uu: " << Q_uu << std::endl;
 
         // Symmetrize Hessian
-        // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
+// Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
         // Check eigenvalues of Q_uu
         Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
@@ -298,20 +358,17 @@ bool CDDPProblem::solveBackwardPass() {
             break;
         }
 
-        // TODO: Regularization
-        // if (options_.regularization_type == 0) {
-        //     Q_uu += options_.regularization_factor * Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
-        // } else if (options_.regularization_type == 1) {
-        //     Q_uu += options_.regularization_factor * Q_uu.maxCoeff() * Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
-        // }
+// TODO: Regularization
+// if (options_.regularization_type == 0) {
+//     Q_uu += options_.regularization_factor * Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
+// } else if (options_.regularization_type == 1) {
+//     Q_uu += options_.regularization_factor * Q_uu.maxCoeff() * Eigen::MatrixXd::Identity(dynamics_->control_size_, dynamics_->control_size_);
+// }
 
         // Feedback Gain Calculation 
         Eigen::MatrixXd K = -Q_uu.inverse() * Q_ux;
         Eigen::VectorXd k = -Q_uu.inverse() * Q_u;
 
-    std::cout << "K: " << K << " at " << i << std::endl;
-    std::cout << "k: " << k.transpose() << " at " << i << std::endl;
-        
         // Store Q-Function Matrices
         Q_UU_.at(i) = Q_uu;
         Q_UX_.at(i) = Q_ux;
@@ -325,7 +382,7 @@ bool CDDPProblem::solveBackwardPass() {
         V_X_.at(i) = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
         V_XX_.at(i) = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
         // Symmetrize Hessian
-        V_XX_.at(i) = 0.5 * (V_XX_.at(i) + V_XX_.at(i).transpose());
+// V_XX_.at(i) = 0.5 * (V_XX_.at(i) + V_XX_.at(i).transpose());
         V_.at(i) = cost + V_X_.at(i).transpose() * (x - goal_state_) + 0.5 * (x - goal_state_).transpose() * V_XX_.at(i) * (x - goal_state_);
     }
     return true;
