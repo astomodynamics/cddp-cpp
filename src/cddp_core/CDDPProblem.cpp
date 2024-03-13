@@ -3,7 +3,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 #include "cddp_core/CDDPProblem.hpp" 
-#include "OsqpEigen/OsqpEigen.h"
+#include "osqp++.h"
 
 namespace cddp {
 
@@ -249,35 +249,33 @@ bool CDDPProblem::solveForwardPass() {
             Eigen::VectorXd ub = trust_region_radius * (temp_control_max - U_.at(i));
 
             // Initialize QP solver
-            OsqpEigen::Solver solver;
-            solver.settings()->setWarmStart(true);
-            solver.settings()->setVerbosity(false);
-            // solver.settings()->setAlpha(1.0); // Change alpha parameter
+            osqp::OsqpInstance instance;
 
-            // Populate the data
-            solver.data()->setNumberOfVariables(dynamics_->control_size_);
-            solver.data()->setNumberOfConstraints(dynamics_->control_size_);
-            solver.data()->setHessianMatrix(P);
-            solver.data()->setGradient(q);
-            solver.data()->setLinearConstraintsMatrix(A);
-            solver.data()->setLowerBound(lb);
-            solver.data()->setUpperBound(ub);
+            // Set the objective
+            instance.objective_matrix = P;
+            instance.objective_vector = q;
+            instance.constraint_matrix = A;
+            instance.lower_bounds = lb;
+            instance.upper_bounds = ub;
 
             // Solve the QP problem
-            solver.initSolver();
-            solver.solveProblem();
+            osqp::OsqpSolver osqp_solver;
+            osqp::OsqpSettings settings;
+            settings.warm_start = true;
+            settings.verbose = false;
 
-            // Get the solution
-            Eigen::VectorXd delta_u = solver.getSolution();
+            osqp_solver.Init(instance, settings);
+            osqp::OsqpExitCode exit_code = osqp_solver.Solve();
+            double optimal_objective = osqp_solver.objective_value();
+            Eigen::VectorXd delta_u = osqp_solver.primal_solution();
 
-            if (solver.getStatus() == OsqpEigen::Status::Solved) {
+            if (exit_code == osqp::OsqpExitCode::kOptimal) {
                 is_feasible = true;
             } else {
                 trust_region_radius *= options_.trust_region_factor;
                 break;
             }
 
-            // Eigen::VectorXd delta_u = Eigen::VectorXd::Zero(dynamics_->control_size_);
             U_new.at(i) += delta_u;       // Update control 
 
             J_new += objective_->calculateRunningCost(x, U_new.at(i)); // Running cost

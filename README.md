@@ -40,10 +40,9 @@ brew install eigen # For macOS
 
 Although the library automatically finds the following dependencies and installs if you do not have ones, here is how you can install on your own.
 
-* [OSQP](https://osqp.org/) (QP solver) and [OSQP-Eigen](https://robotology.github.io/osqp-eigen/) (C++ OSQP Wrapper)
+* [OSQP](https://osqp.org/) (QP solver) and [osqp-cpp](https://github.com/google/osqp-cpp) (C++ Wrapper for OSQP)
 ```bash
 conda install -c conda-forge osqp
-conda install -c conda-forge osqp-eigen
 ```
 
 ### Building
