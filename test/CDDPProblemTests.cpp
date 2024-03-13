@@ -15,20 +15,20 @@ bool testBasicCDDP() {
 
     // Problem Setup
     Eigen::VectorXd initialState(state_dim);
-    initialState << 0.0, 0.0, M_PI/4; // Initial state
+    initialState << 0.0, 0.0, 0.0; // Initial state
 
     DubinsCar system(state_dim, control_dim, dt, integration_type); // Your DoubleIntegrator instance
     CDDPProblem cddp_solver(&system, initialState, horizon, dt);
     
     // Set goal state if needed
     Eigen::VectorXd goal_state(state_dim);
-    goal_state << 2.0, 2.0, M_PI/4;
+    goal_state << 2.0, 2.0, M_PI/2.0;
     cddp_solver.setGoalState(goal_state);
 
     // Simple Cost Matrices 
     Eigen::MatrixXd Q(state_dim, state_dim);
-    Q << 0e-1, 0, 0, 
-         0, 0e-1, 0, 
+    Q << 0e-2, 0, 0, 
+         0, 0e-2, 0, 
          0, 0, 0e-3;
     Eigen::MatrixXd R(control_dim, control_dim);
     R << 1e+0, 0, 
@@ -42,25 +42,37 @@ bool testBasicCDDP() {
 
     CDDPOptions opts;
     // Set options if needed
-    opts.max_iterations = 1;
+    opts.max_iterations = 10;
     // opts.cost_tolerance = 1e-6;
     // opts.grad_tolerance = 1e-8;
     // opts.print_iterations = false;
+
     cddp_solver.setOptions(opts);
 
 
-
     // Set initial trajectory if needed
-    std::vector<Eigen::VectorXd> X = std::vector<Eigen::VectorXd>(horizon + 1, initialState);
-    std::vector<Eigen::VectorXd> U = std::vector<Eigen::VectorXd>(horizon, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> X = std::vector<Eigen::VectorXd>(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U = std::vector<Eigen::VectorXd>(horizon, Eigen::VectorXd::Zero(control_dim));
+    // X.front() = initialState;
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve!
     std::vector<Eigen::VectorXd> U_sol = cddp_solver.solve();
 
-    // std::cout << "Optimal control (first step):\n" << optimal_control_seq[0] << std::endl;
+    std::vector<Eigen::VectorXd> X_sol = cddp_solver.getTrajectory();
 
-    return true; // Replace with proper success/failure logic based on your assertions
+    // Print solution
+    std::cout << "Solution: " << std::endl;
+    // print last state
+    std::cout << "Final State: " << X_sol.back().transpose() << std::endl;
+    // print initial control
+    std::cout << "Initial Control: " << U_sol[0].transpose() << std::endl;
+
+    // for (int i = 0; i < U_sol.size(); i++) {
+    //     std::cout << "Control " << i << ": " << U_sol[i].transpose() << std::endl;
+    // }
+
+    return true; 
 }
 
 int main() {
