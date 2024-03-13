@@ -8,18 +8,20 @@ This library is still under construction.
 **Author: Tomohiro Sasaki** 
 
 ## Installation
-### Requirements
+### Dependencies
 * [Eigen](https://formulae.brew.sh/formula/eigen) (Linear Algebra Library in CPP)
     
 ```bash
 sudo apt-get install libeigen3-dev # For Ubuntu
 brew install eigen # For macOS
-
 ```
+
+Although the library automatically finds the following dependencies and installs if you do not have ones, here is how you can install on your own.
 
 * [OSQP](https://osqp.org/) (QP solver) and [OSQP-Eigen](https://robotology.github.io/osqp-eigen/) (C++ OSQP Wrapper)
 ```bash
-pip install osqp
+conda install -c conda-forge osqp
+conda install -c conda-forge osqp-eigen
 ```
 
 ### Building
