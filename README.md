@@ -36,11 +36,7 @@ make
 
 
 ## References
-
-* Yuval Tassa, Nicolas Mansard, and Emanuel Todorov. "Control-limited differential dynamic programming." 2014 IEEE International Conference on Robotics and Automation (ICRA), 2014.
-* Weiwei Li and Emanuel Todorov, "Iterative linear quadratic regulator design for nonlinear biological movement systems," 2004.
 * Zhaoming Xie, C. Karen Liu, and Kris Hauser, "Differential Dynamic Programming with Nonlinear Constraints," 2017 IEEE International Conference on Robotics and Automation (ICRA), 2017.
-* https://github.com/kazuotani14/iLQR?tab=readme-ov-file
 
 
 ## Citing
