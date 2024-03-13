@@ -15,14 +15,14 @@ bool testBasicCDDP() {
 
     // Problem Setup
     Eigen::VectorXd initialState(state_dim);
-    initialState << 0.0, 0.0, M_PI/4; // Initial state
+    initialState << 0.0, 0.0, 0.0; // Initial state
 
     DubinsCar system(state_dim, control_dim, dt, integration_type); // Your DoubleIntegrator instance
     CDDPProblem cddp_solver(&system, initialState, horizon, dt);
     
     // Set goal state if needed
     Eigen::VectorXd goal_state(state_dim);
-    goal_state << 2.0, 2.0, M_PI/4;
+    goal_state << 2.0, 2.0, M_PI/2.0;
     cddp_solver.setGoalState(goal_state);
 
     // Simple Cost Matrices 
@@ -42,18 +42,18 @@ bool testBasicCDDP() {
 
     CDDPOptions opts;
     // Set options if needed
-    opts.max_iterations = 1;
+    opts.max_iterations = 10;
     // opts.cost_tolerance = 1e-6;
     // opts.grad_tolerance = 1e-8;
     // opts.print_iterations = false;
-    
+
     cddp_solver.setOptions(opts);
 
 
     // Set initial trajectory if needed
     std::vector<Eigen::VectorXd> X = std::vector<Eigen::VectorXd>(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U = std::vector<Eigen::VectorXd>(horizon, Eigen::VectorXd::Zero(control_dim));
-    X.front() = initialState;
+    // X.front() = initialState;
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve!
