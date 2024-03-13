@@ -6,13 +6,12 @@ This is an optimal control solver library using constrained differential dynamic
 The CDDP library solves problems in the form:
 
 $$
-\min_{\mathbf{U}} J(\mathbf{x}0, \mathbf{U}) = \phi(\mathbf{x}N) + \sum{k=0}^{N-1} \ell(\mathbf{x}_k,\mathbf{u}k) 
-
-\mathrm{s.t.~}  \mathbf{x}{k+1} = \mathbf{f}(\mathbf{x}_k,\mathbf{u}_k) , \mathbf{g}(\mathbf{x}_k,\mathbf{u})_k\leq 0 
-
-\mathbf{x}0 = \mathbf{x}{\mathrm{init}}  
-
+\begin{align}
+\min_{\mathbf{U}} J(\mathbf{x}0, \mathbf{U}) = \phi(\mathbf{x}N) + \sum{k=0}^{N-1} \ell(\mathbf{x}_k,\mathbf{u}k) \\
+\mathrm{s.t.~}  \mathbf{x}{k+1} = \mathbf{f}(\mathbf{x}_k,\mathbf{u}_k) , \mathbf{g}(\mathbf{x}_k,\mathbf{u})_k\leq \\
+\mathbf{x}0 = \mathbf{x}{\mathrm{init}}  \\
 k = 0,1,\cdots N-1
+\end{align}
 $$
 
 This library is still under construction. 
