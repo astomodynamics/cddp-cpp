@@ -1,7 +1,19 @@
 # Constrained Differential Dynamic Programming (CDDP) solver in C++
 
 ## Overview
-This is an optimal control solver library using constrained differential dynamic programming (CDDP) written in C++ based on Xie's [paper](https://zhaomingxie.github.io/projects/CDDP/CDDP.pdf) and [implementation](https://github.com/ZhaomingXie/CDDP). This library is particularly useful for mobile robot trajectory optimization and model predictive control (MPC).
+This is an optimal control solver library using constrained differential dynamic programming (CDDP) written in C++ based on Xie's [paper](https://zhaomingxie.github.io/projects/CDDP/CDDP.pdf). This library is particularly useful for mobile robot trajectory optimization and model predictive control (MPC).
+
+The CDDP library solves problems in the form 
+$$
+\min_{\mathbf{U}}  &J(\mathbf{x}_0, \mathbf{U}) = \phi(\mathbf{x}_N) + \sum_{k=0}^{N-1} \ell(\mathbf{x}_k,\mathbf{u}_k)
+
+\mathrm{s.t.~} & ~\mathbf{x}_{k+1} = \mathbf{f}(\mathbf{x}_{k},\mathbf{u}_k)
+& ~\mathbf{g}(\mathbf{x}_k,\mathbf{u})_k\leq 0
+
+& \mathbf{x}_0 = \mathbf{x}_{\mathrm{init}}
+
+& k = 0,1,\cdots N-1
+$$
 
 This library is still under construction. 
 
