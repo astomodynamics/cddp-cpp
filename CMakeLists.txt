@@ -37,35 +37,6 @@ else()
   find_package(osqp-cpp REQUIRED)
 endif()
 
-# # OSQP
-# if (NOT TARGET osqp OR NOT TARGET osqpstatic)
-#     message(STATUS "CDDP-cpp: `osqp` targets not found. Attempting to fetch contents...")
-#     FetchContent_Declare(
-#     osqp
-#     GIT_REPOSITORY https://github.com/osqp/osqp.git
-#     GIT_TAG v0.6.2
-#   )
-#   FetchContent_MakeAvailable(osqp)
-# else()
-#   message(STATUS "CDDP-cpp: `osqp` targets found.")
-#   find_package(osqp REQUIRED)
-# endif()
-
-# # OsqpEigen
-# if (NOT TARGET OsqpEigen::OsqpEigen)
-#     message(STATUS "CDDP-cpp: `osqp-eigen` targets not found. Attempting to fetch contents...")
-#     FetchContent_Declare(
-#     OsqpEigen
-#     GIT_REPOSITORY https://github.com/robotology/osqp-eigen.git
-#     GIT_TAG master
-#   )
-#   FetchContent_MakeAvailable(OsqpEigen)
-# else()
-#   message(STATUS "CDDP-cpp: `osqp-eigen` targets found.")
-#   find_package(OsqpEigen REQUIRED)
-# endif()
-
-
 # # Googletest
 # if (OSQP-CPP_BUILD_TESTS)
 #   enable_testing()
@@ -89,9 +60,6 @@ endif()
 add_executable(cddp_eigen_test test/test_eigen.cpp)
 target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 
-# OSQP test
-# add_executable(cddp_osqp_test test/test_osqp.cpp)
-# target_link_libraries(cddp_osqp_test PRIVATE osqp OsqpEigen) 
 
 # Add the main library
 # message(STATUS "CDDP-cpp: Adding DDP-cpp library...")
