@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <vector>
 #include <cassert> // For basic assertions
 #include "cddp/cddp_core/DynamicalSystem.hpp"
 #include "cddp/model/DoubleIntegrator.hpp"

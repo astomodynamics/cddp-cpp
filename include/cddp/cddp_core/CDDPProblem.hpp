@@ -1,8 +1,10 @@
 #ifndef CDDP_CDDPPROBLEM_HPP
 #define CDDP_CDDPPROBLEM_HPP
 
-#include <Eigen/Dense>
+#include <iostream>
+#include <memory>
 #include <vector>
+#include <Eigen/Dense>
 
 #include "cddp_core/DynamicalSystem.hpp" 
 #include "cddp_core/Objective.hpp" 
