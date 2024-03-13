@@ -47,23 +47,16 @@ public:
     }
 
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXd>  calculateRunningCostGradient(const Eigen::VectorXd& x, const Eigen::VectorXd& u) const override {
-        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd>  gradients;
         Eigen::VectorXd l_x = Q_ * (x - goal_state_) * timestep_;
         Eigen::VectorXd l_u = R_ * u * timestep_;
-        std::get<0>(gradients) = l_x;
-        std::get<1>(gradients) = l_u;
-        return gradients;
+        return std::make_tuple(l_x, l_u);
     }
 
     std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd>   calculateRunningCostHessian(const Eigen::VectorXd& x, const Eigen::VectorXd& u) const override {
-        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd>   hessians;
         Eigen::MatrixXd l_xx = Q_ * timestep_;
         Eigen::MatrixXd l_ux = Eigen::MatrixXd::Zero(R_.rows(), Q_.rows());
         Eigen::MatrixXd l_uu = R_ * timestep_;
-        std::get<0>(hessians) = l_xx;
-        std::get<1>(hessians) = l_ux;
-        std::get<2>(hessians) = l_uu;
-        return hessians;
+        return std::make_tuple(l_xx, l_ux, l_uu);
     }
 
     double calculateFinalCost(const Eigen::VectorXd& x) const override {

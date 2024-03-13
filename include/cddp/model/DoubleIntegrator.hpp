@@ -30,23 +30,19 @@ public:
     }
 
     
-    std::vector<Eigen::MatrixXd> getDynamicsJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
-        std::vector<Eigen::MatrixXd> jacobians;
+    std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> getDynamicsJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
         Eigen::MatrixXd A = Eigen::MatrixXd::Zero(state_size_, state_size_);
         A.block(0, 2, 2, 2) = Eigen::MatrixXd::Identity(2, 2);
         Eigen::MatrixXd B = Eigen::MatrixXd::Zero(state_size_, control_size_);
         B.block(2, 0, 2, 2) = Eigen::MatrixXd::Identity(2, 2);
-        jacobians.push_back(A);
-        jacobians.push_back(B);
-        return jacobians;
+
+        return std::make_tuple(A, B);
     }
 
-    std::vector<Eigen::MatrixXd> getDynamicsHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
-        std::vector<Eigen::MatrixXd> hessians;
+    std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> getDynamicsHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) override {
         Eigen::MatrixXd hessian = Eigen::MatrixXd::Zero(state_size_, state_size_ + control_size_);
-        hessians.push_back(hessian);
-        hessians.push_back(hessian);
-        return hessians;
+
+        return std::make_tuple(hessian, hessian, hessian);
     }   
 };
     
