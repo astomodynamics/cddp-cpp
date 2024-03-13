@@ -6,8 +6,8 @@
 #include <vector>
 #include <Eigen/Dense>
 
-#include "cddp_core/DynamicalSystem.hpp" 
-#include "cddp_core/Objective.hpp" 
+#include "cddp/cddp_core/DynamicalSystem.hpp" 
+#include "cddp/cddp_core/Objective.hpp" 
 
 namespace cddp {
 

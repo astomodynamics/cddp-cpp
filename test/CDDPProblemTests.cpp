@@ -1,7 +1,7 @@
 #include <iostream> 
 #include <Eigen/Dense>
-#include "cddp_core/CDDPProblem.hpp"
-#include "model/DubinsCar.hpp"
+#include "cddp/cddp_core/CDDPProblem.hpp"
+#include "cddp/model/DubinsCar.hpp"
 
 using namespace cddp;
 
