@@ -18,7 +18,7 @@ $$
 $$
 
 $$
-\quad \mathbf{x}_0 = \mathbf{x}_{\mathrm{init}} 
+\quad {\mathbf{x}}_0 = \mathbf{x}_{\mathrm{init}} 
 $$
 
 $$
