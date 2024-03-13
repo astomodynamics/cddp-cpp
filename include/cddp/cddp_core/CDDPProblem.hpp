@@ -22,7 +22,8 @@ struct CDDPOptions {
     int active_set_max_iterations = 100;  // Maximum iterations for active set method
     double active_set_tolerance = 1e-6;   // Tolerance for active set
     double active_set_coeff = 1.0;        // Coefficient for active set method
-    double trust_region_coeff = 1.0;      // Coefficient for trust region method
+    double trust_region_radius = 1.0;      // Coefficient for trust region method
+    double trust_region_factor = 0.90;      // Coefficient for trust region method
     int regularization_type = 0;          // 0 or 1 for different regularization types
     double regularization_x = 1e-6;       // Regularization for state
     double regularization_u = 1e-6;       // Regularization for control
