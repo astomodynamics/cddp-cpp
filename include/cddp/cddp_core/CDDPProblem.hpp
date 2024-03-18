@@ -5,9 +5,10 @@
 #include <memory>
 #include <vector>
 #include <Eigen/Dense>
-
-#include "cddp_core/DynamicalSystem.hpp" 
-#include "cddp_core/Objective.hpp" 
+#include "cddp/cddp_core/DynamicalSystem.hpp" 
+#include "cddp/cddp_core/Objective.hpp" 
+#include "cddp/cddp_core/Constriant.hpp" 
+// #include "cddp/cddp_core/Helper.hpp"
 
 namespace cddp {
 
@@ -51,6 +52,7 @@ public:
     void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U);
     void initializeCost();
     void setObjective(std::unique_ptr<Objective> objective);
+    void addConstraint(std::unique_ptr<Constraint> constraint);
     Eigen::VectorXd getInitialState() { return initial_state_; }
     Eigen::VectorXd getGoalState() { return goal_state_; }
     int getHorizon() { return horizon_; }
@@ -122,7 +124,7 @@ private:
     CDDPOptions options_;
 
     std::unique_ptr<Objective> objective_; // Store a cost function
-    // std::vector<std::unique_ptr<Constraint>> constraints_; // Store multiple constraints
+    std::vector<std::unique_ptr<Constraint>> constraint_set_; // Store multiple constraints
 };
 
 
