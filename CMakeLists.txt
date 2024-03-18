@@ -9,6 +9,7 @@ option(CDDP-CPP_BUILD_TESTS
   "Whether to build tests." OFF
 )
 
+# Set the default build type to Release
 include_directories(include)
 include_directories(src)
 
@@ -55,18 +56,17 @@ endif()
 #   endif()
 # endif()
 
+# Add the main library
+message(STATUS "CDDP-cpp: Adding CDDP-cpp library...")
+add_library(cddp ../src/cddp_core/CDDPProblem.cpp)
+target_link_libraries(cddp Eigen3::Eigen osqp-cpp)
+target_include_directories(cddp PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
+message(STATUS "CDDP-cpp: Added CDDP-cpp library.")
 
-# Eigen test
+# Eigen test (Placeholder for now, will be removed later on)
 add_executable(cddp_eigen_test test/test_eigen.cpp)
 target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 
-
-# Add the main library
-# message(STATUS "CDDP-cpp: Adding DDP-cpp library...")
-# add_library(cddp src/cddp.cpp)
-# target_link_libraries(cddp Eigen3::Eigen osqp OsqpEigen)
-# target_include_directories(DDP-cpp PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
-# message(STATUS "CDDP-cpp: Added DDP-cpp library.")
 
 # TEST
 add_subdirectory(test)
