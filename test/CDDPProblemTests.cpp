@@ -40,9 +40,19 @@ bool testBasicCDDP() {
     QuadraticCost objective(Q, R, Qf, goal_state, dt);
     cddp_solver.setObjective(std::make_unique<QuadraticCost>(objective));
 
+    // Add constraints 
+    Eigen::VectorXd lower_bound(control_dim);
+    lower_bound << -0.1, -M_PI;
+
+    Eigen::VectorXd upper_bound(control_dim);
+    upper_bound << 0.1, M_PI;
+
+    ControlBoxConstraint control_constraint(lower_bound, upper_bound);
+    cddp_solver.addConstraint(std::make_unique<ControlBoxConstraint>(control_constraint));
+
     CDDPOptions opts;
     // Set options if needed
-    opts.max_iterations = 10;
+    opts.max_iterations = 20;
     // opts.cost_tolerance = 1e-6;
     // opts.grad_tolerance = 1e-8;
     // opts.print_iterations = false;
@@ -68,9 +78,9 @@ bool testBasicCDDP() {
     // print initial control
     std::cout << "Initial Control: " << U_sol[0].transpose() << std::endl;
 
-    // for (int i = 0; i < U_sol.size(); i++) {
-    //     std::cout << "Control " << i << ": " << U_sol[i].transpose() << std::endl;
-    // }
+    for (int i = 0; i < U_sol.size(); i++) {
+        std::cout << "Control " << i << ": " << U_sol[i].transpose() << std::endl;
+    }
 
     return true; 
 }
