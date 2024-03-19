@@ -58,7 +58,7 @@ endif()
 
 # Add the main library
 message(STATUS "CDDP-cpp: Adding CDDP-cpp library...")
-add_library(cddp ../src/cddp_core/CDDPProblem.cpp)
+add_library(cddp src/cddp_core/CDDPProblem.cpp)
 target_link_libraries(cddp Eigen3::Eigen osqp-cpp)
 target_include_directories(cddp PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
 message(STATUS "CDDP-cpp: Added CDDP-cpp library.")
