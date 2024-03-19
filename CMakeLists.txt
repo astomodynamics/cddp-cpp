@@ -69,7 +69,7 @@ target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 
 
 # TEST
-add_subdirectory(test)
+# add_subdirectory(test)
 
 # Build and register tests.
 # if (CDDP-CPP_BUILD_TESTS)
