@@ -1,7 +1,7 @@
-cmake_minimum_required(VERSION 3.10) 
+cmake_minimum_required(VERSION 3.14) 
 project(cddp)
 
-set(CMAKE_CXX_STANDARD 14) # Enforce C++14 as the minimum standard
+set(CMAKE_CXX_STANDARD 17) # Enforce C++17 as the minimum standard
 # set(CMAKE_CXX_STANDARD_REQUIRED ON) 
 
 # Options.
