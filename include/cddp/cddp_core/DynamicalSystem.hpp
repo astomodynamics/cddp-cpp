@@ -51,10 +51,10 @@ public:
 
 
     // Optional methods
-    virtual std::vector<Eigen::VectorXd> getTrajectory(const Eigen::VectorXd &initialState, const std::vector<Eigen::VectorXd> &controlSeq, int num_steps) {}; 
+    // virtual std::vector<Eigen::VectorXd> getTrajectory(const Eigen::VectorXd &initialState, const std::vector<Eigen::VectorXd> &controlSeq, int num_steps) {}; 
     
     
-    virtual void setGoal(const Eigen::VectorXd &goal) {}
+    // virtual void setGoal(const Eigen::VectorXd &goal) {}
 
 private:
     Eigen::VectorXd euler_step(const Eigen::VectorXd &state, const Eigen::VectorXd &control, double dt) {
