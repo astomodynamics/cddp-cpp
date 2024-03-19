@@ -1,7 +1,7 @@
 #include <iostream> 
 #include <cassert> 
 #include "cddp_core/Objective.hpp"
-#include <Eigen/Dense>
+#include "Eigen/Dense"
 
 namespace cddp { 
 

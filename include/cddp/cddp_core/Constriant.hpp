@@ -1,7 +1,7 @@
 #ifndef CDDP_CONSTRAINT_HPP
 #define CDDP_CONSTRAINT_HPP
 
-#include <Eigen/Dense>
+#include "Eigen/Dense"
 #include <vector>
 
 namespace cddp {

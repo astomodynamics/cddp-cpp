@@ -1,7 +1,7 @@
 #ifndef CDDP_PENDULUM_HPP
 #define CDDP_PENDULUM_HPP
 
-#include <Eigen/Dense>
+#include "Eigen/Dense"
 #include <vector>
 #include "cddp_core/DynamicalSystem.hpp"
 
