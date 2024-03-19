@@ -23,15 +23,17 @@ public:
 
     
     Eigen::VectorXd getDynamics(const Eigen::VectorXd &state, const Eigen::VectorXd &control) {
+        Eigen::VectorXd next_state;
         if (integration_type_ == 0) {
-            return euler_step(state, control, dt_);
+            next_state = euler_step(state, control, dt_);
         } else if (integration_type_ == 1) {
-            return heun_step(state, control, dt_);
+            next_state = heun_step(state, control, dt_);
         } else if (integration_type_ == 2) {
-            return rk3_step(state, control, dt_);
+            next_state = rk3_step(state, control, dt_);
         } else if (integration_type_ == 3) {
-            return rk4_step(state, control, dt_);
+            next_state = rk4_step(state, control, dt_);
         } 
+        return next_state;
     }
         
     virtual std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> getDynamicsJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) {
