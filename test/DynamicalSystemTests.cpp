@@ -2,9 +2,9 @@
 #include <iostream>
 #include <vector>
 #include <cassert> // For basic assertions
-#include "cddp/cddp_core/DynamicalSystem.hpp"
-#include "cddp/model/DoubleIntegrator.hpp"
-#include "cddp/model/DubinsCar.hpp"
+#include "cddp_core/DynamicalSystem.hpp"
+#include "model/DoubleIntegrator.hpp"
+#include "model/DubinsCar.hpp"
 
 // Test case for the transition function of the DoubleIntegrator
 bool testDoubleIntegratorTransition() {

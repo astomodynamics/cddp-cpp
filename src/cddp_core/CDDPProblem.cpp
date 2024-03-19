@@ -2,7 +2,7 @@
 #include <vector>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
-#include "cddp/cddp_core/CDDPProblem.hpp" 
+#include "cddp_core/CDDPProblem.hpp" 
 #include "osqp++.h"
 
 /* 
