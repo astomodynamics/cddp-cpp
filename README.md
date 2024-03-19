@@ -52,7 +52,7 @@ mkdir build
 cd build
 cmake ..
 make
-# make install
+make test
 ```
 
 ## Basic Usage

@@ -9,7 +9,7 @@ set(CMAKE_BUILD_TYPE "Release")
 
 # Options.
 option(CDDP-CPP_BUILD_TESTS
-  "Whether to build tests." OFF
+  "Whether to build tests." ON
 )
 
 # Enable FetchContent for downloading dependencies
@@ -39,22 +39,22 @@ else()
 endif()
 
 # # Googletest
-# if (OSQP-CPP_BUILD_TESTS)
-#   enable_testing()
-#   if (NOT TARGET gtest OR NOT TARGET gmock OR NOT TARGET gtest_main)
-#     message(STATUS "CDDP-cpp: `googletest` targets not found. Attempting to fetch contents...")
-#     set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-#     FetchContent_Declare(
-#       googletest
-#       GIT_REPOSITORY https://github.com/google/googletest.git
-#       GIT_TAG        origin/main
-#     )
-#     FetchContent_MakeAvailable(googletest)
-#     include(GoogleTest)
-#   else()
-#     message(STATUS "CDDP-cpp: `googletest` targets found.")
-#   endif()
-# endif()
+if (CDDP-CPP_BUILD_TESTS)
+  enable_testing()
+  if (NOT TARGET gtest OR NOT TARGET gmock OR NOT TARGET gtest_main)
+    message(STATUS "CDDP-cpp: `googletest` targets not found. Attempting to fetch contents...")
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    FetchContent_Declare(
+      googletest
+      GIT_REPOSITORY https://github.com/google/googletest.git
+      GIT_TAG        origin/main
+    )
+    FetchContent_MakeAvailable(googletest)
+    include(GoogleTest)
+  else()
+    message(STATUS "CDDP-cpp: `googletest` targets found.")
+  endif()
+endif()
 
 # Add the include directory
 include_directories(include/cddp)
@@ -75,11 +75,11 @@ target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 add_subdirectory(test)
 
 # Build and register tests.
-# if (CDDP-CPP_BUILD_TESTS)
-#   message(STATUS "CDDP-cpp: Adding CDDP-cpp tests...")
-#   add_executable(osqp_test test/osqp++_test.cc)
-#   target_link_libraries(cddp_test gtest gmock gtest_main absl::status absl::span cddp-cpp)
-#   gtest_discover_tests(cddp_test)
-#   message(STATUS "CDDP-cpp: Added CDDP-cpp tests.")
-# endif()
+if (CDDP-CPP_BUILD_TESTS)
+  message(STATUS "CDDP-cpp: Adding CDDP-cpp tests...")
+  add_executable(cddp_test test/cddp_test.cpp)
+  target_link_libraries(cddp_test gtest gmock gtest_main cddp)
+  gtest_discover_tests(cddp_test)
+  message(STATUS "CDDP-cpp: Added CDDP-cpp tests.")
+endif()
 
