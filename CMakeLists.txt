@@ -24,32 +24,6 @@ else()
   message(STATUS "CDDP-cpp: `Eigen3` targets found.")
 endif()
 
-# # ABSL
-# if (NOT TARGET absl::strings OR NOT TARGET absl::status OR NOT TARGET absl::span)
-#   message(STATUS "CDDP-cpp: `absl` targets not found. Attempting to fetch contents...")
-#   FetchContent_Declare(
-#     abseil-cpp
-#     GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
-#     GIT_TAG        origin/master
-#   )
-#   FetchContent_MakeAvailable(abseil-cpp)
-# else()
-#   message(STATUS "CDDP-cpp: `absl` targets found.")
-# endif()
-
-# # OSQP
-# if (NOT TARGET osqpstatic)
-#   message(STATUS "CDDP-cpp: `osqp` targets not found. Attempting to fetch contents...")
-#   FetchContent_Declare(
-#     osqp
-#     GIT_REPOSITORY https://github.com/oxfordcontrol/osqp.git
-#     GIT_TAG        v0.6.0
-#   )
-#   FetchContent_MakeAvailable(osqp)
-# else()
-#   message(STATUS "CDDP-cpp: `osqp` targets found.")
-# endif()
-
 # OSQP-CPP
 if (NOT TARGET osqp-cpp OR NOT TARGET osqpstatic)
     message(STATUS "CDDP-cpp: `osqp` targets not found. Attempting to fetch contents...")
@@ -105,3 +79,15 @@ add_subdirectory(test)
 #   gtest_discover_tests(cddp_test)
 #   message(STATUS "CDDP-cpp: Added CDDP-cpp tests.")
 # endif()
+
+
+
+# Install
+set(CMAKE_INSTALL_PREFIX "/usr/local" CACHE PATH "Default install path" FORCE)
+
+# ... Inside the install section ...
+install(TARGETS cddp 
+        DESTINATION lib) 
+
+install(DIRECTORY include/cddp 
+        DESTINATION include) 
