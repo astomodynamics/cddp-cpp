@@ -56,6 +56,9 @@ endif()
 #   endif()
 # endif()
 
+# Add the include directory
+include_directories(include/cddp)
+
 # Add the main library
 message(STATUS "CDDP-cpp: Adding CDDP-cpp library...")
 add_library(cddp src/cddp_core/CDDPProblem.cpp)
@@ -69,7 +72,7 @@ target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 
 
 # TEST
-# add_subdirectory(test)
+add_subdirectory(test)
 
 # Build and register tests.
 # if (CDDP-CPP_BUILD_TESTS)
@@ -80,14 +83,3 @@ target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 #   message(STATUS "CDDP-cpp: Added CDDP-cpp tests.")
 # endif()
 
-
-
-# Install
-set(CMAKE_INSTALL_PREFIX "/usr/local" CACHE PATH "Default install path" FORCE)
-
-# ... Inside the install section ...
-install(TARGETS cddp 
-        DESTINATION lib) 
-
-install(DIRECTORY include/cddp 
-        DESTINATION include) 
