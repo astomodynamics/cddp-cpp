@@ -16,12 +16,13 @@ include_directories(src)
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
 
-# Eigen
-find_package(Eigen3 REQUIRED)
-if (APPLE)
-      include_directories(/usr/local/include/eigen3) 
-else ()
-    include_directories(${EIGEN3_INCLUDE_DIR})
+# EIGEN
+# Eigen is usually available as a system package, so we use find_package.
+if (NOT TARGET Eigen3::Eigen)
+  message(STATUS "CDDP-cpp: `Eigen3` targets not found. Attempting to find package...")
+  find_package(Eigen3 REQUIRED NO_MODULE)
+else()
+  message(STATUS "CDDP-cpp: `Eigen3` targets found.")
 endif()
 
 # ABSL
