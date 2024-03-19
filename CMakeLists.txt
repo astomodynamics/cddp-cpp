@@ -2,16 +2,15 @@ cmake_minimum_required(VERSION 3.14)
 project(cddp)
 
 set(CMAKE_CXX_STANDARD 17) # Enforce C++17 as the minimum standard
-# set(CMAKE_CXX_STANDARD_REQUIRED ON) 
+set(CMAKE_CXX_STANDARD_REQUIRED ON) 
+
+# Set the default build type to Release
+set(CMAKE_BUILD_TYPE "Release")
 
 # Options.
 option(CDDP-CPP_BUILD_TESTS
   "Whether to build tests." OFF
 )
-
-# Set the default build type to Release
-include_directories(include)
-include_directories(src)
 
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
@@ -25,31 +24,31 @@ else()
   message(STATUS "CDDP-cpp: `Eigen3` targets found.")
 endif()
 
-# ABSL
-if (NOT TARGET absl::strings OR NOT TARGET absl::status OR NOT TARGET absl::span)
-  message(STATUS "CDDP-cpp: `absl` targets not found. Attempting to fetch contents...")
-  FetchContent_Declare(
-    abseil-cpp
-    GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
-    GIT_TAG        origin/master
-  )
-  FetchContent_MakeAvailable(abseil-cpp)
-else()
-  message(STATUS "CDDP-cpp: `absl` targets found.")
-endif()
+# # ABSL
+# if (NOT TARGET absl::strings OR NOT TARGET absl::status OR NOT TARGET absl::span)
+#   message(STATUS "CDDP-cpp: `absl` targets not found. Attempting to fetch contents...")
+#   FetchContent_Declare(
+#     abseil-cpp
+#     GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
+#     GIT_TAG        origin/master
+#   )
+#   FetchContent_MakeAvailable(abseil-cpp)
+# else()
+#   message(STATUS "CDDP-cpp: `absl` targets found.")
+# endif()
 
-# OSQP
-if (NOT TARGET osqpstatic)
-  message(STATUS "CDDP-cpp: `osqp` targets not found. Attempting to fetch contents...")
-  FetchContent_Declare(
-    osqp
-    GIT_REPOSITORY https://github.com/oxfordcontrol/osqp.git
-    GIT_TAG        v0.6.0
-  )
-  FetchContent_MakeAvailable(osqp)
-else()
-  message(STATUS "CDDP-cpp: `osqp` targets found.")
-endif()
+# # OSQP
+# if (NOT TARGET osqpstatic)
+#   message(STATUS "CDDP-cpp: `osqp` targets not found. Attempting to fetch contents...")
+#   FetchContent_Declare(
+#     osqp
+#     GIT_REPOSITORY https://github.com/oxfordcontrol/osqp.git
+#     GIT_TAG        v0.6.0
+#   )
+#   FetchContent_MakeAvailable(osqp)
+# else()
+#   message(STATUS "CDDP-cpp: `osqp` targets found.")
+# endif()
 
 # OSQP-CPP
 if (NOT TARGET osqp-cpp OR NOT TARGET osqpstatic)
@@ -86,7 +85,7 @@ endif()
 # Add the main library
 message(STATUS "CDDP-cpp: Adding CDDP-cpp library...")
 add_library(cddp src/cddp_core/CDDPProblem.cpp)
-target_link_libraries(cddp Eigen3::Eigen osqp-cpp)
+target_link_libraries(cddp PUBLIC Eigen3::Eigen PRIVATE osqp-cpp ${CMAKE_DL_LIBS})
 target_include_directories(cddp PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
 message(STATUS "CDDP-cpp: Added CDDP-cpp library.")
 

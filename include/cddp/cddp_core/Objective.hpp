@@ -1,7 +1,7 @@
 #ifndef CDDP_OBJECTIVE_HPP
 #define CDDP_OBJECTIVE_HPP
 
-#include <Eigen/Dense>
+#include "Eigen/Dense"
 #include <vector>
 
 namespace cddp {

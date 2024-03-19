@@ -4,7 +4,7 @@
 #include <iostream>
 #include <memory>
 #include <vector>
-#include <Eigen/Dense>
+#include "Eigen/Dense"
 #include "cddp/cddp_core/DynamicalSystem.hpp" 
 #include "cddp/cddp_core/Objective.hpp" 
 #include "cddp/cddp_core/Constriant.hpp" 

@@ -1,7 +1,7 @@
 #ifndef CDDP_DOUBLEINTEGRATOR_HPP
 #define CDDP_DOUBLEINTEGRATOR_HPP
 
-#include <Eigen/Dense>
+#include "Eigen/Dense"
 #include <vector>
 #include "cddp_core/DynamicalSystem.hpp" // Include the missing header file
 

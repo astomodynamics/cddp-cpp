@@ -1,5 +1,5 @@
 #include <iostream> 
-#include <Eigen/Dense>
+#include "Eigen/Dense"
 #include "cddp/cddp_core/CDDPProblem.hpp"
 #include "cddp/model/DubinsCar.hpp"
 

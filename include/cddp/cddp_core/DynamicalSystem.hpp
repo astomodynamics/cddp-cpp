@@ -1,7 +1,7 @@
 #ifndef CDDP_DYNAMICALSYSTEM_HPP
 #define CDDP_DYNAMICALSYSTEM_HPP
 
-#include <Eigen/Dense>
+#include "Eigen/Dense"
 
 namespace cddp {
 class DynamicalSystem {
