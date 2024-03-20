@@ -34,11 +34,29 @@ if (NOT TARGET osqp-cpp OR NOT TARGET osqpstatic)
   )
   FetchContent_MakeAvailable(osqp-cpp)
 else()
-  message(STATUS "CDDP-cpp: `osqp-cpp` targets found.")
-  find_package(osqp-cpp REQUIRED)
+    message(STATUS "CDDP-cpp: `osqp-cpp` targets found.")
+    find_package(osqp-cpp REQUIRED)
 endif()
 
-# # Googletest
+# Matplotplusplus
+if (NOT TARGET matplot)
+    message(STATUS "CDDP-cpp: `matplot` targets not found. Attempting to fetch contents...")
+    FetchContent_Declare(
+      matplotplusplus
+      GIT_REPOSITORY https://github.com/alandefreitas/matplotplusplus
+      GIT_TAG origin/master
+    ) 
+    FetchContent_GetProperties(matplotplusplus)
+    if(NOT matplotplusplus_POPULATED)
+        FetchContent_Populate(matplotplusplus)
+        add_subdirectory(${matplotplusplus_SOURCE_DIR} ${matplotplusplus_BINARY_DIR} EXCLUDE_FROM_ALL)
+    endif()
+else()
+    message(STATUS "CDDP-cpp: `matplot` targets found.")
+endif()
+
+
+# Googletest
 if (CDDP-CPP_BUILD_TESTS)
   enable_testing()
   if (NOT TARGET gtest OR NOT TARGET gmock OR NOT TARGET gtest_main)
@@ -69,6 +87,10 @@ message(STATUS "CDDP-cpp: Added CDDP-cpp library.")
 # Eigen test (Placeholder for now, will be removed later on)
 add_executable(cddp_eigen_test test/test_eigen.cpp)
 target_link_libraries(cddp_eigen_test Eigen3::Eigen)
+
+# matplotplusplus test (Placeholder for now, will be removed later on)
+add_executable(cddp_matplotplusplus_test test/test_matplotplusplus.cpp)
+target_link_libraries(cddp_matplotplusplus_test PUBLIC matplot)
 
 
 # TEST
