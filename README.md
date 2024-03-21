@@ -1,5 +1,5 @@
 # Constrained Differential Dynamic Programming (CDDP) solver in C++
-
+**This library is actively under construction.**
 ## Overview
 This is an optimal control solver library using constrained differential dynamic programming (CDDP) written in C++ based on Xie's [paper](https://zhaomingxie.github.io/projects/CDDP/CDDP.pdf). This library is particularly useful for mobile robot trajectory optimization and model predictive control (MPC).
 
@@ -24,8 +24,6 @@ $$
 $$
 \quad k = 0,1,\cdots N-1
 $$
-
-This library is still under construction. 
 
 **Author: Tomohiro Sasaki** 
 
