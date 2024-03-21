@@ -73,3 +73,4 @@ If you use this work in an academic context, please cite this repository.
 * add initial guess functionality based on path planner solution
 * add automatic differentiation
 * add nonlinear objective and constraint handling
+* add simulation and its plots
