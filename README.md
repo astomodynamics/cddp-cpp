@@ -67,3 +67,6 @@ make test
 If you use this work in an academic context, please cite this repository.
 
 ## TODO
+* add state constraint handling
+* add regularization process
+* add initial guess functionality based on path planner solution
