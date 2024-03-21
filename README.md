@@ -57,6 +57,9 @@ make test
 ## Basic Usage
 
 
+## ROS 
+If you want to use this library for ROS2 MPC node, please refer <https://github.com/astomodynamics/cddp_mpc_pkg> 
+
 ## References
 * Zhaoming Xie, C. Karen Liu, and Kris Hauser, "Differential Dynamic Programming with Nonlinear Constraints," 2017 IEEE International Conference on Robotics and Automation (ICRA), 2017.
 
