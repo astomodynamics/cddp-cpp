@@ -36,7 +36,7 @@ sudo apt-get install libeigen3-dev # For Ubuntu
 brew install eigen # For macOS
 ```
 
-Although the library automatically finds the following dependencies and installs if you do not have ones, here is how you can install on your own.
+Although the library automatically finds and installs the following dependencies via [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html), if you do not have ones, here is how you can install on your own.
 
 * [OSQP](https://osqp.org/) (QP solver) and [osqp-cpp](https://github.com/google/osqp-cpp) (C++ Wrapper for OSQP)
 ```bash
@@ -62,6 +62,7 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 
 ## References
 * Zhaoming Xie, C. Karen Liu, and Kris Hauser, "Differential Dynamic Programming with Nonlinear Constraints," 2017 IEEE International Conference on Robotics and Automation (ICRA), 2017.
+* Zhamming Xie's github repository <https://github.com/ZhaomingXie/CDDP>
 
 
 ## Citing
