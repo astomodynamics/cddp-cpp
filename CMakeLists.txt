@@ -12,21 +12,43 @@ option(CDDP-CPP_BUILD_TESTS
   "Whether to build tests." ON
 )
 
+# EIGEN
+find_package(Eigen3 REQUIRED)
+
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
 
-# EIGEN
-# Eigen is usually available as a system package, so we use find_package.
-if (NOT TARGET Eigen3::Eigen)
-  message(STATUS "CDDP-cpp: `Eigen3` targets not found. Attempting to find package...")
-  find_package(Eigen3 REQUIRED NO_MODULE)
+# ABSL
+if (NOT TARGET absl::strings OR NOT TARGET absl::status OR NOT TARGET absl::span)
+  message(STATUS "CDDP-cpp: `absl` targets not found. Attempting to fetch contents...")
+  FetchContent_Declare(
+    abseil-cpp
+    GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
+    GIT_TAG        origin/master
+  )
+  FetchContent_MakeAvailable(abseil-cpp)
 else()
-  message(STATUS "CDDP-cpp: `Eigen3` targets found.")
+  message(STATUS "CDDP-cpp: `absl` targets found.")
 endif()
+
+
+# OSQP
+if (NOT TARGET osqpstatic)
+  message(STATUS "CDDP-cpp: `osqp` targets not found. Attempting to fetch contents...")
+  FetchContent_Declare(
+    osqp
+    GIT_REPOSITORY https://github.com/oxfordcontrol/osqp.git
+    GIT_TAG        v0.6.0
+  )
+  FetchContent_MakeAvailable(osqp)
+else()
+  message(STATUS "CDDP-cpp: `osqp` targets found.")
+endif()
+
 
 # OSQP-CPP
 if (NOT TARGET osqp-cpp OR NOT TARGET osqpstatic)
-    message(STATUS "CDDP-cpp: `osqp` targets not found. Attempting to fetch contents...")
+    message(STATUS "CDDP-cpp: `osqp-cpp` targets not found. Attempting to fetch contents...")
     FetchContent_Declare(
     osqp-cpp
     GIT_REPOSITORY https://github.com/google/osqp-cpp
@@ -83,25 +105,15 @@ add_library(cddp src/cddp_core/CDDPProblem.cpp)
 target_link_libraries(cddp PUBLIC Eigen3::Eigen PRIVATE osqp-cpp ${CMAKE_DL_LIBS})
 target_include_directories(cddp PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
 message(STATUS "CDDP-cpp: Added CDDP-cpp library.")
-
 # Eigen test (Placeholder for now, will be removed later on)
 add_executable(cddp_eigen_test test/test_eigen.cpp)
 target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 
-# matplotplusplus test (Placeholder for now, will be removed later on)
-add_executable(cddp_matplotplusplus_test test/test_matplotplusplus.cpp)
-target_link_libraries(cddp_matplotplusplus_test PUBLIC matplot)
-
-
-# TEST
+# LOCAL TEST
 add_subdirectory(test)
 
-# Build and register tests.
-if (CDDP-CPP_BUILD_TESTS)
-  message(STATUS "CDDP-cpp: Adding CDDP-cpp tests...")
-  add_executable(cddp_test test/cddp_test.cpp)
-  target_link_libraries(cddp_test gtest gmock gtest_main cddp)
-  gtest_discover_tests(cddp_test)
-  message(STATUS "CDDP-cpp: Added CDDP-cpp tests.")
-endif()
 
+add_executable(cddp_problem_tests 
+    test/CDDPProblemTests.cpp
+    src/cddp_core/CDDPProblem.cpp)
+target_link_libraries(cddp_problem_tests PUBLIC Eigen3::Eigen PRIVATE osqp-cpp)  
