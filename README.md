@@ -51,7 +51,7 @@ git clone https://github.com/astomodynamics/CDDP-cpp
 cd CDDP-cpp
 mkdir build
 cd build
-cmake -DCMAKE_INSTALL_PREFIX:PATH=</path/to/your/desired/directory> ..
+cmake -DCMAKE_INSTALL_PREFIX:PATH=</path/to/your/desired/directory>/cddp ..
 make
 make install
 make test
