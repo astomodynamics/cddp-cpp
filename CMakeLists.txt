@@ -113,7 +113,3 @@ target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 add_subdirectory(test)
 
 
-add_executable(cddp_problem_tests 
-    test/CDDPProblemTests.cpp
-    src/cddp_core/CDDPProblem.cpp)
-target_link_libraries(cddp_problem_tests PUBLIC Eigen3::Eigen PRIVATE osqp-cpp)  
