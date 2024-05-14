@@ -4,7 +4,6 @@
 #include "Eigen/Sparse"
 #include "cddp_core/CDDPProblem.hpp" 
 #include "osqp++.h"
-
 /* 
 TODO
 - Add circle constraint

@@ -96,44 +96,24 @@ if (CDDP-CPP_BUILD_TESTS)
   endif()
 endif()
 
-# Add the include directory
-include_directories(include/cddp)
+# # Add the include directory
+# include_directories(include/cddp)
 
 # Add the main library
-# message(STATUS "CDDP-cpp: Adding CDDP-cpp library...")
-# add_library(cddp src/cddp_core/CDDPProblem.cpp)
-# target_link_libraries(cddp PUBLIC Eigen3::Eigen PRIVATE osqp-cpp ${CMAKE_DL_LIBS})
-# target_include_directories(cddp PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>")
-# message(STATUS "CDDP-cpp: Added CDDP-cpp library.")
-# # Eigen test (Placeholder for now, will be removed later on)
-# add_executable(cddp_eigen_test test/test_eigen.cpp)
-# target_link_libraries(cddp_eigen_test Eigen3::Eigen)
+message(STATUS "CDDP-cpp: Adding CDDP-cpp library...")
+add_library(cddp src/cddp_core/CDDPProblem.cpp)
+target_link_libraries(cddp PUBLIC 
+    Eigen3::Eigen 
+    PRIVATE osqp-cpp ${CMAKE_DL_LIBS})
+target_include_directories(cddp PUBLIC 
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" 
+    include/cddp)
+message(STATUS "CDDP-cpp: Added CDDP-cpp library.")
+
+# Eigen test (Placeholder for now, will be removed later on)
+add_executable(cddp_eigen_test test/test_eigen.cpp)
+target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 
 # LOCAL TEST
 add_subdirectory(test)
 
-#################### install ####################
-add_library(${PROJECT_NAME} INTERFACE)
-
-target_compile_features(${PROJECT_NAME} INTERFACE cxx_std_17)
-
-target_include_directories(${PROJECT_NAME} INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-
-install(TARGETS ${PROJECT_NAME}
-  EXPORT ${PROJECT_NAME}-config
-)
-
-install(EXPORT ${PROJECT_NAME}-config
-  NAMESPACE ${PROJECT_NAME}::
-  DESTINATION lib/cmake/${PROJECT_NAME}
-)
-
-install(
-  DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/
-  DESTINATION include
-)
-
-add_library(${PROJECT_NAME}::${PROJECT_NAME} ALIAS ${PROJECT_NAME})
