@@ -47,7 +47,7 @@ struct CDDPOptions {
 
 class CDDPProblem {
 public:
-    CDDPProblem(DynamicalSystem* system, const Eigen::VectorXd& initialState, int horizon, double dt);
+    CDDPProblem(const Eigen::VectorXd& initialState, int horizon, double dt);
 
     // Problem Setup
     void setInitialState(const Eigen::VectorXd& x0);
