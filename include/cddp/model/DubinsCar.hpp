@@ -3,7 +3,7 @@
 
 #include "Eigen/Dense"
 #include <vector>
-#include "../cddp_core/DynamicalSystem.hpp" 
+#include "cddp_core/DynamicalSystem.hpp" 
 
 namespace cddp {
 

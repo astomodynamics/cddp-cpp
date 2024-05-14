@@ -19,8 +19,7 @@ TODO
 namespace cddp {
 
 // Constructor 
-CDDPProblem::CDDPProblem(cddp::DynamicalSystem* system, const Eigen::VectorXd& initialState, int horizon, double timestep) :
-    dynamics_(system), 
+CDDPProblem::CDDPProblem(const Eigen::VectorXd& initialState, int horizon, double timestep) :
     initial_state_(initialState), 
     goal_state_(initialState), // Pre-allocate goal to initialState 
     horizon_(horizon),
@@ -28,23 +27,23 @@ CDDPProblem::CDDPProblem(cddp::DynamicalSystem* system, const Eigen::VectorXd& i
 {
     // Initialize Trajectory
     X_.resize(horizon + 1, initial_state_);
-    U_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
+    // U_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
 
     // Initialize Intermediate Cost
     J_ = 0.0;
 
-    k_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
-    K_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->state_size_));
+    // k_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
+    // K_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->state_size_));
 
     // Initialize Intermediate value function
     V_.resize(horizon + 1, 0.0);
-    V_X_.resize(horizon + 1, Eigen::VectorXd::Zero(system->state_size_));
-    V_XX_.resize(horizon + 1, Eigen::MatrixXd::Zero(system->state_size_, system->state_size_));
+    // V_X_.resize(horizon + 1, Eigen::VectorXd::Zero(system->state_size_));
+    // V_XX_.resize(horizon + 1, Eigen::MatrixXd::Zero(system->state_size_, system->state_size_));
 
     // Initialize Q-function Matrices
-    Q_UU_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->control_size_));
-    Q_UX_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->state_size_));
-    Q_U_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
+    // Q_UU_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->control_size_));
+    // Q_UX_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->state_size_));
+    // Q_U_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
 }
 
 // Setup Methods
