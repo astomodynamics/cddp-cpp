@@ -27,6 +27,14 @@ struct CDDPOptions {
     double active_set_coeff = 1.0;        // Coefficient for active set method
     double trust_region_radius = 1.0;      // Coefficient for trust region method
     double trust_region_factor = 0.90;      // Coefficient for trust region method
+    
+    // Line search method
+    // int line_search_type = 0;             // 0 for Armijo, 1 for Wolfe
+    double line_search_coeff = 1e-0;      // Coefficient for line search
+    double line_search_factor = 0.5;      // Factor for line search
+    int line_search_max_iterations = 11; // Maximum iterations for line search
+
+
     int regularization_type = 0;          // 0 or 1 for different regularization types
     double regularization_x = 1e-6;       // Regularization for state
     double regularization_u = 1e-6;       // Regularization for control
