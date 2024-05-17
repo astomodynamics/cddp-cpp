@@ -26,24 +26,8 @@ CDDPProblem::CDDPProblem(const Eigen::VectorXd& initialState, int horizon, doubl
     dt_(timestep)
 {
     // Initialize Trajectory
-    X_.resize(horizon + 1, initial_state_);
+    // X_.resize(horizon + 1, initial_state_);
     // U_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
-
-    // Initialize Intermediate Cost
-    J_ = 0.0;
-
-    // k_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
-    // K_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->state_size_));
-
-    // Initialize Intermediate value function
-    V_.resize(horizon + 1, 0.0);
-    // V_X_.resize(horizon + 1, Eigen::VectorXd::Zero(system->state_size_));
-    // V_XX_.resize(horizon + 1, Eigen::MatrixXd::Zero(system->state_size_, system->state_size_));
-
-    // Initialize Q-function Matrices
-    // Q_UU_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->control_size_));
-    // Q_UX_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->state_size_));
-    // Q_U_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
 }
 
 // Setup Methods
@@ -80,6 +64,32 @@ void CDDPProblem::setTimeStep(double timestep) {
 
 void CDDPProblem::setOptions(const CDDPOptions& opts) {
     options_ = opts;
+}
+
+void CDDPProblem::setDynamicalSystem(std::unique_ptr<DynamicalSystem> dynamics) {
+    dynamics_ = std::move(dynamics);
+
+    // Initialize Trajectory
+    X_.resize(horizon_ + 1, initial_state_);
+    U_.resize(horizon_, Eigen::VectorXd::Zero(dynamics_->control_size_));
+
+    // Initialize Intermediate Cost
+    J_ = 0.0;
+
+    // Initialize Control Gains
+    k_.resize(horizon_, Eigen::VectorXd::Zero(dynamics_->control_size_));
+    K_.resize(horizon_, Eigen::MatrixXd::Zero(dynamics_->control_size_, dynamics_->state_size_));
+
+    // Initialize Intermediate value function
+    V_.resize(horizon_ + 1, 0.0);
+    V_X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(dynamics_->state_size_));
+    V_XX_.resize(horizon_ + 1, Eigen::MatrixXd::Zero(dynamics_->state_size_, dynamics_->state_size_));
+    
+    // Initialize Q-function Matrices
+    Q_UU_.resize(horizon_, Eigen::MatrixXd::Zero(dynamics_->control_size_, dynamics_->control_size_));
+    Q_UX_.resize(horizon_, Eigen::MatrixXd::Zero(dynamics_->control_size_, dynamics_->state_size_));
+    Q_U_.resize(horizon_, Eigen::VectorXd::Zero(dynamics_->control_size_));
+
 }
 
 void CDDPProblem::setObjective(std::unique_ptr<Objective> objective) {
