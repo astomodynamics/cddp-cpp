@@ -19,9 +19,9 @@ TODO
 namespace cddp {
 
 // Constructor 
-CDDPProblem::CDDPProblem(const Eigen::VectorXd& initialState, int horizon, double timestep) :
-    initial_state_(initialState), 
-    goal_state_(initialState), // Pre-allocate goal to initialState 
+CDDPProblem::CDDPProblem(const Eigen::VectorXd& initial_state, const Eigen::VectorXd& goal_state, int horizon, double timestep) :
+    initial_state_(initial_state), 
+    goal_state_(goal_state), // Pre-allocate goal to initialState 
     horizon_(horizon),
     dt_(timestep)
 {
