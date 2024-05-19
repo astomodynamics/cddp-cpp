@@ -10,22 +10,25 @@ using namespace cddp;
 bool testBasicCDDP() {
     int state_dim = 3; 
     int control_dim = 2; 
-    double dt = 0.05;
+    double dt = 0.03;
     int horizon = 100;
     int integration_type = 0; // 0 for Euler, 1 for Heun, 2 for RK3, 3 for RK4
 
     // Problem Setup
-    Eigen::VectorXd initialState(state_dim);
-    initialState << 0.0, 0.0, 0.0; // Initial state
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 0.0, 0.0, M_PI/4.0; // Initial state
 
-    DubinsCar system(state_dim, control_dim, dt, integration_type); // Your DoubleIntegrator instance
-    CDDPProblem cddp_solver(&system, initialState, horizon, dt);
-    
-    // Set goal state if needed
+    // Set goal state
     Eigen::VectorXd goal_state(state_dim);
     goal_state << 2.0, 2.0, M_PI/2.0;
-    cddp_solver.setGoalState(goal_state);
 
+    DubinsCar system(state_dim, control_dim, dt, integration_type); // Your DoubleIntegrator instance
+    CDDPProblem cddp_solver(initial_state, goal_state, horizon, dt);
+
+    // Set dynamical system
+    cddp_solver.setDynamicalSystem(std::make_unique<DubinsCar>(system));
+    
+   
     // Simple Cost Matrices 
     Eigen::MatrixXd Q(state_dim, state_dim);
     Q << 0e-2, 0, 0, 
@@ -43,10 +46,10 @@ bool testBasicCDDP() {
 
     // Add constraints 
     Eigen::VectorXd lower_bound(control_dim);
-    lower_bound << -0.1, -M_PI;
+    lower_bound << -1.0, -M_PI;
 
     Eigen::VectorXd upper_bound(control_dim);
-    upper_bound << 0.1, M_PI;
+    upper_bound << 1.0, M_PI;
 
     ControlBoxConstraint control_constraint(lower_bound, upper_bound);
     cddp_solver.addConstraint(std::make_unique<ControlBoxConstraint>(control_constraint));
@@ -64,7 +67,6 @@ bool testBasicCDDP() {
     // Set initial trajectory if needed
     std::vector<Eigen::VectorXd> X = std::vector<Eigen::VectorXd>(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U = std::vector<Eigen::VectorXd>(horizon, Eigen::VectorXd::Zero(control_dim));
-    // X.front() = initialState;
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve!
