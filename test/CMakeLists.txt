@@ -14,10 +14,10 @@ add_executable(cddp_objective_tests
 target_link_libraries(cddp_objective_tests PUBLIC Eigen3::Eigen)
 
 # ---- CDDPTests ----
-# add_executable(cddp_problem_tests 
-#     CDDPProblemTests.cpp
-#     ../src/cddp_core/CDDPProblem.cpp)
-# target_link_libraries(cddp_problem_tests PUBLIC Eigen3::Eigen PRIVATE osqp-cpp)
+add_executable(cddp_problem_tests 
+    CDDPProblemTests.cpp
+    ../src/cddp_core/CDDPProblem.cpp)
+target_link_libraries(cddp_problem_tests PUBLIC Eigen3::Eigen PRIVATE osqp-cpp)
 
 
 

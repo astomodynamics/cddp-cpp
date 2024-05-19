@@ -1,4 +1,5 @@
 #include <iostream>
+#include <chrono>
 #include <vector>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
@@ -169,10 +170,13 @@ std::vector<Eigen::VectorXd> CDDPProblem::solve() {
     double J = std::numeric_limits<double>::infinity();
     double gradientNorm = std::numeric_limits<double>::infinity();
 
+    // Start the timer
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     // 2. Main CDDP Iterative Loop
     for (int iter = 0; iter < options_.max_iterations; ++iter) {
 std::cout << "Iteration: " << iter << std::endl;
-std::cout << "Cost " << J_ << std::endl;
+std::cout << "Cost " << J_ << std::endl; 
         double J_old = J;
         // 3. Backward 
         bool backward_pass_done = solveBackwardPass();
@@ -208,6 +212,15 @@ std::cout << "Cost " << J_ << std::endl;
 
 
     }
+
+    // Stop the timer
+    auto end_time = std::chrono::high_resolution_clock::now();
+
+    // Calculate the elapsed time
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    // Print the elapsed time
+std::cout << "Solver time: " << duration.count() << " ms" << std::endl;
 
     // 6. Return Optimal Control Sequence
     // place holder 
