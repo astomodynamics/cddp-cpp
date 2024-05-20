@@ -1,4 +1,5 @@
 #include <iostream>
+#include <chrono>
 #include <vector>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
@@ -19,32 +20,15 @@ TODO
 namespace cddp {
 
 // Constructor 
-CDDPProblem::CDDPProblem(cddp::DynamicalSystem* system, const Eigen::VectorXd& initialState, int horizon, double timestep) :
-    dynamics_(system), 
-    initial_state_(initialState), 
-    goal_state_(initialState), // Pre-allocate goal to initialState 
+CDDPProblem::CDDPProblem(const Eigen::VectorXd& initial_state, const Eigen::VectorXd& goal_state, int horizon, double timestep) :
+    initial_state_(initial_state), 
+    goal_state_(goal_state), // Pre-allocate goal to initialState 
     horizon_(horizon),
     dt_(timestep)
 {
     // Initialize Trajectory
-    X_.resize(horizon + 1, initial_state_);
-    U_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
-
-    // Initialize Intermediate Cost
-    J_ = 0.0;
-
-    k_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
-    K_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->state_size_));
-
-    // Initialize Intermediate value function
-    V_.resize(horizon + 1, 0.0);
-    V_X_.resize(horizon + 1, Eigen::VectorXd::Zero(system->state_size_));
-    V_XX_.resize(horizon + 1, Eigen::MatrixXd::Zero(system->state_size_, system->state_size_));
-
-    // Initialize Q-function Matrices
-    Q_UU_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->control_size_));
-    Q_UX_.resize(horizon, Eigen::MatrixXd::Zero(system->control_size_, system->state_size_));
-    Q_U_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
+    // X_.resize(horizon + 1, initial_state_);
+    // U_.resize(horizon, Eigen::VectorXd::Zero(system->control_size_));
 }
 
 // Setup Methods
@@ -81,6 +65,32 @@ void CDDPProblem::setTimeStep(double timestep) {
 
 void CDDPProblem::setOptions(const CDDPOptions& opts) {
     options_ = opts;
+}
+
+void CDDPProblem::setDynamicalSystem(std::unique_ptr<DynamicalSystem> dynamics) {
+    dynamics_ = std::move(dynamics);
+
+    // Initialize Trajectory
+    X_.resize(horizon_ + 1, initial_state_);
+    U_.resize(horizon_, Eigen::VectorXd::Zero(dynamics_->control_size_));
+
+    // Initialize Intermediate Cost
+    J_ = 0.0;
+
+    // Initialize Control Gains
+    k_.resize(horizon_, Eigen::VectorXd::Zero(dynamics_->control_size_));
+    K_.resize(horizon_, Eigen::MatrixXd::Zero(dynamics_->control_size_, dynamics_->state_size_));
+
+    // Initialize Intermediate value function
+    V_.resize(horizon_ + 1, 0.0);
+    V_X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(dynamics_->state_size_));
+    V_XX_.resize(horizon_ + 1, Eigen::MatrixXd::Zero(dynamics_->state_size_, dynamics_->state_size_));
+    
+    // Initialize Q-function Matrices
+    Q_UU_.resize(horizon_, Eigen::MatrixXd::Zero(dynamics_->control_size_, dynamics_->control_size_));
+    Q_UX_.resize(horizon_, Eigen::MatrixXd::Zero(dynamics_->control_size_, dynamics_->state_size_));
+    Q_U_.resize(horizon_, Eigen::VectorXd::Zero(dynamics_->control_size_));
+
 }
 
 void CDDPProblem::setObjective(std::unique_ptr<Objective> objective) {
@@ -160,10 +170,13 @@ std::vector<Eigen::VectorXd> CDDPProblem::solve() {
     double J = std::numeric_limits<double>::infinity();
     double gradientNorm = std::numeric_limits<double>::infinity();
 
+    // Start the timer
+    auto start_time = std::chrono::high_resolution_clock::now();
+
     // 2. Main CDDP Iterative Loop
     for (int iter = 0; iter < options_.max_iterations; ++iter) {
 std::cout << "Iteration: " << iter << std::endl;
-std::cout << "Cost " << J_ << std::endl;
+std::cout << "Cost " << J_ << std::endl; 
         double J_old = J;
         // 3. Backward 
         bool backward_pass_done = solveBackwardPass();
@@ -199,6 +212,15 @@ std::cout << "Cost " << J_ << std::endl;
 
 
     }
+
+    // Stop the timer
+    auto end_time = std::chrono::high_resolution_clock::now();
+
+    // Calculate the elapsed time
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    // Print the elapsed time
+std::cout << "Solver time: " << duration.count() << " ms" << std::endl;
 
     // 6. Return Optimal Control Sequence
     // place holder 
