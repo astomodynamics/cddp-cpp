@@ -47,7 +47,7 @@ struct CDDPOptions {
 
 class CDDPProblem {
 public:
-    CDDPProblem(DynamicalSystem* system, const Eigen::VectorXd& initialState, int horizon, double dt);
+    CDDPProblem(const Eigen::VectorXd& initial_state, const Eigen::VectorXd& goal_state, int horizon, double dt);
 
     // Problem Setup
     void setInitialState(const Eigen::VectorXd& x0);
@@ -59,6 +59,7 @@ public:
     void setOptions(const CDDPOptions& opts);
     void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U);
     void initializeCost();
+    void setDynamicalSystem(std::unique_ptr<DynamicalSystem> dynamics);
     void setObjective(std::unique_ptr<Objective> objective);
     void addConstraint(std::unique_ptr<Constraint> constraint);
     Eigen::VectorXd getInitialState() { return initial_state_; }
@@ -98,7 +99,7 @@ public:
 
 private:
     // Problem Data
-    DynamicalSystem* dynamics_;
+    std::unique_ptr<DynamicalSystem> dynamics_;
     Eigen::VectorXd initial_state_;
     Eigen::VectorXd goal_state_;
     int horizon_;
