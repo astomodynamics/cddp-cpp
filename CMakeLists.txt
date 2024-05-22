@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.14)
 project(cddp)
 
 set(CMAKE_CXX_STANDARD 17) # Enforce C++17 as the minimum standard
-set(CMAKE_CXX_STANDARD_REQUIRED ON) 
+set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Enforce C++17 as the minimum standard
+set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
 
 # Set the default build type to Release
 set(CMAKE_BUILD_TYPE "Release")
