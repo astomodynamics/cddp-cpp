@@ -114,7 +114,7 @@ void CDDPProblem::setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, co
 void CDDPProblem::initializeCost() {
     J_ = 0.0;
     for (int i = 0; i < horizon_; ++i) {
-        J_ += objective_->calculateRunningCost(X_.at(i), U_.at(i));
+        J_ += objective_->calculateRunningCost(X_.at(i), U_.at(i), i);
     }
     J_ += objective_->calculateFinalCost(X_.back());
 
@@ -251,6 +251,7 @@ bool CDDPProblem::solveForwardPass() {
     
     // Trust Region Loop
     while (is_feasible == false && iter < options_.active_set_max_iterations) {
+std::cout << "Forward pass Iteration: " << iter  << std::endl;
         double J_new = 0.0;
         double dJ = 0.0;            
         double expected_dV = 0.0;
@@ -324,9 +325,10 @@ bool CDDPProblem::solveForwardPass() {
 
             U_new.at(i) += delta_u;       // Update control 
 
-            J_new += objective_->calculateRunningCost(x, U_new.at(i)); // Running cost
+            J_new += objective_->calculateRunningCost(x, U_new.at(i), i); // Running cost
             x = dynamics_->getDynamics(x, U_new.at(i)); // Simulate forward 
             X_new.at(i + 1) = x;          // Update trajectory
+        
         }
         J_new += objective_->calculateFinalCost(X_new.back()); // Final cost
 
@@ -384,11 +386,11 @@ bool CDDPProblem::solveBackwardPass() {
         Eigen::MatrixXd B = dt_ * f_u;
 
         // Calculate cost gradients and Hessians
-        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> gradients = objective_->calculateRunningCostGradient(x, u);
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> gradients = objective_->calculateRunningCostGradient(x, u, i);
         Eigen::VectorXd l_x = std::get<0>(gradients);
         Eigen::VectorXd l_u = std::get<1>(gradients);
 
-        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> hessians = objective_->calculateRunningCostHessian(x, u);
+        std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> hessians = objective_->calculateRunningCostHessian(x, u, i);
         Eigen::MatrixXd l_xx = std::get<0>(hessians);
         Eigen::MatrixXd l_ux = std::get<1>(hessians);
         Eigen::MatrixXd l_uu = std::get<2>(hessians);
@@ -507,7 +509,7 @@ bool CDDPProblem::solveBackwardPass() {
         K_.at(i) = K;
 
         // Update Value Function
-        double cost = objective_->calculateRunningCost(x, u);
+        double cost = objective_->calculateRunningCost(x, u, i);
         V_X_.at(i) = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
         V_XX_.at(i) = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
 
