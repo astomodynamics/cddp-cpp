@@ -43,6 +43,7 @@ struct CDDPOptions {
     double regularization_max = 1e6;      // Maximum regularization
     double regularization_min = 1e-6;     // Minimum regularization
     bool print_iterations = true;         // Option for debug printing 
+    bool is_ilqr = false;                  // Option for iLQR
 };
 
 class CDDPProblem {
