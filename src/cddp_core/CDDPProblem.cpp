@@ -6,7 +6,7 @@
 #include "cddp_core/CDDPProblem.hpp" 
 #include "osqp++.h"
 /* 
-TODO
+TODO:
 - Add circle constraint
 - Add Merit function check
 - Add regularization
@@ -15,6 +15,7 @@ TODO
 - Add convergence check
 - Add cost improvement check
 - Add expected improvement check
+- Add parallelization
 */
 
 namespace cddp {
