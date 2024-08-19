@@ -8,14 +8,16 @@
 /* 
 TODO:
 - Add circle constraint
+- Add ellipse constraint
 - Add Merit function check
 - Add regularization
-- Add trust region
+- Add trust region/line-search
 - Add print methods
 - Add convergence check
 - Add cost improvement check
 - Add expected improvement check
 - Add parallelization
+- Add warm start
 */
 
 namespace cddp {
