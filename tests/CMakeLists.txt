@@ -3,9 +3,9 @@ add_executable(test_pendulum dynamics_model/test_pendulum.cpp)
 target_link_libraries(test_pendulum gtest gmock gtest_main cddp Eigen3::Eigen)
 gtest_discover_tests(test_pendulum)
 
-# add_executable(test_objective test/cddp_core/test_objective.cc)
-# target_link_libraries(test_objective gtest gmock gtest_main cddp)
-# gtest_discover_tests(test_objective)
+add_executable(test_objective cddp_core/test_objective.cpp)
+target_link_libraries(test_objective gtest gmock gtest_main cddp)
+gtest_discover_tests(test_objective)
 
 # add_executable(test_cddp_core test/cddp_core/test_cddp_core.cc)
 # target_link_libraries(test_cddp_core gtest gmock gtest_main cddp)

@@ -102,7 +102,7 @@ include_directories(/usr/include/python3.10)
 # Add your source files
 add_library(cddp
     src/cddp_core/dynamical_system.cpp
-    # src/cddp_core/objective.cc
+    src/cddp_core/objective.cpp
     # src/cddp_core/cddp_core.cc
     src/dynamics_model/pendulum.cpp
 )
