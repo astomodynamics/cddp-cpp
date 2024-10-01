@@ -118,7 +118,7 @@ endif()
 # Build and register tests.
 if (CDDP-CPP_BUILD_TESTS)
 message(STATUS "cddp-cpp: Adding cddp-cpp tests...")  
-  add_executable(test_pendulum test/dynamics_model/test_pendulum.cc)
+  add_executable(test_pendulum tests/dynamics_model/test_pendulum.cc)
   target_link_libraries(test_pendulum gtest gmock gtest_main cddp Eigen3::Eigen)
   gtest_discover_tests(test_pendulum)
 
@@ -131,7 +131,7 @@ message(STATUS "cddp-cpp: Adding cddp-cpp tests...")
   # gtest_discover_tests(test_cddp_core)
 
   # # Test for eigen vs torch
-  add_executable(test_eigen test/test_eigen.cc)
+  add_executable(test_eigen tests/test_eigen.cc)
   target_link_libraries(test_eigen gtest gmock gtest_main Eigen3::Eigen)
   gtest_discover_tests(test_eigen)
 
