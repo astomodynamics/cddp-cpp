@@ -1,5 +1,5 @@
-#ifndef CDDP_DYNAMICAL_SYSTEM_H
-#define CDDP_DYNAMICAL_SYSTEM_H
+#ifndef CDDP_DYNAMICAL_SYSTEM_HPP
+#define CDDP_DYNAMICAL_SYSTEM_HPP
 
 #include <Eigen/Dense>
 
@@ -77,4 +77,4 @@ protected:
     Eigen::VectorXd rk4_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const;
 };
 }
-#endif // CDDP_DYNAMICAL_SYSTEM_H
+#endif // CDDP_DYNAMICAL_SYSTEM_HPP

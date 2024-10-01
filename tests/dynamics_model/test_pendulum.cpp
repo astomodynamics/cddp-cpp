@@ -6,8 +6,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "cddp-cpp/dynamics_model/pendulum.h" // Assuming you have the Eigen-based Pendulum class
-#include "cddp-cpp/matplotlibcpp.h"
+#include "cddp-cpp/dynamics_model/pendulum.hpp" // Assuming you have the Eigen-based Pendulum class
+#include "cddp-cpp/matplotlibcpp.hpp"
 
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
@@ -33,10 +33,6 @@ TEST(PendulumTest, DiscreteDynamics) {
     // Simulate for a few steps
     int num_steps = 100;
     for (int i = 0; i < num_steps; ++i) {
-        // Print the current state
-        std::cout << "Step " << i << ": theta = " << state[0]
-                  << ", theta_dot = " << state[1] << std::endl;
-
         // Store data for plotting
         time_data.push_back(i * timestep);
         theta_data.push_back(state[0]);
@@ -47,10 +43,11 @@ TEST(PendulumTest, DiscreteDynamics) {
     }
 
     // Create directory for saving plot (if it doesn't exist)
-    const std::string plotDirectory = "../plots/test";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directory(plotDirectory);
-    }
+    // const std::string plotDirectory = "../plots/test";
+    // if (!fs::exists(plotDirectory)) {
+    //     fs::create_directory(plotDirectory);
+    // }
+
     // Plot the results (same as before)
     plt::figure();
     plt::plot(time_data, theta_data, {{"label", "Angle"}});
@@ -58,11 +55,8 @@ TEST(PendulumTest, DiscreteDynamics) {
     plt::xlabel("Time");
     plt::ylabel("State");
     plt::legend();
-    plt::save(plotDirectory + "/pendulum_dynamics.png");
+    // plt::save(plotDirectory + "/pendulum_dynamics.png");
     // plt::show();
-
-    // Assertions (adapt to Eigen)
-    // No GPU checks needed anymore
 
     // Assert true if the pendulum has the correct state dimension
     ASSERT_EQ(pendulum.getStateDim(), 2);

@@ -1,7 +1,7 @@
-#ifndef CDDP_PENDULUM_H
-#define CDDP_PENDULUM_H
+#ifndef CDDP_PENDULUM_HPP
+#define CDDP_PENDULUM_HPP
 
-#include "cddp-cpp/cddp_core/dynamical_system.h" 
+#include "cddp-cpp/cddp_core/dynamical_system.hpp" 
 #include <Eigen/Dense>
 
 namespace cddp
@@ -36,4 +36,4 @@ private:
 };
 
 } // namespace cddp
-#endif // CDDP_PENDULUM_H
+#endif // CDDP_PENDULUM_HPP

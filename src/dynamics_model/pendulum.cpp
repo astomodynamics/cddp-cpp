@@ -1,4 +1,4 @@
-#include "cddp-cpp/dynamics_model/pendulum.h" 
+#include "cddp-cpp/dynamics_model/pendulum.hpp" 
 #include <cmath>
 #include <Eigen/Dense>
 

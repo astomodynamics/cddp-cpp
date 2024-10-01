@@ -1,4 +1,9 @@
-#pragma once
+#ifndef MATPLOTLIBCPP_HPP
+#define MATPLOTLIBCPP_HPP
+
+// This file is imported from matplotlib-cpp (https://github.com/lava/matplotlib-cpp) with modification
+// LICENSE: The MIT License (MIT)
+// Original author: lava/matplotlib-cpp
 
 // Python headers must be included before any system headers, since
 // they define _POSIX_C_SOURCE
@@ -2984,3 +2989,5 @@ private:
 };
 
 } // end namespace matplotlibcpp
+
+#endif // MATPLOTLIBCPP_HPP

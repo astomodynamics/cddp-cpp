@@ -101,10 +101,10 @@ include_directories(/usr/include/python3.10)
 
 # Add your source files
 add_library(cddp
-    src/cddp_core/dynamical_system.cc
+    src/cddp_core/dynamical_system.cpp
     # src/cddp_core/objective.cc
     # src/cddp_core/cddp_core.cc
-    src/dynamics_model/pendulum.cc
+    src/dynamics_model/pendulum.cpp
 )
 
 # Link against the gurobi library
@@ -117,31 +117,21 @@ endif()
 
 # Build and register tests.
 if (CDDP-CPP_BUILD_TESTS)
-message(STATUS "cddp-cpp: Adding cddp-cpp tests...")  
-  add_executable(test_pendulum tests/dynamics_model/test_pendulum.cc)
-  target_link_libraries(test_pendulum gtest gmock gtest_main cddp Eigen3::Eigen)
-  gtest_discover_tests(test_pendulum)
+  message(STATUS "cddp-cpp: Adding cddp-cpp tests...")  
 
-  # add_executable(test_objective test/cddp_core/test_objective.cc)
-  # target_link_libraries(test_objective gtest gmock gtest_main cddp)
-  # gtest_discover_tests(test_objective)
+  add_subdirectory(tests) # include cmake in tests
 
-  # add_executable(test_cddp_core test/cddp_core/test_cddp_core.cc)
-  # target_link_libraries(test_cddp_core gtest gmock gtest_main cddp)
-  # gtest_discover_tests(test_cddp_core)
-
-  # # Test for eigen vs torch
-  add_executable(test_eigen tests/test_eigen.cc)
-  target_link_libraries(test_eigen gtest gmock gtest_main Eigen3::Eigen)
-  gtest_discover_tests(test_eigen)
-
-  # # Test for gurobi
-  # add_executable(test_gurobi test/test_gurobi.cc)
-  # target_link_libraries(test_gurobi gtest gmock gtest_main ${GUROBI_LIBRARIES}  gurobi_c++ 
-  # gurobi110)
-  # gtest_discover_tests(test_gurobi)
   message(STATUS "cddp-cpp: Added cddp-cpp tests.")
 endif()
+
+
+# Cmake compile commmand:
+# $ mkdir build
+# $ cd build
+# $ cmake  -DCMAKE_BUILD_TYPE=Release -DCDDP-CPP_GUROBI=ON -DCDDP-CPP_BUILD_TESTS=ON ..
+# $ make -j4
+# $ make test
+
 
 # # Add the main library
 # message(STATUS "CDDP-cpp: Adding CDDP-cpp library...")
@@ -159,12 +149,7 @@ endif()
 # target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 
 # # LOCAL TEST
-# add_subdirectory(test)
+# 
 
 
-# Cmake compile commmand:
-# $ mkdir build
-# $ cd build
-# $ cmake  -DCMAKE_BUILD_TYPE=Release -DCDDP-CPP_GUROBI=ON -DCDDP-CPP_BUILD_TESTS=ON ..
-# $ make -j4
-# $ make test
+
