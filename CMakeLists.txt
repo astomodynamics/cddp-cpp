@@ -18,7 +18,8 @@ option(CDDP-CPP_GUROBI
 )
 
 # EIGEN
-find_package(Eigen3 REQUIRED)
+find_package(Eigen3 REQUIRED) # for matplotlibcpp
+find_package(PythonLibs 3.10 REQUIRED)
 
 # Enable FetchContent for downloading dependencies
 include(FetchContent)

@@ -1,14 +1,16 @@
 // Description: Test the pendulum dynamics model.
 #include <iostream>
 #include <vector>
+#include <filesystem>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include "cddp-cpp/dynamics_model/pendulum.h" // Assuming you have the Eigen-based Pendulum class
-// #include "cddp-cpp/matplotlibcpp.h"
+#include "cddp-cpp/matplotlibcpp.h"
 
-// namespace plt = matplotlibcpp;
+namespace plt = matplotlibcpp;
+namespace fs = std::filesystem;
 using namespace cddp;
 
 TEST(PendulumTest, DiscreteDynamics) {
@@ -44,13 +46,19 @@ TEST(PendulumTest, DiscreteDynamics) {
         state = pendulum.getDiscreteDynamics(state, control); 
     }
 
+    // Create directory for saving plot (if it doesn't exist)
+    const std::string plotDirectory = "../plots/test";
+    if (!fs::exists(plotDirectory)) {
+        fs::create_directory(plotDirectory);
+    }
     // Plot the results (same as before)
-    // plt::figure();
-    // plt::plot(time_data, theta_data, {{"label", "Angle"}});
-    // plt::plot(time_data, theta_dot_data, {{"label", "Angular Velocity"}});
-    // plt::xlabel("Time");
-    // plt::ylabel("State");
-    // plt::legend();
+    plt::figure();
+    plt::plot(time_data, theta_data, {{"label", "Angle"}});
+    plt::plot(time_data, theta_dot_data, {{"label", "Angular Velocity"}});
+    plt::xlabel("Time");
+    plt::ylabel("State");
+    plt::legend();
+    plt::save(plotDirectory + "/pendulum_dynamics.png");
     // plt::show();
 
     // Assertions (adapt to Eigen)
