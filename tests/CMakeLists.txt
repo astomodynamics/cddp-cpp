@@ -7,9 +7,9 @@ add_executable(test_objective cddp_core/test_objective.cpp)
 target_link_libraries(test_objective gtest gmock gtest_main cddp)
 gtest_discover_tests(test_objective)
 
-# add_executable(test_cddp_core test/cddp_core/test_cddp_core.cc)
-# target_link_libraries(test_cddp_core gtest gmock gtest_main cddp)
-# gtest_discover_tests(test_cddp_core)
+add_executable(test_cddp_core cddp_core/test_cddp_core.cpp)
+target_link_libraries(test_cddp_core gtest gmock gtest_main cddp)
+gtest_discover_tests(test_cddp_core)
 
 # # Test for eigen vs torch
 add_executable(test_eigen test_eigen.cpp)
