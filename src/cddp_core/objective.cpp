@@ -39,7 +39,7 @@ QuadraticObjective::QuadraticObjective(
     // Check the last reference state is same as the reference state
     if (reference_states_.size() > 0)
     {
-        if ((reference_states_.row(reference_states_.rows() - 1) - reference_state_).norm() > 1e-6)
+        if ((reference_states_.col(reference_states_.cols() - 1) - reference_state_).norm() > 1e-6)
         {
             std::cerr << "QuadraticObjective: Last reference state must be same as the reference state" << std::endl;
             throw std::invalid_argument("Last reference state must be same as the reference state");
