@@ -32,36 +32,56 @@ TEST(ObjectiveFunctionTests, QuadraticObjective) {
     Eigen::MatrixXd R = Eigen::MatrixXd::Identity(control_dim, control_dim) * 0.1; 
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim) * 2.0;
     Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
-    std::vector<Eigen::VectorXd> X_ref(horizon, goal_state);
+    Eigen::MatrixXd X_ref(state_dim, horizon + 1);
+    X_ref << 1.0, 1.1, 1.2, 1.3, 1.4, 1.5,
+             0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+             0.2, 0.3, 0.4, 0.5, 0.6, 0.7;
+
+    goal_state << 1.1, 0.6, 0.3;
 
     // Create the objective
-    cddp::QuadraticObjective objective(Q, R, Qf, goal_state);
+    cddp::QuadraticObjective objective(Q, R, Qf, goal_state, Eigen::MatrixXd::Zero(0, 0), timestep);
 
     // Example state and control
     Eigen::VectorXd state(state_dim);
     state << 1.0, 0.5, 0.2;
 
+    Eigen::MatrixXd states(state_dim, horizon + 1);
+    states << 1.0, 1.1, 1.2, 1.3, 1.4, 1.5,
+              0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
+              0.2, 0.3, 0.4, 0.5, 0.6, 0.7;
+
     Eigen::VectorXd control(control_dim);
     control << 0.8, 0.5;
 
-    // Test evaluate
-    double cost = objective.evaluate(state, control);
-    double expected_cost = ((state - goal_state).transpose() * Q * (state - goal_state)).value() + (control.transpose() * R * control).value();
+    Eigen::MatrixXd controls(control_dim, horizon);
+    controls << 0.8, 0.8, 0.8, 0.8, 0.8,
+                0.5, 0.5, 0.5, 0.5, 0.5;
 
+    // Test evaluate
+    double cost = objective.evaluate(states, controls);
+    double expected_cost = 0.0;
+    for (int i = 0; i < states.cols() - 1; i++) {
+        Eigen::VectorXd state_error = states.col(i) - goal_state;
+        expected_cost += (state_error.transpose() * Q * state_error).value() * timestep;
+        expected_cost += (controls.col(i).transpose() * R * controls.col(i)).value() * timestep;
+    }
+    Eigen::VectorXd state_error = states.col(states.cols() - 1) - goal_state;
+    expected_cost += (state_error.transpose() * Qf * state_error).value();
     ASSERT_TRUE(std::abs(cost - expected_cost) < 1e-6);
 
-    // // Test gradients
-    auto [state_grad, control_grad] = objective.getRunningCostGradients(state, control);
-    Eigen::VectorXd expected_state_grad = 2.0 * Q * (state - goal_state);
-    Eigen::VectorXd expected_control_grad = 2.0 * R * control;
+    // Test gradients
+    auto [state_grad, control_grad] = objective.getRunningCostGradients(state, control, 0);
+    Eigen::VectorXd expected_state_grad = 2.0 * Q * (state - goal_state) * timestep;
+    Eigen::VectorXd expected_control_grad = 2.0 * R * control * timestep;
 
     ASSERT_TRUE(compareVectors(state_grad, expected_state_grad));
     ASSERT_TRUE(compareVectors(control_grad, expected_control_grad));
 
     // Test Hessians
-    auto [state_hess, control_hess, cross_hess] = objective.getRunningCostHessians(state, control);
-    Eigen::MatrixXd expected_state_hess = 2.0 * Q;
-    Eigen::MatrixXd expected_control_hess = 2.0 * R;
+    auto [state_hess, control_hess, cross_hess] = objective.getRunningCostHessians(state, control, 0);
+    Eigen::MatrixXd expected_state_hess = 2.0 * Q * timestep;
+    Eigen::MatrixXd expected_control_hess = 2.0 * R * timestep;
     Eigen::MatrixXd expected_cross_hess = Eigen::MatrixXd::Zero(state_dim, control_dim);
 
     ASSERT_TRUE(compareMatrices(state_hess, expected_state_hess));

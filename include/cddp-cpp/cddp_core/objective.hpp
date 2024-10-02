@@ -9,38 +9,41 @@ public:
     // Constructor 
     Objective() {} 
 
-    // Core objective function (running cost): l(x_t, u_t) 
-    virtual double evaluate(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const = 0;
+    // Core objective function (total cost)
+    virtual double evaluate(const Eigen::MatrixXd& states, const Eigen::MatrixXd& controls) const = 0;
+
+    // Running cost: l(x, u)
+    virtual double running_cost(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const = 0;
 
     // Final/terminal cost: lf(x_T)
     virtual double terminal_cost(const Eigen::VectorXd& final_state) const = 0;
 
     // Gradient of the running cost w.r.t state: dl/dx
-    virtual Eigen::VectorXd getRunningCostStateGradient(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const = 0;
+    virtual Eigen::VectorXd getRunningCostStateGradient(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const = 0;
 
     // Gradient of the running cost w.r.t control: dl/du
-    virtual Eigen::VectorXd getRunningCostControlGradient(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const = 0;
+    virtual Eigen::VectorXd getRunningCostControlGradient(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const = 0;
 
     // Gradients of the running cost w.r.t state and control
-    virtual std::tuple<Eigen::VectorXd, Eigen::VectorXd> getRunningCostGradients(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-        return { getRunningCostStateGradient(state, control), getRunningCostControlGradient(state, control) };
+    virtual std::tuple<Eigen::VectorXd, Eigen::VectorXd> getRunningCostGradients(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const {
+        return { getRunningCostStateGradient(state, control, index), getRunningCostControlGradient(state, control, index) };
     }
 
     // Gradient of the final cost w.r.t state: dlf/dx
     virtual Eigen::VectorXd getFinalCostGradient(const Eigen::VectorXd& final_state) const = 0;
 
     // Hessian of the running cost w.r.t state: d^2l/dx^2
-    virtual Eigen::MatrixXd getRunningCostStateHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const = 0;
+    virtual Eigen::MatrixXd getRunningCostStateHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const = 0;
 
     // Hessian of the running cost w.r.t control: d^2l/du^2
-    virtual Eigen::MatrixXd getRunningCostControlHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const = 0;
+    virtual Eigen::MatrixXd getRunningCostControlHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const = 0;
 
     // Hessian of the running cost w.r.t state and control: d^2l/dxdu
-    virtual Eigen::MatrixXd getRunningCostCrossHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const = 0;
+    virtual Eigen::MatrixXd getRunningCostCrossHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const = 0;
 
     // Hessians of the running cost
-    virtual std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> getRunningCostHessians(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-        return { getRunningCostStateHessian(state, control), getRunningCostControlHessian(state, control), getRunningCostCrossHessian(state, control) };
+    virtual std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> getRunningCostHessians(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const {
+        return { getRunningCostStateHessian(state, control, index), getRunningCostControlHessian(state, control, index), getRunningCostCrossHessian(state, control, index) };
     }
 
     // Hessian of the final cost w.r.t state: d^2lf/dx^2
@@ -50,28 +53,35 @@ public:
 class QuadraticObjective : public Objective {
 public:
     // Constructor
-    QuadraticObjective(const Eigen::MatrixXd& Q, const Eigen::MatrixXd& R, const Eigen::MatrixXd& Qf, 
-                       const Eigen::VectorXd& reference_state);
+    QuadraticObjective(const Eigen::MatrixXd& Q, 
+                       const Eigen::MatrixXd& R, 
+                       const Eigen::MatrixXd& Qf, 
+                       const Eigen::VectorXd& reference_state = Eigen::VectorXd::Zero(0), // Default to empty vector
+                       const Eigen::MatrixXd& reference_states = Eigen::MatrixXd::Zero(0, 0), // Default to empty matrix
+                       double timestep = 0.1);
 
-    // Evaluate the running cost: 0.5 * (x - x_ref)^T Q (x - x_ref) + 0.5 * u^T R u 
-    double evaluate(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
+    // Evaluate the total cost: terminal cost + running cost
+    double evaluate(const Eigen::MatrixXd& states, const Eigen::MatrixXd& controls) const override;
 
-    // Evaluate the final/terminal cost: 0.5 * (x_T - x_ref)^T Qf (x_T - x_ref)
+    // Evaluate the running cost: (x - x_ref)^T Q (x - x_ref) +  u^T R u
+    double running_cost(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const override;
+
+    // Evaluate the final/terminal cost: (x_T - x_ref)^T Qf (x_T - x_ref)
     double terminal_cost(const Eigen::VectorXd& final_state) const override;
 
     // Gradient of the running cost w.r.t state
-    Eigen::VectorXd getRunningCostStateGradient(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
+    Eigen::VectorXd getRunningCostStateGradient(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const override;
 
     // Gradient of the running cost w.r.t control
-    Eigen::VectorXd getRunningCostControlGradient(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
+    Eigen::VectorXd getRunningCostControlGradient(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const override;
 
     // Gradient of the final cost w.r.t state
     Eigen::VectorXd getFinalCostGradient(const Eigen::VectorXd& final_state) const override;
 
     // Hessians of the running cost (constant for quadratic objectives)
-    Eigen::MatrixXd getRunningCostStateHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
-    Eigen::MatrixXd getRunningCostControlHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
-    Eigen::MatrixXd getRunningCostCrossHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
+    Eigen::MatrixXd getRunningCostStateHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const override;
+    Eigen::MatrixXd getRunningCostControlHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const override;
+    Eigen::MatrixXd getRunningCostCrossHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control, int index) const override;
 
     // Hessian of the final cost
     Eigen::MatrixXd getFinalCostHessian(const Eigen::VectorXd& final_state) const override;
@@ -91,9 +101,10 @@ public:
 private:
     Eigen::MatrixXd Q_, R_, Qf_;      // Weight matrices for state, control, and final state
     Eigen::VectorXd reference_state_; // Reference/target state
+    Eigen::MatrixXd reference_states_; // Reference/target states 
+    double timestep_;                 // Timestep
 };
 
-// TODO: Implement the QuadraticTrackingObjective class
 
 } // namespace cddp
 
