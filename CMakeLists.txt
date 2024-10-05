@@ -7,7 +7,7 @@ set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
 
 # Options.
 option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
-option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." ON)
+option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
 
 # Find packages
@@ -82,10 +82,15 @@ if (CDDP-CPP_GUROBI)
   set(GUROBI_LIBRARIES ${GUROBI_ROOT}/lib/libgurobi_c++.a) # Set the path to the Gurobi library
   find_library(GUROBI_LIBRARY gurobi_c++ PATHS ${GUROBI_ROOT}/lib)
   find_path(GUROBI_INCLUDE_DIR gurobi_c++.h PATHS ${GUROBI_ROOT}/include)
+  link_directories(${GUROBI_ROOT}/lib) 
 
-  if (GUROBI_LIBRARY AND GUROBI_INCLUDE_DIR)
+  if (GUROBI_LIBRARIES AND GUROBI_INCLUDE_DIR)
+    message(STATUS "Found Gurobi: ${GUROBI_LIBRARIES} ${GUROBI_LIBRARY}")
+    message(STATUS "Gurobi include directory: ${GUROBI_INCLUDE_DIR}")
+    
     include_directories(${GUROBI_INCLUDE_DIR})
-    target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARY}) 
+    target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARIES}  gurobi_c++ 
+    gurobi110) 
   else()
     message(FATAL_ERROR "Could not find Gurobi. Please set GUROBI_ROOT.")
   endif()
@@ -100,7 +105,7 @@ endif()
 # Cmake compile commmand:
 # $ mkdir build
 # $ cd build
-# $ cmake  -DCMAKE_BUILD_TYPE=Release -DCDDP-CPP_GUROBI=ON -DCDDP-CPP_BUILD_TESTS=ON -DGUROBI_ROOT=/home/tom/.local/lib/gurobi1103/linux64 ..
+# $ cmake  -DCDDP-CPP_GUROBI=ON -DCDDP-CPP_BUILD_TESTS=ON -DGUROBI_ROOT=/home/tom/.local/lib/gurobi1103/linux64 ..
 # $ make -j4
 # $ make test
 
