@@ -13,6 +13,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+
 #include <iostream>
 #include <Eigen/Dense>
 
@@ -82,10 +83,7 @@ double QuadraticObjective::evaluate(const Eigen::MatrixXd &states, const Eigen::
         total_cost += running_cost(states.col(t), controls.col(t), t);
         
     }
-    std::cout << "Running cost: " << total_cost << std::endl;
-    // Add terminal cost
     total_cost += terminal_cost(states.col(states.cols() - 1));
-    std::cout << "total cost: " << total_cost << std::endl;
     return total_cost;
 }
 

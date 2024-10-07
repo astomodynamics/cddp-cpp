@@ -16,15 +16,11 @@
 #include <iostream>
 #include <vector>
 
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-
 #include "cddp-cpp/cddp.hpp"
 
 namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
 
-TEST(CDDPTest, Solve) {
+int main() {
     // Problem parameters
     int state_dim = 2;
     int control_dim = 1;
@@ -61,5 +57,5 @@ TEST(CDDPTest, Solve) {
     // // Assertions
     // ASSERT_TRUE(solution.converged); // Check if the solver converged
     // // Add more assertions based on expected behavior
-
 }
+

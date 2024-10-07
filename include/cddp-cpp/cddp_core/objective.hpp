@@ -13,6 +13,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+
 #ifndef CDDP_OBJECTIVE_HPP
 #define CDDP_OBJECTIVE_HPP
 
@@ -63,6 +64,14 @@ public:
 
     // Hessian of the final cost w.r.t state: d^2lf/dx^2
     virtual Eigen::MatrixXd getFinalCostHessian(const Eigen::VectorXd& final_state) const = 0;
+
+    // Accessors
+    virtual const Eigen::VectorXd& getReferenceState() const { return Eigen::VectorXd::Zero(0); }
+    virtual const Eigen::MatrixXd& getReferenceStates() const { return Eigen::MatrixXd::Zero(0, 0); }
+
+    // Setters
+    virtual void setReferenceState(const Eigen::VectorXd& reference_state) {}
+    virtual void setReferenceStates(const Eigen::MatrixXd& reference_states) {}
 };
 
 class QuadraticObjective : public Objective {
@@ -105,13 +114,15 @@ public:
     const Eigen::MatrixXd& getQ() const { return Q_; }
     const Eigen::MatrixXd& getR() const { return R_; }
     const Eigen::MatrixXd& getQf() const { return Qf_; }
-    const Eigen::VectorXd& getReferenceState() const { return reference_state_; }
+    const Eigen::VectorXd& getReferenceState() const override{ return reference_state_; }
+    const Eigen::MatrixXd& getReferenceStates() const override { return reference_states_; }
 
     // Setters
     void setQ(const Eigen::MatrixXd& Q) { Q_ = Q; }
     void setR(const Eigen::MatrixXd& R) { R_ = R; }
     void setQf(const Eigen::MatrixXd& Qf) { Qf_ = Qf; }
     void setReferenceState(const Eigen::VectorXd& reference_state) { reference_state_ = reference_state; }
+    void setReferenceStates(const Eigen::MatrixXd& reference_states) { reference_states_ = reference_states; }
 
 private:
     Eigen::MatrixXd Q_, R_, Qf_;      // Weight matrices for state, control, and final state
