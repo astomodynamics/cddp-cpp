@@ -16,15 +16,16 @@
 #ifndef CDDP_CDDP_CORE_HPP
 #define CDDP_CDDP_CORE_HPP
 
-#include <iostream>
-#include <memory>
+#include <iostream> // For std::cout, std::cerr
+#include <memory> // For std::unique_ptr
+#include <map>    // For std::map
 #include <Eigen/Dense>
 #include <vector>
 // #include "torch/torch.h"
 
 #include "cddp-cpp/cddp_core/dynamical_system.hpp" 
 #include "cddp-cpp/cddp_core/objective.hpp"
-// #include "cddp-cpp/cddp_core/constraint.hpp"
+#include "cddp-cpp/cddp_core/constraint.hpp"
 
 namespace cddp {
 
@@ -65,8 +66,8 @@ struct CDDPOptions {
 };
 
 struct CDDPSolution {
-    Eigen::MatrixXd control_sequence;
-    Eigen::MatrixXd state_sequence;
+    std::vector<Eigen::VectorXd> control_sequence;
+    std::vector<Eigen::VectorXd> state_sequence;
     std::vector<double> cost_sequence;
     int iterations;
     bool converged;
@@ -107,7 +108,7 @@ public:
     void setTimestep(double timestep) { timestep_ = timestep; }
     void setOptions(const CDDPOptions& options) { options_ = options; }
     void setObjective(std::unique_ptr<Objective> objective) { objective_ = std::move(objective); }
-    void setInitialTrajectory(const Eigen::MatrixXd& X, const Eigen::MatrixXd& U) { X_ = X; U_ = U; }
+    void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) { X_ = X; U_ = U; }
     // void addConstraint(std::unique_ptr<Constraint> constraint) { /*constraint_set_.push_back(std::move(constraint));*/ }
 
     // Solve the problem
@@ -140,8 +141,8 @@ private:
     CDDPOptions options_;              // Options for the solver
 
     // Intermediate trajectories
-    Eigen::MatrixXd X_;                  // State trajectory
-    Eigen::MatrixXd U_;                  // Control trajectory
+    std::vector<Eigen::VectorXd> X_;                  // State trajectory
+    std::vector<Eigen::VectorXd> U_;                  // Control trajectory
 
     // Intermediate cost
     double J_;
@@ -150,7 +151,7 @@ private:
     std::unique_ptr<Objective> objective_; // Objective function
 
     // Constraints
-    // std::vector<std::unique_ptr<Constraint>> constraint_set_; // Set of constraints
+    std::map<std::string, std::unique_ptr<Constraint>> constraint_set_; 
 
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_;

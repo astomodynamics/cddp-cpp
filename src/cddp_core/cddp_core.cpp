@@ -14,9 +14,10 @@
  limitations under the License.
 */
 
-#include <iostream>
-#include <iomanip>
-#include <memory>
+#include <iostream> // For std::cout, std::cerr
+#include <iomanip> // For std::setw
+#include <memory> // For std::unique_ptr
+#include <map>    // For std::map
 #include <Eigen/Dense>
 #include <chrono> // For timing
 
@@ -56,14 +57,14 @@ void CDDP::initializeCDDP() {
         throw std::runtime_error("Initial state and goal state in the objective function do not match");
     }
 
-    // Initialize trajectories (X_ and U_ are Matrix)
-    if (X_.rows() != system_->getStateDim() && U_.rows() != system_->getControlDim()) {
-        X_ = Eigen::MatrixXd::Zero(system_->getStateDim(), horizon_ + 1);
-        U_ = Eigen::MatrixXd::Zero(system_->getControlDim(), horizon_);
-    } else if (X_.rows() != system_->getStateDim()) {
-        X_ = Eigen::MatrixXd::Zero(system_->getStateDim(), horizon_ + 1);
-    } else if (U_.rows() != system_->getControlDim()) {
-        U_ = Eigen::MatrixXd::Zero(system_->getControlDim(), horizon_);
+    // Initialize trajectories (X_ and U_ are std::vectors of Eigen::VectorXd)
+    if (X_.size() != horizon_ + 1 && U_.size() != horizon_) {
+        X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(system_->getStateDim()));
+        U_.resize(horizon_, Eigen::VectorXd::Zero(system_->getControlDim()));
+    } else if (X_.size() != horizon_ + 1) {
+        X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(system_->getStateDim()));
+    } else if (U_.size() != horizon_) {
+        U_.resize(horizon_, Eigen::VectorXd::Zero(system_->getControlDim()));
     }
 
     // Initialize cost
@@ -108,7 +109,7 @@ CDDPSolution CDDP::solve() {
     // double J_ = objective_->evaluate(X_, U_);
     // solution.cost_sequence.push_back(J_);
 
-
+    // Start timer
     auto start_time = std::chrono::high_resolution_clock::now();
     // Main loop
     for (int iter = 0; iter < options_.max_iterations; ++iter) {
@@ -149,9 +150,9 @@ CDDPSolution CDDP::solve() {
     // solution.iterations = solution.converged ? solution.iterations : options_.max_iterations;
 
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time); 
 
-    solution.solve_time = duration.count() / 1e3; // Time in milliseconds
+    solution.solve_time = duration.count(); // Time in milliseconds
     printSolution(solution);
 
     return solution;
@@ -160,43 +161,38 @@ CDDPSolution CDDP::solve() {
 // Backward pass
 bool CDDP::solveBackwardPass() {
     // Terminal cost and its derivatives
-    V_[horizon_] = objective_->terminal_cost(X_.col(horizon_));
-    V_X_[horizon_] = objective_->getFinalCostGradient(X_.col(horizon_));
-    V_XX_[horizon_] = objective_->getFinalCostHessian(X_.col(horizon_));
+    V_.back() = objective_->terminal_cost(X_.back());
+    V_X_.back() = objective_->getFinalCostGradient(X_.back());
+    V_XX_.back() = objective_->getFinalCostHessian(X_.back());
 
     // Pre-allocate matrices
-    Eigen::MatrixXd Fx, Fu, A, B;
-    Eigen::VectorXd l_x, l_u;
-    Eigen::MatrixXd l_xx, l_uu, l_ux;
-    Eigen::VectorXd Q_x, Q_u;
-    Eigen::MatrixXd Q_xx, Q_uu, Q_ux;
-
-    Fx.resize(system_->getStateDim(), system_->getStateDim());
-    Fu.resize(system_->getStateDim(), system_->getControlDim());
-    A.resize(system_->getStateDim(), system_->getStateDim());
-    B.resize(system_->getStateDim(), system_->getControlDim());
-    l_x.resize(system_->getStateDim());
-    l_u.resize(system_->getControlDim());
-    l_xx.resize(system_->getStateDim(), system_->getStateDim());
-    l_uu.resize(system_->getControlDim(), system_->getControlDim());
-    l_ux.resize(system_->getControlDim(), system_->getStateDim());
-    Q_x.resize(system_->getStateDim());
-    Q_u.resize(system_->getControlDim());
-    Q_xx.resize(system_->getStateDim(), system_->getStateDim());
-    Q_uu.resize(system_->getControlDim(), system_->getControlDim());
-    Q_ux.resize(system_->getControlDim(), system_->getStateDim());
+    Eigen::MatrixXd Fx(system_->getStateDim(), system_->getStateDim());
+    Eigen::MatrixXd Fu(system_->getStateDim(), system_->getControlDim());
+    Eigen::MatrixXd A(system_->getStateDim(), system_->getStateDim());
+    Eigen::MatrixXd B(system_->getStateDim(), system_->getControlDim());
+    Eigen::VectorXd l_x(system_->getStateDim());
+    Eigen::VectorXd l_u(system_->getControlDim());
+    Eigen::MatrixXd l_xx(system_->getStateDim(), system_->getStateDim());
+    Eigen::MatrixXd l_uu(system_->getControlDim(), system_->getControlDim());
+    Eigen::MatrixXd l_ux(system_->getControlDim(), system_->getStateDim());
+    Eigen::VectorXd Q_x(system_->getStateDim());
+    Eigen::VectorXd Q_u(system_->getControlDim());
+    Eigen::MatrixXd Q_xx(system_->getStateDim(), system_->getStateDim());
+    Eigen::MatrixXd Q_uu(system_->getControlDim(), system_->getControlDim());
+    Eigen::MatrixXd Q_ux(system_->getControlDim(), system_->getStateDim());
 
     // Backward Riccati recursion
     for (int t = horizon_ - 1; t >= 0; --t) {
         // Get state and control
-        const Eigen::VectorXd& x = X_.col(t);
-        const Eigen::VectorXd& u = U_.col(t);
+        const Eigen::VectorXd& x = X_.at(t);
+        const Eigen::VectorXd& u = U_.at(t);
 
         // Get continuous dynamics Jacobians
         auto [Fx, Fu] = system_->getJacobians(x, u);
 
         // Convert continuous dynamics to discrete time
-        A = Eigen::MatrixXd::Identity(system_->getStateDim(), system_->getStateDim()) + timestep_ * Fx;
+        A = timestep_ * Fx; 
+        A.diagonal().array() += 1.0; // More efficient way to add identity
         B = timestep_ * Fu;
 
         // Get cost and its derivatives
@@ -205,44 +201,45 @@ bool CDDP::solveBackwardPass() {
         auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
 
         // Compute Q-function matrices 
-        // Q_x = l_x + A.transpose() * V_X_[t + 1];
-        // Q_u = l_u + B.transpose() * V_X_[t + 1];
-        // Q_xx = l_xx + A.transpose() * V_XX_[t + 1] * A;
-        // Q_uu = l_uu + B.transpose() * V_XX_[t + 1] * B;
-        // Q_ux = l_ux + B.transpose() * V_XX_[t + 1] * A;
+        Q_x = l_x + A.transpose() * V_X_[t + 1];
+        Q_u = l_u + B.transpose() * V_X_[t + 1];
+        Q_xx = l_xx + A.transpose() * V_XX_[t + 1] * A;
+        Q_uu = l_uu + B.transpose() * V_XX_[t + 1] * B;
+        Q_ux = l_ux + B.transpose() * V_XX_[t + 1] * A;
 
         // Symmetrize Q_uu
-        // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
+        Q_uu += Q_uu.transpose();
+        Q_uu *= 0.5;
 
         // Check eigenvalues of Q_uu
-        // Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigensolver(Q_uu);
-        // if (eigensolver.eigenvalues().minCoeff() < 0) {
-        //     // Add regularization
-        //     // Q_uu.diagonal() += 1e-6;
-        //     std::cout << "Q_uu is not positive definite" << std::endl;
-        // }
+        Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigensolver(Q_uu);
+        if (eigensolver.eigenvalues().minCoeff() < 0) {
+            // Add regularization
+            // Q_uu.diagonal() += 1e-6;
+            std::cout << "Q_uu is not positive definite" << std::endl;
+        }
 
         // // TODO: Regularization
         // if (options_.regularization_type == 0) {
         //     Q_uu += options_.regularization_parameter * Eigen::MatrixXd::Identity(system_->getControlDim(), system_->getControlDim());
         // } 
 
-        // // Cholesky decomposition
-        // Eigen::LLT<Eigen::MatrixXd> llt(Q_uu);
-        // if (llt.info() != Eigen::Success) {
-        //     // Decomposition failed
-        //     std::cout << "Cholesky decomposition failed" << std::endl;
-        //     return false;
-        // }
+        // Cholesky decomposition
+        Eigen::LLT<Eigen::MatrixXd> llt(Q_uu);
+        if (llt.info() != Eigen::Success) {
+            // Decomposition failed
+            std::cout << "Cholesky decomposition failed" << std::endl;
+            return false;
+        }
 
-        // // Compute gains
-        // k_[t] = -Q_UU_[t].inverse() * Q_U_[t];
-        // K_[t] = -Q_UU_[t].inverse() * Q_UX_[t];
+        // Compute gains
+        k_[t] = -Q_UU_[t].inverse() * Q_U_[t];
+        K_[t] = -Q_UU_[t].inverse() * Q_UX_[t];
 
-        // // Compute value function approximation
-        // V_[t] = l + V_[t + 1] + 0.5 * k_[t].transpose() * Q_UU_[t] * k_[t] + k_[t].transpose() * Q_U_[t];
-        // V_X_[t] = l_x + Fx.transpose() * V_X_[t + 1] + K_[t].transpose() * Q_UU_[t] * k_[t] + K_[t].transpose() * Q_U_[t];
-        // V_XX_[t] = l_xx + Fx.transpose() * V_XX_[t + 1] * Fx + K_[t].transpose() * Q_UU_[t] * K_[t] + K_[t].transpose() * Q_UX_[t] + Q_UX_[t].transpose() * K_[t];
+        // Compute value function approximation
+        V_[t] = l + V_[t + 1] + 0.5 * k_[t].transpose() * Q_UU_[t] * k_[t] + k_[t].transpose() * Q_U_[t];
+        V_X_[t] = l_x + Fx.transpose() * V_X_[t + 1] + K_[t].transpose() * Q_UU_[t] * k_[t] + K_[t].transpose() * Q_U_[t];
+        V_XX_[t] = l_xx + Fx.transpose() * V_XX_[t + 1] * Fx + K_[t].transpose() * Q_UU_[t] * K_[t] + K_[t].transpose() * Q_UX_[t] + Q_UX_[t].transpose() * K_[t];
     }
 
     return true;
