@@ -1,4 +1,13 @@
 # Constrained Differential Dynamic Programming (CDDP) solver in C++
+
++---------------------------------------------------------+
+|    ____ ____  ____  ____    _          ____             |
+|   / ___|  _ \|  _ \|  _ \  (_)_ __    / ___| _     _    |
+|  | |   | | | | | | | |_) | | | '_ \  | |   _| |_ _| |_  |
+|  | |___| |_| | |_| |  __/  | | | | | | |__|_   _|_   _| |
+|   \____|____/|____/|_|     |_|_| |_|  \____||_|   |_|   |
++---------------------------------------------------------+
+
 **This library is actively under construction.** Please wait for proper release after starring this repo :star:
 Also, I am writing this library for practical experience with C++. Any suggestions are helpful to me.
 
@@ -70,6 +79,9 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 
 ## Citing
 If you use this work in an academic context, please cite this repository.
+
+## License
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## TODO
 * add state constraint handling

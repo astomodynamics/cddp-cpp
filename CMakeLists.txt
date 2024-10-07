@@ -1,5 +1,24 @@
+#  Copyright 2024 Tomo Sasaki
+
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+
+#       https://www.apache.org/licenses/LICENSE-2.0
+
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
 cmake_minimum_required(VERSION 3.14) 
-project(cddp)
+project(
+  cddp
+  VERSION 0.1.0
+  DESCRIPTION "CDDP: A C++ library for MPC"
+  HOMEPAGE_URL  "https://github.com/astomodynamics/CDDP-cpp"
+)
 
 set(CMAKE_CXX_STANDARD 17) # Enforce C++17 as the minimum standard
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Enforce C++17 as the minimum standard
@@ -63,7 +82,7 @@ include_directories(include)
 add_library(${PROJECT_NAME} 
     src/cddp_core/dynamical_system.cpp
     src/cddp_core/objective.cpp
-    # src/cddp_core/cddp_core.cc
+    src/cddp_core/cddp_core.cpp
     src/dynamics_model/pendulum.cpp
 )
 

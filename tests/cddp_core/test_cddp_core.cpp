@@ -1,4 +1,18 @@
-// Description: Test the CDDP solver.
+/*
+ Copyright 2024 Tomo Sasaki
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
 #include <iostream>
 #include <vector>
 
@@ -22,6 +36,9 @@ TEST(CDDPTest, Solve) {
     double length = 1.0; 
     double gravity = 9.81;
     cddp::Pendulum pendulum(mass, length, gravity, timestep); 
+    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::Pendulum>(mass, length, gravity, timestep); // Create unique_ptr
+
+    //
 
     // Create objective function
     Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(state_dim, state_dim);
@@ -31,16 +48,16 @@ TEST(CDDPTest, Solve) {
     auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, Eigen::VectorXd::Zero(0, 0), timestep);
 
     // Initial and target states
-    // Eigen::VectorXd initial_state = Eigen::VectorXd::Ones(state_dim);
-    // Eigen::VectorXd target_state = Eigen::VectorXd::Zero(state_dim); 
+    Eigen::VectorXd initial_state(state_dim);
+    Eigen::VectorXd target_state(state_dim);
 
     // // Create CDDP solver
-    // cddp::CDDP cddp_solver(initial_state, target_state, horizon, timestep);
-    // cddp_solver.setDynamicalSystem(std::move(system));
-    // cddp_solver.setObjective(std::move(objective));
+    cddp::CDDP cddp_solver(initial_state, target_state, horizon, timestep);
+    cddp_solver.setDynamicalSystem(std::move(system));
+    cddp_solver.setObjective(std::move(objective));
 
-    // // Solve the problem
-    // cddp::CDDPSolution solution = cddp_solver.solve();
+    // Solve the problem
+    cddp::CDDPSolution solution = cddp_solver.solve();
 
     // // Assertions
     // ASSERT_TRUE(solution.converged); // Check if the solver converged
