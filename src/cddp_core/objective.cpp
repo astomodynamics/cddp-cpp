@@ -150,7 +150,7 @@ Eigen::MatrixXd QuadraticObjective::getRunningCostControlHessian(const Eigen::Ve
 
 Eigen::MatrixXd QuadraticObjective::getRunningCostCrossHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control, int index) const
 {
-    return Eigen::MatrixXd::Zero(state.size(), control.size());
+    return Eigen::MatrixXd::Zero(control.size(), state.size());
 }
 
 // Hessian of the final cost
