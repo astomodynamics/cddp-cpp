@@ -31,7 +31,12 @@ option(GUROBI_ROOT "Path to Gurobi installation" "")
 
 # Find packages
 find_package(Eigen3 REQUIRED) 
-find_package(PythonLibs 3.10 REQUIRED) 
+set(Python_EXECUTABLE /usr/bin/python3.10) # Or the path to your desired Python interpreter
+execute_process( # Find the NumPy include directory
+  COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
+  OUTPUT_VARIABLE NUMPY_INCLUDE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE 
+)
+find_package(Python3 3.10 EXACT COMPONENTS Interpreter Development NumPy REQUIRED)
 
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
@@ -72,11 +77,12 @@ if (CDDP-CPP_BUILD_TESTS)
   include(GoogleTest)
 endif()
 
-# Include python directories for matplotlibcpp
-include_directories(/usr/include/python3.10)
-
 # Include directories
-include_directories(include)
+include_directories(
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${Python3_INCLUDE_DIRS}
+  ${NUMPY_INCLUDE_DIR}
+) 
 
 # Add your library
 add_library(${PROJECT_NAME} 
@@ -89,7 +95,9 @@ add_library(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} 
     Eigen3::Eigen 
     osqp-cpp 
-    ${PYTHON_LIBRARIES}
+    Python3::Python
+    Python3::Module
+    Python3::NumPy
 ) 
 
 # Gurobi 
