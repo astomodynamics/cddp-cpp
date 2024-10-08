@@ -34,7 +34,8 @@ TEST(PendulumTest, DiscreteDynamics) {
     double length = 1.0; 
     double gravity = 9.81;
     double timestep = 0.05;
-    cddp::Pendulum pendulum(mass, length, gravity, timestep); 
+    std::string integration_type = "euler";
+    cddp::Pendulum pendulum(mass, length, gravity, timestep, integration_type); 
 
     // Store states for plotting
     std::vector<double> time_data, theta_data, theta_dot_data;

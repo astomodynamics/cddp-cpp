@@ -22,7 +22,7 @@ namespace cddp {
 
 class DubinsCar : public DynamicalSystem {
 public:
-    DubinsCar(double timestep);
+    DubinsCar(double timestep, std::string integration_type = "euler");
 
     // Dynamics: Computes the next state given the current state and control input
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;

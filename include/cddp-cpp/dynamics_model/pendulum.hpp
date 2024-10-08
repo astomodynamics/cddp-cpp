@@ -10,7 +10,7 @@ namespace cddp
 class Pendulum : public DynamicalSystem {
 public:
     // Constructor
-    Pendulum(double mass, double length, double gravity, double timestep);
+    Pendulum(double mass, double length, double gravity, double timestep, std::string integration_type = "euler");
 
     // Dynamics: Computes the next state given the current state and control input
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;

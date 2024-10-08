@@ -20,8 +20,8 @@
 using namespace cddp;
 
 // Constructor
-Pendulum::Pendulum(double mass, double length, double gravity, double timestep)
-    : DynamicalSystem(2, 1, timestep, "euler"),  // 2 states (angle, angular velocity), 1 control (torque)
+Pendulum::Pendulum(double mass, double length, double gravity, double timestep, std::string integration_type)
+    : DynamicalSystem(2, 1, timestep, integration_type),  // 2 states (angle, angular velocity), 1 control (torque)
       mass_(mass), length_(length), gravity_(gravity) {}
 
 // Dynamics: xdot = f(x_t, u_t)

@@ -32,7 +32,8 @@ using namespace cddp;
 TEST(DubinsCarTest, DiscreteDynamics) {
     // Create a Dubins car instance
     double timestep = 0.1;
-    cddp::DubinsCar dubins_car(timestep);
+    std::string integration_type = "euler";
+    cddp::DubinsCar dubins_car(timestep, integration_type);
 
     // Store states for plotting
     std::vector<double> time_data, x_data, y_data, theta_data;

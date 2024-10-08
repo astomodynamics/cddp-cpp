@@ -19,7 +19,7 @@
 
 using namespace cddp;
 
-DubinsCar::DubinsCar(double timestep) : DynamicalSystem(3, 2, timestep, "euler") {}
+DubinsCar::DubinsCar(double timestep, std::string integration_type) : DynamicalSystem(3, 2, timestep, integration_type) {}
 
 Eigen::VectorXd DubinsCar::getContinuousDynamics(const Eigen::VectorXd& state, 
                                                  const Eigen::VectorXd& control) const {
