@@ -23,6 +23,7 @@ project(
 set(CMAKE_CXX_STANDARD 17) # Enforce C++17 as the minimum standard
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Enforce C++17 as the minimum standard
 set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
+set(CMAKE_BUILD_TYPE "Release")
 
 # Options.
 option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
