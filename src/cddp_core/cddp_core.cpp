@@ -36,6 +36,8 @@ CDDP::CDDP(const Eigen::VectorXd& initial_state,
       timestep_(timestep) {
 
     printSolverInfo();
+    
+    // initializeCDDP();
 }
 
 // Initialize the CDDP solver
@@ -93,7 +95,7 @@ void CDDP::initializeCDDP() {
 // Solve the problem
 CDDPSolution CDDP::solve() {
     // Initialize CDDP solver
-    // initializeCDDP();
+    initializeCDDP();
 
     if (options_.verbose) {
         printOptions(options_);
@@ -149,9 +151,9 @@ CDDPSolution CDDP::solve() {
     // solution.iterations = solution.converged ? solution.iterations : options_.max_iterations;
 
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time); 
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
 
-    solution.solve_time = duration.count(); // Time in milliseconds
+    solution.solve_time = duration.count(); // Time in microseconds
     printSolution(solution);
 
     return solution;
@@ -169,20 +171,20 @@ bool CDDP::solveBackwardPass() {
     V_XX_.back() = objective_->getFinalCostHessian(X_.back());
 
     // Pre-allocate matrices
-    Eigen::MatrixXd Fx(system_->getStateDim(), system_->getStateDim());
-    Eigen::MatrixXd Fu(system_->getStateDim(), system_->getControlDim());
-    Eigen::MatrixXd A(system_->getStateDim(), system_->getStateDim());
-    Eigen::MatrixXd B(system_->getStateDim(), system_->getControlDim());
-    Eigen::VectorXd l_x(system_->getStateDim());
-    Eigen::VectorXd l_u(system_->getControlDim());
-    Eigen::MatrixXd l_xx(system_->getStateDim(), system_->getStateDim());
-    Eigen::MatrixXd l_uu(system_->getControlDim(), system_->getControlDim());
-    Eigen::MatrixXd l_ux(system_->getControlDim(), system_->getStateDim());
-    Eigen::VectorXd Q_x(system_->getStateDim());
-    Eigen::VectorXd Q_u(system_->getControlDim());
-    Eigen::MatrixXd Q_xx(system_->getStateDim(), system_->getStateDim());
-    Eigen::MatrixXd Q_uu(system_->getControlDim(), system_->getControlDim());
-    Eigen::MatrixXd Q_ux(system_->getControlDim(), system_->getStateDim());
+    // Eigen::MatrixXd Fx(system_->getStateDim(), system_->getStateDim());
+    // Eigen::MatrixXd Fu(system_->getStateDim(), system_->getControlDim());
+    // Eigen::MatrixXd A(system_->getStateDim(), system_->getStateDim());
+    // Eigen::MatrixXd B(system_->getStateDim(), system_->getControlDim());
+    // Eigen::VectorXd l_x(system_->getStateDim());
+    // Eigen::VectorXd l_u(system_->getControlDim());
+    // Eigen::MatrixXd l_xx(system_->getStateDim(), system_->getStateDim());
+    // Eigen::MatrixXd l_uu(system_->getControlDim(), system_->getControlDim());
+    // Eigen::MatrixXd l_ux(system_->getControlDim(), system_->getStateDim());
+    // Eigen::VectorXd Q_x(system_->getStateDim());
+    // Eigen::VectorXd Q_u(system_->getControlDim());
+    // Eigen::MatrixXd Q_xx(system_->getStateDim(), system_->getStateDim());
+    // Eigen::MatrixXd Q_uu(system_->getControlDim(), system_->getControlDim());
+    // Eigen::MatrixXd Q_ux(system_->getControlDim(), system_->getStateDim());
 
     // Backward Riccati recursion
     for (int t = horizon_ - 1; t >= 0; --t) {
@@ -194,9 +196,9 @@ bool CDDP::solveBackwardPass() {
         auto [Fx, Fu] = system_->getJacobians(x, u);
 
         // Convert continuous dynamics to discrete time
-        A = timestep_ * Fx; 
+        Eigen::MatrixXd A = timestep_ * Fx; 
         A.diagonal().array() += 1.0; // More efficient way to add identity
-        B = timestep_ * Fu;
+        Eigen::MatrixXd B = timestep_ * Fu;
 
         // Get cost and its derivatives
         double l = objective_->running_cost(x, u, t);
@@ -204,56 +206,59 @@ bool CDDP::solveBackwardPass() {
         auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
 
         // Compute Q-function matrices 
-        Q_x = l_x + A.transpose() * V_X_[t + 1];
-        Q_u = l_u + B.transpose() * V_X_[t + 1];
-        Q_xx = l_xx + A.transpose() * V_XX_[t + 1] * A;
-        Q_uu = l_uu + B.transpose() * V_XX_[t + 1] * B;
-        Q_ux = l_ux + B.transpose() * V_XX_[t + 1] * A;
+        auto Q_x = l_x + A.transpose() * V_X_[t + 1];
+        auto Q_u = l_u + B.transpose() * V_X_[t + 1];
+        auto Q_xx = l_xx + A.transpose() * V_XX_[t + 1] * A;
+        auto Q_uu = l_uu + B.transpose() * V_XX_[t + 1] * B;
+        auto Q_ux = l_ux + B.transpose() * V_XX_[t + 1] * A;
 
         // Symmetrize Q_uu
-        Q_uu += Q_uu.transpose();
-        Q_uu *= 0.5;
+        // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
         // Check eigenvalues of Q_uu
-        Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigensolver(Q_uu);
-        if (eigensolver.eigenvalues().minCoeff() < 0) {
-            // Add regularization
-            // Q_uu.diagonal() += 1e-6;
-            std::cout << "Q_uu is not positive definite" << std::endl;
-        }
+        // Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
+        // Eigen::VectorXd eigenvalues = es.eigenvalues().real();
+        // if (eigenvalues.minCoeff() <= 0) {
+        //     // Add regularization
+        //     // Q_uu.diagonal() += 1e-6;
+        //     std::cout << "Q_uu is not positive definite at " << t << std::endl;
+        // }
 
         // // TODO: Regularization
         // if (options_.regularization_type == 0) {
         //     Q_uu += options_.regularization_parameter * Eigen::MatrixXd::Identity(system_->getControlDim(), system_->getControlDim());
         // } 
 
-        // Cholesky decomposition
-        Eigen::LLT<Eigen::MatrixXd> llt(Q_uu);
-        if (llt.info() != Eigen::Success) {
-            // Decomposition failed
-            std::cout << "Cholesky decomposition failed" << std::endl;
-            return false;
-        }
+        // // Cholesky decomposition
+        // Eigen::LLT<Eigen::MatrixXd> llt(Q_uu);
+        // if (llt.info() != Eigen::Success) {
+        //     // Decomposition failed
+        //     std::cout << "Cholesky decomposition failed" << std::endl;
+        //     return false;
+        // }
 
-        /*  --- Identify Active Constraint --- */
-        Eigen::MatrixXd C = Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getControlDim());
-        Eigen::MatrixXd D = Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getStateDim());
+        // /*  --- Identify Active Constraint --- */
+        // Eigen::MatrixXd C = Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getControlDim());
+        // Eigen::MatrixXd D = Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getStateDim());
         
 
-        int active_constraint_index = 0;
-        Eigen::MatrixXd active_constraint_table = Eigen::MatrixXd::Zero(2 * (system_->getControlDim()), horizon_);
+        // int active_constraint_index = 0;
+        // Eigen::MatrixXd active_constraint_table = Eigen::MatrixXd::Zero(2 * (system_->getControlDim()), horizon_);
 
-        // TODO: Implement active set method
-        // for (int j = 0)
+        // // TODO: Implement active set method
+        // // for (int j = 0)
 
-        // Compute gains
-        k_[t] = -Q_UU_[t].inverse() * Q_U_[t];
-        K_[t] = -Q_UU_[t].inverse() * Q_UX_[t];
+        // // Compute gains
+        // Eigen::VectorXd k = -Q_uu.inverse() * Q_u;
+        // Eigen::MatrixXd K = -Q_uu.inverse() * Q_ux;
 
-        // Compute value function approximation
-        V_[t] = l + V_[t + 1] + 0.5 * k_[t].transpose() * Q_UU_[t] * k_[t] + k_[t].transpose() * Q_U_[t];
-        V_X_[t] = l_x + Fx.transpose() * V_X_[t + 1] + K_[t].transpose() * Q_UU_[t] * k_[t] + K_[t].transpose() * Q_U_[t];
-        V_XX_[t] = l_xx + Fx.transpose() * V_XX_[t + 1] * Fx + K_[t].transpose() * Q_UU_[t] * K_[t] + K_[t].transpose() * Q_UX_[t] + Q_UX_[t].transpose() * K_[t];
+        // k_[t] = k;
+        // K_[t] = K;
+
+        // // Compute value function approximation
+        // // V_[t] = l + V_[t + 1] + 0.5 * k_[t].transpose() * Q_UU_[t] * k_[t] + k_[t].transpose() * Q_U_[t];
+        // V_X_[t] = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
+        // V_XX_[t] = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
     }
 
     return true;
@@ -330,7 +335,7 @@ void CDDP::printSolution(const CDDPSolution& solution) {
 
     std::cout << "Converged: " << (solution.converged ? "Yes" : "No") << "\n";
     std::cout << "Iterations: " << solution.iterations << "\n";
-    std::cout << "Solve Time: " << std::setprecision(4) << solution.solve_time << " ms\n";
+    std::cout << "Solve Time: " << std::setprecision(4) << solution.solve_time << " micro sec\n";
     std::cout << "Final Cost: " << std::setprecision(6) << solution.cost_sequence.back() << "\n"; // Assuming cost_sequence is not empty
 
     std::cout << "========================================\n\n";

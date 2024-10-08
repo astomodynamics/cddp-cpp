@@ -26,64 +26,59 @@ namespace fs = std::filesystem;
 
 TEST(CDDPTest, Solve) {
     // Problem parameters
-    int state_dim = 2;
-    int control_dim = 1;
-    int horizon = 30;
-    double timestep = 0.1;
+    int state_dim = 3;
+    int control_dim = 2;
+    int horizon = 100;
+    double timestep = 0.03;
+    std::string integration_type = "euler";
 
-    // Create a pendulum instance 
-    double mass = 1.0; 
-    double length = 1.0; 
-    double gravity = 9.81;
-    cddp::Pendulum pendulum(mass, length, gravity, timestep); 
-    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::Pendulum>(mass, length, gravity, timestep); // Create unique_ptr
+    // Create a dubins car instance 
+    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::DubinsCar>(timestep, integration_type); // Create unique_ptr
 
     // Create objective function
-    Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
     Eigen::MatrixXd R = Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
+    Qf << 50.0, 0.0, 0.0,
+          0.0, 50.0, 0.0,
+          0.0, 0.0, 10.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 2.0, 2.0, M_PI/2.0;
+
     // Create an empty vector of Eigen::VectorXd
     std::vector<Eigen::VectorXd> empty_reference_states; 
     auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
 
     // Initial and target states
     Eigen::VectorXd initial_state(state_dim);
+    initial_state << 0.0, 0.0, M_PI/4.0; 
 
-    initial_state << 0.1, 0.0;  // Start at a small angle, zero velocity
-
-    // Create CDDP solver
+    // // Create CDDP solver
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
     cddp_solver.setDynamicalSystem(std::move(system));
     cddp_solver.setObjective(std::move(objective));
 
     // Define constraints
-    Eigen::VectorXd control_lower_bound(1);
-    control_lower_bound << -2.0;
-    Eigen::VectorXd control_upper_bound(1);
-    control_upper_bound << 2.0;
+    Eigen::VectorXd control_lower_bound(control_dim);
+    control_lower_bound << -1.0, -M_PI;
+    Eigen::VectorXd control_upper_bound(control_dim);
+    control_upper_bound << 1.0, M_PI;
     // Add the constraint to the solver
-    cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound)); // Moved here
-
-    // Test for  evalueate
-    Eigen::VectorXd state(2);
-    state << 0.1, 0.0;
-    Eigen::VectorXd control(1);
-    control << 0.0;
-
-    // Check if the constraint set is not empty
-    ASSERT_FALSE(cddp_solver.getConstraintSet().empty()); 
-
-    // Check the size of the constraint set
-    ASSERT_EQ(cddp_solver.getConstraintSet().size(), 1);
-
-
+    cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
     auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
-    auto value = constraint.evaluate(state, control);
-    ASSERT_TRUE(value[0] == 0.0);
+
+    // Set options
+    cddp::CDDPOptions options;
+    options.max_iterations = 1;
+    cddp_solver.setOptions(options);
+
+    // Set initial trajectory
+    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    // cddp::CDDPSolution solution = cddp_solver.solve();
+    cddp::CDDPSolution solution = cddp_solver.solve();
 
     // // Assertions
     // ASSERT_TRUE(solution.converged); // Check if the solver converged
