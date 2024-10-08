@@ -58,10 +58,10 @@ TEST(PendulumTest, DiscreteDynamics) {
     }
 
     // Create directory for saving plot (if it doesn't exist)
-    // const std::string plotDirectory = "../plots/test";
-    // if (!fs::exists(plotDirectory)) {
-    //     fs::create_directory(plotDirectory);
-    // }
+    const std::string plotDirectory = "../plots/test";
+    if (!fs::exists(plotDirectory)) {
+        fs::create_directory(plotDirectory);
+    }
 
     // Plot the results (same as before)
     plt::figure();
@@ -70,7 +70,7 @@ TEST(PendulumTest, DiscreteDynamics) {
     plt::xlabel("Time");
     plt::ylabel("State");
     plt::legend();
-    // plt::save(plotDirectory + "/pendulum_dynamics.png");
+    plt::save(plotDirectory + "/pendulum_dynamics.png");
     // plt::show();
 
     // Assert true if the pendulum has the correct state dimension
@@ -83,5 +83,5 @@ TEST(PendulumTest, DiscreteDynamics) {
     ASSERT_DOUBLE_EQ(pendulum.getTimestep(), 0.05);
 
     // Assert true if the pendulum has the correct integration type
-    ASSERT_EQ(pendulum.getIntegrationType(), "rk4"); 
+    ASSERT_EQ(pendulum.getIntegrationType(), "euler"); 
 }

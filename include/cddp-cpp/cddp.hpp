@@ -30,6 +30,7 @@
 
 // Models
 #include "cddp-cpp/dynamics_model/pendulum.hpp"
+#include "cddp-cpp/dynamics_model/dubins_car.hpp"
 // #include "cddp-cpp/dynamics_model/cartpole.hpp"
 
 #include "cddp-cpp/matplotlibcpp.hpp"

@@ -24,14 +24,22 @@ class DubinsCar : public DynamicalSystem {
 public:
     DubinsCar(double timestep);
 
-    Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
-                                          const Eigen::VectorXd& control) const override;
+    // Dynamics: Computes the next state given the current state and control input
+    Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
 
-    Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, 
-                                     const Eigen::VectorXd& control) const override;
+    // Discrete dynamics (declare it even if using base class implementation)
+    Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override {
+        return DynamicalSystem::getDiscreteDynamics(state, control); 
+    }
+    
+    // Jacobians: Computes the Jacobian matrices of the dynamics with respect to state and control
+    Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
+    Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
 
-    Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, 
-                                       const Eigen::VectorXd& control) const override;
+    // Hessians: Computes the Hessian matrices of the dynamics (optional for now)
+    // You might implement these later if needed for your DDP algorithm
+    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
+    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override;
 };
 
 } // namespace cddp

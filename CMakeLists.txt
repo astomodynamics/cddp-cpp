@@ -91,6 +91,7 @@ add_library(${PROJECT_NAME}
     src/cddp_core/constraint.cpp
     src/cddp_core/cddp_core.cpp
     src/dynamics_model/pendulum.cpp
+    src/dynamics_model/dubins_car.cpp
 )
 
 target_link_libraries(${PROJECT_NAME} 
