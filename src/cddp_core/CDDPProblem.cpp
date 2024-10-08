@@ -220,10 +220,10 @@ std::cout << "Cost " << J_ << std::endl;
     auto end_time = std::chrono::high_resolution_clock::now();
 
     // Calculate the elapsed time
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
     // Print the elapsed time
-std::cout << "Solver time: " << duration.count() << " ms" << std::endl;
+std::cout << "Solver time: " << duration.count() << " micro sec" << std::endl;
 
     // 6. Return Optimal Control Sequence
     // place holder 
