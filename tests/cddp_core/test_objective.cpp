@@ -47,41 +47,51 @@ TEST(ObjectiveFunctionTests, QuadraticObjective) {
     Eigen::MatrixXd R = Eigen::MatrixXd::Identity(control_dim, control_dim) * 0.1; 
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim) * 2.0;
     Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
-    Eigen::MatrixXd X_ref(state_dim, horizon + 1);
-    X_ref << 1.0, 1.1, 1.2, 1.3, 1.4, 1.5,
-             0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
-             0.2, 0.3, 0.4, 0.5, 0.6, 0.7;
-
+    std::vector<Eigen::VectorXd> X_ref(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    X_ref[0] << 1.0, 0.5, 0.2;
+    X_ref[1] << 1.1, 0.6, 0.3;
+    X_ref[2] << 1.2, 0.7, 0.4;
+    X_ref[3] << 1.3, 0.8, 0.5;
+    X_ref[4] << 1.4, 0.9, 0.6;
+    X_ref[5] << 1.5, 1.0, 0.7;
+    
     goal_state << 1.1, 0.6, 0.3;
 
     // Create the objective
-    cddp::QuadraticObjective objective(Q, R, Qf, goal_state, Eigen::MatrixXd::Zero(0, 0), timestep);
-
+    cddp::QuadraticObjective objective(Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep);
     // Example state and control
     Eigen::VectorXd state(state_dim);
     state << 1.0, 0.5, 0.2;
 
-    Eigen::MatrixXd states(state_dim, horizon + 1);
-    states << 1.0, 1.1, 1.2, 1.3, 1.4, 1.5,
-              0.5, 0.6, 0.7, 0.8, 0.9, 1.0,
-              0.2, 0.3, 0.4, 0.5, 0.6, 0.7;
+    std::vector<Eigen::VectorXd>  states(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+
+    states[0] << 1.0, 0.5, 0.2;
+    states[1] << 1.1, 0.6, 0.3;
+    states[2] << 1.2, 0.7, 0.4;
+    states[3] << 1.3, 0.8, 0.5;
+    states[4] << 1.4, 0.9, 0.6;
+    states[5] << 1.5, 1.0, 0.7;
 
     Eigen::VectorXd control(control_dim);
     control << 0.8, 0.5;
 
-    Eigen::MatrixXd controls(control_dim, horizon);
-    controls << 0.8, 0.8, 0.8, 0.8, 0.8,
-                0.5, 0.5, 0.5, 0.5, 0.5;
+    std::vector<Eigen::VectorXd> controls(horizon, Eigen::VectorXd::Zero(control_dim));
+
+    controls[0] << 0.8, 0.5;
+    controls[1] << 0.8, 0.5;
+    controls[2] << 0.8, 0.5;
+    controls[3] << 0.8, 0.5;
+    controls[4] << 0.8, 0.5;
 
     // Test evaluate
     double cost = objective.evaluate(states, controls);
     double expected_cost = 0.0;
-    for (int i = 0; i < states.cols() - 1; i++) {
-        Eigen::VectorXd state_error = states.col(i) - goal_state;
+    for (int i = 0; i < states.size() - 1; i++) {
+        Eigen::VectorXd state_error = states.at(i) - goal_state;
         expected_cost += (state_error.transpose() * Q * state_error).value() * timestep;
-        expected_cost += (controls.col(i).transpose() * R * controls.col(i)).value() * timestep;
+        expected_cost += (controls.at(i).transpose() * R * controls.at(i)).value() * timestep;
     }
-    Eigen::VectorXd state_error = states.col(states.cols() - 1) - goal_state;
+    Eigen::VectorXd state_error = states.back() - goal_state;
     expected_cost += (state_error.transpose() * Qf * state_error).value();
     ASSERT_TRUE(std::abs(cost - expected_cost) < 1e-6);
 

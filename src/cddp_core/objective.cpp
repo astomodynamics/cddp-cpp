@@ -32,9 +32,12 @@ QuadraticObjective::QuadraticObjective(
     const Eigen::MatrixXd &R,
     const Eigen::MatrixXd &Qf,
     const Eigen::VectorXd &reference_state,
-    const Eigen::MatrixXd &reference_states,
+    const std::vector<Eigen::VectorXd> &reference_states,
     double timestep)
     : Q_(Q), R_(R), Qf_(Qf), reference_state_(reference_state), reference_states_(reference_states), timestep_(timestep) {
+
+    Q_ = Q * timestep_;
+    R_ = R * timestep_;
     // Check dimensions
     if (Q.rows() != Q.cols())
     {
@@ -55,7 +58,7 @@ QuadraticObjective::QuadraticObjective(
     // Check the last reference state is same as the reference state
     if (reference_states_.size() > 0)
     {
-        if ((reference_states_.col(reference_states_.cols() - 1) - reference_state_).norm() > 1e-6)
+        if ((reference_states_.back() - reference_state_).norm() > 1e-6)
         {
             std::cerr << "QuadraticObjective: Last reference state must be same as the reference state" << std::endl;
             throw std::invalid_argument("Last reference state must be same as the reference state");
@@ -74,16 +77,16 @@ QuadraticObjective::QuadraticObjective(
 }
 
 // Evaluate the total cost: terminal cost + running cost
-double QuadraticObjective::evaluate(const Eigen::MatrixXd &states, const Eigen::MatrixXd &controls) const
+double QuadraticObjective::evaluate(const std::vector<Eigen::VectorXd> &states, const std::vector<Eigen::VectorXd> &controls) const
 {
     double total_cost = 0.0;
     // Compute running cost for all time steps
-    for (int t = 0; t < states.cols() - 1; ++t)
+    for (int t = 0; t < states.size() - 1; ++t)
     {
-        total_cost += running_cost(states.col(t), controls.col(t), t);
+        total_cost += running_cost(states[t], controls[t], t);
         
     }
-    total_cost += terminal_cost(states.col(states.cols() - 1));
+    total_cost += terminal_cost(states.back());
     return total_cost;
 }
 
@@ -93,13 +96,13 @@ double QuadraticObjective::running_cost(const Eigen::VectorXd &state, const Eige
     Eigen::VectorXd state_error;
     if (reference_states_.size() > 0)
     {
-        state_error = state - reference_states_.col(index);
+        state_error = state - reference_states_[index];
     }
     else
     {
         state_error = state - reference_state_; // Otherwise, use reference_state_
     }
-    return ((state_error.transpose() * Q_ * state_error).value() + (control.transpose() * R_ * control).value()) * timestep_;
+    return ((state_error.transpose() * Q_ * state_error).value() + (control.transpose() * R_ * control).value());
 }
 
 // Evaluate the final/terminal cost: (x_T - x_ref)^T Qf (x_T - x_ref)
@@ -115,19 +118,19 @@ Eigen::VectorXd QuadraticObjective::getRunningCostStateGradient(const Eigen::Vec
     Eigen::VectorXd state_error;
     if (reference_states_.size() > 0)
     {
-        state_error = state - reference_states_.row(index);
+        state_error = state - reference_states_[index];
     }
     else
     {
         state_error = state - reference_state_; // Otherwise, use reference_state_
     }
-    return 2.0 * Q_ * state_error * timestep_;
+    return 2.0 * Q_ * state_error;
 }
 
 // Gradient of the running cost w.r.t control
 Eigen::VectorXd QuadraticObjective::getRunningCostControlGradient(const Eigen::VectorXd &state, const Eigen::VectorXd &control, int index) const
 {
-    return 2.0 * R_ * control * timestep_;
+    return 2.0 * R_ * control;
 }
 
 // Gradient of the final cost w.r.t state
@@ -140,12 +143,12 @@ Eigen::VectorXd QuadraticObjective::getFinalCostGradient(const Eigen::VectorXd &
 // Hessians of the running cost (constant for quadratic objectives)
 Eigen::MatrixXd QuadraticObjective::getRunningCostStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control, int index) const
 {
-    return 2.0 * Q_ * timestep_;
+    return 2.0 * Q_;
 }
 
 Eigen::MatrixXd QuadraticObjective::getRunningCostControlHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control, int index) const
 {
-    return 2.0 * R_ * timestep_;
+    return 2.0 * R_;
 }
 
 Eigen::MatrixXd QuadraticObjective::getRunningCostCrossHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control, int index) const

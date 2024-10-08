@@ -43,7 +43,9 @@ TEST(CDDPTest, Solve) {
     Eigen::MatrixXd R = Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
     Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
-    auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, Eigen::MatrixXd::Zero(0, 0), timestep);
+    // Create an empty vector of Eigen::VectorXd
+    std::vector<Eigen::VectorXd> empty_reference_states; 
+    auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
 
     // Initial and target states
     Eigen::VectorXd initial_state(state_dim);

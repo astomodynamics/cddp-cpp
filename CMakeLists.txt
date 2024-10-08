@@ -128,10 +128,6 @@ if (CDDP-CPP_BUILD_TESTS)
   add_subdirectory(tests) 
 endif()
 
-add_executable(test_cddp tests/test_cddp.cpp)
-target_link_libraries(test_cddp ${PROJECT_NAME})
-
-
 # Cmake compile commmand:
 # $ mkdir build
 # $ cd build
