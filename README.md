@@ -1,5 +1,5 @@
 # Constrained Differential Dynamic Programming (CDDP) solver in C++
-```
+```<span style="color:lightblue">
 +---------------------------------------------------------+
 |    ____ ____  ____  ____    _          ____             |
 |   / ___|  _ \|  _ \|  _ \  (_)_ __    / ___| _     _    |
