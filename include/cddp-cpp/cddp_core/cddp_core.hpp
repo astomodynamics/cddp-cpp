@@ -21,6 +21,7 @@
 #include <map>    // For std::map
 #include <Eigen/Dense>
 #include <vector>
+#include <regex>
 // #include "torch/torch.h"
 
 #include "cddp-cpp/cddp_core/dynamical_system.hpp" 
@@ -46,6 +47,9 @@ struct CDDPOptions {
     double barrier_factor = 0.90;        // Factor for log-barrier method
     double barrier_tolerance = 1e-6;     // Tolerance for log-barrier method
     double relaxation_coeff = 5;             // Relaxation for log-barrier method
+
+    // Active set method
+    double active_set_tolerance = 1e-6;  // Tolerance for active set method
 
     // Regularization options
     int regularization_type = 0;          // 0 or 1 for different regularization types
@@ -109,7 +113,29 @@ public:
     void setOptions(const CDDPOptions& options) { options_ = options; }
     void setObjective(std::unique_ptr<Objective> objective) { objective_ = std::move(objective); }
     void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) { X_ = X; U_ = U; }
-    // void addConstraint(std::unique_ptr<Constraint> constraint) { /*constraint_set_.push_back(std::move(constraint));*/ }
+    void addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
+        constraint_set_[constraint_name] = std::move(constraint);
+    }
+        
+    // Get a specific constraint by name
+    template <typename T>
+    T& getConstraint(const std::string& name) {
+        auto it = constraint_set_.find(name);
+        if (it == constraint_set_.end()) {
+            throw std::runtime_error("Constraint not found: " + name);
+        }
+        try {
+            // Note: Returning a non-const reference here
+            return dynamic_cast<T&>(*(it->second)); 
+        } catch (const std::bad_cast& e) {
+            throw std::runtime_error("Invalid constraint type: " + name);
+        }
+    }
+
+    // Getter for the constraint set
+    const std::map<std::string, std::unique_ptr<Constraint>>& getConstraintSet() const { 
+        return constraint_set_; 
+    }
 
     // Solve the problem
     CDDPSolution solve();

@@ -88,6 +88,7 @@ include_directories(
 add_library(${PROJECT_NAME} 
     src/cddp_core/dynamical_system.cpp
     src/cddp_core/objective.cpp
+    src/cddp_core/constraint.cpp
     src/cddp_core/cddp_core.cpp
     src/dynamics_model/pendulum.cpp
 )

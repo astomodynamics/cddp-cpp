@@ -25,7 +25,7 @@
 
 #include "cddp-cpp/cddp_core/dynamical_system.hpp"
 #include "cddp-cpp/cddp_core/objective.hpp"
-// #include "cddp-cpp/cddp_core/constraint.hpp"
+#include "cddp-cpp/cddp_core/constraint.hpp"
 #include "cddp-cpp/cddp_core/cddp_core.hpp"
 
 // Models

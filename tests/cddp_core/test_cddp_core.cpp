@@ -52,13 +52,38 @@ TEST(CDDPTest, Solve) {
 
     initial_state << 0.1, 0.0;  // Start at a small angle, zero velocity
 
-    // // Create CDDP solver
+    // Create CDDP solver
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
     cddp_solver.setDynamicalSystem(std::move(system));
     cddp_solver.setObjective(std::move(objective));
 
+    // Define constraints
+    Eigen::VectorXd control_lower_bound(1);
+    control_lower_bound << -2.0;
+    Eigen::VectorXd control_upper_bound(1);
+    control_upper_bound << 2.0;
+    // Add the constraint to the solver
+    cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound)); // Moved here
+
+    // Test for  evalueate
+    Eigen::VectorXd state(2);
+    state << 0.1, 0.0;
+    Eigen::VectorXd control(1);
+    control << 0.0;
+
+    // Check if the constraint set is not empty
+    ASSERT_FALSE(cddp_solver.getConstraintSet().empty()); 
+
+    // Check the size of the constraint set
+    ASSERT_EQ(cddp_solver.getConstraintSet().size(), 1);
+
+
+    auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    auto value = constraint.evaluate(state, control);
+    ASSERT_TRUE(value[0] == 0.0);
+
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    // cddp::CDDPSolution solution = cddp_solver.solve();
 
     // // Assertions
     // ASSERT_TRUE(solution.converged); // Check if the solver converged

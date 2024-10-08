@@ -34,7 +34,7 @@ CDDP::CDDP(const Eigen::VectorXd& initial_state,
       reference_state_(reference_state), 
       horizon_(horizon), 
       timestep_(timestep) {
-        
+
     printSolverInfo();
 }
 
@@ -82,11 +82,10 @@ void CDDP::initializeCDDP() {
     Q_UX_.resize(horizon_, Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getStateDim()));
     Q_U_.resize(horizon_, Eigen::VectorXd::Zero(system_->getControlDim()));
 
-    // Initialize constraints
-    // constraint_set_.clear(); // Clear existing constraints
-    // for (const auto& constraint : constraint_set_) {
-    //     constraint_set_.push_back(std::move(constraint));
-    // }
+    // Initialize constraints if empty
+    if (constraint_set_.empty()) {
+        std::cerr << "CDDP: No constraints are set" << std::endl;
+    }
     
 
 }
@@ -94,7 +93,7 @@ void CDDP::initializeCDDP() {
 // Solve the problem
 CDDPSolution CDDP::solve() {
     // Initialize CDDP solver
-    initializeCDDP();
+    // initializeCDDP();
 
     if (options_.verbose) {
         printOptions(options_);
@@ -160,6 +159,10 @@ CDDPSolution CDDP::solve() {
 
 // Backward pass
 bool CDDP::solveBackwardPass() {
+    auto active_set_tol = options_.active_set_tolerance;
+    // Extract control box constraint
+    auto control_box_constraint = constraint_set_.find("ControlBoxConstraint");
+
     // Terminal cost and its derivatives
     V_.back() = objective_->terminal_cost(X_.back());
     V_X_.back() = objective_->getFinalCostGradient(X_.back());
@@ -231,6 +234,17 @@ bool CDDP::solveBackwardPass() {
             std::cout << "Cholesky decomposition failed" << std::endl;
             return false;
         }
+
+        /*  --- Identify Active Constraint --- */
+        Eigen::MatrixXd C = Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getControlDim());
+        Eigen::MatrixXd D = Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getStateDim());
+        
+
+        int active_constraint_index = 0;
+        Eigen::MatrixXd active_constraint_table = Eigen::MatrixXd::Zero(2 * (system_->getControlDim()), horizon_);
+
+        // TODO: Implement active set method
+        // for (int j = 0)
 
         // Compute gains
         k_[t] = -Q_UU_[t].inverse() * Q_U_[t];
