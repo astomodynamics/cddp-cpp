@@ -107,8 +107,9 @@ CDDPSolution CDDP::solve() {
     solution.cost_sequence.reserve(options_.max_iterations); // Reserve space for efficiency
 
     // // Evaluate initial cost
-    // double J_ = objective_->evaluate(X_, U_);
-    // solution.cost_sequence.push_back(J_);
+    double J_ = objective_->evaluate(X_, U_);
+    solution.cost_sequence.push_back(J_);
+    std::cout << "Initial Cost: " << J_ << std::endl;
 
     // Start timer
     auto start_time = std::chrono::high_resolution_clock::now();
@@ -186,12 +187,21 @@ bool CDDP::solveBackwardPass() {
     // Eigen::MatrixXd Q_uu(system_->getControlDim(), system_->getControlDim());
     // Eigen::MatrixXd Q_ux(system_->getControlDim(), system_->getStateDim());
 
+    auto start_time = std::chrono::high_resolution_clock::now();
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
+
     // Backward Riccati recursion
     for (int t = horizon_ - 1; t >= 0; --t) {
+        start_time = std::chrono::high_resolution_clock::now();
         // Get state and control
         const Eigen::VectorXd& x = X_.at(t);
         const Eigen::VectorXd& u = U_.at(t);
+        end_time = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
+        std::cout << "Time taken to get state and control: " << duration.count() << " nanoseconds" << std::endl;
 
+        start_time = std::chrono::high_resolution_clock::now();
         // Get continuous dynamics Jacobians
         auto [Fx, Fu] = system_->getJacobians(x, u);
 
@@ -199,18 +209,30 @@ bool CDDP::solveBackwardPass() {
         Eigen::MatrixXd A = timestep_ * Fx; 
         A.diagonal().array() += 1.0; // More efficient way to add identity
         Eigen::MatrixXd B = timestep_ * Fu;
+        end_time = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
+        std::cout << "Time taken to get discrete time dynamics: " << duration.count() << " nanoseconds" << std::endl;
 
+        start_time = std::chrono::high_resolution_clock::now();
         // Get cost and its derivatives
         double l = objective_->running_cost(x, u, t);
         auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
         auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
+        end_time = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
+        std::cout << "Time taken to get cost and its derivatives: " << duration.count() << " nanoseconds" << std::endl;
 
+
+        start_time = std::chrono::high_resolution_clock::now();
         // Compute Q-function matrices 
         auto Q_x = l_x + A.transpose() * V_X_[t + 1];
         auto Q_u = l_u + B.transpose() * V_X_[t + 1];
         auto Q_xx = l_xx + A.transpose() * V_XX_[t + 1] * A;
         auto Q_uu = l_uu + B.transpose() * V_XX_[t + 1] * B;
         auto Q_ux = l_ux + B.transpose() * V_XX_[t + 1] * A;
+        end_time = std::chrono::high_resolution_clock::now();
+        duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
+        std::cout << "Time taken to compute Q-function matrices: " << duration.count() << " nanoseconds" << std::endl;
 
         // Symmetrize Q_uu
         // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
