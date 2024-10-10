@@ -20,6 +20,8 @@
 #include <map>    // For std::map
 #include <Eigen/Dense>
 #include <chrono> // For timing
+#include <execution> // For parallel execution policies
+#include "osqp++.h"
 
 #include "cddp-cpp/cddp_core/cddp_core.hpp"
 
@@ -68,6 +70,9 @@ void CDDP::initializeCDDP() {
     } else if (U_.size() != horizon_) {
         U_.resize(horizon_, Eigen::VectorXd::Zero(system_->getControlDim()));
     }
+
+    // Set initial state
+    X_[0] = initial_state_;
 
     // Initialize cost
     J_ = 0.0;
@@ -121,11 +126,11 @@ CDDPSolution CDDP::solve() {
             break; // Exit if backward pass fails
         }
 
-        // // Forward pass
-        // bool forward_pass_success = solveForwardPass();
-        // if (!forward_pass_success) {
-        //     break; // Exit if forward pass fails
-        // }
+        // Forward pass
+        bool forward_pass_success = solveForwardPass();
+        if (!forward_pass_success) {
+            break; // Exit if forward pass fails
+        }
 
         // Check convergence
         // double J_new = objective_->evaluate(X_, U_);
@@ -172,115 +177,116 @@ bool CDDP::solveBackwardPass() {
     V_XX_.back() = objective_->getFinalCostHessian(X_.back());
 
     // Pre-allocate matrices
-    // Eigen::MatrixXd Fx(system_->getStateDim(), system_->getStateDim());
-    // Eigen::MatrixXd Fu(system_->getStateDim(), system_->getControlDim());
-    // Eigen::MatrixXd A(system_->getStateDim(), system_->getStateDim());
-    // Eigen::MatrixXd B(system_->getStateDim(), system_->getControlDim());
-    // Eigen::VectorXd l_x(system_->getStateDim());
-    // Eigen::VectorXd l_u(system_->getControlDim());
-    // Eigen::MatrixXd l_xx(system_->getStateDim(), system_->getStateDim());
-    // Eigen::MatrixXd l_uu(system_->getControlDim(), system_->getControlDim());
-    // Eigen::MatrixXd l_ux(system_->getControlDim(), system_->getStateDim());
-    // Eigen::VectorXd Q_x(system_->getStateDim());
-    // Eigen::VectorXd Q_u(system_->getControlDim());
-    // Eigen::MatrixXd Q_xx(system_->getStateDim(), system_->getStateDim());
-    // Eigen::MatrixXd Q_uu(system_->getControlDim(), system_->getControlDim());
-    // Eigen::MatrixXd Q_ux(system_->getControlDim(), system_->getStateDim());
-
-    auto start_time = std::chrono::high_resolution_clock::now();
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
+    Eigen::MatrixXd Fx(system_->getStateDim(), system_->getStateDim());
+    Eigen::MatrixXd Fu(system_->getStateDim(), system_->getControlDim());
+    Eigen::MatrixXd A(system_->getStateDim(), system_->getStateDim());
+    Eigen::MatrixXd B(system_->getStateDim(), system_->getControlDim());
+    Eigen::VectorXd l_x(system_->getStateDim());
+    Eigen::VectorXd l_u(system_->getControlDim());
+    Eigen::MatrixXd l_xx(system_->getStateDim(), system_->getStateDim());
+    Eigen::MatrixXd l_uu(system_->getControlDim(), system_->getControlDim());
+    Eigen::MatrixXd l_ux(system_->getControlDim(), system_->getStateDim());
+    Eigen::VectorXd Q_x(system_->getStateDim());
+    Eigen::VectorXd Q_u(system_->getControlDim());
+    Eigen::MatrixXd Q_xx(system_->getStateDim(), system_->getStateDim());
+    Eigen::MatrixXd Q_uu(system_->getControlDim(), system_->getControlDim());
+    Eigen::MatrixXd Q_ux(system_->getControlDim(), system_->getStateDim());
+    Eigen::MatrixXd Q_uu_inv(system_->getControlDim(), system_->getControlDim());
+    Eigen::MatrixXd active_constraint_tabl(2 * (system_->getControlDim()), horizon_); 
+    Eigen::VectorXd k(system_->getControlDim());
+    Eigen::MatrixXd K(system_->getControlDim(), system_->getStateDim());
 
     // Backward Riccati recursion
     for (int t = horizon_ - 1; t >= 0; --t) {
-        start_time = std::chrono::high_resolution_clock::now();
         // Get state and control
         const Eigen::VectorXd& x = X_.at(t);
         const Eigen::VectorXd& u = U_.at(t);
-        end_time = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
-        std::cout << "Time taken to get state and control: " << duration.count() << " nanoseconds" << std::endl;
 
-        start_time = std::chrono::high_resolution_clock::now();
         // Get continuous dynamics Jacobians
         auto [Fx, Fu] = system_->getJacobians(x, u);
 
         // Convert continuous dynamics to discrete time
-        Eigen::MatrixXd A = timestep_ * Fx; 
+        A = timestep_ * Fx; 
         A.diagonal().array() += 1.0; // More efficient way to add identity
-        Eigen::MatrixXd B = timestep_ * Fu;
-        end_time = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
-        std::cout << "Time taken to get discrete time dynamics: " << duration.count() << " nanoseconds" << std::endl;
+        B = timestep_ * Fu;
 
-        start_time = std::chrono::high_resolution_clock::now();
         // Get cost and its derivatives
         double l = objective_->running_cost(x, u, t);
         auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
         auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
-        end_time = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
-        std::cout << "Time taken to get cost and its derivatives: " << duration.count() << " nanoseconds" << std::endl;
 
 
-        start_time = std::chrono::high_resolution_clock::now();
         // Compute Q-function matrices 
-        auto Q_x = l_x + A.transpose() * V_X_[t + 1];
-        auto Q_u = l_u + B.transpose() * V_X_[t + 1];
-        auto Q_xx = l_xx + A.transpose() * V_XX_[t + 1] * A;
-        auto Q_uu = l_uu + B.transpose() * V_XX_[t + 1] * B;
-        auto Q_ux = l_ux + B.transpose() * V_XX_[t + 1] * A;
-        end_time = std::chrono::high_resolution_clock::now();
-        duration = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
-        std::cout << "Time taken to compute Q-function matrices: " << duration.count() << " nanoseconds" << std::endl;
+        Q_x = l_x + A.transpose() * V_X_[t + 1];
+        Q_u = l_u + B.transpose() * V_X_[t + 1];
+        Q_xx = l_xx + A.transpose() * V_XX_[t + 1] * A;
+        Q_uu = l_uu + B.transpose() * V_XX_[t + 1] * B;
+        Q_ux = l_ux + B.transpose() * V_XX_[t + 1] * A;
 
         // Symmetrize Q_uu
-        // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
+        Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
         // Check eigenvalues of Q_uu
-        // Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
-        // Eigen::VectorXd eigenvalues = es.eigenvalues().real();
-        // if (eigenvalues.minCoeff() <= 0) {
-        //     // Add regularization
-        //     // Q_uu.diagonal() += 1e-6;
-        //     std::cout << "Q_uu is not positive definite at " << t << std::endl;
+        Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
+        Eigen::VectorXd eigenvalues = es.eigenvalues().real();
+        if (eigenvalues.minCoeff() <= 0) {
+            // Add regularization
+            // Q_uu.diagonal() += 1e-6;
+            std::cout << "Q_uu is not positive definite at " << t << std::endl;
+        }
+
+        // TODO: Regularization
+        if (options_.regularization_type == 0) {
+            Q_uu += options_.regularization_parameter * Eigen::MatrixXd::Identity(system_->getControlDim(), system_->getControlDim());
+        } 
+
+        // Cholesky decomposition
+        Eigen::LLT<Eigen::MatrixXd> llt(Q_uu);
+        if (llt.info() != Eigen::Success) {
+            // Decomposition failed
+            std::cout << "Cholesky decomposition failed" << std::endl;
+            return false;
+        }
+
+        /*  --- Identify Active Constraint --- */
+
+        int active_constraint_index = 0;
+        Eigen::MatrixXd C(system_->getControlDim(), system_->getControlDim()); // Control constraint matrix
+        Eigen::MatrixXd D(system_->getControlDim(), system_->getStateDim()); // State constraint matrix
+
+        // TODO: Implement active set method
+        // for (int j = 0; j < system_->getControlDim(); j++) {
+        //     if (u(j) < control_box_constraint->getLowerBound()(j) - active_set_tol) {
+        //         Eigen::VectorXd e = Eigen::VectorXd::Zero(system_->getControlDim());
+        //         e(j) = 1.0;
+        //         C.row(active_constraint_index) = e;
+        //         D.row(active_constraint_index) = Eigen::VectorXd::Zero(system_->getStateDim());
+        //         active_constraint_index += 1;
+        //     } else if (u(j) > control_box_constraint->getUpperBound()(j) + active_set_tol) {
+        //         Eigen::VectorXd e = Eigen::VectorXd::Zero(system_->getControlDim());
+        //         e(j) = -1.0;
+        //         C.row(active_constraint_index) = e;
+        //         D.row(active_constraint_index) = Eigen::VectorXd::Zero(system_->getStateDim());
+        //         active_constraint_index += 1;
+        //     }
         // }
 
-        // // TODO: Regularization
-        // if (options_.regularization_type == 0) {
-        //     Q_uu += options_.regularization_parameter * Eigen::MatrixXd::Identity(system_->getControlDim(), system_->getControlDim());
-        // } 
+        // Store Q-function matrices
+        Q_UU_[t] = Q_uu;
+        Q_UX_[t] = Q_ux;
+        Q_U_[t] = Q_u;
 
-        // // Cholesky decomposition
-        // Eigen::LLT<Eigen::MatrixXd> llt(Q_uu);
-        // if (llt.info() != Eigen::Success) {
-        //     // Decomposition failed
-        //     std::cout << "Cholesky decomposition failed" << std::endl;
-        //     return false;
-        // }
+        // Compute gains
+        k = -Q_uu.inverse() * Q_u;
+        K = -Q_uu.inverse() * Q_ux;
 
-        // /*  --- Identify Active Constraint --- */
-        // Eigen::MatrixXd C = Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getControlDim());
-        // Eigen::MatrixXd D = Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getStateDim());
-        
+        k_[t] = k;
+        K_[t] = K;
 
-        // int active_constraint_index = 0;
-        // Eigen::MatrixXd active_constraint_table = Eigen::MatrixXd::Zero(2 * (system_->getControlDim()), horizon_);
-
-        // // TODO: Implement active set method
-        // // for (int j = 0)
-
-        // // Compute gains
-        // Eigen::VectorXd k = -Q_uu.inverse() * Q_u;
-        // Eigen::MatrixXd K = -Q_uu.inverse() * Q_ux;
-
-        // k_[t] = k;
-        // K_[t] = K;
-
-        // // Compute value function approximation
-        // // V_[t] = l + V_[t + 1] + 0.5 * k_[t].transpose() * Q_UU_[t] * k_[t] + k_[t].transpose() * Q_U_[t];
-        // V_X_[t] = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
-        // V_XX_[t] = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
+        // Compute value function approximation
+        // V_[t] = l + V_[t + 1] + 0.5 * k_[t].transpose() * Q_UU_[t] * k_[t] + k_[t].transpose() * Q_U_[t];
+        V_X_[t] = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
+        V_XX_[t] = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
     }
 
     return true;
@@ -289,7 +295,79 @@ bool CDDP::solveBackwardPass() {
 
 // Forward pass
 bool CDDP::solveForwardPass() {
-    // ... (Implement your forward pass logic here) ...
+    bool is_feasible = false;
+
+    // 
+
+    // Extract control box constraint
+    auto control_box_constraint = constraint_set_.find("ControlBoxConstraint");
+
+    int iter = 0;
+
+    // Line-search iteration 
+    for (iter = 0; iter < options_.max_line_search_iterations; ++iter) {
+        // Initialize cost and constraints
+        double J = 0.0;
+        std::vector<Eigen::VectorXd> X_new(horizon_ + 1, Eigen::VectorXd::Zero(system_->getStateDim()));
+        std::vector<Eigen::VectorXd> U_new(horizon_, Eigen::VectorXd::Zero(system_->getControlDim()));
+        X_new[0] = initial_state_;
+
+        for (int t = 0; t < horizon_; ++t) {
+            // Get state and control
+            const Eigen::VectorXd& x = X_new[t];
+            const Eigen::VectorXd& u = U_new[t];
+
+            Eigen::VectorXd dx = x - X_[t];
+
+            // Extract Q-function matrices
+            const Eigen::VectorXd& Q_u = Q_U_[t];
+            const Eigen::MatrixXd& Q_uu = Q_UU_[t];
+            const Eigen::MatrixXd& Q_ux = Q_UX_[t];
+
+            // Extract gains
+            const Eigen::VectorXd& k = k_[t];
+            const Eigen::MatrixXd& K = K_[t];
+
+            // Create QP problem
+            
+
+            // Compute new state
+            X_new[t + 1] = system_->getDiscreteDynamics(x, u);
+
+            // Compute cost
+            J += objective_->running_cost(x, u, t);
+        }
+        J += objective_->terminal_cost(X_new.back());
+        std::cout << "Cost: " << J << std::endl;
+
+        // // Check constraints
+        // is_feasible = true;
+        // for (int t = 0; t < horizon_; ++t) {
+        //     const Eigen::VectorXd& u = U_new[t];
+        //     // Check control box constraint
+        //     if (control_box_constraint != constraint_set_.end()) {
+        //         if (!control_box_constraint->second->isFeasible(u)) {
+        //             is_feasible = false;
+        //             break;
+        //         }
+        //     }
+        // }
+
+        // Check if the cost is reduced
+        // if (is_feasible && J < J_) {
+        //     // Update state and control
+        //     X_ = X_new;
+        //     U_ = U_new;
+        //     J_ = J;
+        //     break;
+        // } else {
+        //     // Backtracking line search
+        //     for (int t = 0; t < horizon_; ++t) {
+        //         U_new[t] = options_.backtracking_coeff * U_[t];
+        //     }
+        // }
+    }
+
     return true; // Or false if forward pass fails
 }
 

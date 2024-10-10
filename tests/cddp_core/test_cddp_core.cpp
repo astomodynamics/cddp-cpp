@@ -80,6 +80,10 @@ TEST(CDDPTest, Solve) {
     // Solve the problem
     cddp::CDDPSolution solution = cddp_solver.solve();
 
+    // Extract solution
+    auto X_sol = solution.state_sequence;
+    auto U_sol = solution.control_sequence;
+
     // // Assertions
     // ASSERT_TRUE(solution.converged); // Check if the solver converged
     // // Add more assertions based on expected behavior
