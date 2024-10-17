@@ -15,9 +15,20 @@ option(CDDP-CPP_BUILD_TESTS
 
 # EIGEN
 find_package(Eigen3 REQUIRED)
+set(Python_EXECUTABLE /usr/bin/python3.10) # Or the path to your desired Python interpreter
+execute_process( # Find the NumPy include directory
+  COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
+  OUTPUT_VARIABLE NUMPY_INCLUDE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE 
+)
+find_package(Python3 3.10 EXACT COMPONENTS Interpreter Development NumPy REQUIRED)
 
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
+include_directories(
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${Python3_INCLUDE_DIRS}
+  ${NUMPY_INCLUDE_DIR}
+) 
 
 # ABSL
 if (NOT TARGET absl::strings OR NOT TARGET absl::status OR NOT TARGET absl::span)

@@ -17,7 +17,9 @@ target_link_libraries(cddp_objective_tests PUBLIC Eigen3::Eigen)
 add_executable(cddp_problem_tests 
     CDDPProblemTests.cpp
     ../src/cddp_core/CDDPProblem.cpp)
-target_link_libraries(cddp_problem_tests PUBLIC Eigen3::Eigen PRIVATE osqp-cpp)
+target_link_libraries(cddp_problem_tests PUBLIC Eigen3::Eigen Python3::Python
+Python3::Module
+Python3::NumPy PRIVATE osqp-cpp)
 
 
 
