@@ -112,7 +112,7 @@ CDDPSolution CDDP::solve() {
     solution.cost_sequence.reserve(options_.max_iterations); // Reserve space for efficiency
 
     // // Evaluate initial cost
-    double J_ = objective_->evaluate(X_, U_);
+    J_ = objective_->evaluate(X_, U_);
     solution.cost_sequence.push_back(J_);
     std::cout << "Initial Cost: " << J_ << std::endl;
 
@@ -133,7 +133,7 @@ CDDPSolution CDDP::solve() {
         }
 
         // Check convergence
-        // double J_new = objective_->evaluate(X_, U_);
+        double J_new = objective_->evaluate(X_, U_);
         // double dJ = J_old - J_new;
         // // ... (Calculate expected_dV and gradient_norm based on your algorithm) ...
         // solution.converged = checkConvergence(J_new, J_old, dJ, expected_dV, gradient_norm);
@@ -145,16 +145,16 @@ CDDPSolution CDDP::solve() {
         // }
 
         // Print iteration information
-        // printIteration(iter, J_new, gradient_norm, 0.0); // Assuming lambda is not used
+        printIteration(iter, J_, 0.0, 0.0); // Assuming lambda is not used
 
         // Append Latest Cost
-        // solution.cost_sequence.push_back(J_new);
+        solution.cost_sequence.push_back(J_new);
     }
 
     // // Finalize solution
-    // solution.control_sequence = U_;
-    // solution.state_sequence = X_;
-    // solution.iterations = solution.converged ? solution.iterations : options_.max_iterations;
+    solution.control_sequence = U_;
+    solution.state_sequence = X_;
+    solution.iterations = solution.converged ? solution.iterations : options_.max_iterations;
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
@@ -304,6 +304,8 @@ bool CDDP::solveForwardPass() {
 
     int iter = 0;
 
+    double alpha = options_.backtracking_coeff;
+
     // Line-search iteration 
     for (iter = 0; iter < options_.max_line_search_iterations; ++iter) {
         // Initialize cost and constraints
@@ -329,13 +331,23 @@ bool CDDP::solveForwardPass() {
             const Eigen::MatrixXd& K = K_[t];
 
             // Create QP problem
+
+            // Create OSQP solver
+
+
+            // Solve QP problem
+
+            // Extract control
+
+
+            U_new[t] = u + alpha * k + K * dx;
             
 
             // Compute new state
-            X_new[t + 1] = system_->getDiscreteDynamics(x, u);
+            X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t]);
 
             // Compute cost
-            J += objective_->running_cost(x, u, t);
+            J += objective_->running_cost(X_new[t + 1], U_new[t], t);
         }
         J += objective_->terminal_cost(X_new.back());
         std::cout << "Cost: " << J << std::endl;
@@ -354,18 +366,13 @@ bool CDDP::solveForwardPass() {
         // }
 
         // Check if the cost is reduced
-        // if (is_feasible && J < J_) {
-        //     // Update state and control
-        //     X_ = X_new;
-        //     U_ = U_new;
-        //     J_ = J;
-        //     break;
-        // } else {
-        //     // Backtracking line search
-        //     for (int t = 0; t < horizon_; ++t) {
-        //         U_new[t] = options_.backtracking_coeff * U_[t];
-        //     }
-        // }
+        if (J < J_) {
+            // Update state and control
+            X_ = X_new;
+            U_ = U_new;
+            J_ = J;
+            return true;
+        } 
     }
 
     return true; // Or false if forward pass fails
@@ -426,6 +433,13 @@ void CDDP::printOptions(const CDDPOptions& options) {
     std::cout << "  iLQR: " << (options.is_ilqr ? "Yes" : "No") << "\n";
 
     std::cout << "========================================\n\n";
+}
+
+void CDDP::printIteration(int iter, double cost, double grad_norm, double lambda) {
+    std::cout << "Iteration: " << std::setw(5) << iter << " | ";
+    std::cout << "Cost: " << std::setprecision(6) << std::setw(10) << cost << " | ";
+    std::cout << "Grad Norm: " << std::setprecision(6) << std::setw(10) << grad_norm << " | ";
+    std::cout << "Lambda: " << std::setprecision(6) << std::setw(10) << lambda << "\n";
 }
 
 void CDDP::printSolution(const CDDPSolution& solution) {

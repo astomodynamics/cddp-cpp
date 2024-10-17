@@ -69,7 +69,7 @@ TEST(CDDPTest, Solve) {
 
     // Set options
     cddp::CDDPOptions options;
-    options.max_iterations = 1;
+    options.max_iterations = 20;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory
@@ -83,6 +83,15 @@ TEST(CDDPTest, Solve) {
     // Extract solution
     auto X_sol = solution.state_sequence;
     auto U_sol = solution.control_sequence;
+
+    // Plot the solution (x-y plane)
+    std::vector<double> x_arr, y_arr;
+    for (const auto& x : X_sol) {
+        x_arr.push_back(x(0));
+        y_arr.push_back(x(1));
+    }
+    plt::plot(x_arr, y_arr);
+    plt::show();
 
     // // Assertions
     // ASSERT_TRUE(solution.converged); // Check if the solver converged
