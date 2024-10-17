@@ -3,9 +3,10 @@
 // #include "cddp/cddp_core/CDDPProblem.hpp"
 #include "CDDP.hpp"
 #include "model/DubinsCar.hpp"
+#include "matplotlibcpp.hpp"
 
 using namespace cddp;
-
+namespace plt = matplotlibcpp;
 // Simple Test Function
 bool testBasicCDDP() {
     int state_dim = 3; 
@@ -46,10 +47,10 @@ bool testBasicCDDP() {
 
     // Add constraints 
     Eigen::VectorXd lower_bound(control_dim);
-    lower_bound << -1.0, -M_PI;
+    lower_bound << -10.0, -10*M_PI;
 
     Eigen::VectorXd upper_bound(control_dim);
-    upper_bound << 1.0, M_PI;
+    upper_bound << 10.0, 10*M_PI;
 
     ControlBoxConstraint control_constraint(lower_bound, upper_bound);
     cddp_solver.addConstraint(std::make_unique<ControlBoxConstraint>(control_constraint));
@@ -80,6 +81,21 @@ bool testBasicCDDP() {
     std::cout << "Final State: " << X_sol.back().transpose() << std::endl;
     // print initial control
     std::cout << "Initial Control: " << U_sol[0].transpose() << std::endl;
+
+    // Plotting
+    std::vector<double> x, y, theta;
+    for (int i = 0; i < X_sol.size(); i++) {
+        x.push_back(X_sol[i](0));
+        y.push_back(X_sol[i](1));
+        theta.push_back(X_sol[i](2));
+    }
+
+    plt::figure();
+    plt::plot(x, y);
+    plt::xlabel("X");
+    plt::ylabel("Y");
+    plt::title("Dubins Car Trajectory");
+    plt::show();
 
     // for (int i = 0; i < U_sol.size(); i++) {
     //     std::cout << "Control " << i << ": " << U_sol[i].transpose() << std::endl;
