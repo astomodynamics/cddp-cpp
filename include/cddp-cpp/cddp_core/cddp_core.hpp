@@ -22,6 +22,7 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <regex>
+#include "osqp++.h"
 // #include "torch/torch.h"
 
 #include "cddp-cpp/cddp_core/dynamical_system.hpp" 
@@ -192,6 +193,10 @@ private:
     std::vector<Eigen::MatrixXd> Q_UU_;
     std::vector<Eigen::MatrixXd> Q_UX_;
     std::vector<Eigen::VectorXd> Q_U_; 
+
+    // QP sover 
+    osqp::OsqpSolver osqp_solver_;
+   
 };
 }
 #endif // CDDP_CDDP_CORE_HPP

@@ -94,7 +94,40 @@ void CDDP::initializeCDDP() {
         std::cerr << "CDDP: No constraints are set" << std::endl;
     }
     
+     
+    // Initialize OSQP setting
+     osqp::OsqpSettings settings;
+    settings.warm_start = true;
+    settings.verbose = false;
+    // settings_.max_iter = 1000;
 
+    // Initialize QP solver instance
+    osqp::OsqpInstance instance;
+
+    Eigen::SparseMatrix<double> P(system_->getControlDim(), system_->getControlDim());
+    P.setIdentity();
+    P.makeCompressed();
+    instance.objective_matrix = P;
+
+    instance.objective_vector = Eigen::VectorXd::Zero(system_->getControlDim());
+
+    Eigen::SparseMatrix<double> A(system_->getControlDim(), system_->getControlDim());
+    A.setIdentity();
+    A.makeCompressed();
+    instance.constraint_matrix = A;
+    
+    instance.lower_bounds = Eigen::VectorXd::Constant(system_->getControlDim(), -std::numeric_limits<double>::infinity());
+    instance.upper_bounds = Eigen::VectorXd::Constant(system_->getControlDim(), std::numeric_limits<double>::infinity());
+
+    // Initialize the solver
+    osqp_solver_.Init(instance, settings);
+
+    // Ceck if the problem is initialized correctly
+    if (osqp_solver_.IsInitialized()) {
+        std::cout << "OSQP Solver is initialized" << std::endl;
+    } else {
+        std::cerr << "OSQP Solver is not initialized" << std::endl;
+    }
 }
 
 // Solve the problem
@@ -297,21 +330,19 @@ bool CDDP::solveBackwardPass() {
 bool CDDP::solveForwardPass() {
     bool is_feasible = false;
 
-    // 
-
     // Extract control box constraint
-    auto control_box_constraint = constraint_set_.find("ControlBoxConstraint");
+    auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
 
     int iter = 0;
-
     double alpha = options_.backtracking_coeff;
 
     // Line-search iteration 
     for (iter = 0; iter < options_.max_line_search_iterations; ++iter) {
         // Initialize cost and constraints
-        double J = 0.0;
-        std::vector<Eigen::VectorXd> X_new(horizon_ + 1, Eigen::VectorXd::Zero(system_->getStateDim()));
-        std::vector<Eigen::VectorXd> U_new(horizon_, Eigen::VectorXd::Zero(system_->getControlDim()));
+        double J_new = 0.0, dJ = 0.0, expected_dV = 0.0, gradient_norm = 0.0;
+
+        std::vector<Eigen::VectorXd> X_new = X_;
+        std::vector<Eigen::VectorXd> U_new = U_;
         X_new[0] = initial_state_;
 
         for (int t = 0; t < horizon_; ++t) {
@@ -319,7 +350,8 @@ bool CDDP::solveForwardPass() {
             const Eigen::VectorXd& x = X_new[t];
             const Eigen::VectorXd& u = U_new[t];
 
-            Eigen::VectorXd dx = x - X_[t];
+            // Deviation from the nominal trajectory
+            const Eigen::VectorXd& delta_x = x - X_[t];
 
             // Extract Q-function matrices
             const Eigen::VectorXd& Q_u = Q_U_[t];
@@ -331,26 +363,63 @@ bool CDDP::solveForwardPass() {
             const Eigen::MatrixXd& K = K_[t];
 
             // Create QP problem
-
-            // Create OSQP solver
-
-
-            // Solve QP problem
-
-            // Extract control
-
-
-            U_new[t] = u + alpha * k + K * dx;
+            Eigen::SparseMatrix<double> P(Q_uu.rows(), Q_uu.cols()); // Hessian of QP objective
+            int numNonZeros = Q_uu.nonZeros(); 
+            P.reserve(numNonZeros);
+            for (int i = 0; i < Q_uu.rows(); ++i) {
+                for (int j = 0; j < Q_uu.cols(); ++j) {
+                    if (Q_uu(i, j) != 0) {
+                        P.insert(i, j) = Q_uu(i, j);
+                    }
+                }
+            }
+            P.makeCompressed(); // Important for efficient storage and operations
+            osqp_solver_.UpdateObjectiveMatrix(P);
             
+            const Eigen::VectorXd& q = Q_ux * delta_x + Q_u; // Gradient of QP objective
+            osqp_solver_.SetObjectiveVector(q);
+
+            // Create constraints
+            Eigen::SparseMatrix<double> A(system_->getStateDim(), system_->getControlDim());
+            A.setIdentity();
+            A.makeCompressed();
+            osqp_solver_.UpdateConstraintMatrix(A);
+
+             // Lower and upper bounds
+            Eigen::VectorXd lb = 1.0 * (control_box_constraint.getLowerBound() - u);
+            Eigen::VectorXd ub = 1.0 * (control_box_constraint.getUpperBound() - u);    
+            osqp_solver_.SetBounds(lb, ub);
+
+            // Solve the QP problem
+            osqp::OsqpExitCode exit_code = osqp_solver_.Solve();
+
+            // // Extract solution`
+            double optimal_objective = osqp_solver_.objective_value();
+            const Eigen::VectorXd& delta_u = osqp_solver_.primal_solution();
+
+            if (exit_code == osqp::OsqpExitCode::kOptimal) {
+                is_feasible = true;
+            } else {
+                // trust_region_radius *= options_.trust_region_factor;
+                // break;
+            }
+
+
+            U_new[t] += delta_u;
+            // U_new[t] += alpha * k + K * delta_x;
+
+            // Compute cost
+            J_new += objective_->running_cost(x, U_new[t], t);
 
             // Compute new state
             X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t]);
 
-            // Compute cost
-            J += objective_->running_cost(X_new[t + 1], U_new[t], t);
         }
-        J += objective_->terminal_cost(X_new.back());
-        std::cout << "Cost: " << J << std::endl;
+        J_new += objective_->terminal_cost(X_new.back());
+
+        // Calculate Cost Reduction
+        dJ = J_ - J_new;
+        std::cout << "Cost: " << J_new << std::endl;
 
         // // Check constraints
         // is_feasible = true;
@@ -366,13 +435,15 @@ bool CDDP::solveForwardPass() {
         // }
 
         // Check if the cost is reduced
-        if (J < J_) {
+        if (dJ > 0) {
             // Update state and control
             X_ = X_new;
             U_ = U_new;
-            J_ = J;
+            J_ = J_new;
             return true;
-        } 
+        } else {
+            alpha *= options_.backtracking_factor;
+        }
     }
 
     return true; // Or false if forward pass fails
