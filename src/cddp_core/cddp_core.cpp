@@ -99,8 +99,13 @@ void CDDP::initializeCDDP() {
      osqp::OsqpSettings settings;
     settings.warm_start = true;
     settings.verbose = false;
-    // settings_.max_iter = 1000;
-
+    // settings.max_iter = 1000;
+    settings.eps_abs = 1e-3;
+    settings.eps_rel = 1e-2;
+    // settings.eps_prim_inf = 1e-4;
+    // settings.eps_dual_inf = 1e-4;
+    // settings.alpha = 1.6;
+    
     // Initialize QP solver instance
     osqp::OsqpInstance instance;
 
@@ -124,7 +129,7 @@ void CDDP::initializeCDDP() {
 
     // Ceck if the problem is initialized correctly
     if (osqp_solver_.IsInitialized()) {
-        std::cout << "OSQP Solver is initialized" << std::endl;
+        // std::cout << "OSQP Solver is initialized" << std::endl;
     } else {
         std::cerr << "OSQP Solver is not initialized" << std::endl;
     }
@@ -335,6 +340,15 @@ bool CDDP::solveForwardPass() {
 
     int iter = 0;
     double alpha = options_.backtracking_coeff;
+    
+    // Pre-allocate matrices
+    Eigen::SparseMatrix<double> P(system_->getControlDim(), system_->getControlDim()); // Hessian of QP objective
+    
+    // A is already defined in initializeCDDP
+    // Eigen::SparseMatrix<double> A(system_->getStateDim(), system_->getControlDim());
+    // A.setIdentity();
+    // A.makeCompressed();
+    // osqp_solver_.UpdateConstraintMatrix(A);
 
     // Line-search iteration 
     for (iter = 0; iter < options_.max_line_search_iterations; ++iter) {
@@ -363,7 +377,6 @@ bool CDDP::solveForwardPass() {
             const Eigen::MatrixXd& K = K_[t];
 
             // Create QP problem
-            Eigen::SparseMatrix<double> P(Q_uu.rows(), Q_uu.cols()); // Hessian of QP objective
             int numNonZeros = Q_uu.nonZeros(); 
             P.reserve(numNonZeros);
             for (int i = 0; i < Q_uu.rows(); ++i) {
@@ -376,14 +389,8 @@ bool CDDP::solveForwardPass() {
             P.makeCompressed(); // Important for efficient storage and operations
             osqp_solver_.UpdateObjectiveMatrix(P);
             
-            const Eigen::VectorXd& q = Q_ux * delta_x + Q_u; // Gradient of QP objective
-            osqp_solver_.SetObjectiveVector(q);
-
-            // Create constraints
-            Eigen::SparseMatrix<double> A(system_->getStateDim(), system_->getControlDim());
-            A.setIdentity();
-            A.makeCompressed();
-            osqp_solver_.UpdateConstraintMatrix(A);
+            const Eigen::VectorXd& q = Q_ux * delta_x + alpha * Q_u; // Gradient of QP objective
+            osqp_solver_.SetObjectiveVector(q);            
 
              // Lower and upper bounds
             Eigen::VectorXd lb = 1.0 * (control_box_constraint.getLowerBound() - u);
