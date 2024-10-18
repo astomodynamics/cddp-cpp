@@ -4,6 +4,7 @@
 
 #include "cddp-cpp/sdqp.hpp"
 #include "osqp++.h"
+#include "gurobi_c++.h"
 #include <chrono>
 
 using namespace std;
@@ -94,7 +95,43 @@ TEST(SDQP, test_sdqp) {
     std::cout << "optimal sol: " << osqp_solver.primal_solution().transpose() << std::endl;
     std::cout << "optimal obj: " << osqp_solver.objective_value() << std::endl;
     std::cout << "elapsed time: " << elapsed.count() << "s" << std::endl;
-    
+
+    // Test for gurobi
+    // Test for gurobi
+    GRBEnv env = GRBEnv();
+    GRBModel model = GRBModel(env);
+
+    // Create variables
+    GRBVar x1 = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "x1");
+    GRBVar x2 = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "x2");
+    GRBVar x3 = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "x3");
+
+    // Set objective
+    GRBQuadExpr obj = 2 * x1 * x1 + 2 * x2 * x2 + 2 * x3 * x3 + 2 * x1 * x2 + 2 * x1 * x3 + 2 * x2 * x3 + 1.2 * x1 + 2.5 * x2 - 10 * x3;
+    model.setObjective(obj);
+
+    // Add constraints
+    model.addConstr(x1 <= 10, "c0");
+    model.addConstr(x2 <= 10, "c1");
+    model.addConstr(x3 <= 10, "c2");
+    model.addConstr(-0.7 * x1 + 0.5 * x2 <= 1.7, "c3");
+    model.addConstr(0.5 * x1 - x2 <= -7.1, "c4");
+    model.addConstr(0.13 * x2 - x3 <= -3.31, "c5");
+    model.addConstr(0.1 * x1 - 3 * x2 - 1.3 * x3 <= 2.59, "c6");
+
+    // Optimize model
+    start_time = std::chrono::high_resolution_clock::now();
+    model.optimize();
+    end_time = std::chrono::high_resolution_clock::now();
+    elapsed = end_time - start_time;
+
+    std::cout << "optimal sol: " << x1.get(GRB_DoubleAttr_X) << " " 
+              << x2.get(GRB_DoubleAttr_X) << " " 
+              << x3.get(GRB_DoubleAttr_X) << std::endl;
+    std::cout << "optimal obj: " << model.get(GRB_DoubleAttr_ObjVal) << std::endl;
+    std::cout << "elapsed time: " << elapsed.count() << "s" << std::endl;
+
+ 
 }
 
 // Output:
