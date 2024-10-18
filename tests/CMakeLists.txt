@@ -28,3 +28,8 @@ gtest_discover_tests(test_eigen)
 add_executable(test_gurobi test_gurobi.cpp)
 target_link_libraries(test_gurobi gtest gmock gtest_main cddp)
 gtest_discover_tests(test_gurobi)
+
+# Test for SDQP
+add_executable(test_sdqp test_sdqp.cpp)
+target_link_libraries(test_sdqp gtest gmock gtest_main cddp)
+gtest_discover_tests(test_sdqp)
