@@ -106,7 +106,7 @@ TEST(SDQP, test_sdqp) {
     GRBVar x3 = model.addVar(-GRB_INFINITY, GRB_INFINITY, 0.0, GRB_CONTINUOUS, "x3");
 
     // Set objective
-    GRBQuadExpr obj = 2 * x1 * x1 + 2 * x2 * x2 + 2 * x3 * x3 + 2 * x1 * x2 + 2 * x1 * x3 + 2 * x2 * x3 + 1.2 * x1 + 2.5 * x2 - 10 * x3;
+    GRBQuadExpr obj = x1 * x1 + x2 * x2 + x3 * x3 + x1 * x2 + x1 * x3 + x2 * x3 + 1.2 * x1 + 2.5 * x2 - 10 * x3;
     model.setObjective(obj);
 
     // Add constraints
