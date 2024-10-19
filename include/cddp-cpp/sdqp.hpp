@@ -279,11 +279,6 @@ namespace sdqp
             return 0.0;
         }
 
-         // Debugging output
-        std::cout << "Initial x: " << x.transpose() << std::endl;
-        std::cout << "Matrix A: \n" << A << std::endl;
-        std::cout << "Vector b: " << b.transpose() << std::endl;
-
         Eigen::VectorXi perm(n - 1);
         Eigen::VectorXi next(n);
         Eigen::VectorXi prev(n + 1);
@@ -306,12 +301,6 @@ namespace sdqp
             next(1) = 1;
         }
 
-        // Debugging output
-        std::cout << "perm: " << perm.transpose() << std::endl;
-        std::cout << "next: " << next.transpose() << std::endl;
-        std::cout << "prev: " << prev.transpose() << std::endl;
-
-
         Eigen::MatrixXd halves(A.cols() + 1, n);
         Eigen::VectorXd work((n + 2) * (d + 2) * (d - 1) / 2 + 1 - d);
 
@@ -320,24 +309,15 @@ namespace sdqp
         halves.topRows(A.cols()) = (A.array().colwise() / scale.array()).transpose();
         halves.bottomRows(1) = (-b.array() / scale.array()).transpose();
 
-        // Debugging output
-        std::cout << "Scaling factors (Code 1): " << scale.transpose() << std::endl;
-        std::cout << "Halves matrix (Code 1): \n" << halves << std::endl;
-
         const int status = min_norm(halves.data(), n, n,
                                    x.data(), work.data(),
                                    next.data(), prev.data(), d);
-
-        // Debugging output
-        std::cout << "Status after min_norm: " << status << std::endl;
-        std::cout << "x after min_norm: " << x.transpose() << std::endl;
 
         double minimum = INFINITY;
         if (status != INFEASIBLE)
         {
             minimum = x.norm();
         }
-        std::cout << "Minimum value: " << minimum << std::endl;
         return minimum;
     }
 
@@ -354,7 +334,6 @@ namespace sdqp
         const Eigen::VectorXd bs = A * v + b;
 
         double minimum = sdmn(As, bs, x, Q.cols());
-        std::cout << "minimum: " << minimum << std::endl;
         if (!std::isinf(minimum))
         {
             llt.matrixU().solveInPlace(x);
