@@ -87,13 +87,21 @@ include_directories(
 ) 
 
 # Add your library
-add_library(${PROJECT_NAME} 
+set(cddp_core_srcs
     src/cddp_core/dynamical_system.cpp
     src/cddp_core/objective.cpp
     src/cddp_core/constraint.cpp
     src/cddp_core/cddp_core.cpp
+)
+
+set(dynamics_model_srcs
     src/dynamics_model/pendulum.cpp
     src/dynamics_model/dubins_car.cpp
+)
+
+add_library(${PROJECT_NAME} 
+    ${cddp_core_srcs}
+    ${dynamics_model_srcs}
 )
 
 target_link_libraries(${PROJECT_NAME} 
@@ -103,6 +111,10 @@ target_link_libraries(${PROJECT_NAME}
     Python3::Module
     Python3::NumPy
 ) 
+
+target_include_directories(${PROJECT_NAME} PUBLIC
+    include  
+)
 
 # Gurobi 
 if (CDDP-CPP_GUROBI)

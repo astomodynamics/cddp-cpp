@@ -15,7 +15,7 @@ TEST(SDQP, test_sdqp) {
     int m = 7;
     Eigen::Matrix<double, 3, 3> Q;
     Eigen::Matrix<double, 3, 1> c;
-    Eigen::Matrix<double, 3, 1> x;        // decision variables
+    Eigen::VectorXd x(3);        // decision variables
     Eigen::Matrix<double, -1, 3> A(m, 3); // constraint matrix
     Eigen::VectorXd b(m);                 // constraint bound
 
@@ -32,7 +32,7 @@ TEST(SDQP, test_sdqp) {
     b << 10.0, 10.0, 10.0, 1.7, -7.1, -3.31, 2.59;
 
     auto start_time = std::chrono::high_resolution_clock::now();
-    double minobj = sdqp::sdqp<3>(Q, c, A, b, x);
+    double minobj = sdqp::sdqp(Q, c, A, b, x);
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_time - start_time;
 
