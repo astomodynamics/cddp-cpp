@@ -74,6 +74,7 @@ struct CDDPSolution {
     std::vector<Eigen::VectorXd> control_sequence;
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<double> cost_sequence;
+    std::vector<double> lagrangian_sequence;
     int iterations;
     bool converged;
     double solve_time;
@@ -151,10 +152,11 @@ private:
 
     // Helper methods
     void printSolverInfo();
-    void printIteration(int iter, double cost, double grad_norm, double lambda);
+    void printIteration(int iter, double cost, double lagrangian, double grad_norm, double lambda);
     void printOptions(const CDDPOptions& options);
     void printSolution(const CDDPSolution& solution);
     bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
+    double computeLogBarrierCost(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff);
 
     // Problem Data
     std::unique_ptr<DynamicalSystem> system_;         // Eigen-based dynamical system
@@ -172,7 +174,9 @@ private:
     std::vector<Eigen::VectorXd> U_;                  // Control trajectory
 
     // Intermediate cost
-    double J_;
+    double J_; // Cost 
+    double L_; // Lagrangian
+    double barrier_coeff_;
 
     // Cost function
     std::unique_ptr<Objective> objective_; // Objective function

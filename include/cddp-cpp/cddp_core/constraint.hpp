@@ -8,7 +8,10 @@ namespace cddp {
 class Constraint {
 public:
     // Constructor
-    Constraint() {}
+    Constraint(const std::string& name) : name_(name) {}
+
+    // Get the name of the constraint
+    const std::string& getName() const { return name_; }
 
     // Evaluate the constraint function: g(x, u)
     virtual Eigen::VectorXd evaluate(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const = 0;
@@ -29,13 +32,15 @@ public:
     virtual std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> getJacobians(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
         return {getStateJacobian(state, control), getControlJacobian(state, control)};
     }
+private:
+    std::string name_; // Name of the constraint
 };
 
 
 class ControlBoxConstraint : public Constraint {
 public:
     ControlBoxConstraint(const Eigen::VectorXd& lower_bound, const Eigen::VectorXd& upper_bound) 
-        : lower_bound_(lower_bound), upper_bound_(upper_bound) {}
+        : Constraint("ControlBoxConstraint"), lower_bound_(lower_bound), upper_bound_(upper_bound) {}
 
     Eigen::VectorXd evaluate(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override {
         return control; // The constraint is directly on the control
@@ -65,7 +70,7 @@ private:
 class StateBoxConstraint : public Constraint {
 public:
     StateBoxConstraint(const Eigen::VectorXd& lower_bound, const Eigen::VectorXd& upper_bound) 
-        : lower_bound_(lower_bound), upper_bound_(upper_bound) {}
+        : Constraint("StateBoxConstraint"), lower_bound_(lower_bound), upper_bound_(upper_bound) {}
 
     Eigen::VectorXd evaluate(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override {
         return state; // The constraint is directly on the state
@@ -95,7 +100,7 @@ private:
 // CircleConstraint (assuming the circle is centered at the origin)
 class CircleConstraint : public Constraint {
 public:
-    CircleConstraint(double radius) : radius_(radius) {}
+    CircleConstraint(double radius) : Constraint("CircleConstraint"), radius_(radius) {}
 
     Eigen::VectorXd evaluate(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override {
         Eigen::Vector2d position(state(0), state(1)); // Assuming the first two elements of the state are x and y position

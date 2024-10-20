@@ -18,10 +18,14 @@
 #include <iomanip> // For std::setw
 #include <memory> // For std::unique_ptr
 #include <map>    // For std::map
+#include <cmath>  // For std::log
 #include <Eigen/Dense>
 #include <chrono> // For timing
 #include <execution> // For parallel execution policies
+#include "cddp-cpp/sdqp.hpp"
 #include "osqp++.h"
+// TODO: gurobi solver compatibility
+// #include "gurobi_c++.h"
 
 #include "cddp-cpp/cddp_core/cddp_core.hpp"
 
@@ -44,6 +48,9 @@ CDDP::CDDP(const Eigen::VectorXd& initial_state,
 
 // Initialize the CDDP solver
 void CDDP::initializeCDDP() {
+    const int state_dim = system_->getStateDim();
+    const int control_dim = system_->getControlDim();
+
     // Check if the system and objective are set
     if (!system_) {
         std::cerr << "CDDP: Dynamical system is not set" << std::endl;
@@ -63,12 +70,12 @@ void CDDP::initializeCDDP() {
 
     // Initialize trajectories (X_ and U_ are std::vectors of Eigen::VectorXd)
     if (X_.size() != horizon_ + 1 && U_.size() != horizon_) {
-        X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(system_->getStateDim()));
-        U_.resize(horizon_, Eigen::VectorXd::Zero(system_->getControlDim()));
+        X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(state_dim));
+        U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
     } else if (X_.size() != horizon_ + 1) {
-        X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(system_->getStateDim()));
+        X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(state_dim));
     } else if (U_.size() != horizon_) {
-        U_.resize(horizon_, Eigen::VectorXd::Zero(system_->getControlDim()));
+        U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
     }
 
     // Set initial state
@@ -77,17 +84,19 @@ void CDDP::initializeCDDP() {
     // Initialize cost
     J_ = 0.0;
 
+    barrier_coeff_ = options_.barrier_coeff;
+
     // Initialize gains and value function approximation
-    k_.resize(horizon_, Eigen::VectorXd::Zero(system_->getControlDim()));
-    K_.resize(horizon_, Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getStateDim()));
+    k_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
+    K_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, state_dim));
     V_.resize(horizon_ + 1, 0.0);
-    V_X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(system_->getStateDim()));
-    V_XX_.resize(horizon_ + 1, Eigen::MatrixXd::Zero(system_->getStateDim(), system_->getStateDim()));
+    V_X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(state_dim));
+    V_XX_.resize(horizon_ + 1, Eigen::MatrixXd::Zero(state_dim, state_dim));
 
     // Initialize Q-function matrices
-    Q_UU_.resize(horizon_, Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getControlDim()));
-    Q_UX_.resize(horizon_, Eigen::MatrixXd::Zero(system_->getControlDim(), system_->getStateDim()));
-    Q_U_.resize(horizon_, Eigen::VectorXd::Zero(system_->getControlDim()));
+    Q_UU_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, control_dim));
+    Q_UX_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, state_dim));
+    Q_U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
 
     // Initialize constraints if empty
     if (constraint_set_.empty()) {
@@ -109,20 +118,20 @@ void CDDP::initializeCDDP() {
     // Initialize QP solver instance
     osqp::OsqpInstance instance;
 
-    Eigen::SparseMatrix<double> P(system_->getControlDim(), system_->getControlDim());
+    Eigen::SparseMatrix<double> P(control_dim, control_dim);
     P.setIdentity();
     P.makeCompressed();
     instance.objective_matrix = P;
 
-    instance.objective_vector = Eigen::VectorXd::Zero(system_->getControlDim());
+    instance.objective_vector = Eigen::VectorXd::Zero(control_dim);
 
-    Eigen::SparseMatrix<double> A(system_->getControlDim(), system_->getControlDim());
+    Eigen::SparseMatrix<double> A(control_dim, control_dim);
     A.setIdentity();
     A.makeCompressed();
     instance.constraint_matrix = A;
     
-    instance.lower_bounds = Eigen::VectorXd::Constant(system_->getControlDim(), -std::numeric_limits<double>::infinity());
-    instance.upper_bounds = Eigen::VectorXd::Constant(system_->getControlDim(), std::numeric_limits<double>::infinity());
+    instance.lower_bounds = Eigen::VectorXd::Constant(control_dim, -std::numeric_limits<double>::infinity());
+    instance.upper_bounds = Eigen::VectorXd::Constant(control_dim, std::numeric_limits<double>::infinity());
 
     // Initialize the solver
     osqp_solver_.Init(instance, settings);
@@ -149,15 +158,36 @@ CDDPSolution CDDP::solve() {
     solution.converged = false;
     solution.cost_sequence.reserve(options_.max_iterations); // Reserve space for efficiency
 
-    // // Evaluate initial cost
+    // Evaluate initial cost
     J_ = objective_->evaluate(X_, U_);
     solution.cost_sequence.push_back(J_);
-    std::cout << "Initial Cost: " << J_ << std::endl;
+    
+    // Evaluate Lagrangian
+    L_ = J_;
+
+    // Loop over horizon 
+    for (int t = 0; t < 1; ++t) {
+        // Evaluate constraint violation
+        for (const auto& constraint : constraint_set_) {
+            L_ += computeLogBarrierCost(*constraint.second, X_[t], U_[t], barrier_coeff_);
+            // Eigen::VectorXd constraint_violation = constraint.second->evaluate(X_[t], U_[t]);
+            // if (constraint_violation.minCoeff() < 0) {
+            //     std::cerr << "CDDP: Constraint violation at time " << t << std::endl;
+            //     std::cerr << "Constraint violation: " << constraint_violation.transpose() << std::endl;
+            //     throw std::runtime_error("Constraint violation");
+            // }
+
+        }
+    }
+
+    if (options_.verbose) {
+        printIteration(0, J_, L_, 0.0, 0.0); // Initial iteration information
+    }
 
     // Start timer
     auto start_time = std::chrono::high_resolution_clock::now();
     // Main loop
-    for (int iter = 0; iter < options_.max_iterations; ++iter) {
+    for (int iter = 1; iter <= options_.max_iterations; ++iter) {
         // Backward pass
         bool backward_pass_success = solveBackwardPass();
         if (!backward_pass_success) {
@@ -183,7 +213,10 @@ CDDPSolution CDDP::solve() {
         // }
 
         // Print iteration information
-        printIteration(iter, J_, 0.0, 0.0); // Assuming lambda is not used
+        if (options_.verbose) {
+            printIteration(iter, J_, L_, 0.0, 0.0); // Assuming lambda is not used
+        }
+        
 
         // Append Latest Cost
         solution.cost_sequence.push_back(J_new);
@@ -205,6 +238,9 @@ CDDPSolution CDDP::solve() {
 
 // Backward pass
 bool CDDP::solveBackwardPass() {
+    const int state_dim = system_->getStateDim();
+    const int control_dim = system_->getControlDim();
+
     auto active_set_tol = options_.active_set_tolerance;
     // Extract control box constraint
     auto control_box_constraint = constraint_set_.find("ControlBoxConstraint");
@@ -215,24 +251,24 @@ bool CDDP::solveBackwardPass() {
     V_XX_.back() = objective_->getFinalCostHessian(X_.back());
 
     // Pre-allocate matrices
-    Eigen::MatrixXd Fx(system_->getStateDim(), system_->getStateDim());
-    Eigen::MatrixXd Fu(system_->getStateDim(), system_->getControlDim());
-    Eigen::MatrixXd A(system_->getStateDim(), system_->getStateDim());
-    Eigen::MatrixXd B(system_->getStateDim(), system_->getControlDim());
-    Eigen::VectorXd l_x(system_->getStateDim());
-    Eigen::VectorXd l_u(system_->getControlDim());
-    Eigen::MatrixXd l_xx(system_->getStateDim(), system_->getStateDim());
-    Eigen::MatrixXd l_uu(system_->getControlDim(), system_->getControlDim());
-    Eigen::MatrixXd l_ux(system_->getControlDim(), system_->getStateDim());
-    Eigen::VectorXd Q_x(system_->getStateDim());
-    Eigen::VectorXd Q_u(system_->getControlDim());
-    Eigen::MatrixXd Q_xx(system_->getStateDim(), system_->getStateDim());
-    Eigen::MatrixXd Q_uu(system_->getControlDim(), system_->getControlDim());
-    Eigen::MatrixXd Q_ux(system_->getControlDim(), system_->getStateDim());
-    Eigen::MatrixXd Q_uu_inv(system_->getControlDim(), system_->getControlDim());
-    Eigen::MatrixXd active_constraint_tabl(2 * (system_->getControlDim()), horizon_); 
-    Eigen::VectorXd k(system_->getControlDim());
-    Eigen::MatrixXd K(system_->getControlDim(), system_->getStateDim());
+    Eigen::MatrixXd Fx(state_dim, state_dim);
+    Eigen::MatrixXd Fu(state_dim, control_dim);
+    Eigen::MatrixXd A(state_dim, state_dim);
+    Eigen::MatrixXd B(state_dim, control_dim);
+    Eigen::VectorXd l_x(state_dim);
+    Eigen::VectorXd l_u(control_dim);
+    Eigen::MatrixXd l_xx(state_dim, state_dim);
+    Eigen::MatrixXd l_uu(control_dim, control_dim);
+    Eigen::MatrixXd l_ux(control_dim, state_dim);
+    Eigen::VectorXd Q_x(state_dim);
+    Eigen::VectorXd Q_u(control_dim);
+    Eigen::MatrixXd Q_xx(state_dim, state_dim);
+    Eigen::MatrixXd Q_uu(control_dim, control_dim);
+    Eigen::MatrixXd Q_ux(control_dim, state_dim);
+    Eigen::MatrixXd Q_uu_inv(control_dim, control_dim);
+    Eigen::MatrixXd active_constraint_tabl(2 * (control_dim), horizon_); 
+    Eigen::VectorXd k(control_dim);
+    Eigen::MatrixXd K(control_dim, state_dim);
 
     // Backward Riccati recursion
     for (int t = horizon_ - 1; t >= 0; --t) {
@@ -275,7 +311,7 @@ bool CDDP::solveBackwardPass() {
 
         // TODO: Regularization
         if (options_.regularization_type == 0) {
-            Q_uu += options_.regularization_parameter * Eigen::MatrixXd::Identity(system_->getControlDim(), system_->getControlDim());
+            Q_uu += options_.regularization_parameter * Eigen::MatrixXd::Identity(control_dim, control_dim);
         } 
 
         // Cholesky decomposition
@@ -289,22 +325,22 @@ bool CDDP::solveBackwardPass() {
         /*  --- Identify Active Constraint --- */
 
         int active_constraint_index = 0;
-        Eigen::MatrixXd C(system_->getControlDim(), system_->getControlDim()); // Control constraint matrix
-        Eigen::MatrixXd D(system_->getControlDim(), system_->getStateDim()); // State constraint matrix
+        Eigen::MatrixXd C(control_dim, control_dim); // Control constraint matrix
+        Eigen::MatrixXd D(control_dim, state_dim); // State constraint matrix
 
         // TODO: Implement active set method
-        // for (int j = 0; j < system_->getControlDim(); j++) {
+        // for (int j = 0; j < control_dim; j++) {
         //     if (u(j) < control_box_constraint->getLowerBound()(j) - active_set_tol) {
-        //         Eigen::VectorXd e = Eigen::VectorXd::Zero(system_->getControlDim());
+        //         Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
         //         e(j) = 1.0;
         //         C.row(active_constraint_index) = e;
-        //         D.row(active_constraint_index) = Eigen::VectorXd::Zero(system_->getStateDim());
+        //         D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
         //         active_constraint_index += 1;
         //     } else if (u(j) > control_box_constraint->getUpperBound()(j) + active_set_tol) {
-        //         Eigen::VectorXd e = Eigen::VectorXd::Zero(system_->getControlDim());
+        //         Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
         //         e(j) = -1.0;
         //         C.row(active_constraint_index) = e;
-        //         D.row(active_constraint_index) = Eigen::VectorXd::Zero(system_->getStateDim());
+        //         D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
         //         active_constraint_index += 1;
         //     }
         // }
@@ -334,6 +370,8 @@ bool CDDP::solveBackwardPass() {
 // Forward pass
 bool CDDP::solveForwardPass() {
     bool is_feasible = false;
+    const int state_dim = system_->getStateDim();
+    const int control_dim = system_->getControlDim();
 
     // Extract control box constraint
     auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
@@ -342,10 +380,10 @@ bool CDDP::solveForwardPass() {
     double alpha = options_.backtracking_coeff;
     
     // Pre-allocate matrices
-    Eigen::SparseMatrix<double> P(system_->getControlDim(), system_->getControlDim()); // Hessian of QP objective
+    Eigen::SparseMatrix<double> P(control_dim, control_dim); // Hessian of QP objective
     
     // A is already defined in initializeCDDP
-    // Eigen::SparseMatrix<double> A(system_->getStateDim(), system_->getControlDim());
+    // Eigen::SparseMatrix<double> A(state_dim, control_dim);
     // A.setIdentity();
     // A.makeCompressed();
     // osqp_solver_.UpdateConstraintMatrix(A);
@@ -354,6 +392,7 @@ bool CDDP::solveForwardPass() {
     for (iter = 0; iter < options_.max_line_search_iterations; ++iter) {
         // Initialize cost and constraints
         double J_new = 0.0, dJ = 0.0, expected_dV = 0.0, gradient_norm = 0.0;
+        double L_new = 0.0;
 
         std::vector<Eigen::VectorXd> X_new = X_;
         std::vector<Eigen::VectorXd> U_new = U_;
@@ -373,8 +412,8 @@ bool CDDP::solveForwardPass() {
             const Eigen::MatrixXd& Q_ux = Q_UX_[t];
 
             // Extract gains
-            const Eigen::VectorXd& k = k_[t];
-            const Eigen::MatrixXd& K = K_[t];
+            // const Eigen::VectorXd& k = k_[t];
+            // const Eigen::MatrixXd& K = K_[t];
 
             // Create QP problem
             int numNonZeros = Q_uu.nonZeros(); 
@@ -390,9 +429,9 @@ bool CDDP::solveForwardPass() {
             osqp_solver_.UpdateObjectiveMatrix(P);
             
             const Eigen::VectorXd& q = Q_ux * delta_x + alpha * Q_u; // Gradient of QP objective
-            osqp_solver_.SetObjectiveVector(q);            
+            osqp_solver_.SetObjectiveVector(q);  
 
-             // Lower and upper bounds
+            //  // Lower and upper bounds
             Eigen::VectorXd lb = 1.0 * (control_box_constraint.getLowerBound() - u);
             Eigen::VectorXd ub = 1.0 * (control_box_constraint.getUpperBound() - u);    
             osqp_solver_.SetBounds(lb, ub);
@@ -411,9 +450,28 @@ bool CDDP::solveForwardPass() {
                 // break;
             }
 
+            /*
+                // Define Constraint matrix for control variables 
+                Eigen::MatrixXd A(2*control_dim, control_dim);
+                for (int i = 0; i < control_dim; i++) {
+                    A(i, i) = 1.0;
+                    A(i + control_dim, i) = -1.0;
+                }
 
+                Eigen::VectorXd b(2*control_dim);
+                for (int i = 0; i < control_dim; i++) {
+                    b(i) = control_box_constraint.getUpperBound()(i) - u(i);
+                    b(i + control_dim) = -control_box_constraint.getLowerBound()(i) + u(i);
+                }
+                
+                Eigen::VectorXd sol(control_dim);
+
+                double minobj = sdqp::sdqp(Q_uu, q, A, b, sol); // Solve the QP problem using SDQP
+            */
+            
+
+            // Extract solution
             U_new[t] += delta_u;
-            // U_new[t] += alpha * k + K * delta_x;
 
             // Compute cost
             J_new += objective_->running_cost(x, U_new[t], t);
@@ -426,7 +484,6 @@ bool CDDP::solveForwardPass() {
 
         // Calculate Cost Reduction
         dJ = J_ - J_new;
-        std::cout << "Cost: " << J_new << std::endl;
 
         // // Check constraints
         // is_feasible = true;
@@ -457,6 +514,38 @@ bool CDDP::solveForwardPass() {
 }
 
 // Helper methods
+double CDDP::computeLogBarrierCost(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff) {
+    Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
+    Eigen::VectorXd lower_bound = constraint.getLowerBound();
+    Eigen::VectorXd upper_bound = constraint.getUpperBound();
+
+    double barrier_cost = 0.0;
+    for (int i = 0; i < constraint_value.size(); ++i) {
+        // If Constraint is ControlBoxConstraint
+        if (constraint.getName() == "ControlBoxConstraint") {
+            if (constraint_value(i) < lower_bound(i) || constraint_value(i) > upper_bound(i)) {
+                // Constraint is violated, return a large cost
+                return std::numeric_limits<double>::infinity();
+            } else {
+                // Calculate the log barrier term for each constraint component
+                barrier_cost -= barrier_coeff * (std::log(upper_bound(i) - constraint_value(i)) + 
+                                                std::log(constraint_value(i) - lower_bound(i)));
+            }
+        } else {
+            // If Constraint is not ControlBoxConstraint
+            if (constraint_value(i) < lower_bound(i)) {
+                // Constraint is violated, return a large cost
+                return std::numeric_limits<double>::infinity();
+            } else {
+                // Calculate the log barrier term for each constraint component
+                barrier_cost -= barrier_coeff * std::log(lower_bound(i) - constraint_value(i));
+            }
+        }
+    }
+
+    return barrier_cost;
+}
+
 
 void CDDP::printSolverInfo() {
     std::cout << "\n";
@@ -513,9 +602,10 @@ void CDDP::printOptions(const CDDPOptions& options) {
     std::cout << "========================================\n\n";
 }
 
-void CDDP::printIteration(int iter, double cost, double grad_norm, double lambda) {
+void CDDP::printIteration(int iter, double cost, double lagrangian, double grad_norm, double lambda) {
     std::cout << "Iteration: " << std::setw(5) << iter << " | ";
     std::cout << "Cost: " << std::setprecision(6) << std::setw(10) << cost << " | ";
+    std::cout << "Lagrangian: " << std::setprecision(6) << std::setw(10) << lagrangian << " | ";
     std::cout << "Grad Norm: " << std::setprecision(6) << std::setw(10) << grad_norm << " | ";
     std::cout << "Lambda: " << std::setprecision(6) << std::setw(10) << lambda << "\n";
 }
