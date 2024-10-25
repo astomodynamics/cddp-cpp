@@ -27,7 +27,7 @@ set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 
 # Options.
 option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
-option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." ON)
+option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
 set(GUROBI_ROOT /home/tom/.local/lib/gurobi1103/linux64)
 

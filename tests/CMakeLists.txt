@@ -24,10 +24,13 @@ add_executable(test_eigen test_eigen.cpp)
 target_link_libraries(test_eigen gtest gmock gtest_main Eigen3::Eigen)
 gtest_discover_tests(test_eigen)
 
+
 # Test for gurobi
-add_executable(test_gurobi test_gurobi.cpp)
-target_link_libraries(test_gurobi gtest gmock gtest_main cddp)
-gtest_discover_tests(test_gurobi)
+if (CDDP-CPP_GUROBI)
+    add_executable(test_gurobi test_gurobi.cpp)
+    target_link_libraries(test_gurobi gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_gurobi)     
+endif()
 
 # Test for SDQP
 add_executable(test_sdqp test_sdqp.cpp)

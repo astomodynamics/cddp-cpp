@@ -32,8 +32,8 @@
 namespace cddp {
 
 struct CDDPOptions {
-    double cost_tolerance = 1e-4;         // Tolerance for changes in cost function
-    double grad_tolerance = 1e-6;         // Tolerance for cost gradient magnitude
+    double cost_tolerance = 1e-2;         // Tolerance for changes in cost function
+    double grad_tolerance = 1e-2;         // Tolerance for cost gradient magnitude
     int max_iterations = 1;
 
     // Line search method
@@ -41,7 +41,7 @@ struct CDDPOptions {
     double backtracking_coeff = 1.0;      // Maximum step size for line search backtracking
     double backtracking_min = 0.5;    // Coefficient for line search backtracking
     double backtracking_factor = std::pow(2, -2);  // Factor for line search backtracking
-    double minimum_reduction = 1e-4;      // Minimum reduction for line search
+    double minimum_reduction_ratio = 1e-6;      // Minimum reduction for line search
 
     // log-barrier method
     double barrier_coeff = 1.0;          // Coefficient for log-barrier method
@@ -53,16 +53,19 @@ struct CDDPOptions {
     double active_set_tolerance = 1e-6;  // Tolerance for active set method
 
     // Regularization options
-    int regularization_type = 0;          // 0 or 1 for different regularization types
-    double regularization_parameter = 1e-6; // Initial regularization parameter 
-    double regularization_step = 1.0;     // Step size for regularization
-    double regularization_factor = 10.0;  // Factor for regularization
-    double regularization_max = 1e6;      // Maximum regularization
-    double regularization_min = 1e-6;     // Minimum regularization
+    std::string regularization_type = "control";          // different regularization types: ["none", "control", "state", "both"]
+    
+    double regularization_state = 1e-6;       // Regularization for state
+    double regularization_state_step = 1.0;  // Regularization step for state
+    double regularization_state_max = 1e6;      // Maximum regularization
+    double regularization_state_min = 1e-6;     // Minimum regularization
+    double regularization_state_factor = 1.5;  // Factor for state regularization
 
-    double regularization_x = 1e-6;       // Regularization for state
-    double regularization_u = 1e-6;       // Regularization for control
-    double regularization_tolerance = 1e-6; // Tolerance for regularization
+    double regularization_control = 1e-6;       // Regularization for control
+    double regularization_control_step = 1.0;  // Regularization step for control
+    double regularization_control_max = 1e6;      // Maximum regularization
+    double regularization_control_min = 1e-6;     // Minimum regularization
+    double regularization_control_factor = 1.5;  // Factor for control regularization
 
     // Other options
     bool verbose = true;         // Option for debug printing
@@ -71,6 +74,7 @@ struct CDDPOptions {
 };
 
 struct CDDPSolution {
+    std::vector<double> time_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<double> cost_sequence;
@@ -152,7 +156,7 @@ private:
 
     // Helper methods
     void printSolverInfo();
-    void printIteration(int iter, double cost, double lagrangian, double grad_norm, double lambda);
+    void printIteration(int iter, double cost, double lagrangian, double grad_norm, double lambda_state, double lambda_control);
     void printOptions(const CDDPOptions& options);
     void printSolution(const CDDPSolution& solution);
     bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
@@ -175,7 +179,10 @@ private:
 
     // Intermediate cost
     double J_; // Cost 
+    double dJ_; // Cost improvement
     double L_; // Lagrangian
+    double dL_; // Lagrangian improvement
+    double optimality_gap_ = 1e+10;
     double barrier_coeff_;
 
     // Cost function
@@ -189,7 +196,7 @@ private:
     std::vector<Eigen::MatrixXd> K_;
 
     // Intermediate value function
-    std::vector<double> V_;
+    Eigen::VectorXd dV_;
     std::vector<Eigen::VectorXd> V_X_;
     std::vector<Eigen::MatrixXd> V_XX_;
 
@@ -200,7 +207,12 @@ private:
 
     // QP sover 
     osqp::OsqpSolver osqp_solver_;
-   
+
+    // Regularization parameters
+    double regularization_state_;
+    double regularization_state_step_;
+    double regularization_control_;
+    double regularization_control_step_;   
 };
 }
 #endif // CDDP_CDDP_CORE_HPP

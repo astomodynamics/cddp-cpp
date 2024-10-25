@@ -86,10 +86,15 @@ void CDDP::initializeCDDP() {
 
     barrier_coeff_ = options_.barrier_coeff;
 
+    regularization_state_ = options_.regularization_state;
+    regularization_state_step_ = options_.regularization_state_step;
+    regularization_control_ = options_.regularization_control;
+    regularization_control_step_ = options_.regularization_control_step;
+
     // Initialize gains and value function approximation
     k_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
     K_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, state_dim));
-    V_.resize(horizon_ + 1, 0.0);
+    dV_.resize(2);
     V_X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(state_dim));
     V_XX_.resize(horizon_ + 1, Eigen::MatrixXd::Zero(state_dim, state_dim));
 
@@ -101,8 +106,10 @@ void CDDP::initializeCDDP() {
     // Initialize constraints if empty
     if (constraint_set_.empty()) {
         std::cerr << "CDDP: No constraints are set" << std::endl;
+    } // if control constraints are set
+    else if (constraint_set_.find("ControlBoxConstraint") != constraint_set_.end()) {
+        std::cout << "ControlBoxConstraint is set" << std::endl;
     }
-    
      
     // Initialize OSQP setting
      osqp::OsqpSettings settings;
@@ -156,7 +163,12 @@ CDDPSolution CDDP::solve() {
     // Initialize solution
     CDDPSolution solution;
     solution.converged = false;
+    solution.time_sequence.reserve(horizon_ + 1);
+    for (int t = 0; t <= horizon_; ++t) {
+        solution.time_sequence.push_back(timestep_ * t);
+    }
     solution.cost_sequence.reserve(options_.max_iterations); // Reserve space for efficiency
+    solution.lagrangian_sequence.reserve(options_.max_iterations); // Reserve space for efficiency
 
     // Evaluate initial cost
     J_ = objective_->evaluate(X_, U_);
@@ -167,69 +179,110 @@ CDDPSolution CDDP::solve() {
 
     // Loop over horizon 
     for (int t = 0; t < 1; ++t) {
-        // Evaluate constraint violation
+        // Evaluate state constraint violation
         for (const auto& constraint : constraint_set_) {
-            L_ += computeLogBarrierCost(*constraint.second, X_[t], U_[t], barrier_coeff_);
-            // Eigen::VectorXd constraint_violation = constraint.second->evaluate(X_[t], U_[t]);
-            // if (constraint_violation.minCoeff() < 0) {
-            //     std::cerr << "CDDP: Constraint violation at time " << t << std::endl;
-            //     std::cerr << "Constraint violation: " << constraint_violation.transpose() << std::endl;
-            //     throw std::runtime_error("Constraint violation");
-            // }
+            if (constraint.first != "ControlBoxConstraint") {
+                L_ += computeLogBarrierCost(*constraint.second, X_[t], U_[t], barrier_coeff_);
+                // Eigen::VectorXd constraint_violation = constraint.second->evaluate(X_[t], U_[t]);
+                // if (constraint_violation.minCoeff() < 0) {
+                //     std::cerr << "CDDP: Constraint violation at time " << t << std::endl;
+                //     std::cerr << "Constraint violation: " << constraint_violation.transpose() << std::endl;
+                //     throw std::runtime_error("Constraint violation");
+                // }
+            }
 
         }
     }
 
     if (options_.verbose) {
-        printIteration(0, J_, L_, 0.0, 0.0); // Initial iteration information
+        printIteration(0, J_, L_, optimality_gap_, regularization_state_, regularization_control_); // Initial iteration information
     }
 
     // Start timer
     auto start_time = std::chrono::high_resolution_clock::now();
-    // Main loop
+
+    // Main loop of CDDP
     for (int iter = 1; iter <= options_.max_iterations; ++iter) {
-        // Backward pass
-        bool backward_pass_success = solveBackwardPass();
-        if (!backward_pass_success) {
-            break; // Exit if backward pass fails
+        // 1. Backward pass: Solve Riccati recursion to compute optimal control law
+        bool backward_pass_success = false;
+        while (!backward_pass_success) {
+            backward_pass_success = solveBackwardPass();
+
+            if (!backward_pass_success) {
+                std::cerr << "CDDP: Backward pass failed" << std::endl;
+
+                // Increase regularization
+                regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
+                regularization_state_ = std::max(regularization_state_ * regularization_state_step_, options_.regularization_state_min);
+                regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
+                regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_min);
+
+                if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
+                    std::cerr << "CDDP: Regularization limit reached" << std::endl;
+                    break; // Exit if regularization limit reached
+                }
+                continue; // Continue if backward pass fails
+            }
+        }
+        
+        // Check termination due to small cost improvement
+        if (optimality_gap_ < options_.grad_tolerance && regularization_state_ < 1e-4 && regularization_control_ < 1e-4) {
+            regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
+            regularization_state_ *= regularization_state_step_;
+            if (regularization_state_ <= options_.regularization_state_min) {
+                regularization_state_ = 0.0;
+            }
+            regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
+            regularization_control_ *= regularization_control_step_;
+            if (regularization_control_ <= options_.regularization_control_min) {
+                regularization_control_ = 0.0;
+            }
+
+            solution.converged = true;
+            break;
         }
 
-        // Forward pass
-        bool forward_pass_success = solveForwardPass();
-        if (!forward_pass_success) {
-            break; // Exit if forward pass fails
+        bool forward_pass_success = false;
+        if (backward_pass_success) {
+            // 2. Forward pass: line-search to find feasible optimal control sequence
+            forward_pass_success = solveForwardPass();
         }
-
-        // Check convergence
-        double J_new = objective_->evaluate(X_, U_);
-        // double dJ = J_old - J_new;
-        // // ... (Calculate expected_dV and gradient_norm based on your algorithm) ...
-        // solution.converged = checkConvergence(J_new, J_old, dJ, expected_dV, gradient_norm);
-        // J_old = J_new;
-
-        // if (solution.converged) {
-        //     solution.iterations = iter + 1; // Update iteration count
-        //     break; // Exit if converged
-        // }
 
         // Print iteration information
         if (options_.verbose) {
-            printIteration(iter, J_, L_, 0.0, 0.0); // Assuming lambda is not used
+            printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_); 
         }
-        
+       
+       if (forward_pass_success) {
+            // Decrease regularization
+            regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
+            regularization_state_ *= regularization_state_step_;
+            if (regularization_state_ <= options_.regularization_state_min) {
+                regularization_state_ = 0.0;
+            }
+            regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
+            regularization_control_ *= regularization_control_step_;
+            if (regularization_control_ <= options_.regularization_control_min) {
+                regularization_control_ = 0.0;
+            }
 
-        // Append Latest Cost
-        solution.cost_sequence.push_back(J_new);
+            if (dJ_ < options_.cost_tolerance) {
+                solution.converged = true;
+                // Append Latest Cost
+                solution.cost_sequence.push_back(J_);
+                solution.iterations = iter;
+                break;
+            }
+        }
     }
 
-    // // Finalize solution
+    // Finalize solution
     solution.control_sequence = U_;
     solution.state_sequence = X_;
     solution.iterations = solution.converged ? solution.iterations : options_.max_iterations;
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
-
     solution.solve_time = duration.count(); // Time in microseconds
     printSolution(solution);
 
@@ -238,15 +291,15 @@ CDDPSolution CDDP::solve() {
 
 // Backward pass
 bool CDDP::solveBackwardPass() {
+    // Initialize variables
     const int state_dim = system_->getStateDim();
     const int control_dim = system_->getControlDim();
+    const auto active_set_tol = options_.active_set_tolerance;
 
-    auto active_set_tol = options_.active_set_tolerance;
     // Extract control box constraint
     auto control_box_constraint = constraint_set_.find("ControlBoxConstraint");
 
     // Terminal cost and its derivatives
-    V_.back() = objective_->terminal_cost(X_.back());
     V_X_.back() = objective_->getFinalCostGradient(X_.back());
     V_XX_.back() = objective_->getFinalCostHessian(X_.back());
 
@@ -270,14 +323,20 @@ bool CDDP::solveBackwardPass() {
     Eigen::VectorXd k(control_dim);
     Eigen::MatrixXd K(control_dim, state_dim);
 
+    double Qu_error = 0.0;
+
     // Backward Riccati recursion
     for (int t = horizon_ - 1; t >= 0; --t) {
         // Get state and control
-        const Eigen::VectorXd& x = X_.at(t);
-        const Eigen::VectorXd& u = U_.at(t);
+        const Eigen::VectorXd& x = X_[t];
+        const Eigen::VectorXd& u = U_[t];
+
+        // Extract value function approximation
+        const Eigen::VectorXd& V_x = V_X_[t + 1];
+        const Eigen::MatrixXd& V_xx = V_XX_[t + 1];
 
         // Get continuous dynamics Jacobians
-        auto [Fx, Fu] = system_->getJacobians(x, u);
+        const auto [Fx, Fu] = system_->getJacobians(x, u);
 
         // Convert continuous dynamics to discrete time
         A = timestep_ * Fx; 
@@ -285,20 +344,33 @@ bool CDDP::solveBackwardPass() {
         B = timestep_ * Fu;
 
         // Get cost and its derivatives
-        double l = objective_->running_cost(x, u, t);
-        auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
-        auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
+        const double l = objective_->running_cost(x, u, t);
+        const auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
+        const auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
+
+        // Get log barrier cost and its derivatives
 
 
         // Compute Q-function matrices 
-        Q_x = l_x + A.transpose() * V_X_[t + 1];
-        Q_u = l_u + B.transpose() * V_X_[t + 1];
-        Q_xx = l_xx + A.transpose() * V_XX_[t + 1] * A;
-        Q_uu = l_uu + B.transpose() * V_XX_[t + 1] * B;
-        Q_ux = l_ux + B.transpose() * V_XX_[t + 1] * A;
+        Q_x = l_x + A.transpose() * V_x;
+        Q_u = l_u + B.transpose() * V_x;
+        Q_xx = l_xx + A.transpose() * V_xx * A;
 
-        // Symmetrize Q_uu
+        if (options_.regularization_type == "state" || options_.regularization_type == "both") {
+            Q_ux = l_ux + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
+            Q_uu = l_uu + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * B;
+        } else {
+            Q_ux = l_ux + B.transpose() * V_xx * A;
+            Q_uu = l_uu + B.transpose() * V_xx * B;
+        }
+
+        // Symmetrize Q_uu for cholensky decomposition
         Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
+
+        // Control Regularization
+        if (options_.regularization_type == "control" || options_.regularization_type == "both") {
+            Q_uu += options_.regularization_control * Eigen::MatrixXd::Identity(control_dim, control_dim);
+        } 
 
         // Check eigenvalues of Q_uu
         Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
@@ -307,12 +379,13 @@ bool CDDP::solveBackwardPass() {
             // Add regularization
             // Q_uu.diagonal() += 1e-6;
             std::cout << "Q_uu is not positive definite at " << t << std::endl;
-        }
 
-        // TODO: Regularization
-        if (options_.regularization_type == 0) {
-            Q_uu += options_.regularization_parameter * Eigen::MatrixXd::Identity(control_dim, control_dim);
-        } 
+            eigenvalues = es.eigenvalues().real();
+            if (eigenvalues.minCoeff() <= 0) {
+                std::cout << "Q_uu is still not positive definite" << std::endl;
+                return false;
+            }
+        }
 
         // Cholesky decomposition
         Eigen::LLT<Eigen::MatrixXd> llt(Q_uu);
@@ -323,12 +396,11 @@ bool CDDP::solveBackwardPass() {
         }
 
         /*  --- Identify Active Constraint --- */
-
         int active_constraint_index = 0;
         Eigen::MatrixXd C(control_dim, control_dim); // Control constraint matrix
         Eigen::MatrixXd D(control_dim, state_dim); // State constraint matrix
 
-        // TODO: Implement active set method
+        // // TODO: Implement active set method
         // for (int j = 0; j < control_dim; j++) {
         //     if (u(j) < control_box_constraint->getLowerBound()(j) - active_set_tol) {
         //         Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
@@ -354,13 +426,22 @@ bool CDDP::solveBackwardPass() {
         k = -Q_uu.inverse() * Q_u;
         K = -Q_uu.inverse() * Q_ux;
 
-        k_[t] = k;
-        K_[t] = K;
+        // k_[t] = k;
+        // K_[t] = K;
 
         // Compute value function approximation
-        // V_[t] = l + V_[t + 1] + 0.5 * k_[t].transpose() * Q_UU_[t] * k_[t] + k_[t].transpose() * Q_U_[t];
+        Eigen::Vector2d dV_step;
+        dV_step << Q_u.dot(k), 0.5 * k.dot(Q_uu * k);
+        dV_ = dV_ + dV_step;
         V_X_[t] = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
         V_XX_[t] = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
+        V_XX_[t] = 0.5 * (V_XX_[t] + V_XX_[t].transpose()); // Symmetrize Hessian
+
+        // Compute optimality gap (Inf-norm) for convergence check
+        Qu_error = std::max(Qu_error, Q_u.lpNorm<Eigen::Infinity>());
+
+        // TODO: Add constraint optimality gap analysis
+        optimality_gap_ = Qu_error;
     }
 
     return true;
@@ -411,10 +492,6 @@ bool CDDP::solveForwardPass() {
             const Eigen::MatrixXd& Q_uu = Q_UU_[t];
             const Eigen::MatrixXd& Q_ux = Q_UX_[t];
 
-            // Extract gains
-            // const Eigen::VectorXd& k = k_[t];
-            // const Eigen::MatrixXd& K = K_[t];
-
             // Create QP problem
             int numNonZeros = Q_uu.nonZeros(); 
             P.reserve(numNonZeros);
@@ -428,7 +505,7 @@ bool CDDP::solveForwardPass() {
             P.makeCompressed(); // Important for efficient storage and operations
             osqp_solver_.UpdateObjectiveMatrix(P);
             
-            const Eigen::VectorXd& q = Q_ux * delta_x + alpha * Q_u; // Gradient of QP objective
+            const Eigen::VectorXd& q = alpha * Q_u + Q_ux * delta_x; // Gradient of QP objective
             osqp_solver_.SetObjectiveVector(q);  
 
             //  // Lower and upper bounds
@@ -436,7 +513,7 @@ bool CDDP::solveForwardPass() {
             Eigen::VectorXd ub = 1.0 * (control_box_constraint.getUpperBound() - u);    
             osqp_solver_.SetBounds(lb, ub);
 
-            // Solve the QP problem
+            // Solve the QP problem TODO: Use SDQP instead of OSQP
             osqp::OsqpExitCode exit_code = osqp_solver_.Solve();
 
             // // Extract solution`
@@ -449,26 +526,6 @@ bool CDDP::solveForwardPass() {
                 // trust_region_radius *= options_.trust_region_factor;
                 // break;
             }
-
-            /*
-                // Define Constraint matrix for control variables 
-                Eigen::MatrixXd A(2*control_dim, control_dim);
-                for (int i = 0; i < control_dim; i++) {
-                    A(i, i) = 1.0;
-                    A(i + control_dim, i) = -1.0;
-                }
-
-                Eigen::VectorXd b(2*control_dim);
-                for (int i = 0; i < control_dim; i++) {
-                    b(i) = control_box_constraint.getUpperBound()(i) - u(i);
-                    b(i + control_dim) = -control_box_constraint.getLowerBound()(i) + u(i);
-                }
-                
-                Eigen::VectorXd sol(control_dim);
-
-                double minobj = sdqp::sdqp(Q_uu, q, A, b, sol); // Solve the QP problem using SDQP
-            */
-            
 
             // Extract solution
             U_new[t] += delta_u;
@@ -485,6 +542,26 @@ bool CDDP::solveForwardPass() {
         // Calculate Cost Reduction
         dJ = J_ - J_new;
 
+        double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
+        double reduction_ratio = 0.0;
+        if (expected > 0.0) {
+            reduction_ratio = dJ / expected;
+        } else {
+            reduction_ratio = std::copysign(1.0, dJ);
+            std::cout << "Expected improvement is not positive" << std::endl;
+        }
+        if (reduction_ratio > options_.minimum_reduction_ratio) {
+            // Update state and control
+            X_ = X_new;
+            U_ = U_new;
+            J_ = J_new;
+            dJ_ = dJ;
+            return true;
+        } else {
+            alpha *= options_.backtracking_factor;
+        }
+
+
         // // Check constraints
         // is_feasible = true;
         // for (int t = 0; t < horizon_; ++t) {
@@ -497,20 +574,9 @@ bool CDDP::solveForwardPass() {
         //         }
         //     }
         // }
-
-        // Check if the cost is reduced
-        if (dJ > 0) {
-            // Update state and control
-            X_ = X_new;
-            U_ = U_new;
-            J_ = J_new;
-            return true;
-        } else {
-            alpha *= options_.backtracking_factor;
-        }
     }
 
-    return true; // Or false if forward pass fails
+    return false; // Or false if forward pass fails
 }
 
 // Helper methods
@@ -587,13 +653,18 @@ void CDDP::printOptions(const CDDPOptions& options) {
     std::cout << "  Relaxation Coeff: " << std::setw(5) << options.relaxation_coeff << "\n";
 
     std::cout << "\nRegularization:\n";
-    std::cout << "  Type: " << std::setw(10) << options.regularization_type << "\n";
-    std::cout << "  State: " << std::setw(10) << options.regularization_x << "\n";
-    std::cout << "  Control: " << std::setw(10) << options.regularization_u << "\n";
-    std::cout << "  Tolerance: " << std::setw(10) << options.regularization_tolerance << "\n";
-    std::cout << "  Factor: " << std::setw(10) << options.regularization_factor << "\n";
-    std::cout << "  Max: " << std::setw(10) << options.regularization_max << "\n";
-    std::cout << "  Min: " << std::setw(10) << options.regularization_min << "\n";
+    std::cout << "  Regularization Type: " << options.regularization_type << "\n";
+    std::cout << "  Regularization State: " << std::setw(5) << options.regularization_state << "\n";
+    std::cout << "  Regularization State Step: " << std::setw(5) << options.regularization_state_step << "\n";
+    std::cout << "  Regularization State Max: " << std::setw(5) << options.regularization_state_max << "\n";
+    std::cout << "  Regularization State Min: " << std::setw(5) << options.regularization_state_min << "\n";
+    std::cout << "  Regularization State Factor: " << std::setw(5) << options.regularization_state_factor << "\n";
+
+    std::cout << "  Regularization Control: " << std::setw(5) << options.regularization_control << "\n";
+    std::cout << "  Regularization Control Step: " << std::setw(5) << options.regularization_control_step << "\n";
+    std::cout << "  Regularization Control Max: " << std::setw(5) << options.regularization_control_max << "\n";
+    std::cout << "  Regularization Control Min: " << std::setw(5) << options.regularization_control_min << "\n";    
+    std::cout << "  Regularization Control Factor: " << std::setw(5) << options.regularization_control_factor << "\n";
 
     std::cout << "\nOther:\n";
     std::cout << "  Print Iterations: " << (options.verbose ? "Yes" : "No") << "\n";
@@ -602,12 +673,13 @@ void CDDP::printOptions(const CDDPOptions& options) {
     std::cout << "========================================\n\n";
 }
 
-void CDDP::printIteration(int iter, double cost, double lagrangian, double grad_norm, double lambda) {
+void CDDP::printIteration(int iter, double cost, double lagrangian, double grad_norm, double lambda_state, double lambda_control) {
     std::cout << "Iteration: " << std::setw(5) << iter << " | ";
     std::cout << "Cost: " << std::setprecision(6) << std::setw(10) << cost << " | ";
     std::cout << "Lagrangian: " << std::setprecision(6) << std::setw(10) << lagrangian << " | ";
     std::cout << "Grad Norm: " << std::setprecision(6) << std::setw(10) << grad_norm << " | ";
-    std::cout << "Lambda: " << std::setprecision(6) << std::setw(10) << lambda << "\n";
+    std::cout << "Reg (state): " << std::setprecision(6) << std::setw(10) << lambda_state << "\n";
+    std::cout << "Reg (control): " << std::setprecision(6) << std::setw(10) << lambda_control << "\n";
 }
 
 void CDDP::printSolution(const CDDPSolution& solution) {

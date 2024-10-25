@@ -70,7 +70,7 @@ TEST(CDDPTest, Solve) {
 
     // Set options
     cddp::CDDPOptions options;
-    options.max_iterations = 6;
+    options.max_iterations = 10;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory
@@ -82,8 +82,9 @@ TEST(CDDPTest, Solve) {
     cddp::CDDPSolution solution = cddp_solver.solve();
 
     // Extract solution
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
+    auto X_sol = solution.state_sequence; // size: horizon + 1
+    auto U_sol = solution.control_sequence; // size: horizon
+    auto t_sol = solution.time_sequence; // size: horizon + 1
 
     // Plot the solution (x-y plane)
     std::vector<double> x_arr, y_arr;
@@ -91,7 +92,25 @@ TEST(CDDPTest, Solve) {
         x_arr.push_back(x(0));
         y_arr.push_back(x(1));
     }
+
+    // Plot the solution (control inputs)
+    std::vector<double> v_arr, omega_arr;
+    for (const auto& u : U_sol) {
+        v_arr.push_back(u(0));
+        omega_arr.push_back(u(1));
+    }
+
+    // Plot the solution by subplots
+    plt::subplot(2, 1, 1);
     plt::plot(x_arr, y_arr);
+    plt::title("State Trajectory");
+    plt::xlabel("x");
+    plt::ylabel("y");
+
+    plt::subplot(2, 1, 2);
+    plt::plot(v_arr);
+    plt::plot(omega_arr);
+    plt::title("Control Inputs");
     plt::show();
 
     // // Assertions
