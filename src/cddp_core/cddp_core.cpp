@@ -177,22 +177,22 @@ CDDPSolution CDDP::solve() {
     // Evaluate Lagrangian
     L_ = J_;
 
-    // Loop over horizon 
-    for (int t = 0; t < 1; ++t) {
-        // Evaluate state constraint violation
-        for (const auto& constraint : constraint_set_) {
-            if (constraint.first == "ControlBoxConstraint") {
-                L_ += getLogBarrierCost(*constraint.second, X_[t], U_[t], barrier_coeff_, options_.relaxation_coeff);
-                // Eigen::VectorXd constraint_violation = constraint.second->evaluate(X_[t], U_[t]);
-                // if (constraint_violation.minCoeff() < 0) {
-                //     std::cerr << "CDDP: Constraint violation at time " << t << std::endl;
-                //     std::cerr << "Constraint violation: " << constraint_violation.transpose() << std::endl;
-                //     throw std::runtime_error("Constraint violation");
-                // }
-            }
+    // // Loop over horizon 
+    // for (int t = 0; t < 1; ++t) {
+    //     // Evaluate state constraint violation
+    //     for (const auto& constraint : constraint_set_) {
+    //         if (constraint.first == "ControlBoxConstraint") {
+    //             L_ += getLogBarrierCost(*constraint.second, X_[t], U_[t], barrier_coeff_, options_.relaxation_coeff);
+    //             // Eigen::VectorXd constraint_violation = constraint.second->evaluate(X_[t], U_[t]);
+    //             // if (constraint_violation.minCoeff() < 0) {
+    //             //     std::cerr << "CDDP: Constraint violation at time " << t << std::endl;
+    //             //     std::cerr << "Constraint violation: " << constraint_violation.transpose() << std::endl;
+    //             //     throw std::runtime_error("Constraint violation");
+    //             // }
+    //         }
 
-        }
-    }
+    //     }
+    // }
 
     if (options_.verbose) {
         printIteration(0, J_, L_, optimality_gap_, regularization_state_, regularization_control_); // Initial iteration information
@@ -1101,14 +1101,6 @@ bool CDDP::solveCLDDPBackwardPass() {
             }
         }
 
-        // Cholesky decomposition
-        Eigen::LLT<Eigen::MatrixXd> llt(Q_uu);
-        if (llt.info() != Eigen::Success) {
-            // Decomposition failed
-            std::cout << "Cholesky decomposition failed" << std::endl;
-            return false;
-        }
-
         // Store Q-function matrices
         Q_UU_[t] = Q_uu;
         Q_UX_[t] = Q_ux;
@@ -1143,7 +1135,7 @@ bool CDDP::solveCLDDPBackwardPass() {
         k = osqp_solver_.primal_solution();
 
         // Compute feedback gain
-        K = llt.solve(-Q_ux);
+        K = -Q_uu.inverse() * Q_ux;
 
         // Store feedforward and feedback gain
         k_[t] = k;
@@ -1171,9 +1163,6 @@ bool CDDP::solveCLDDPForwardPass() {
     bool is_feasible = false;
     const int state_dim = system_->getStateDim();
     const int control_dim = system_->getControlDim();
-
-    // Extract control box constraint
-    auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
 
     int iter = 0;
     double alpha = options_.backtracking_coeff;
