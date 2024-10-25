@@ -77,7 +77,7 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 * Zhaoming Xie, C. Karen Liu, and Kris Hauser, "Differential Dynamic Programming with Nonlinear Constraints," 2017 IEEE International Conference on Robotics and Automation (ICRA), 2017.
 * Zhamming Xie's GitHub repository: <https://github.com/ZhaomingXie/CDDP>
 * ZJU FAST Lab's GitHub repository: <https://github.com/ZJU-FAST-Lab/SDQP>
-
+* Yuval Tassa's iLQG/DDP trajectory optimization: <https://www.mathworks.com/matlabcentral/fileexchange/52069-ilqg-ddp-trajectory-optimization>
 
 ## Citing
 If you use this work in an academic context, please cite this repository.
