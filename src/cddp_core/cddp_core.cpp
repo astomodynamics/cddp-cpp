@@ -181,8 +181,8 @@ CDDPSolution CDDP::solve() {
     for (int t = 0; t < 1; ++t) {
         // Evaluate state constraint violation
         for (const auto& constraint : constraint_set_) {
-            if (constraint.first != "ControlBoxConstraint") {
-                L_ += computeLogBarrierCost(*constraint.second, X_[t], U_[t], barrier_coeff_);
+            if (constraint.first == "ControlBoxConstraint") {
+                L_ += getLogBarrierCost(*constraint.second, X_[t], U_[t], barrier_coeff_, options_.relaxation_coeff);
                 // Eigen::VectorXd constraint_violation = constraint.second->evaluate(X_[t], U_[t]);
                 // if (constraint_violation.minCoeff() < 0) {
                 //     std::cerr << "CDDP: Constraint violation at time " << t << std::endl;
@@ -203,6 +203,16 @@ CDDPSolution CDDP::solve() {
 
     // Main loop of CDDP
     for (int iter = 1; iter <= options_.max_iterations; ++iter) {
+        // Check maximum CPU time
+        if (options_.max_cpu_time > 0) {
+            auto end_time = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time); 
+            if (duration.count() > options_.max_cpu_time) {
+                std::cerr << "CDDP: Maximum CPU time reached. Returning current solution" << std::endl;
+                break;
+            }
+        }
+
         // 1. Backward pass: Solve Riccati recursion to compute optimal control law
         bool backward_pass_success = false;
         while (!backward_pass_success) {
@@ -243,8 +253,8 @@ CDDPSolution CDDP::solve() {
         }
 
         bool forward_pass_success = false;
+        // 2. Forward pass: line-search to find feasible optimal control sequence if backward pass is successful
         if (backward_pass_success) {
-            // 2. Forward pass: line-search to find feasible optimal control sequence
             forward_pass_success = solveForwardPass();
         }
 
@@ -344,12 +354,25 @@ bool CDDP::solveBackwardPass() {
         B = timestep_ * Fu;
 
         // Get cost and its derivatives
-        const double l = objective_->running_cost(x, u, t);
-        const auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
-        const auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
+        double l = objective_->running_cost(x, u, t);
+        auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
+        auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
 
+        // TODO: Implement log barrier cost and its derivatives // FIXME: Implement log barrier cost and its derivatives
         // Get log barrier cost and its derivatives
-
+        for (const auto& constraint : constraint_set_) {
+            if (constraint.first == "ControlBoxConstraint") {
+                const double barrier_cost = getLogBarrierCost(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
+                l += barrier_cost;
+                const auto [l_x_barrier, l_u_barrier] = getLogBarrierCostGradients(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
+                const auto [l_xx_barrier, l_uu_barrier, l_ux_barrier] = getLogBarrierCostHessians(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
+                l_x += l_x_barrier;
+                l_u += l_u_barrier;
+                // l_xx += l_xx_barrier;
+                // l_uu += l_uu_barrier;
+                // l_ux += l_ux_barrier;
+            }
+        }
 
         // Compute Q-function matrices 
         Q_x = l_x + A.transpose() * V_x;
@@ -602,6 +625,7 @@ bool CDDP::solveForwardPass() {
             U_ = U_new;
             J_ = J_new;
             dJ_ = dJ;
+            barrier_coeff_ = options_.barrier_coeff / 10.0;
             return true;
         } else {
             alpha *= options_.backtracking_factor;
@@ -626,7 +650,7 @@ bool CDDP::solveForwardPass() {
 }
 
 // Helper methods
-double CDDP::computeLogBarrierCost(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff) {
+double CDDP::getLogBarrierCost(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff) {
     Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
     Eigen::VectorXd lower_bound = constraint.getLowerBound();
     Eigen::VectorXd upper_bound = constraint.getUpperBound();
@@ -635,14 +659,25 @@ double CDDP::computeLogBarrierCost(const Constraint& constraint, const Eigen::Ve
     for (int i = 0; i < constraint_value.size(); ++i) {
         // If Constraint is ControlBoxConstraint
         if (constraint.getName() == "ControlBoxConstraint") {
-            if (constraint_value(i) < lower_bound(i) || constraint_value(i) > upper_bound(i)) {
-                // Constraint is violated, return a large cost
-                return std::numeric_limits<double>::infinity();
+            
+            // Calculate the log barrier term for each constraint component
+            double upper = upper_bound(i) - constraint_value(i); // 
+            double lower = constraint_value(i) - lower_bound(i);
+
+            if (upper > relaxation_coeff) {
+                barrier_cost -= barrier_coeff * std::log(upper);
             } else {
-                // Calculate the log barrier term for each constraint component
-                barrier_cost -= barrier_coeff * (std::log(upper_bound(i) - constraint_value(i)) + 
-                                                std::log(constraint_value(i) - lower_bound(i)));
+                barrier_cost += 0.5 * (std::pow((upper - 2 * relaxation_coeff) / relaxation_coeff, 2) - 1.0) - std::log(relaxation_coeff);
             }
+
+            if (lower > -relaxation_coeff) {
+                barrier_cost -= barrier_coeff * std::log(lower);
+            } else {
+                barrier_cost += 0.5 * (std::pow((lower - 2 * relaxation_coeff) / relaxation_coeff, 2) - 1.0) - std::log(relaxation_coeff);
+            }
+        
+
+
         } else {
             // If Constraint is not ControlBoxConstraint
             if (constraint_value(i) < lower_bound(i)) {
@@ -657,6 +692,118 @@ double CDDP::computeLogBarrierCost(const Constraint& constraint, const Eigen::Ve
 
     return barrier_cost;
 }
+
+Eigen::VectorXd CDDP::getLogBarrierCostStateGradient(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff) {
+    Eigen::VectorXd barrier_cost_grad = Eigen::VectorXd::Zero(state.size());
+    Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
+    Eigen::VectorXd lower_bound = constraint.getLowerBound();
+    Eigen::VectorXd upper_bound = constraint.getUpperBound();
+
+    for (int i = 0; i < constraint_value.size(); ++i) {
+        // Calculate the log barrier term for each constraint component
+        double upper = upper_bound(i) - constraint_value(i);
+        double lower = constraint_value(i) - lower_bound(i);
+
+        if (upper > relaxation_coeff) {
+            barrier_cost_grad(i) = -barrier_coeff / upper;
+        } else {
+            barrier_cost_grad(i) = -(upper - 2 * relaxation_coeff) / (relaxation_coeff * relaxation_coeff);
+        }
+
+        if (lower > -relaxation_coeff) {
+            barrier_cost_grad(i) = -barrier_coeff / lower;
+        } else {
+            barrier_cost_grad(i) = -(lower - 2 * relaxation_coeff) / (relaxation_coeff * relaxation_coeff);
+        }
+    }
+
+    return barrier_cost_grad;
+}
+
+Eigen::VectorXd CDDP::getLogBarrierCostControlGradient(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff) {
+    Eigen::VectorXd barrier_cost_grad = Eigen::VectorXd::Zero(control.size());
+
+    if (constraint.getName() == "ControlBoxConstraint") {
+        Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
+        Eigen::VectorXd lower_bound = constraint.getLowerBound();
+        Eigen::VectorXd upper_bound = constraint.getUpperBound();
+
+        for (int i = 0; i < constraint_value.size(); ++i) {
+            // Calculate the log barrier term for each constraint component
+            double upper = upper_bound(i) - constraint_value(i);
+            double lower = constraint_value(i) - lower_bound(i);
+
+            if (upper > relaxation_coeff) {
+                barrier_cost_grad(i) = barrier_coeff / upper;
+            } else {
+                barrier_cost_grad(i) = (upper - 2 * relaxation_coeff) / (relaxation_coeff * relaxation_coeff);
+            }
+
+            if (lower > -relaxation_coeff) {
+                barrier_cost_grad(i) = barrier_coeff / lower;
+            } else {
+                barrier_cost_grad(i) = (lower - 2 * relaxation_coeff) / (relaxation_coeff * relaxation_coeff);
+            }
+        }
+    }
+
+    return barrier_cost_grad;
+}
+
+Eigen::MatrixXd CDDP::getLogBarrierCostStateHessian(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff) {
+    Eigen::MatrixXd barrier_cost_hess = Eigen::MatrixXd::Zero(state.size(), state.size());
+    Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
+    Eigen::VectorXd lower_bound = constraint.getLowerBound();
+    Eigen::VectorXd upper_bound = constraint.getUpperBound();
+
+    // for (int i = 0; i < constraint_value.size(); ++i) {
+    //     // Calculate the log barrier term for each constraint component
+    //     double upper = upper_bound(i) - constraint_value(i);
+    //     double lower = constraint_value(i) - lower_bound(i);
+
+    //     if (upper > relaxation_coeff) {
+    //         barrier_cost_hess(i, i) = barrier_coeff / (upper * upper);
+    //     } else {
+    //         barrier_cost_hess(i, i) = 1.0 / (relaxation_coeff * relaxation_coeff);
+    //     }
+
+    //     if (lower > -relaxation_coeff) {
+    //         barrier_cost_hess(i, i) = barrier_coeff / (lower * lower);
+    //     } else {
+    //         barrier_cost_hess(i, i) = 1.0 / (relaxation_coeff * relaxation_coeff);
+    //     }
+    // }
+
+    return barrier_cost_hess;
+}
+
+Eigen::MatrixXd CDDP::getLogBarrierCostControlHessian(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff) {
+    Eigen::MatrixXd barrier_cost_hess = Eigen::MatrixXd::Zero(state.size(), state.size());
+    Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
+    Eigen::VectorXd lower_bound = constraint.getLowerBound();
+    Eigen::VectorXd upper_bound = constraint.getUpperBound();
+
+    for (int i = 0; i < constraint_value.size(); ++i) {
+        // Calculate the log barrier term for each constraint component
+        double upper = upper_bound(i) - constraint_value(i);
+        double lower = constraint_value(i) - lower_bound(i);
+
+        if (upper > relaxation_coeff) {
+            barrier_cost_hess(i, i) = barrier_coeff / (upper * upper);
+        } else {
+            barrier_cost_hess(i, i) = 1.0 / (relaxation_coeff * relaxation_coeff);
+        }
+
+        if (lower > -relaxation_coeff) {
+            barrier_cost_hess(i, i) = barrier_coeff / (lower * lower);
+        } else {
+            barrier_cost_hess(i, i) = 1.0 / (relaxation_coeff * relaxation_coeff);
+        }
+    }
+
+    return barrier_cost_hess;
+}
+
 
 
 void CDDP::printSolverInfo() {
@@ -685,6 +832,7 @@ void CDDP::printOptions(const CDDPOptions& options) {
     std::cout << "Cost Tolerance: " << std::setw(10) << options.cost_tolerance << "\n";
     std::cout << "Grad Tolerance: " << std::setw(10) << options.grad_tolerance << "\n";
     std::cout << "Max Iterations: " << std::setw(10) << options.max_iterations << "\n";
+    std::cout << "Max CPU Time: " << std::setw(10) << options.max_cpu_time << "\n";
 
     std::cout << "\nLine Search:\n";
     std::cout << "  Max Iterations: " << std::setw(5) << options.max_line_search_iterations << "\n";
