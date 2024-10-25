@@ -35,6 +35,7 @@ struct CDDPOptions {
     double cost_tolerance = 1e-2;         // Tolerance for changes in cost function
     double grad_tolerance = 1e-2;         // Tolerance for cost gradient magnitude
     int max_iterations = 1;
+    double max_cpu_time = 0.0;            // Maximum CPU time for the solver in seconds
 
     // Line search method
     int max_line_search_iterations = 1; // Maximum iterations for line search
@@ -44,10 +45,10 @@ struct CDDPOptions {
     double minimum_reduction_ratio = 1e-6;      // Minimum reduction for line search
 
     // log-barrier method
-    double barrier_coeff = 1.0;          // Coefficient for log-barrier method
+    double barrier_coeff = 1e-2;          // Coefficient for log-barrier method
     double barrier_factor = 0.90;        // Factor for log-barrier method
     double barrier_tolerance = 1e-6;     // Tolerance for log-barrier method
-    double relaxation_coeff = 5;             // Relaxation for log-barrier method
+    double relaxation_coeff = 1.0;             // Relaxation for log-barrier method
 
     // Active set method
     double active_set_tolerance = 1e-6;  // Tolerance for active set method
@@ -154,6 +155,7 @@ public:
 
     // Solve the problem
     CDDPSolution solve();
+    CDDPSolution solveCLDDP();
 
 private:
     // Initialization methods
@@ -164,13 +166,28 @@ private:
     ForwardPassInfo solveForwardPassIteration(double alpha);
     bool solveBackwardPass();
 
+    bool solveCLDDPForwardPass();
+    bool solveCLDDPBackwardPass();
+
     // Helper methods
     void printSolverInfo();
     void printIteration(int iter, double cost, double lagrangian, double grad_norm, double lambda_state, double lambda_control);
     void printOptions(const CDDPOptions& options);
     void printSolution(const CDDPSolution& solution);
     bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
-    double computeLogBarrierCost(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff);
+
+    // Log-barrier method
+    double getLogBarrierCost(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff);
+    std::tuple<Eigen::VectorXd, Eigen::VectorXd> getLogBarrierCostGradients(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff) {
+        return {getLogBarrierCostStateGradient(constraint, state, control, barrier_coeff, relaxation_coeff), getLogBarrierCostControlGradient(constraint, state, control, barrier_coeff, relaxation_coeff)};
+    }
+    Eigen::VectorXd getLogBarrierCostStateGradient(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff);
+    Eigen::VectorXd getLogBarrierCostControlGradient(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff);
+    std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> getLogBarrierCostHessians(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff) {
+        return {getLogBarrierCostStateHessian(constraint, state, control, barrier_coeff, relaxation_coeff), getLogBarrierCostControlHessian(constraint, state, control, barrier_coeff, relaxation_coeff), Eigen::MatrixXd::Zero(control.size(), state.size())};
+    }
+    Eigen::MatrixXd getLogBarrierCostStateHessian(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff);
+    Eigen::MatrixXd getLogBarrierCostControlHessian(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff);
 
     // Problem Data
     std::unique_ptr<DynamicalSystem> system_;         // Eigen-based dynamical system
