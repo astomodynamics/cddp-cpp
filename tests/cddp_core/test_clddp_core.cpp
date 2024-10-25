@@ -71,6 +71,7 @@ TEST(CDDPTest, SolveCLDDP) {
     // Set options
     cddp::CDDPOptions options;
     options.max_iterations = 20;
+    options.max_cpu_time = 1e-2;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory

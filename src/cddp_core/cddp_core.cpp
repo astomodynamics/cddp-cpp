@@ -206,8 +206,8 @@ CDDPSolution CDDP::solve() {
         // Check maximum CPU time
         if (options_.max_cpu_time > 0) {
             auto end_time = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time); 
-            if (duration.count() > options_.max_cpu_time) {
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
+            if (duration.count() * 1e-6 > options_.max_cpu_time) {
                 std::cerr << "CDDP: Maximum CPU time reached. Returning current solution" << std::endl;
                 break;
             }
@@ -920,8 +920,8 @@ CDDPSolution CDDP::solveCLDDP() {
         // Check maximum CPU time
         if (options_.max_cpu_time > 0) {
             auto end_time = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::seconds>(end_time - start_time); 
-            if (duration.count() > options_.max_cpu_time) {
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
+            if (duration.count() * 1e-6 > options_.max_cpu_time) {
                 std::cerr << "CDDP: Maximum CPU time reached. Returning current solution" << std::endl;
                 break;
             }
