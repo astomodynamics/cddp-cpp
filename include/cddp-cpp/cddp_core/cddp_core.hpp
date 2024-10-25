@@ -84,6 +84,15 @@ struct CDDPSolution {
     double solve_time;
 };
 
+struct ForwardPassInfo {
+    std::vector<Eigen::VectorXd> X;
+    std::vector<Eigen::VectorXd> U;
+    double J;
+    double dJ;
+    double L; 
+    double dL; 
+    bool success;
+};
 
 class CDDP {
 public:
@@ -152,6 +161,7 @@ private:
 
     // Solver methods
     bool solveForwardPass();
+    ForwardPassInfo solveForwardPassIteration(double alpha);
     bool solveBackwardPass();
 
     // Helper methods
