@@ -81,9 +81,9 @@ bool testBasicCDDP() {
     // print initial control
     std::cout << "Initial Control: " << U_sol[0].transpose() << std::endl;
 
-    for (int i = 0; i < U_sol.size(); i++) {
-        std::cout << "Control " << i << ": " << U_sol[i].transpose() << std::endl;
-    }
+    // for (int i = 0; i < U_sol.size(); i++) {
+    //     std::cout << "Control " << i << ": " << U_sol[i].transpose() << std::endl;
+    // }
 
     return true; 
 }
