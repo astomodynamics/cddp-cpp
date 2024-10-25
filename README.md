@@ -75,7 +75,8 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 
 ## References
 * Zhaoming Xie, C. Karen Liu, and Kris Hauser, "Differential Dynamic Programming with Nonlinear Constraints," 2017 IEEE International Conference on Robotics and Automation (ICRA), 2017.
-* Zhamming Xie's github repository <https://github.com/ZhaomingXie/CDDP>
+* Zhamming Xie's GitHub repository: <https://github.com/ZhaomingXie/CDDP>
+* ZJU FAST Lab's GitHub repository: <https://github.com/ZJU-FAST-Lab/SDQP>
 
 
 ## Citing
@@ -86,7 +87,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## TODO
 * add state constraint handling
-* add regularization process
 * add initial guess functionality based on path planner solution
 * add automatic differentiation
 * add nonlinear objective and constraint handling
