@@ -297,7 +297,7 @@ bool CDDP::solveBackwardPass() {
     const auto active_set_tol = options_.active_set_tolerance;
 
     // Extract control box constraint
-    auto control_box_constraint = constraint_set_.find("ControlBoxConstraint");
+    auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
 
     // Terminal cost and its derivatives
     V_X_.back() = objective_->getFinalCostGradient(X_.back());
@@ -400,34 +400,80 @@ bool CDDP::solveBackwardPass() {
         Eigen::MatrixXd C(control_dim, control_dim); // Control constraint matrix
         Eigen::MatrixXd D(control_dim, state_dim); // State constraint matrix
 
-        // // TODO: Implement active set method
-        // for (int j = 0; j < control_dim; j++) {
-        //     if (u(j) < control_box_constraint->getLowerBound()(j) - active_set_tol) {
-        //         Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
-        //         e(j) = 1.0;
-        //         C.row(active_constraint_index) = e;
-        //         D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
-        //         active_constraint_index += 1;
-        //     } else if (u(j) > control_box_constraint->getUpperBound()(j) + active_set_tol) {
-        //         Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
-        //         e(j) = -1.0;
-        //         C.row(active_constraint_index) = e;
-        //         D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
-        //         active_constraint_index += 1;
-        //     }
-        // }
+        // TODO: Implement active set method
+        for (int j = 0; j < control_dim; j++) {
+            if (u(j) < control_box_constraint.getLowerBound()(j) - active_set_tol) {
+                Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
+                e(j) = 1.0;
+                C.row(active_constraint_index) = e;
+                D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
+                active_constraint_index += 1;
+            } else if (u(j) > control_box_constraint.getUpperBound()(j) + active_set_tol) {
+                Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
+                e(j) = -1.0;
+                C.row(active_constraint_index) = e;
+                D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
+                active_constraint_index += 1;
+            }
+        }
+
+        Eigen::MatrixXd active_constraint_table = Eigen::MatrixXd::Zero(2 * (control_dim), horizon_);
+        if (active_constraint_index == 0) {
+
+            Eigen::MatrixXd H = Q_uu.inverse();
+            // Feedback Gain Calculation 
+            K = -H * Q_ux;
+            k = -H * Q_u;
+        } else {
+            // Shrink C and D matrices
+            C.conservativeResize(active_constraint_index, control_dim);
+            D.conservativeResize(active_constraint_index, state_dim);
+
+            // Calculate Lagrange Multipliers
+            Eigen::MatrixXd Q_uu_inv = Q_uu.inverse();
+            Eigen::MatrixXd lambda = (C * Q_uu_inv * C.transpose()).inverse() * C * Q_uu_inv * Q_u;
+
+            // Remove active constraints if lambda is negative
+            active_constraint_index = 0;
+            std::vector<int> deleted_index_list;
+
+            for (int j = 0; j < control_dim; j++) {
+                if (active_constraint_table(j) == 1 && lambda(active_constraint_index) < 0) {
+                    C.row(active_constraint_index) = Eigen::VectorXd::Zero(control_dim);
+                    active_constraint_table(j, t) = 0;
+                    deleted_index_list.push_back(active_constraint_index);
+                    active_constraint_index += 1;
+                } else if (active_constraint_table(j + control_dim, t) == 1 && lambda(active_constraint_index) < 0) {
+                    C.row(active_constraint_index) = Eigen::VectorXd::Zero(control_dim);
+                    active_constraint_table(j, t) = 0;
+                    deleted_index_list.push_back(active_constraint_index);
+                    active_constraint_index += 1;
+                }
+            }
+
+
+            Eigen::MatrixXd C_shrinked = Eigen::MatrixXd::Zero(C.rows() - deleted_index_list.size(), control_dim);
+            Eigen::MatrixXd D_shrinked = Eigen::MatrixXd::Zero(C.rows() - deleted_index_list.size(),  state_dim);
+
+            // Shrink C and D matrices by taking out negative lambda
+            for (int j = 0; j < C.rows(); j++) {
+                if (std::find(deleted_index_list.begin(), deleted_index_list.end(), j) == deleted_index_list.end()) {
+                    C_shrinked.row(j) = C.row(j);
+                    D_shrinked.row(j) = D.row(j);
+                }
+            }
+
+            // Feedback Gain Calculation
+            Eigen::MatrixXd W = (C_shrinked * Q_uu_inv * C_shrinked.transpose()).inverse() * C_shrinked * Q_uu_inv;
+            Eigen::MatrixXd H = Q_uu_inv * (Eigen::MatrixXd::Identity(control_dim, control_dim) - C_shrinked.transpose() * W);
+            k = -H * Q_u;
+            K = -H * Q_ux;
+        }
 
         // Store Q-function matrices
         Q_UU_[t] = Q_uu;
         Q_UX_[t] = Q_ux;
         Q_U_[t] = Q_u;
-
-        // Compute gains
-        k = -Q_uu.inverse() * Q_u;
-        K = -Q_uu.inverse() * Q_ux;
-
-        // k_[t] = k;
-        // K_[t] = K;
 
         // Compute value function approximation
         Eigen::Vector2d dV_step;

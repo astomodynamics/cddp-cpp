@@ -61,9 +61,9 @@ TEST(CDDPTest, Solve) {
 
     // Define constraints
     Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -10.0, -10*M_PI;
+    control_lower_bound << -1.0, -M_PI;
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 10.0, 10*M_PI;
+    control_upper_bound << 1.0, M_PI;
     // Add the constraint to the solver
     cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
     auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
