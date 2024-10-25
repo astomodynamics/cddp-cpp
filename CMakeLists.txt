@@ -1,120 +1,166 @@
+#  Copyright 2024 Tomo Sasaki
+
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+
+#       https://www.apache.org/licenses/LICENSE-2.0
+
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
 cmake_minimum_required(VERSION 3.14) 
-project(cddp)
+project(
+  cddp
+  VERSION 0.1.0
+  DESCRIPTION "CDDP: A C++ library for MPC"
+  HOMEPAGE_URL  "https://github.com/astomodynamics/CDDP-cpp"
+)
 
 set(CMAKE_CXX_STANDARD 17) # Enforce C++17 as the minimum standard
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Enforce C++17 as the minimum standard
 set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
-
-# Set the default build type to Release
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 
 # Options.
-option(CDDP-CPP_BUILD_TESTS
-  "Whether to build tests." ON
-)
+option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
+option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." OFF)
+option(GUROBI_ROOT "Path to Gurobi installation" "") 
+set(GUROBI_ROOT /home/tom/.local/lib/gurobi1103/linux64)
 
-# EIGEN
-find_package(Eigen3 REQUIRED)
+# Find packages
+find_package(Eigen3 REQUIRED) 
+set(Python_EXECUTABLE /usr/bin/python3.10) # Or the path to your desired Python interpreter
+execute_process( # Find the NumPy include directory
+  COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
+  OUTPUT_VARIABLE NUMPY_INCLUDE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE 
+)
+find_package(Python3 3.10 EXACT COMPONENTS Interpreter Development NumPy REQUIRED)
 
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
 
 # ABSL
-if (NOT TARGET absl::strings OR NOT TARGET absl::status OR NOT TARGET absl::span)
-  message(STATUS "CDDP-cpp: `absl` targets not found. Attempting to fetch contents...")
-  FetchContent_Declare(
-    abseil-cpp
-    GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
-    GIT_TAG        origin/master
-  )
-  FetchContent_MakeAvailable(abseil-cpp)
-else()
-  message(STATUS "CDDP-cpp: `absl` targets found.")
-endif()
-
+FetchContent_Declare(
+  abseil-cpp
+  GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
+  GIT_TAG        origin/master
+)
+FetchContent_MakeAvailable(abseil-cpp) 
 
 # OSQP
-if (NOT TARGET osqpstatic)
-  message(STATUS "CDDP-cpp: `osqp` targets not found. Attempting to fetch contents...")
-  FetchContent_Declare(
-    osqp
-    GIT_REPOSITORY https://github.com/oxfordcontrol/osqp.git
-    GIT_TAG        v0.6.0
-  )
-  FetchContent_MakeAvailable(osqp)
-else()
-  message(STATUS "CDDP-cpp: `osqp` targets found.")
-endif()
-
+FetchContent_Declare(
+  osqp
+  GIT_REPOSITORY https://github.com/oxfordcontrol/osqp.git
+  GIT_TAG        v0.6.0  # Consider using a more recent version if applicable
+)
+FetchContent_MakeAvailable(osqp)
 
 # OSQP-CPP
-if (NOT TARGET osqp-cpp OR NOT TARGET osqpstatic)
-    message(STATUS "CDDP-cpp: `osqp-cpp` targets not found. Attempting to fetch contents...")
-    FetchContent_Declare(
-    osqp-cpp
-    GIT_REPOSITORY https://github.com/google/osqp-cpp
-    GIT_TAG master
-  )
-  FetchContent_MakeAvailable(osqp-cpp)
-else()
-    message(STATUS "CDDP-cpp: `osqp-cpp` targets found.")
-    find_package(osqp-cpp REQUIRED)
-endif()
-
-# Matplotplusplus
-if (NOT TARGET matplot)
-    message(STATUS "CDDP-cpp: `matplot` targets not found. Attempting to fetch contents...")
-    FetchContent_Declare(
-      matplotplusplus
-      GIT_REPOSITORY https://github.com/alandefreitas/matplotplusplus
-      GIT_TAG origin/master
-    ) 
-    FetchContent_GetProperties(matplotplusplus)
-    if(NOT matplotplusplus_POPULATED)
-        FetchContent_Populate(matplotplusplus)
-        add_subdirectory(${matplotplusplus_SOURCE_DIR} ${matplotplusplus_BINARY_DIR} EXCLUDE_FROM_ALL)
-    endif()
-else()
-    message(STATUS "CDDP-cpp: `matplot` targets found.")
-endif()
-
+FetchContent_Declare(
+  osqp-cpp
+  GIT_REPOSITORY https://github.com/google/osqp-cpp
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(osqp-cpp)
 
 # Googletest
 if (CDDP-CPP_BUILD_TESTS)
   enable_testing()
-  if (NOT TARGET gtest OR NOT TARGET gmock OR NOT TARGET gtest_main)
-    message(STATUS "CDDP-cpp: `googletest` targets not found. Attempting to fetch contents...")
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    FetchContent_Declare(
-      googletest
-      GIT_REPOSITORY https://github.com/google/googletest.git
-      GIT_TAG        origin/main
-    )
-    FetchContent_MakeAvailable(googletest)
-    include(GoogleTest)
+  FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG        origin/main
+  )
+  FetchContent_MakeAvailable(googletest)
+  include(GoogleTest)
+endif()
+
+# Include directories
+include_directories(
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${Python3_INCLUDE_DIRS}
+  ${NUMPY_INCLUDE_DIR}
+) 
+
+# Add your library
+set(cddp_core_srcs
+    src/cddp_core/dynamical_system.cpp
+    src/cddp_core/objective.cpp
+    src/cddp_core/constraint.cpp
+    src/cddp_core/cddp_core.cpp
+)
+
+set(dynamics_model_srcs
+    src/dynamics_model/pendulum.cpp
+    src/dynamics_model/dubins_car.cpp
+)
+
+add_library(${PROJECT_NAME} 
+    ${cddp_core_srcs}
+    ${dynamics_model_srcs}
+)
+
+target_link_libraries(${PROJECT_NAME} 
+    Eigen3::Eigen 
+    osqp-cpp 
+    Python3::Python
+    Python3::Module
+    Python3::NumPy
+) 
+
+target_include_directories(${PROJECT_NAME} PUBLIC
+    include  
+)
+
+# Gurobi 
+if (CDDP-CPP_GUROBI)
+  if (NOT GUROBI_ROOT)
+    message(FATAL_ERROR "Please set GUROBI_ROOT.")
+  endif()
+  set(GUROBI_INCLUDE_DIRS ${GUROBI_ROOT}/include) # Set the path to the Gurobi include directory
+  set(GUROBI_LIBRARIES ${GUROBI_ROOT}/lib/libgurobi_c++.a) # Set the path to the Gurobi library
+  find_library(GUROBI_LIBRARY gurobi_c++ PATHS ${GUROBI_ROOT}/lib)
+  find_path(GUROBI_INCLUDE_DIR gurobi_c++.h PATHS ${GUROBI_ROOT}/include)
+  link_directories(${GUROBI_ROOT}/lib) 
+
+  if (GUROBI_LIBRARIES AND GUROBI_INCLUDE_DIR)
+    message(STATUS "Found Gurobi: ${GUROBI_LIBRARIES} ${GUROBI_LIBRARY}")
+    message(STATUS "Gurobi include directory: ${GUROBI_INCLUDE_DIR}")
+    
+    include_directories(${GUROBI_INCLUDE_DIR})
+    target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARIES}  gurobi_c++ 
+    gurobi110) 
   else()
-    message(STATUS "CDDP-cpp: `googletest` targets found.")
+    message(FATAL_ERROR "Could not find Gurobi. Please set GUROBI_ROOT.")
   endif()
 endif()
 
-# # Add the include directory
-# include_directories(include/cddp)
+# Build and register tests.
+if (CDDP-CPP_BUILD_TESTS)
+  add_subdirectory(tests) 
+endif()
 
-# Add the main library
-message(STATUS "CDDP-cpp: Adding CDDP-cpp library...")
-add_library(cddp src/cddp_core/CDDPProblem.cpp)
-target_link_libraries(cddp PUBLIC 
-    Eigen3::Eigen 
-    PRIVATE osqp-cpp ${CMAKE_DL_LIBS})
-target_include_directories(cddp PUBLIC 
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" 
-    include/cddp)
-message(STATUS "CDDP-cpp: Added CDDP-cpp library.")
+# Cmake compile commmand:
+# $ mkdir build
+# $ cd build
+# $ cmake  -DCDDP-CPP_GUROBI=ON -DCDDP-CPP_BUILD_TESTS=ON -DGUROBI_ROOT=/home/tom/.local/lib/gurobi1103/linux64 ..
+# $ make -j4
+# $ make test
 
-# Eigen test (Placeholder for now, will be removed later on)
-add_executable(cddp_eigen_test test/test_eigen.cpp)
-target_link_libraries(cddp_eigen_test Eigen3::Eigen)
 
-# LOCAL TEST
-add_subdirectory(test)
+# # Add the main library
+# message(STATUS "CDDP-cpp: Adding CDDP-cpp library...")
+# add_library(cddp src/cddp_core/CDDPProblem.cpp)
+# target_link_libraries(cddp PUBLIC 
+#     Eigen3::Eigen 
+#     PRIVATE osqp-cpp ${CMAKE_DL_LIBS})
+# target_include_directories(cddp PUBLIC 
+#     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" 
+#     include/cddp)
+# message(STATUS "CDDP-cpp: Added CDDP-cpp library.")
+
 

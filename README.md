@@ -81,6 +81,9 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 ## Citing
 If you use this work in an academic context, please cite this repository.
 
+## License
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+
 ## TODO
 * add state constraint handling
 * add regularization process
