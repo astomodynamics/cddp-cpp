@@ -1,4 +1,4 @@
-#include "cddp-cpp/cddp_core/constraint.hpp"
+#include "cddp_core/constraint.hpp"
 
 namespace cddp {
 

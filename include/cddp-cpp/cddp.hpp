@@ -23,17 +23,17 @@
 
 
 
-#include "cddp-cpp/cddp_core/dynamical_system.hpp"
-#include "cddp-cpp/cddp_core/objective.hpp"
-#include "cddp-cpp/cddp_core/constraint.hpp"
-#include "cddp-cpp/cddp_core/cddp_core.hpp"
+#include "cddp_core/dynamical_system.hpp"
+#include "cddp_core/objective.hpp"
+#include "cddp_core/constraint.hpp"
+#include "cddp_core/cddp_core.hpp"
 
 // Models
-#include "cddp-cpp/dynamics_model/pendulum.hpp"
-#include "cddp-cpp/dynamics_model/dubins_car.hpp"
-// #include "cddp-cpp/dynamics_model/cartpole.hpp"
+#include "dynamics_model/pendulum.hpp"
+#include "dynamics_model/dubins_car.hpp"
+// #include "dynamics_model/cartpole.hpp"
 
-#include "cddp-cpp/matplotlibcpp.hpp"
+#include "matplotlibcpp.hpp"
 
 
 #endif // CDDP_HPP

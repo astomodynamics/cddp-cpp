@@ -17,7 +17,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 
-#include "cddp-cpp/cddp_core/dynamical_system.hpp" 
+#include "cddp_core/dynamical_system.hpp" 
 
 using namespace cddp;
 

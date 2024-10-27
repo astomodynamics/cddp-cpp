@@ -25,9 +25,9 @@
 #include "osqp++.h"
 // #include "torch/torch.h"
 
-#include "cddp-cpp/cddp_core/dynamical_system.hpp" 
-#include "cddp-cpp/cddp_core/objective.hpp"
-#include "cddp-cpp/cddp_core/constraint.hpp"
+#include "cddp_core/dynamical_system.hpp" 
+#include "cddp_core/objective.hpp"
+#include "cddp_core/constraint.hpp"
 
 namespace cddp {
 

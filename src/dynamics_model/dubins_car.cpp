@@ -13,7 +13,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#include "cddp-cpp/dynamics_model/dubins_car.hpp"
+#include "dynamics_model/dubins_car.hpp"
 #include <Eigen/Dense>
 #include <cmath>
 
