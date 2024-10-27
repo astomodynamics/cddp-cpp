@@ -26,13 +26,15 @@ public:
     DynamicalSystem(int state_dim, int control_dim, double timestep, std::string integration_type) 
         : state_dim_(state_dim), control_dim_(control_dim), timestep_(timestep), integration_type_(integration_type) {}
 
+    virtual ~DynamicalSystem() {} // Virtual destructor
+
     // Core dynamics function: xdot = f(x_t, u_t)
     virtual Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
                                   const Eigen::VectorXd& control) const = 0;
     
     // Discrete dynamics function: x_{t+1} = f(x_t, u_t)
     virtual Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state, 
-                                  const Eigen::VectorXd& control) const = 0;
+                                  const Eigen::VectorXd& control) const;
 
     // Jacobian of dynamics w.r.t state: df/dx
     virtual Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, 

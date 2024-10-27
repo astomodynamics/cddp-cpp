@@ -34,9 +34,10 @@ if (CDDP-CPP_GUROBI)
     add_executable(test_gurobi test_gurobi.cpp)
     target_link_libraries(test_gurobi gtest gmock gtest_main cddp)
     gtest_discover_tests(test_gurobi)     
-endif()
 
-# Test for SDQP
-add_executable(test_sdqp test_sdqp.cpp)
-target_link_libraries(test_sdqp gtest gmock gtest_main cddp)
-gtest_discover_tests(test_sdqp)
+
+    # Test for SDQP
+    add_executable(test_sdqp test_sdqp.cpp)
+    target_link_libraries(test_sdqp gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_sdqp)
+endif()
