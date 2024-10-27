@@ -17,7 +17,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 
-#include "cddp-cpp/cddp_core/objective.hpp"
+#include "cddp_core/objective.hpp"
 
 namespace cddp
 {

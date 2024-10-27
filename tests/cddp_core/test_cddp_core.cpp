@@ -54,7 +54,7 @@ TEST(CDDPTest, Solve) {
     Eigen::VectorXd initial_state(state_dim);
     initial_state << 0.0, 0.0, M_PI/4.0; 
 
-    // // Create CDDP solver
+    // Create CDDP solver
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
     cddp_solver.setDynamicalSystem(std::move(system));
     cddp_solver.setObjective(std::move(objective));
@@ -64,6 +64,7 @@ TEST(CDDPTest, Solve) {
     control_lower_bound << -1.0, -M_PI;
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 1.0, M_PI;
+    
     // Add the constraint to the solver
     cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
     auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");

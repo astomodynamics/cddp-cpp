@@ -43,22 +43,6 @@ find_package(Python3 3.10 EXACT COMPONENTS Interpreter Development NumPy REQUIRE
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
 
-# ABSL
-FetchContent_Declare(
-  abseil-cpp
-  GIT_REPOSITORY https://github.com/abseil/abseil-cpp.git
-  GIT_TAG        origin/master
-)
-FetchContent_MakeAvailable(abseil-cpp) 
-
-# OSQP
-FetchContent_Declare(
-  osqp
-  GIT_REPOSITORY https://github.com/oxfordcontrol/osqp.git
-  GIT_TAG        v0.6.0  # Consider using a more recent version if applicable
-)
-FetchContent_MakeAvailable(osqp)
-
 # OSQP-CPP
 FetchContent_Declare(
   osqp-cpp
@@ -66,6 +50,7 @@ FetchContent_Declare(
   GIT_TAG master
 )
 FetchContent_MakeAvailable(osqp-cpp)
+FetchContent_GetProperties(osqp-cpp)
 
 # Googletest
 if (CDDP-CPP_BUILD_TESTS)
@@ -88,32 +73,33 @@ include_directories(
 
 # Add your library
 set(cddp_core_srcs
-    src/cddp_core/dynamical_system.cpp
-    src/cddp_core/objective.cpp
-    src/cddp_core/constraint.cpp
-    src/cddp_core/cddp_core.cpp
+  src/cddp_core/dynamical_system.cpp
+  src/cddp_core/objective.cpp
+  src/cddp_core/constraint.cpp
+  src/cddp_core/cddp_core.cpp
 )
 
 set(dynamics_model_srcs
-    src/dynamics_model/pendulum.cpp
-    src/dynamics_model/dubins_car.cpp
+  src/dynamics_model/pendulum.cpp
+  src/dynamics_model/dubins_car.cpp
 )
 
 add_library(${PROJECT_NAME} 
-    ${cddp_core_srcs}
-    ${dynamics_model_srcs}
+  ${cddp_core_srcs}
+  ${dynamics_model_srcs}
 )
 
 target_link_libraries(${PROJECT_NAME} 
-    Eigen3::Eigen 
-    osqp-cpp 
-    Python3::Python
-    Python3::Module
-    Python3::NumPy
+  Eigen3::Eigen 
+  osqp-cpp 
+  Python3::Python
+  Python3::Module
+  Python3::NumPy
 ) 
 
 target_include_directories(${PROJECT_NAME} PUBLIC
-    include  
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/cddp-cpp>
+  $<INSTALL_INTERFACE:include> 
 )
 
 # Gurobi 

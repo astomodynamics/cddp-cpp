@@ -27,7 +27,7 @@
 // TODO: gurobi solver compatibility
 // #include "gurobi_c++.h"
 
-#include "cddp-cpp/cddp_core/cddp_core.hpp"
+#include "cddp_core/cddp_core.hpp"
 
 namespace cddp {
 
@@ -555,8 +555,9 @@ bool CDDP::solveForwardPass() {
             const Eigen::MatrixXd& Q_ux = Q_UX_[t];
 
             // Create QP problem
-            int numNonZeros = Q_uu.nonZeros(); 
+            int numNonZeros = Q_uu.nonZeros();
             P.reserve(numNonZeros);
+            P.setZero();
             for (int i = 0; i < Q_uu.rows(); ++i) {
                 for (int j = 0; j < Q_uu.cols(); ++j) {
                     if (Q_uu(i, j) != 0) {
@@ -1109,6 +1110,7 @@ bool CDDP::solveCLDDPBackwardPass() {
         /*    Solve Box QP Problem    */   
         int numNonZeros = Q_uu.nonZeros(); 
         P.reserve(numNonZeros);
+        P.setZero();
         for (int i = 0; i < Q_uu.rows(); ++i) {
             for (int j = 0; j < Q_uu.cols(); ++j) {
                 if (Q_uu(i, j) != 0) {

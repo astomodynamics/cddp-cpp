@@ -16,7 +16,7 @@
 #ifndef CDDP_DUBINS_CAR_HPP
 #define CDDP_DUBINS_CAR_HPP
 
-#include "cddp-cpp/cddp_core/dynamical_system.hpp"
+#include "cddp_core/dynamical_system.hpp"
 
 namespace cddp {
 

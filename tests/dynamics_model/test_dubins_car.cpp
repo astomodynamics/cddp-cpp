@@ -22,8 +22,9 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "cddp-cpp/dynamics_model/dubins_car.hpp"
-#include "cddp-cpp/matplotlibcpp.hpp"
+// #include "cddp-cpp/dynamics_model/dubins_car.hpp"
+// #include "cddp-cpp/matplotlibcpp.hpp"
+#include "cddp.hpp"
 
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
