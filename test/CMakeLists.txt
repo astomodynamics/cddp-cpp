@@ -21,5 +21,13 @@ target_link_libraries(cddp_problem_tests PUBLIC Eigen3::Eigen Python3::Python
 Python3::Module
 Python3::NumPy PRIVATE osqp-cpp)
 
+# ---- CDDPTests_Bicycle ----
+add_executable(cddp_bicycle_tests 
+    CDDPProblemTests_Bicycle.cpp
+    ../src/cddp_core/CDDPProblem.cpp)
+target_link_libraries(cddp_bicycle_tests PUBLIC Eigen3::Eigen Python3::Python
+Python3::Module
+Python3::NumPy PRIVATE osqp-cpp)
+
 
 
