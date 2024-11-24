@@ -82,6 +82,8 @@ TEST(CDDPTest, SolveCLDDP) {
     // // Solve the problem
     cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
 
+    ASSERT_TRUE(solution.converged);
+
     // // Extract solution
     // auto X_sol = solution.state_sequence; // size: horizon + 1
     // auto U_sol = solution.control_sequence; // size: horizon
