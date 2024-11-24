@@ -58,21 +58,21 @@ TEST(DubinsCarTest, DiscreteDynamics) {
         state = dubins_car.getDiscreteDynamics(state, control); 
     }
 
-    // Create directory for saving plot (if it doesn't exist)
-    const std::string plotDirectory = "../plots/test";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directory(plotDirectory);
-    }
+    // // Create directory for saving plot (if it doesn't exist)
+    // const std::string plotDirectory = "../plots/test";
+    // if (!fs::exists(plotDirectory)) {
+    //     fs::create_directory(plotDirectory);
+    // }
 
-    // Plot the results
-    plt::figure();
-    plt::plot(x_data, y_data, {{"label", "Trajectory"}});
-    plt::xlabel("X");
-    plt::ylabel("Y");
-    plt::title("Dubins Car Trajectory");
-    plt::legend();
-    plt::save(plotDirectory + "/dubins_car_trajectory.png");
-    // plt::show();
+    // // Plot the results
+    // plt::figure();
+    // plt::plot(x_data, y_data, {{"label", "Trajectory"}});
+    // plt::xlabel("X");
+    // plt::ylabel("Y");
+    // plt::title("Dubins Car Trajectory");
+    // plt::legend();
+    // plt::save(plotDirectory + "/dubins_car_trajectory.png");
+    // // plt::show();
 
     // Assert true if the dubins_car has the correct state dimension
     ASSERT_EQ(dubins_car.getStateDim(), 3);
