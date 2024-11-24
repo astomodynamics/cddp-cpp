@@ -130,6 +130,9 @@ if (CDDP-CPP_BUILD_TESTS)
   add_subdirectory(tests) 
 endif()
 
+# Build examples
+add_subdirectory(examples)
+
 # Cmake compile commmand:
 # $ mkdir build
 # $ cd build
