@@ -82,37 +82,37 @@ TEST(CDDPTest, SolveCLDDP) {
     // // Solve the problem
     cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
 
-    // Extract solution
-    auto X_sol = solution.state_sequence; // size: horizon + 1
-    auto U_sol = solution.control_sequence; // size: horizon
-    auto t_sol = solution.time_sequence; // size: horizon + 1
+    // // Extract solution
+    // auto X_sol = solution.state_sequence; // size: horizon + 1
+    // auto U_sol = solution.control_sequence; // size: horizon
+    // auto t_sol = solution.time_sequence; // size: horizon + 1
 
-    // Plot the solution (x-y plane)
-    std::vector<double> x_arr, y_arr;
-    for (const auto& x : X_sol) {
-        x_arr.push_back(x(0));
-        y_arr.push_back(x(1));
-    }
+    // // Plot the solution (x-y plane)
+    // std::vector<double> x_arr, y_arr;
+    // for (const auto& x : X_sol) {
+    //     x_arr.push_back(x(0));
+    //     y_arr.push_back(x(1));
+    // }
 
-    // Plot the solution (control inputs)
-    std::vector<double> v_arr, omega_arr;
-    for (const auto& u : U_sol) {
-        v_arr.push_back(u(0));
-        omega_arr.push_back(u(1));
-    }
+    // // Plot the solution (control inputs)
+    // std::vector<double> v_arr, omega_arr;
+    // for (const auto& u : U_sol) {
+    //     v_arr.push_back(u(0));
+    //     omega_arr.push_back(u(1));
+    // }
 
-    // Plot the solution by subplots
-    plt::subplot(2, 1, 1);
-    plt::plot(x_arr, y_arr);
-    plt::title("State Trajectory");
-    plt::xlabel("x");
-    plt::ylabel("y");
+    // // Plot the solution by subplots
+    // plt::subplot(2, 1, 1);
+    // plt::plot(x_arr, y_arr);
+    // plt::title("State Trajectory");
+    // plt::xlabel("x");
+    // plt::ylabel("y");
 
-    plt::subplot(2, 1, 2);
-    plt::plot(v_arr);
-    plt::plot(omega_arr);
-    plt::title("Control Inputs");
-    plt::show();
+    // plt::subplot(2, 1, 2);
+    // plt::plot(v_arr);
+    // plt::plot(omega_arr);
+    // plt::title("Control Inputs");
+    // plt::show();
 
     // // Assertions
     // ASSERT_TRUE(solution.converged); // Check if the solver converged
