@@ -35,7 +35,10 @@ public:
      * @param timestep Time step for discretization
      * @param integration_type Integration method ("euler" by default)
      */
-    Pendulum(double timestep, double length, double mass, double damping,
+    Pendulum(double timestep, 
+             double length = 1.0, 
+             double mass = 1.0, 
+             double damping = 0.0,
              std::string integration_type = "euler");
 
     /**
