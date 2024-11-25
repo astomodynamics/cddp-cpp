@@ -46,14 +46,11 @@ TEST(JacobianTest , Pendulum) {
     Eigen::MatrixXd B = pendulum.getControlJacobian(state, control);
 
     // Check the Jacobians
-    Eigen::MatrixXd A_expected(2, 2);
-    A_expected << 0.0, 1.0,
-                  -9.76099, 0.0;
-    Eigen::MatrixXd B_expected(2, 1);
-    B_expected << 0.0, 1.0;
+    Eigen::MatrixXd A_expected = pendulum.getFiniteDifferenceStateJacobian(state, control);
+    Eigen::MatrixXd B_expected = pendulum.getFiniteDifferenceControlJacobian(state, control);
 
     // print the Jacobians
-    // std::cout << "A = \n" << A << std::endl;
+    std::cout << "A = \n" << A << std::endl;
     std::cout << "B = \n" << B << std::endl;
 
     // Check the Jacobians
