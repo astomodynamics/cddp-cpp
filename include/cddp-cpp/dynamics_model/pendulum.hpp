@@ -99,6 +99,16 @@ public:
     Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
+    // Getters
+    int getStateDim() const { return STATE_DIM; }
+    int getControlDim() const { return CONTROL_DIM; }
+
+    // Pendulum parameters
+    double getLength() const { return length_; }
+    double getMass() const { return mass_; }
+    double getDamping() const { return damping_; }
+    double getGravity() const { return gravity_; }
+
 private:
     // Pendulum parameters
     double length_;  // length [m]
