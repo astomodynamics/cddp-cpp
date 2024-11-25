@@ -14,35 +14,27 @@
  limitations under the License.
 */
 
-#ifndef CDDP_DUBINS_CAR_HPP
-#define CDDP_DUBINS_CAR_HPP
+#ifndef CDDP_BICYCLE_HPP
+#define CDDP_BICYCLE_HPP
 
 #include "cddp_core/dynamical_system.hpp"
 
 namespace cddp {
 
-/**
- * @brief Dubins Car model implementation
- * 
- * This class implements the Dubins car model, which is a simple car-like robot
- * that can only move forward at a constant speed and can change its heading angle.
- * The state vector consists of [x, y, theta], where (x,y) is the position and
- * theta is the heading angle. The control input is the steering angle rate.
- */
-class DubinsCar : public DynamicalSystem {
+class Bicycle : public DynamicalSystem {
 public:
     /**
-     * @brief Constructor for the Dubins car model
+     * Constructor for the Bicycle model
      * @param timestep Time step for discretization
+     * @param wheelbase Distance between front and rear axles
      * @param integration_type Integration method ("euler" by default)
      */
-    DubinsCar(double timestep, 
-              std::string integration_type = "euler");
+    Bicycle(double timestep, double wheelbase, std::string integration_type = "euler");
 
     /**
-     * @brief Computes the continuous-time dynamics of the Dubins car
-     * State vector: [x, y, theta]
-     * Control vector: [omega] (steering angle rate)
+     * Computes the continuous-time dynamics of the bicycle model
+     * State vector: [x, y, theta, v]
+     * Control vector: [acceleration, steering_angle]
      * @param state Current state vector
      * @param control Current control input
      * @return State derivative vector
@@ -51,7 +43,7 @@ public:
                                          const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Computes the discrete-time dynamics using the specified integration method
+     * Computes the discrete-time dynamics using the specified integration method
      * @param state Current state vector
      * @param control Current control input
      * @return Next state vector
@@ -62,7 +54,7 @@ public:
     }
 
     /**
-     * @brief Computes the Jacobian of the dynamics with respect to the state
+     * Computes the Jacobian of the dynamics with respect to the state
      * @param state Current state vector
      * @param control Current control input
      * @return State Jacobian matrix (A matrix)
@@ -71,7 +63,7 @@ public:
                                     const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Computes the Jacobian of the dynamics with respect to the control input
+     * Computes the Jacobian of the dynamics with respect to the control input
      * @param state Current state vector
      * @param control Current control input
      * @return Control Jacobian matrix (B matrix)
@@ -80,7 +72,7 @@ public:
                                       const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Computes the Hessian of the dynamics with respect to the state
+     * Computes the Hessian of the dynamics with respect to the state
      * @param state Current state vector
      * @param control Current control input
      * @return State Hessian matrix
@@ -89,7 +81,7 @@ public:
                                    const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Computes the Hessian of the dynamics with respect to the control
+     * Computes the Hessian of the dynamics with respect to the control
      * @param state Current state vector
      * @param control Current control input
      * @return Control Hessian matrix
@@ -98,18 +90,21 @@ public:
                                      const Eigen::VectorXd& control) const override;
 
 private:
+    double wheelbase_;  // Distance between front and rear axles
+
     // State indices
     static constexpr int STATE_X = 0;      // x position
     static constexpr int STATE_Y = 1;      // y position
     static constexpr int STATE_THETA = 2;  // heading angle
-    static constexpr int STATE_DIM = 3;    // state dimension
+    static constexpr int STATE_V = 3;      // velocity
+    static constexpr int STATE_DIM = 4;    // state dimension
 
     // Control indices
-    static constexpr int CONTROL_V = 0;      // velocity
-    static constexpr int CONTROL_OMEGA = 1;  // steering angle rate
+    static constexpr int CONTROL_ACC = 0;    // acceleration
+    static constexpr int CONTROL_DELTA = 1;  // steering angle
     static constexpr int CONTROL_DIM = 2;    // control dimension
 };
 
 } // namespace cddp
 
-#endif // CDDP_DUBINS_CAR_HPP
+#endif // CDDP_BICYCLE_HPP

@@ -13,28 +13,14 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#ifndef CDDP_HPP
-#define CDDP_HPP
 
-#include <iostream>
-#include <memory>
-#include <vector>
+#ifndef CDDP_HELPER_HPP
+#define CDDP_HELPER_HPP
+
 #include <Eigen/Dense>
 
+namespace cddp {
 
+} // namespace cddp
 
-#include "cddp_core/dynamical_system.hpp"
-#include "cddp_core/objective.hpp"
-#include "cddp_core/constraint.hpp"
-#include "cddp_core/cddp_core.hpp"
-
-// Models
-#include "dynamics_model/pendulum.hpp"
-#include "dynamics_model/dubins_car.hpp"
-#include "dynamics_model/bicycle.hpp"
-// #include "dynamics_model/cartpole.hpp"
-
-#include "matplotlibcpp.hpp"
-
-
-#endif // CDDP_HPP
+#endif // CDDP_HELPER_HPP

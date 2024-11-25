@@ -39,6 +39,18 @@ $$
 
 **Author: Tomohiro Sasaki** 
 
+## Examples
+### Dubins Car
+
+Simple car-like robot with velocity and steering control:
+<img src="results/tests/dubins_car.gif" width="600" alt="Dubins Car CDDP">
+
+### Bicycle Model
+
+Bicycle model with velocity and steering control:
+<img src="results/tests/bicycle.gif" width="600" alt="Bicycle Model CDDP">
+
+
 ## Installation
 ### Dependencies
 * [Eigen](https://formulae.brew.sh/formula/eigen) (Linear Algebra Library in CPP)
