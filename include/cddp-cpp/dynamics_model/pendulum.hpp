@@ -35,7 +35,7 @@ public:
      * @param timestep Time step for discretization
      * @param integration_type Integration method ("euler" by default)
      */
-    Pendulum(double timestep, 
+    Pendulum(double timestep, double length, double mass, double damping,
              std::string integration_type = "euler");
 
     /**
@@ -97,6 +97,12 @@ public:
                                      const Eigen::VectorXd& control) const override;
 
 private:
+    // Pendulum parameters
+    double length_;  // length [m]
+    double mass_;    // mass [kg]
+    double damping_; // damping coefficient
+    double gravity_ = 9.81; // gravity [m/s^2]
+
     // State indices
     static constexpr int STATE_THETA = 0;      // angle
     static constexpr int STATE_THETA_DOT = 1;  // angular velocity
@@ -105,12 +111,6 @@ private:
     // Control indices
     static constexpr int CONTROL_TORQUE = 0;   // applied torque
     static constexpr int CONTROL_DIM = 1;      // control dimension
-
-    // System parameters
-    static constexpr double MASS = 1.0;        // mass [kg]
-    static constexpr double LENGTH = 1.0;      // length [m]
-    static constexpr double GRAVITY = 9.81;    // gravity [m/s^2]
-    static constexpr double DAMPING = 0.1;     // damping coefficient
 };
 
 } // namespace cddp

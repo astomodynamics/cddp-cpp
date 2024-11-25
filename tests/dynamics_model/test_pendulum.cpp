@@ -30,8 +30,12 @@ using namespace cddp;
 TEST(PendulumTest, DiscreteDynamics) {
     // Create a Pendulum instance
     double timestep = 0.01;
+    // Parameters
+    double length = 1.0;
+    double mass = 1.0;
+    double damping = 0.1;
     std::string integration_type = "rk4";
-    cddp::Pendulum pendulum(timestep, integration_type);
+    cddp::Pendulum pendulum(timestep, length, mass, damping, integration_type);
 
     // Store states for plotting
     std::vector<double> time_data, theta_data, theta_dot_data;

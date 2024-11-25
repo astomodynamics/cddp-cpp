@@ -19,9 +19,10 @@
 
 namespace cddp {
 
-Pendulum::Pendulum(double timestep, std::string integration_type)
-    : DynamicalSystem(STATE_DIM, CONTROL_DIM, timestep, integration_type) {
-}
+Pendulum::Pendulum(double timestep, double length, double mass, double damping,
+                   std::string integration_type)
+    : DynamicalSystem(STATE_DIM, CONTROL_DIM, timestep, integration_type),
+        length_(length), mass_(mass), damping_(damping) {}
 
 Eigen::VectorXd Pendulum::getContinuousDynamics(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
@@ -36,12 +37,12 @@ Eigen::VectorXd Pendulum::getContinuousDynamics(
     const double torque = control(CONTROL_TORQUE);
     
     // Precompute constants
-    const double intertia = MASS * LENGTH * LENGTH;
+    const double intertia = mass_ * length_ * length_;
 
     // Pendulum dynamics equations
     state_dot(STATE_THETA) = theta_dot;
-    state_dot(STATE_THETA_DOT) = (torque - DAMPING * theta_dot - MASS * GRAVITY * LENGTH * std::sin(theta)) / intertia;
-    
+    state_dot(STATE_THETA_DOT) = (torque - damping_ * theta_dot - mass_ * gravity_ * length_ * std::sin(theta)) / intertia;
+
     return state_dot;
 }
 
@@ -57,10 +58,10 @@ Eigen::MatrixXd Pendulum::getStateJacobian(
     A(STATE_THETA, STATE_THETA_DOT) = 1.0;
     
     // d(dtheta_dot/dt)/dtheta
-    A(STATE_THETA_DOT, STATE_THETA) = (-GRAVITY / LENGTH) * std::cos(theta);
+    A(STATE_THETA_DOT, STATE_THETA) = (-gravity_ / length_) * std::cos(theta);
     
     // d(dtheta_dot/dt)/dtheta_dot
-    A(STATE_THETA_DOT, STATE_THETA_DOT) = -DAMPING / (MASS * LENGTH * LENGTH);
+    A(STATE_THETA_DOT, STATE_THETA_DOT) = -damping_ / (mass_ * length_ * length_);
     
     return A;
 }
@@ -72,7 +73,7 @@ Eigen::MatrixXd Pendulum::getControlJacobian(
     
     // Compute partial derivatives with respect to control variable
     // d(dtheta_dot/dt)/dtorque
-    B(STATE_THETA_DOT, CONTROL_TORQUE) = 1.0 / (MASS * LENGTH * LENGTH);
+    B(STATE_THETA_DOT, CONTROL_TORQUE) = 1.0 / (mass_ * length_ * length_);
     
     return B;
 }
@@ -87,7 +88,7 @@ Eigen::MatrixXd Pendulum::getStateHessian(
     
     // Only non-zero term is d^2(dtheta_dot/dt)/dtheta^2
     const int idx = STATE_THETA_DOT * STATE_DIM + STATE_THETA;
-    H(idx, STATE_THETA) = (GRAVITY / LENGTH) * std::sin(theta);
+    H(idx, STATE_THETA) = (gravity_ / length_) * std::sin(theta);
     
     return H;
 }
