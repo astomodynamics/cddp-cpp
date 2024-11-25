@@ -58,20 +58,20 @@ TEST(PendulumTest, DiscreteDynamics) {
         state = pendulum.getDiscreteDynamics(state, control); 
     }
 
-    // Create directory for saving plot (if it doesn't exist)
-    const std::string plotDirectory = "../plots/test";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directory(plotDirectory);
-    }
+    // // Create directory for saving plot (if it doesn't exist)
+    // const std::string plotDirectory = "../plots/test";
+    // if (!fs::exists(plotDirectory)) {
+    //     fs::create_directory(plotDirectory);
+    // }
 
-    // Plot the results (same as before)
-    plt::figure();
-    plt::plot(time_data, theta_data, {{"label", "Angle"}});
-    plt::plot(time_data, theta_dot_data, {{"label", "Angular Velocity"}});
-    plt::xlabel("Time");
-    plt::ylabel("State");
-    plt::legend();
-    plt::save(plotDirectory + "/pendulum_dynamics.png");
+    // // Plot the results (same as before)
+    // plt::figure();
+    // plt::plot(time_data, theta_data, {{"label", "Angle"}});
+    // plt::plot(time_data, theta_dot_data, {{"label", "Angular Velocity"}});
+    // plt::xlabel("Time");
+    // plt::ylabel("State");
+    // plt::legend();
+    // plt::save(plotDirectory + "/pendulum_dynamics.png");
     // plt::show();
 
     // Assert true if the pendulum has the correct state dimension

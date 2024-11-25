@@ -13,60 +13,88 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+
 #include "dynamics_model/dubins_car.hpp"
-#include <Eigen/Dense>
 #include <cmath>
 
-using namespace cddp;
+namespace cddp {
 
-DubinsCar::DubinsCar(double timestep, std::string integration_type) : DynamicalSystem(3, 2, timestep, integration_type) {}
-
-Eigen::VectorXd DubinsCar::getContinuousDynamics(const Eigen::VectorXd& state, 
-                                                 const Eigen::VectorXd& control) const {
-    Eigen::VectorXd xdot(3);
-    double v = control(0);
-    double omega = control(1);
-    double theta = state(2);
-
-    xdot(0) = v * std::cos(theta);
-    xdot(1) = v * std::sin(theta);
-    xdot(2) = omega;
-
-    return xdot;
+DubinsCar::DubinsCar(double timestep, std::string integration_type)
+    : DynamicalSystem(STATE_DIM, CONTROL_DIM, timestep, integration_type) {
 }
 
-Eigen::MatrixXd DubinsCar::getStateJacobian(const Eigen::VectorXd& state, 
-                                            const Eigen::VectorXd& control) const {
-    Eigen::MatrixXd jacobian(3, 3);
-    double v = control(0);
-    double theta = state(2);
-
-    jacobian << 0.0, 0.0, -v * std::sin(theta),
-                0.0, 0.0,  v * std::cos(theta),
-                0.0, 0.0,  0.0;
-
-    return jacobian;
+Eigen::VectorXd DubinsCar::getContinuousDynamics(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
+    
+    // Extract state variables
+    const double theta = state(STATE_THETA);  // heading angle
+    
+    // Extract control variables
+    const double v = control(CONTROL_V);      // velocity
+    const double omega = control(CONTROL_OMEGA);  // angular velocity
+    
+    // Dubins car dynamics equations
+    state_dot(STATE_X) = v * std::cos(theta);     // dx/dt
+    state_dot(STATE_Y) = v * std::sin(theta);     // dy/dt
+    state_dot(STATE_THETA) = omega;               // dtheta/dt
+    
+    return state_dot;
 }
 
-Eigen::MatrixXd DubinsCar::getControlJacobian(const Eigen::VectorXd& state, 
-                                             const Eigen::VectorXd& control) const {
-    Eigen::MatrixXd jacobian(3, 2);
-    double theta = state(2);
-
-    jacobian << std::cos(theta), 0.0,
-                std::sin(theta), 0.0,
-                0.0, 1.0;
-
-    return jacobian;
+Eigen::MatrixXd DubinsCar::getStateJacobian(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    
+    // Extract state variables
+    const double theta = state(STATE_THETA);  // heading angle
+    
+    // Extract control variables
+    const double v = control(CONTROL_V);  // velocity
+    
+    // Compute partial derivatives with respect to state variables
+    // df1/dtheta = d(dx/dt)/dtheta
+    A(STATE_X, STATE_THETA) = -v * std::sin(theta);
+    
+    // df2/dtheta = d(dy/dt)/dtheta
+    A(STATE_Y, STATE_THETA) = v * std::cos(theta);
+    
+    return A;
 }
 
-Eigen::MatrixXd DubinsCar::getStateHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) 
-const {
-    return Eigen::MatrixXd::Zero(3*3, 2);
+Eigen::MatrixXd DubinsCar::getControlJacobian(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    Eigen::MatrixXd B = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);  // Note: Using 2 for control dim as per original
+    
+    // Extract state variables
+    const double theta = state(STATE_THETA);  // heading angle
+    
+    // Compute partial derivatives with respect to control variables
+    // df1/dv = d(dx/dt)/dv
+    B(STATE_X, CONTROL_V) = std::cos(theta);
+    
+    // df2/dv = d(dy/dt)/dv
+    B(STATE_Y, CONTROL_V) = std::sin(theta);
+    
+    // df3/domega = d(dtheta/dt)/domega
+    B(STATE_THETA, CONTROL_OMEGA) = 1.0;
+    
+    return B;
 }
 
-Eigen::MatrixXd DubinsCar::getControlHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control)
-const {
+Eigen::MatrixXd DubinsCar::getStateHessian(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, 2);
+}
+
+Eigen::MatrixXd DubinsCar::getControlHessian(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     // TODO: Compute and return the Hessian tensor d^2f/du^2 (represented as a matrix)
-    return Eigen::MatrixXd::Zero(3*2, 2);
+    return Eigen::MatrixXd::Zero(STATE_DIM * 2, 2);
 }
+
+} // namespace cddp
