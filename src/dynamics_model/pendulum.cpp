@@ -98,4 +98,9 @@ Eigen::MatrixXd Pendulum::getControlHessian(
     return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
 }
 
+Eigen::MatrixXd Pendulum::getControlHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control)
+const {
+    // TODO: Compute and return the Hessian tensor d^2f/du^2 (represented as a matrix)
+    return Eigen::MatrixXd::Zero(2*1, 1); 
+}
 } // namespace cddp
