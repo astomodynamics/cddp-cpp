@@ -142,7 +142,7 @@ int main() {
     // plt::ylabel("Control");
     // plt::legend();
     
-    plt::save(plotDirectory + "/bicycle_cddp_results.png");
+    // plt::save(plotDirectory + "/bicycle_cddp_results.png");
 
     // Animation
     plt::figure_size(800, 600);
@@ -217,5 +217,8 @@ int main() {
     }
 }
 
-// Command to convert images to gif:
+// Create gif from images using ImageMagick
+// Installation:
+// $ sudo apt-get install imagemagick
+
 // convert -delay 100 ../results/tests/bicycle_*.png ../results/tests/bicycle.gif
