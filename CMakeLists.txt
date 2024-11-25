@@ -82,6 +82,7 @@ set(cddp_core_srcs
 set(dynamics_model_srcs
   src/dynamics_model/pendulum.cpp
   src/dynamics_model/dubins_car.cpp
+  src/dynamics_model/bicycle.cpp
 )
 
 add_library(${PROJECT_NAME} 
