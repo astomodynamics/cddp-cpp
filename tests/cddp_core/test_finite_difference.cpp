@@ -25,13 +25,15 @@
 using namespace cddp;
 
 TEST(JacobianTest , Pendulum) {
-    // Create a pendulum instance (no device needed for Eigen)
-    double mass = 1.0;
+    // Parameters
     double length = 1.0;
-    double gravity = 9.81;
+    double mass = 1.0;
+    double damping = 0.0;
+
+    // Create a pendulum instance 
     double timestep = 0.05;
     std::string integration_type = "euler";
-    cddp::Pendulum pendulum(mass, length, gravity, timestep, integration_type);
+    cddp::Pendulum pendulum(timestep, length, mass, damping, integration_type);
 
     // Initial state and control (use Eigen vectors)
     Eigen::VectorXd state(2);
@@ -44,11 +46,8 @@ TEST(JacobianTest , Pendulum) {
     Eigen::MatrixXd B = pendulum.getControlJacobian(state, control);
 
     // Check the Jacobians
-    Eigen::MatrixXd A_expected(2, 2);
-    A_expected << 0.0, 1.0,
-                  -9.76099, 0.0;
-    Eigen::MatrixXd B_expected(2, 1);
-    B_expected << 0.0, 1.0;
+    Eigen::MatrixXd A_expected = pendulum.getFiniteDifferenceStateJacobian(state, control);
+    Eigen::MatrixXd B_expected = pendulum.getFiniteDifferenceControlJacobian(state, control);
 
     // print the Jacobians
     std::cout << "A = \n" << A << std::endl;
