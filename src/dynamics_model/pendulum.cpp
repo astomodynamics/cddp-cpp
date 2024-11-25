@@ -13,63 +13,88 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#include "dynamics_model/pendulum.hpp" 
-#include <cmath>
-#include <Eigen/Dense>
 
-using namespace cddp;
+#include "dynamics_model/pendulum.hpp"
+#include <cmath>
 
 namespace cddp {
-// Constructor
-Pendulum::Pendulum(double mass, double length, double gravity, double timestep, std::string integration_type)
-    : DynamicalSystem(2, 1, timestep, integration_type),  // 2 states (angle, angular velocity), 1 control (torque)
-      mass_(mass), length_(length), gravity_(gravity) {}
 
-// Dynamics: xdot = f(x_t, u_t)
-Eigen::VectorXd Pendulum::getContinuousDynamics(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-
-    double theta = state[0];   // Angle
-    double theta_dot = state[1]; // Angular velocity
-    double torque = control[0];   // Control input (torque)
-
-    double theta_ddot = - (gravity_ / length_) * sin(theta) + (1.0 / (mass_ * length_ * length_)) * torque; 
-
-    Eigen::VectorXd xdot(2);
-    xdot << theta_dot, theta_ddot;    
-
-    return xdot;
+Pendulum::Pendulum(double timestep, std::string integration_type)
+    : DynamicalSystem(STATE_DIM, CONTROL_DIM, timestep, integration_type) {
 }
 
-Eigen::MatrixXd Pendulum::getStateJacobian(const Eigen::VectorXd& state, 
-                                    const Eigen::VectorXd& control) const {
-    return getFiniteDifferenceStateJacobian(state, control);
-}
-
-// Analytical state Jacobian
-// Eigen::MatrixXd Pendulum::getStateJacobian(const Eigen::VectorXd& state, 
-//                                 const Eigen::VectorXd& control) const {
-//     Eigen::MatrixXd J(2, 2);
-//     double theta = state(0);
-//     J << 0, 1,
-//             -gravity_ * cos(theta) / length_, 0;
-//     return J;
-// }
-
-Eigen::MatrixXd Pendulum::getControlJacobian(const Eigen::VectorXd& state, 
-                                    const Eigen::VectorXd& control) const {
-    return getFiniteDifferenceControlJacobian(state, control);
-}
-
-Eigen::MatrixXd Pendulum::getStateHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) 
-const {
-    // TODO: Compute and return the Hessian tensor d^2f/dx^2 (represented as a matrix)
-    return Eigen::MatrixXd::Zero(2*2, 2); 
-}
-
-Eigen::MatrixXd Pendulum::getControlHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control)
-const {
-    // TODO: Compute and return the Hessian tensor d^2f/du^2 (represented as a matrix)
-    return Eigen::MatrixXd::Zero(2*1, 1); 
-}
+Eigen::VectorXd Pendulum::getContinuousDynamics(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
+    Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
+    
+    // Extract state variables
+    const double theta = state(STATE_THETA);
+    const double theta_dot = state(STATE_THETA_DOT);
+    
+    // Extract control variable
+    const double torque = control(CONTROL_TORQUE);
+    
+    // Precompute constants
+    const double intertia = MASS * LENGTH * LENGTH;
+
+    // Pendulum dynamics equations
+    state_dot(STATE_THETA) = theta_dot;
+    state_dot(STATE_THETA_DOT) = (torque - DAMPING * theta_dot - MASS * GRAVITY * LENGTH * std::sin(theta)) / intertia;
+    
+    return state_dot;
+}
+
+Eigen::MatrixXd Pendulum::getStateJacobian(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    
+    // Extract state variables
+    const double theta = state(STATE_THETA);
+    
+    // Compute partial derivatives with respect to state variables
+    A(STATE_THETA, STATE_THETA_DOT) = 1.0;
+    
+    // d(dtheta_dot/dt)/dtheta
+    A(STATE_THETA_DOT, STATE_THETA) = (-GRAVITY / LENGTH) * std::cos(theta);
+    
+    // d(dtheta_dot/dt)/dtheta_dot
+    A(STATE_THETA_DOT, STATE_THETA_DOT) = -DAMPING / (MASS * LENGTH * LENGTH);
+    
+    return A;
+}
+
+Eigen::MatrixXd Pendulum::getControlJacobian(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    Eigen::MatrixXd B = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);
+    
+    // Compute partial derivatives with respect to control variable
+    // d(dtheta_dot/dt)/dtorque
+    B(STATE_THETA_DOT, CONTROL_TORQUE) = 1.0 / (MASS * LENGTH * LENGTH);
+    
+    return B;
+}
+
+Eigen::MatrixXd Pendulum::getStateHessian(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    Eigen::MatrixXd H = Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+    
+    // Extract state variables
+    const double theta = state(STATE_THETA);
+    
+    // Only non-zero term is d^2(dtheta_dot/dt)/dtheta^2
+    const int idx = STATE_THETA_DOT * STATE_DIM + STATE_THETA;
+    H(idx, STATE_THETA) = (GRAVITY / LENGTH) * std::sin(theta);
+    
+    return H;
+}
+
+Eigen::MatrixXd Pendulum::getControlHessian(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+}
+
 } // namespace cddp

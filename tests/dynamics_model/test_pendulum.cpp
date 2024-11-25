@@ -13,41 +13,37 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-// Description: Test the pendulum dynamics model.
+
+// Description: Test the Pendulum dynamics model.
 #include <iostream>
 #include <vector>
 #include <filesystem>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
-
-#include "cddp-cpp/dynamics_model/pendulum.hpp" // Assuming you have the Eigen-based Pendulum class
-#include "cddp-cpp/matplotlibcpp.hpp"
+#include "cddp.hpp"
 
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
 using namespace cddp;
 
 TEST(PendulumTest, DiscreteDynamics) {
-    // Create a pendulum instance (no device needed for Eigen)
-    double mass = 1.0; 
-    double length = 1.0; 
-    double gravity = 9.81;
-    double timestep = 0.05;
-    std::string integration_type = "euler";
-    cddp::Pendulum pendulum(mass, length, gravity, timestep, integration_type); 
+    // Create a Pendulum instance
+    double timestep = 0.01;
+    std::string integration_type = "rk4";
+    cddp::Pendulum pendulum(timestep, integration_type);
 
     // Store states for plotting
     std::vector<double> time_data, theta_data, theta_dot_data;
 
-    // Initial state and control (use Eigen vectors)
+    // Initial state and control
     Eigen::VectorXd state(2);
-    state << 0.1, 0.0;  // Start at a small angle, zero velocity
+    state << M_PI/4, 0.0;  // Initial angle (45 degrees) and angular velocity
     Eigen::VectorXd control(1);
-    control << 0.0; // No torque initially
+    control << 0.0;  // No initial torque
 
     // Simulate for a few steps
-    int num_steps = 100;
+    int num_steps = 500;
     for (int i = 0; i < num_steps; ++i) {
         // Store data for plotting
         time_data.push_back(i * timestep);
@@ -58,22 +54,6 @@ TEST(PendulumTest, DiscreteDynamics) {
         state = pendulum.getDiscreteDynamics(state, control); 
     }
 
-    // // Create directory for saving plot (if it doesn't exist)
-    // const std::string plotDirectory = "../plots/test";
-    // if (!fs::exists(plotDirectory)) {
-    //     fs::create_directory(plotDirectory);
-    // }
-
-    // // Plot the results (same as before)
-    // plt::figure();
-    // plt::plot(time_data, theta_data, {{"label", "Angle"}});
-    // plt::plot(time_data, theta_dot_data, {{"label", "Angular Velocity"}});
-    // plt::xlabel("Time");
-    // plt::ylabel("State");
-    // plt::legend();
-    // plt::save(plotDirectory + "/pendulum_dynamics.png");
-    // plt::show();
-
     // Assert true if the pendulum has the correct state dimension
     ASSERT_EQ(pendulum.getStateDim(), 2);
 
@@ -81,8 +61,29 @@ TEST(PendulumTest, DiscreteDynamics) {
     ASSERT_EQ(pendulum.getControlDim(), 1);
 
     // Assert true if the pendulum has the correct timestep
-    ASSERT_DOUBLE_EQ(pendulum.getTimestep(), 0.05);
+    ASSERT_DOUBLE_EQ(pendulum.getTimestep(), 0.01);
 
     // Assert true if the pendulum has the correct integration type
-    ASSERT_EQ(pendulum.getIntegrationType(), "euler"); 
+    ASSERT_EQ(pendulum.getIntegrationType(), "rk4");
+
+    // Verify that energy decreases due to damping
+    double initial_energy = 9.81 * (1.0 - std::cos(M_PI/4));  // mgl(1-cos(theta))
+    double final_energy = 9.81 * (1.0 - std::cos(theta_data.back()));
+    ASSERT_LT(final_energy, initial_energy);
+
+    // // Plot the results
+    // plt::figure();
+    // plt::subplot(2, 1, 1);
+    // plt::plot(time_data, theta_data);
+    // plt::xlabel("Time (s)");
+    // plt::ylabel("Angle (rad)");
+    // plt::title("Pendulum Angle vs. Time");
+
+    // plt::subplot(2, 1, 2);
+    // plt::plot(time_data, theta_dot_data);
+    // plt::xlabel("Time (s)");
+    // plt::ylabel("Angular Velocity (rad/s)");
+    // plt::title("Pendulum Angular Velocity vs. Time");
+
+    // plt::show();
 }
