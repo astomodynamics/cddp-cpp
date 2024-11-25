@@ -19,6 +19,7 @@
 
 using namespace cddp;
 
+namespace cddp {
 // Constructor
 Pendulum::Pendulum(double mass, double length, double gravity, double timestep, std::string integration_type)
     : DynamicalSystem(2, 1, timestep, integration_type),  // 2 states (angle, angular velocity), 1 control (torque)
@@ -39,19 +40,24 @@ Eigen::VectorXd Pendulum::getContinuousDynamics(const Eigen::VectorXd& state, co
     return xdot;
 }
 
-// Discrete dynamics: x_{t+1} = f(x_t, u_t)
-// We'll use the base class implementation, so no need to redefine it here
-
-Eigen::MatrixXd Pendulum::getStateJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) 
-const {
-    // TODO: Compute and return the Jacobian matrix df/dx
-    return Eigen::MatrixXd::Zero(2, 2); 
+Eigen::MatrixXd Pendulum::getStateJacobian(const Eigen::VectorXd& state, 
+                                    const Eigen::VectorXd& control) const {
+    return getFiniteDifferenceStateJacobian(state, control);
 }
 
-Eigen::MatrixXd Pendulum::getControlJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control)
-const {
-    // TODO: Compute and return the Jacobian matrix df/du
-    return Eigen::MatrixXd::Zero(2, 1); 
+// Analytical state Jacobian
+// Eigen::MatrixXd Pendulum::getStateJacobian(const Eigen::VectorXd& state, 
+//                                 const Eigen::VectorXd& control) const {
+//     Eigen::MatrixXd J(2, 2);
+//     double theta = state(0);
+//     J << 0, 1,
+//             -gravity_ * cos(theta) / length_, 0;
+//     return J;
+// }
+
+Eigen::MatrixXd Pendulum::getControlJacobian(const Eigen::VectorXd& state, 
+                                    const Eigen::VectorXd& control) const {
+    return getFiniteDifferenceControlJacobian(state, control);
 }
 
 Eigen::MatrixXd Pendulum::getStateHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) 
@@ -65,3 +71,5 @@ const {
     // TODO: Compute and return the Hessian tensor d^2f/du^2 (represented as a matrix)
     return Eigen::MatrixXd::Zero(2*1, 1); 
 }
+    
+} // namespace cddp

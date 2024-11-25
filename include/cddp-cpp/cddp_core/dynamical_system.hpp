@@ -50,6 +50,10 @@ public:
         return {getStateJacobian(state, control), getControlJacobian(state, control)};
     }
 
+    Eigen::MatrixXd getFiniteDifferenceStateJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const;
+    
+    Eigen::MatrixXd getFiniteDifferenceControlJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const;
+
     // TODO: Add methods for Hessian calculations
     // Hessian of dynamics w.r.t state: d^2f/dx^2
     // Note: This is a tensor, but we represent it as a matrix for now.

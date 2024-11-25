@@ -107,7 +107,7 @@ TEST(ObjectiveFunctionTests, QuadraticObjective) {
     auto [state_hess, control_hess, cross_hess] = objective.getRunningCostHessians(state, control, 0);
     Eigen::MatrixXd expected_state_hess = 2.0 * Q * timestep;
     Eigen::MatrixXd expected_control_hess = 2.0 * R * timestep;
-    Eigen::MatrixXd expected_cross_hess = Eigen::MatrixXd::Zero(state_dim, control_dim);
+    Eigen::MatrixXd expected_cross_hess = Eigen::MatrixXd::Zero(control_dim, state_dim);
 
     ASSERT_TRUE(compareMatrices(state_hess, expected_state_hess));
     ASSERT_TRUE(compareMatrices(control_hess, expected_control_hess));

@@ -23,6 +23,10 @@ add_executable(test_constraint cddp_core/test_constraint.cpp)
 target_link_libraries(test_constraint gtest gmock gtest_main cddp)
 gtest_discover_tests(test_constraint)
 
+add_executable(test_finite_difference cddp_core/test_finite_difference.cpp)
+target_link_libraries(test_finite_difference gtest gmock gtest_main cddp)
+gtest_discover_tests(test_finite_difference)
+
 # # Test for eigen vs torch
 add_executable(test_eigen test_eigen.cpp)
 target_link_libraries(test_eigen gtest gmock gtest_main Eigen3::Eigen)
