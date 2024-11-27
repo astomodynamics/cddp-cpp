@@ -71,8 +71,8 @@ TEST(PendulumTest, DiscreteDynamics) {
     ASSERT_EQ(pendulum.getIntegrationType(), "rk4");
 
     // Verify that energy decreases due to damping
-    double initial_energy = 9.81 * (1.0 - std::cos(M_PI/4));  // mgl(1-cos(theta))
-    double final_energy = 9.81 * (1.0 - std::cos(theta_data.back()));
+    double initial_energy = 9.81 * (1.0 + std::cos(M_PI/4));  // mgl(1+cos(theta))
+    double final_energy = 9.81 * (1.0 + std::cos(theta_data.back()));
     ASSERT_LT(final_energy, initial_energy);
 
     // // Plot the results
