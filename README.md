@@ -50,6 +50,11 @@ Simple car-like robot with velocity and steering control:
 Bicycle model with velocity and steering control:
 <img src="results/tests/bicycle.gif" width="600" alt="Bicycle Model CDDP">
 
+### Pendulum
+
+Simple pendulum with torque control:
+<img src="results/tests/pendulum.gif" width="600" alt="Pendulum CDDP">
+
 
 ## Installation
 ### Dependencies
