@@ -78,8 +78,10 @@ void CDDP::initializeCDDP() {
         U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
     }
 
-    // Set initial state
-    X_[0] = initial_state_;
+    // Set initial state for all sequence
+    for (int t = 0; t < horizon_ + 1; ++t) {
+        X_[t] = initial_state_;
+    }
 
     // Initialize cost
     J_ = 0.0;
@@ -200,9 +202,12 @@ CDDPSolution CDDP::solve() {
 
     // Start timer
     auto start_time = std::chrono::high_resolution_clock::now();
+    int iter = 0;
 
     // Main loop of CDDP
-    for (int iter = 1; iter <= options_.max_iterations; ++iter) {
+    while (iter < options_.max_iterations + 1) {
+        ++iter;
+        
         // Check maximum CPU time
         if (options_.max_cpu_time > 0) {
             auto end_time = std::chrono::high_resolution_clock::now();
@@ -276,10 +281,11 @@ CDDPSolution CDDP::solve() {
                 regularization_control_ = 0.0;
             }
 
+            // Append Latest Cost
+            solution.cost_sequence.push_back(J_);
+
             if (dJ_ < options_.cost_tolerance) {
                 solution.converged = true;
-                // Append Latest Cost
-                solution.cost_sequence.push_back(J_);
                 solution.iterations = iter;
                 break;
             }
@@ -289,7 +295,7 @@ CDDPSolution CDDP::solve() {
     // Finalize solution
     solution.control_sequence = U_;
     solution.state_sequence = X_;
-    solution.iterations = solution.converged ? solution.iterations : options_.max_iterations;
+    solution.iterations = solution.converged ? iter : options_.max_iterations;
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
@@ -1011,6 +1017,8 @@ CDDPSolution CDDP::solveCLDDP() {
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
     solution.solve_time = duration.count(); // Time in microseconds
     printSolution(solution);
+
+    std::cout << "cost sequence: " << solution.cost_sequence.back() << std::endl;
 
     return solution;
 }
