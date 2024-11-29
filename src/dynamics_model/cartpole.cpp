@@ -32,29 +32,29 @@ CartPole::CartPole(double timestep, std::string integration_type,
 
 Eigen::VectorXd CartPole::getContinuousDynamics(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    // TODO: Implement damping term
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
     
     const double x = state(STATE_X);
-    const double x_dot = state(STATE_X_DOT);
     const double theta = state(STATE_THETA);
+    const double x_dot = state(STATE_X_DOT);
     const double theta_dot = state(STATE_THETA_DOT);
     const double force = control(CONTROL_FORCE);
     
     const double sin_theta = std::sin(theta);
     const double cos_theta = std::cos(theta);
     const double total_mass = cart_mass_ + pole_mass_;
-    const double pole_mass_length = pole_mass_ * pole_length_;
     
     const double den = cart_mass_ + pole_mass_ * sin_theta * sin_theta;
     
     state_dot(STATE_X) = x_dot;
     
-    state_dot(STATE_X_DOT) = (force + pole_mass_length * sin_theta * (pole_length_ * theta_dot * theta_dot + gravity_ * cos_theta)) / den;
-    
     state_dot(STATE_THETA) = theta_dot;
     
-    state_dot(STATE_THETA_DOT) = (-force * cos_theta - pole_mass_length * theta_dot * theta_dot * cos_theta * sin_theta - total_mass * gravity_ * sin_theta) / (pole_length_ * den);
+    state_dot(STATE_X_DOT) = (force + pole_mass_ * sin_theta * (pole_length_ * theta_dot * theta_dot + gravity_ * cos_theta)) / den;
+
+    state_dot(STATE_THETA_DOT) = (-force * cos_theta - pole_mass_ * pole_length_ * theta_dot * theta_dot * cos_theta * sin_theta - total_mass * gravity_ * sin_theta) / (pole_length_ * den);
     
     return state_dot;
 }
