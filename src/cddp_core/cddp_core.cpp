@@ -80,7 +80,7 @@ void CDDP::initializeCDDP() {
 
     // Set initial state for all sequence
     for (int t = 0; t < horizon_ + 1; ++t) {
-        X_[t] = initial_state_;
+        X_[t] = initial_state_; 
     }
 
     // Initialize cost
@@ -205,7 +205,7 @@ CDDPSolution CDDP::solve() {
     int iter = 0;
 
     // Main loop of CDDP
-    while (iter < options_.max_iterations + 1) {
+    while (iter < options_.max_iterations) {
         ++iter;
         
         // Check maximum CPU time
@@ -359,19 +359,19 @@ bool CDDP::solveBackwardPass() {
 
         // TODO: Implement log barrier cost and its derivatives // FIXME: Implement log barrier cost and its derivatives
         // Get log barrier cost and its derivatives
-        for (const auto& constraint : constraint_set_) {
-            if (constraint.first == "ControlBoxConstraint") {
-                const double barrier_cost = getLogBarrierCost(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
-                l += barrier_cost;
-                const auto [l_x_barrier, l_u_barrier] = getLogBarrierCostGradients(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
-                const auto [l_xx_barrier, l_uu_barrier, l_ux_barrier] = getLogBarrierCostHessians(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
-                l_x += l_x_barrier;
-                l_u += l_u_barrier;
-                // l_xx += l_xx_barrier;
-                // l_uu += l_uu_barrier;
-                // l_ux += l_ux_barrier;
-            }
-        }
+        // for (const auto& constraint : constraint_set_) {
+        //     if (constraint.first == "ControlBoxConstraint") {
+        //         const double barrier_cost = getLogBarrierCost(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
+        //         l += barrier_cost;
+        //         const auto [l_x_barrier, l_u_barrier] = getLogBarrierCostGradients(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
+        //         const auto [l_xx_barrier, l_uu_barrier, l_ux_barrier] = getLogBarrierCostHessians(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
+        //         l_x += l_x_barrier;
+        //         l_u += l_u_barrier;
+        //         // l_xx += l_xx_barrier;
+        //         // l_uu += l_uu_barrier;
+        //         // l_ux += l_ux_barrier;
+        //     }
+        // }
 
         // Compute Q-function matrices 
         Q_x = l_x + A.transpose() * V_x;
@@ -539,6 +539,7 @@ bool CDDP::solveForwardPass() {
 
     // Line-search iteration 
     for (iter = 0; iter < options_.max_line_search_iterations; ++iter) {
+        std::cout << "Forward Pass Iteration: " << iter << std::endl;
         // Initialize cost and constraints
         double J_new = 0.0, dJ = 0.0, expected_dV = 0.0, gradient_norm = 0.0;
         double L_new = 0.0;
@@ -559,6 +560,13 @@ bool CDDP::solveForwardPass() {
             const Eigen::VectorXd& Q_u = Q_U_[t];
             const Eigen::MatrixXd& Q_uu = Q_UU_[t];
             const Eigen::MatrixXd& Q_ux = Q_UX_[t];
+
+            // print 
+            // std::cout << "time step: " << t << std::endl;
+            // std::cout << "alpha: " << alpha << std::endl;
+            // std::cout << "state: " << x.transpose() << std::endl;
+            // std::cout << "ku: " << -Q_uu.inverse() * Q_u << std::endl;
+            // std::cout << "Ku: " << -Q_uu.inverse() * Q_ux << std::endl;
 
             // Create QP problem
             int numNonZeros = Q_uu.nonZeros();
@@ -595,9 +603,9 @@ bool CDDP::solveForwardPass() {
 
             // Extract solution
             double optimal_objective = osqp_solver_.objective_value();
-            const Eigen::VectorXd& delta_u = osqp_solver_.primal_solution();
+            const Eigen::VectorXd& delta_u_ = osqp_solver_.primal_solution();
 
-            
+            Eigen::VectorXd delta_u = - Q_uu.inverse() * (alpha * Q_u + Q_ux * delta_x);
 
             // Extract solution
             U_new[t] += delta_u;
@@ -609,7 +617,11 @@ bool CDDP::solveForwardPass() {
             X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t]);
 
         }
+        std::cout << "alpha: " << alpha << std::endl;
+        std::cout << "last state: " << X_new.back().transpose() << std::endl;
         J_new += objective_->terminal_cost(X_new.back());
+
+        std::cout << "J_new: " << J_new << std::endl;
 
         // Calculate Cost Reduction
         dJ = J_ - J_new;
@@ -623,6 +635,7 @@ bool CDDP::solveForwardPass() {
             std::cout << "Expected improvement is not positive" << std::endl;
         }
         if (reduction_ratio > options_.minimum_reduction_ratio) {
+        // if (dJ > 0) {
             // Update state and control
             X_ = X_new;
             U_ = U_new;

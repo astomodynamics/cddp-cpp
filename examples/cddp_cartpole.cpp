@@ -41,26 +41,25 @@ int main() {
 
     // Cost matrices
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Q(0,0) = 1.0;  // Cart position cost
-    Q(2,2) = 10.0;  // Pole angle cost
     
-    Eigen::MatrixXd R = 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd R = 0.05 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf(0,0) = 100.0;  // Final cart position cost
-    Qf(1,1) = 10.0;   // Final cart velocity cost
-    Qf(2,2) = 200.0;  // Final pole angle cost
-    Qf(3,3) = 10.0;   // Final pole angular velocity cost
+    Qf(0,0) = 50.0;  // Final cart position cost
+    Qf(1,1) = 50.0;   // Final cart velocity cost
+    Qf(2,2) = 50.0;  // Final pole angle cost
+    Qf(3,3) = 50.0;   // Final pole angular velocity cost
 
     // Goal state: cart at origin, pole upright, zero velocities
     Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
+    goal_state << 0.0, M_PI, 0.0, 0.0;
 
     std::vector<Eigen::VectorXd> empty_reference_states;
     auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
 
     // Initial state (cart at rest, pole hanging down)
     Eigen::VectorXd initial_state(state_dim);
-    initial_state << 0.0, 0.0, M_PI, 0.0;  // x=0, dx=0, theta=pi, dtheta=0
+    initial_state << 0.0, 0.0, 0.0, 0.0;  // x=0, theta=0.0, v=0, dtheta=0
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
@@ -69,19 +68,19 @@ int main() {
 
     // Control constraints
     Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -20.0;  // Maximum negative force
+    control_lower_bound << -100.0;  // Maximum negative force
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 20.0;   // Maximum positive force
+    control_upper_bound << 100.0;   // Maximum positive force
     
     cddp_solver.addConstraint("ControlBoxConstraint", 
         std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
 
     // Solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 20;
-    options.regularization_type = "state_control";
-    options.regularization_state = 1e-4;
-    options.regularization_control = 1e-4;
+    options.max_iterations = 4;
+    options.max_line_search_iterations = 11;
+    options.regularization_type = "control";
+    options.regularization_control = 1e-8;
     cddp_solver.setOptions(options);
 
     // Initial trajectory
@@ -141,15 +140,12 @@ int main() {
     double cart_height = 0.2;
     double pole_width = 0.05;
 
-    Eigen::VectorXd state = initial_state;
-
-    // create initial cartpole animation
-    for (int i = 0; i < horizon + 1; ++i) {
+    for (int i = 0; i < X_sol.size(); ++i) {
         if (i % 5 == 0) {
             plt::clf();
 
-            double x = state(0);
-            double theta = state(2);
+            double x = x_arr[i];
+            double theta = theta_arr[i];
 
             // Cart corners
             std::vector<double> cart_x = {
@@ -166,7 +162,7 @@ int main() {
 
             // Pole
             double pole_end_x = x + pole_length * std::sin(theta);
-            double pole_end_y = pole_length * std::cos(theta);
+            double pole_end_y = -pole_length * std::cos(theta);
             std::vector<double> pole_x = {x, pole_end_x};
             std::vector<double> pole_y = {0, pole_end_y};
             plt::plot(pole_x, pole_y, "b-");
@@ -184,65 +180,13 @@ int main() {
             double view_width = 4.0;
             plt::xlim(x - view_width/2, x + view_width/2);
             plt::ylim(-view_width/2, view_width/2);
-            plt::axis("equal");
+            // plt::axis("equal");
 
             std::string filename = plotDirectory + "/cartpole_" + std::to_string(i) + ".png";
             plt::save(filename);
+            plt::pause(0.01);
         }
-
-        // Update state
-        state = system->getDiscreteDynamics(state, Eigen::VectorXd::Zero(control_dim));
     }
-
-
-
-    // for (int i = 0; i < X_sol.size(); ++i) {
-    //     if (i % 5 == 0) {
-    //         plt::clf();
-
-    //         double x = x_arr[i];
-    //         double theta = theta_arr[i];
-
-    //         // Cart corners
-    //         std::vector<double> cart_x = {
-    //             x - cart_width/2, x + cart_width/2,
-    //             x + cart_width/2, x - cart_width/2,
-    //             x - cart_width/2
-    //         };
-    //         std::vector<double> cart_y = {
-    //             -cart_height/2, -cart_height/2,
-    //             cart_height/2, cart_height/2,
-    //             -cart_height/2
-    //         };
-    //         plt::plot(cart_x, cart_y, "k-");
-
-    //         // Pole
-    //         double pole_end_x = x + pole_length * std::sin(theta);
-    //         double pole_end_y = pole_length * std::cos(theta);
-    //         std::vector<double> pole_x = {x, pole_end_x};
-    //         std::vector<double> pole_y = {0, pole_end_y};
-    //         plt::plot(pole_x, pole_y, "b-");
-
-    //         // Plot pole bob
-    //         std::vector<double> circle_x, circle_y;
-    //         for (int j = 0; j <= 20; ++j) {
-    //             double t = 2 * M_PI * j / 20;
-    //             circle_x.push_back(pole_end_x + pole_width * std::cos(t));
-    //             circle_y.push_back(pole_end_y + pole_width * std::sin(t));
-    //         }
-    //         plt::plot(circle_x, circle_y, "b-");
-
-    //         // Set fixed axis limits for stable animation
-    //         double view_width = 4.0;
-    //         plt::xlim(x - view_width/2, x + view_width/2);
-    //         plt::ylim(-view_width/2, view_width/2);
-    //         plt::axis("equal");
-
-    //         std::string filename = plotDirectory + "/cartpole_" + std::to_string(i) + ".png";
-    //         plt::save(filename);
-    //         plt::pause(0.01);
-    //     }
-    // }
 }
 
 // Create gif from images using ImageMagick:
