@@ -77,7 +77,7 @@ int main() {
 
     // Solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 4;
+    options.max_iterations = 50;
     options.max_line_search_iterations = 11;
     options.regularization_type = "control";
     options.regularization_control = 1e-8;
@@ -102,33 +102,64 @@ int main() {
     }
 
     // Extract solution data
-    std::vector<double> x_arr, x_dot_arr, theta_arr, theta_dot_arr, force_arr, time_arr;
+    std::vector<double> x_arr, x_dot_arr, theta_arr, theta_dot_arr, force_arr, time_arr, time_arr2;
     for (size_t i = 0; i < X_sol.size(); ++i) {
         time_arr.push_back(t_sol[i]);
         x_arr.push_back(X_sol[i](0));
-        x_dot_arr.push_back(X_sol[i](1));
-        theta_arr.push_back(X_sol[i](2));
+        theta_arr.push_back(X_sol[i](1));
+        x_dot_arr.push_back(X_sol[i](2));
         theta_dot_arr.push_back(X_sol[i](3));
     }
-    for (const auto& u : U_sol) {
-        force_arr.push_back(u(0));
+    for (size_t i = 0; i < U_sol.size(); ++i) {
+        force_arr.push_back(U_sol[i](0));
+        time_arr2.push_back(t_sol[i]);
     }
 
-    // Plot results
-    plt::subplot(2, 1, 1);
-    plt::named_plot("Cart Position", x_arr);
-    plt::named_plot("Cart Velocity", x_dot_arr);
-    plt::named_plot("Pole Angle", theta_arr);
-    plt::named_plot("Pole Angular Velocity", theta_dot_arr);
-    plt::title("State Trajectory");
-    plt::legend();
+    // Plot results (2x2)
+    plt::figure_size(1200, 800);
+    plt::subplot(2, 2, 1);
+    plt::title("Cart Position");
+    plt::plot(time_arr, x_arr, "b-");
+    plt::xlabel("Time [s]");
+    plt::ylabel("Position [m]");
+    plt::grid(true);
 
-    plt::subplot(2, 1, 2);
-    plt::named_plot("Force", force_arr);
-    plt::title("Control Input");
-    plt::legend();
-    
-    plt::save(plotDirectory + "/cartpole_cddp_test.png");
+    plt::subplot(2, 2, 2);
+    plt::title("Cart Velocity");
+    plt::plot(time_arr, x_dot_arr, "b-");
+    plt::xlabel("Time [s]");
+    plt::ylabel("Velocity [m/s]");
+    plt::grid(true);
+
+    plt::subplot(2, 2, 3);
+    plt::title("Pole Angle");
+    plt::plot(time_arr, theta_arr, "b-");
+    plt::xlabel("Time [s]");
+    plt::ylabel("Angle [rad]");
+    plt::grid(true);
+
+    plt::subplot(2, 2, 4);
+    plt::title("Pole Angular Velocity");
+    plt::plot(time_arr, theta_dot_arr, "b-");
+    plt::xlabel("Time [s]");
+    plt::ylabel("Angular Velocity [rad/s]");
+    plt::grid(true);
+
+    plt::tight_layout();
+    plt::save(plotDirectory + "/cartpole_results.png");
+    plt::clf();
+
+    // Plot control inputs
+    plt::figure_size(800, 600);
+    plt::title("Control Inputs");
+    plt::plot(time_arr2, force_arr, "b-");
+    plt::xlabel("Time [s]");
+    plt::ylabel("Force [N]");
+    plt::grid(true);
+
+    plt::save(plotDirectory + "/cartpole_control_inputs.png");
+    plt::clf();
+
 
     // Animation
     plt::figure_size(800, 600);
@@ -141,7 +172,7 @@ int main() {
     double pole_width = 0.05;
 
     for (int i = 0; i < X_sol.size(); ++i) {
-        if (i % 5 == 0) {
+        if (i % 10 == 0) {
             plt::clf();
 
             double x = x_arr[i];
@@ -177,12 +208,12 @@ int main() {
             plt::plot(circle_x, circle_y, "b-");
 
             // Set fixed axis limits for stable animation
-            double view_width = 4.0;
-            plt::xlim(x - view_width/2, x + view_width/2);
+            double view_width = 3.0;
+            plt::xlim(-0.5 - view_width/2, 0.5 + view_width/2);
             plt::ylim(-view_width/2, view_width/2);
             // plt::axis("equal");
 
-            std::string filename = plotDirectory + "/cartpole_" + std::to_string(i) + ".png";
+            std::string filename = plotDirectory + "/cartpole_frame_" + std::to_string(i) + ".png";
             plt::save(filename);
             plt::pause(0.01);
         }
@@ -190,4 +221,4 @@ int main() {
 }
 
 // Create gif from images using ImageMagick:
-// convert -delay 50 ../results/tests/cartpole_*.png ../results/tests/cartpole.gif
+// convert -delay 5 ../results/tests/cartpole_frame_*.png ../results/tests/cartpole.gif
