@@ -114,3 +114,6 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 * add automatic differentiation
 * add nonlinear objective and constraint handling
 * add simulation and its plots
+  * Quadrotor
+  * Spacecraft
+  * Humanoid
