@@ -55,6 +55,10 @@ Bicycle model with velocity and steering control:
 Simple pendulum with torque control:
 <img src="results/tests/pendulum.gif" width="600" alt="Pendulum CDDP">
 
+### Cartpole
+
+Cartpole with cart control:
+<img src="results/tests/cartpole.gif" width="600" alt="Cartpole CDDP">
 
 ## Installation
 ### Dependencies
