@@ -85,6 +85,7 @@ set(dynamics_model_srcs
   src/dynamics_model/bicycle.cpp
   src/dynamics_model/cartpole.cpp
   src/dynamics_model/quadrotor.cpp
+  src/dynamics_model/spacecraft_linear.cpp
 )
 
 add_library(${PROJECT_NAME} 
