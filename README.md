@@ -85,9 +85,8 @@ conda install -c conda-forge osqp
 git clone https://github.com/astomodynamics/cddp-cpp
 cd cddp-cpp
 mkdir build && cd build
-cmake -DCMAKE_INSTALL_PREFIX:PATH=</path/to/your/desired/directory>/cddp ..
+cmake ..
 make -j4
-make install
 make test
 ```
 
