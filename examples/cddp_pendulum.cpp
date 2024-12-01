@@ -179,7 +179,7 @@ int main() {
             // plt::axis("equal");  // Make the aspect ratio 1:1
 
             // Save frame
-            std::string filename = plotDirectory + "/pendulum_" + std::to_string(i) + ".png";
+            std::string filename = plotDirectory + "/pendulum_frame_" + std::to_string(i) + ".png";
             plt::save(filename);
             
             plt::pause(0.01);
@@ -189,4 +189,4 @@ int main() {
 }
 
 // Create gif from images using ImageMagick:
-// convert -delay 100 ../results/tests/pendulum_*.png ../results/tests/pendulum.gif
+// convert -delay 100 ../results/tests/pendulum_frame_*.png ../results/tests/pendulum.gif

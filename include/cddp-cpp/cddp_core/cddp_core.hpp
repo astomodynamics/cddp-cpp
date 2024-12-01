@@ -41,7 +41,7 @@ struct CDDPOptions {
     int max_line_search_iterations = 1; // Maximum iterations for line search
     double backtracking_coeff = 1.0;      // Maximum step size for line search backtracking
     double backtracking_min = 0.5;    // Coefficient for line search backtracking
-    double backtracking_factor = std::pow(2, -2);  // Factor for line search backtracking
+    double backtracking_factor = std::pow(2, -1);  // Factor for line search backtracking
     double minimum_reduction_ratio = 1e-6;      // Minimum reduction for line search
 
     // log-barrier method

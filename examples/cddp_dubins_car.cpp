@@ -184,7 +184,7 @@ int main() {
             plt::legend();
 
             // Save current frame as an image
-            std::string filename = plotDirectory + "/dubins_car_" + std::to_string(i) + ".png";
+            std::string filename = plotDirectory + "/dubins_car_frame_" + std::to_string(i) + ".png";
             plt::save(filename);
             
             // Display plot continuously
@@ -198,4 +198,4 @@ int main() {
 // Installation:
 // $ sudo apt-get install imagemagick
 
-// convert -delay 100 ../results/tests/dubins_car_*.png ../results/tests/dubins_car.gif 
+// convert -delay 100 ../results/tests/dubins_car_frame_*.png ../results/tests/dubins_car.gif 

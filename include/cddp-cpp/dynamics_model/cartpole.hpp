@@ -47,10 +47,10 @@ public:
      * @param damping Damping coefficient for cart motion
      */
     CartPole(double timestep, 
-             std::string integration_type = "euler",
+             std::string integration_type = "rk4",
              double cart_mass = 1.0,
-             double pole_mass = 0.1,
-             double pole_length = 1.0,
+             double pole_mass = 0.2,
+             double pole_length = 0.5,
              double gravity = 9.81,
              double damping = 0.0);
 
@@ -120,8 +120,8 @@ public:
 private:
     // State indices
     static constexpr int STATE_X = 0;          ///< Cart position index
-    static constexpr int STATE_X_DOT = 1;      ///< Cart velocity index
-    static constexpr int STATE_THETA = 2;      ///< Pole angle index
+    static constexpr int STATE_THETA = 1;      ///< Pole angle index
+    static constexpr int STATE_X_DOT = 2;      ///< Cart velocity index
     static constexpr int STATE_THETA_DOT = 3;  ///< Pole angular velocity index
     static constexpr int STATE_DIM = 4;        ///< State dimension
 

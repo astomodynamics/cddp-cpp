@@ -80,7 +80,7 @@ void CDDP::initializeCDDP() {
 
     // Set initial state for all sequence
     for (int t = 0; t < horizon_ + 1; ++t) {
-        X_[t] = initial_state_;
+        X_[t] = initial_state_; 
     }
 
     // Initialize cost
@@ -205,7 +205,7 @@ CDDPSolution CDDP::solve() {
     int iter = 0;
 
     // Main loop of CDDP
-    while (iter < options_.max_iterations + 1) {
+    while (iter < options_.max_iterations) {
         ++iter;
         
         // Check maximum CPU time
@@ -359,19 +359,19 @@ bool CDDP::solveBackwardPass() {
 
         // TODO: Implement log barrier cost and its derivatives // FIXME: Implement log barrier cost and its derivatives
         // Get log barrier cost and its derivatives
-        for (const auto& constraint : constraint_set_) {
-            if (constraint.first == "ControlBoxConstraint") {
-                const double barrier_cost = getLogBarrierCost(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
-                l += barrier_cost;
-                const auto [l_x_barrier, l_u_barrier] = getLogBarrierCostGradients(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
-                const auto [l_xx_barrier, l_uu_barrier, l_ux_barrier] = getLogBarrierCostHessians(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
-                l_x += l_x_barrier;
-                l_u += l_u_barrier;
-                // l_xx += l_xx_barrier;
-                // l_uu += l_uu_barrier;
-                // l_ux += l_ux_barrier;
-            }
-        }
+        // for (const auto& constraint : constraint_set_) {
+        //     if (constraint.first == "ControlBoxConstraint") {
+        //         const double barrier_cost = getLogBarrierCost(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
+        //         l += barrier_cost;
+        //         const auto [l_x_barrier, l_u_barrier] = getLogBarrierCostGradients(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
+        //         const auto [l_xx_barrier, l_uu_barrier, l_ux_barrier] = getLogBarrierCostHessians(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
+        //         l_x += l_x_barrier;
+        //         l_u += l_u_barrier;
+        //         // l_xx += l_xx_barrier;
+        //         // l_uu += l_uu_barrier;
+        //         // l_ux += l_ux_barrier;
+        //     }
+        // }
 
         // Compute Q-function matrices 
         Q_x = l_x + A.transpose() * V_x;
@@ -424,15 +424,15 @@ bool CDDP::solveBackwardPass() {
 
         // TODO: Implement active set method
         for (int j = 0; j < control_dim; j++) {
-            if (u(j) < control_box_constraint.getLowerBound()(j) - active_set_tol) {
+            if (u(j) <= control_box_constraint.getLowerBound()(j) + active_set_tol) {
                 Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
                 e(j) = 1.0;
-                C.row(active_constraint_index) = e;
+                C.row(active_constraint_index) = -e;  // Note the negative sign
                 D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
                 active_constraint_index += 1;
-            } else if (u(j) > control_box_constraint.getUpperBound()(j) + active_set_tol) {
+            } else if (u(j) >= control_box_constraint.getUpperBound()(j) - active_set_tol) {
                 Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
-                e(j) = -1.0;
+                e(j) = 1.0;  // No negative here
                 C.row(active_constraint_index) = e;
                 D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
                 active_constraint_index += 1;
@@ -440,56 +440,51 @@ bool CDDP::solveBackwardPass() {
         }
 
         Eigen::MatrixXd active_constraint_table = Eigen::MatrixXd::Zero(2 * (control_dim), horizon_);
-        if (active_constraint_index == 0) {
-
+        if (active_constraint_index == 0) {  // No active constraints
+            // Compute the optimal control deviation
             Eigen::MatrixXd H = Q_uu.inverse();
-            // Feedback Gain Calculation 
             K = -H * Q_ux;
             k = -H * Q_u;
         } else {
-            // Shrink C and D matrices
-            C.conservativeResize(active_constraint_index, control_dim);
-            D.conservativeResize(active_constraint_index, state_dim);
-
-            // Calculate Lagrange Multipliers
+            // Extract identified active constraints
+            Eigen::MatrixXd grad_x_g = D.topRows(active_constraint_index);
+            Eigen::MatrixXd grad_u_g = C.topRows(active_constraint_index);
+            
+            // Calculate Lagrange multipliers
             Eigen::MatrixXd Q_uu_inv = Q_uu.inverse();
-            Eigen::MatrixXd lambda = (C * Q_uu_inv * C.transpose()).inverse() * C * Q_uu_inv * Q_u;
+            Eigen::MatrixXd lambda = -(grad_u_g * Q_uu_inv * grad_u_g.transpose()).inverse() * (grad_u_g * Q_uu_inv * Q_u);
 
-            // Remove active constraints if lambda is negative
-            active_constraint_index = 0;
-            std::vector<int> deleted_index_list;
-
-            for (int j = 0; j < control_dim; j++) {
-                if (active_constraint_table(j) == 1 && lambda(active_constraint_index) < 0) {
-                    C.row(active_constraint_index) = Eigen::VectorXd::Zero(control_dim);
-                    active_constraint_table(j, t) = 0;
-                    deleted_index_list.push_back(active_constraint_index);
-                    active_constraint_index += 1;
-                } else if (active_constraint_table(j + control_dim, t) == 1 && lambda(active_constraint_index) < 0) {
-                    C.row(active_constraint_index) = Eigen::VectorXd::Zero(control_dim);
-                    active_constraint_table(j, t) = 0;
-                    deleted_index_list.push_back(active_constraint_index);
-                    active_constraint_index += 1;
+            // Find indices where lambda is non-negative
+            std::vector<int> active_indices;
+            for (int i = 0; i < lambda.rows(); ++i) {
+                if (lambda(i) >= 0) {
+                    active_indices.push_back(i);
                 }
             }
+            int active_count_new = active_indices.size();
 
+            // Create new constraint matrices
+            Eigen::MatrixXd C_new = Eigen::MatrixXd::Zero(active_count_new, control_dim);
+            Eigen::MatrixXd D_new = Eigen::MatrixXd::Zero(active_count_new, state_dim);
 
-            Eigen::MatrixXd C_shrinked = Eigen::MatrixXd::Zero(C.rows() - deleted_index_list.size(), control_dim);
-            Eigen::MatrixXd D_shrinked = Eigen::MatrixXd::Zero(C.rows() - deleted_index_list.size(),  state_dim);
-
-            // Shrink C and D matrices by taking out negative lambda
-            for (int j = 0; j < C.rows(); j++) {
-                if (std::find(deleted_index_list.begin(), deleted_index_list.end(), j) == deleted_index_list.end()) {
-                    C_shrinked.row(j) = C.row(j);
-                    D_shrinked.row(j) = D.row(j);
+            if (active_count_new > 0) {
+                // Fill new constraint matrices with active constraints
+                for (int i = 0; i < active_count_new; ++i) {
+                    C_new.row(i) = grad_u_g.row(active_indices[i]);
+                    D_new.row(i) = grad_x_g.row(active_indices[i]);
                 }
-            }
 
-            // Feedback Gain Calculation
-            Eigen::MatrixXd W = (C_shrinked * Q_uu_inv * C_shrinked.transpose()).inverse() * C_shrinked * Q_uu_inv;
-            Eigen::MatrixXd H = Q_uu_inv * (Eigen::MatrixXd::Identity(control_dim, control_dim) - C_shrinked.transpose() * W);
-            k = -H * Q_u;
-            K = -H * Q_ux;
+                // Calculate feedback gains
+                Eigen::MatrixXd W = -(C_new * Q_uu_inv * C_new.transpose()).inverse() * (C_new * Q_uu_inv);
+                Eigen::MatrixXd H = Q_uu_inv * (Eigen::MatrixXd::Identity(control_dim, control_dim) - C_new.transpose() * W);
+                k = -H * Q_u;
+                K = -H * Q_ux + W.transpose() * D_new;
+            } else {
+                // If no active constraints remain, revert to unconstrained solution
+                Eigen::MatrixXd H = Q_uu.inverse();
+                K = -H * Q_ux;
+                k = -H * Q_u;
+            }
         }
 
         // Store Q-function matrices
@@ -595,9 +590,9 @@ bool CDDP::solveForwardPass() {
 
             // Extract solution
             double optimal_objective = osqp_solver_.objective_value();
-            const Eigen::VectorXd& delta_u = osqp_solver_.primal_solution();
+            const Eigen::VectorXd& delta_u_ = osqp_solver_.primal_solution();
 
-            
+            Eigen::VectorXd delta_u = - Q_uu.inverse() * (alpha * Q_u + Q_ux * delta_x);
 
             // Extract solution
             U_new[t] += delta_u;
