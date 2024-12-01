@@ -77,7 +77,7 @@ Although the library automatically finds and installs the following dependencies
 
 * [OSQP](https://osqp.org/) (QP solver) and [osqp-cpp](https://github.com/google/osqp-cpp) (C++ Wrapper for OSQP)
 ```bash
-conda install -c conda-forge osqp
+conda install -c conda-forge osqp # Optional
 ```
 
 ### Building
