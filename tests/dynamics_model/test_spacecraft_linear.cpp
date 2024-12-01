@@ -78,33 +78,33 @@ TEST(HCWTest, DiscreteDynamics) {
     ASSERT_DOUBLE_EQ(hcw.getTimestep(), 1);
     ASSERT_EQ(hcw.getIntegrationType(), "euler");
 
-    // Plot the results
-    plt::figure();
+    // // Plot the results
+    // plt::figure();
     
-    // Position plots
-    plt::subplot(2, 1, 1);
-    plt::named_plot("x (radial)", time_data, x_data);
-    plt::named_plot("y (along-track)", time_data, y_data);
-    plt::named_plot("z (cross-track)", time_data, z_data);
-    plt::title("Relative Position");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Position [m]");
-    plt::grid(true);
-    plt::legend();
+    // // Position plots
+    // plt::subplot(2, 1, 1);
+    // plt::named_plot("x (radial)", time_data, x_data);
+    // plt::named_plot("y (along-track)", time_data, y_data);
+    // plt::named_plot("z (cross-track)", time_data, z_data);
+    // plt::title("Relative Position");
+    // plt::xlabel("Time [s]");
+    // plt::ylabel("Position [m]");
+    // plt::grid(true);
+    // plt::legend();
 
-    // Velocity plots
-    plt::subplot(2, 1, 2);
-    plt::named_plot("vx", time_data, vx_data);
-    plt::named_plot("vy", time_data, vy_data);
-    plt::named_plot("vz", time_data, vz_data);
-    plt::title("Relative Velocity");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Velocity [m/s]");
-    plt::grid(true);
-    plt::legend();
+    // // Velocity plots
+    // plt::subplot(2, 1, 2);
+    // plt::named_plot("vx", time_data, vx_data);
+    // plt::named_plot("vy", time_data, vy_data);
+    // plt::named_plot("vz", time_data, vz_data);
+    // plt::title("Relative Velocity");
+    // plt::xlabel("Time [s]");
+    // plt::ylabel("Velocity [m/s]");
+    // plt::grid(true);
+    // plt::legend();
 
-    plt::tight_layout();
-    plt::save("../results/tests/hcw_discrete_dynamics.png");
+    // plt::tight_layout();
+    // plt::save("../results/tests/hcw_discrete_dynamics.png");
 }
 
 TEST(HCWTest, ContinuousDynamics) {
@@ -136,13 +136,11 @@ TEST(HCWTest, ContinuousDynamics) {
 }
 
 TEST(HCWTest, RelativeTrajectory) {
-    plt::figure();
-    
     // Create HCW instance
     double timestep = 1.0;
     double mean_motion = std::sqrt(3.986004418e14 / std::pow(6371e3 + 500e3, 3));  // For 500km orbit
     double mass = 1.0;
-    cddp::HCW hcw(timestep, mean_motion, mass, "rk4");
+    cddp::HCW hcw(timestep, mean_motion, mass, "euler");
 
     // Initial conditions
     Eigen::VectorXd state = Eigen::VectorXd::Zero(6);
@@ -159,52 +157,53 @@ TEST(HCWTest, RelativeTrajectory) {
     // Store trajectory points
     std::vector<double> x_data, y_data, z_data;
 
-    // Simulate for multiple orbits
-    int num_steps = 6000;
-    for (int i = 0; i < num_steps; ++i) {
-        x_data.push_back(state[0]);
-        y_data.push_back(state[1]);
-        z_data.push_back(state[2]);
+    // // Simulate for multiple orbits
+    // int num_steps = 6000;
+    // for (int i = 0; i < num_steps; ++i) {
+    //     x_data.push_back(state[0]);
+    //     y_data.push_back(state[1]);
+    //     z_data.push_back(state[2]);
         
-        state = hcw.getDiscreteDynamics(state, control);
-    }
+    //     state = hcw.getDiscreteDynamics(state, control);
+    // }
 
-    // Plot relative motion trajectory
-    // XY plot (radial vs along-track)
-    plt::subplot(2, 2, 1);
-    plt::plot(y_data, x_data);
-    plt::title("Radial vs Along-track");
-    plt::xlabel("Along-track Y [m]");
-    plt::ylabel("Radial X [m]");
-    plt::grid(true);
+    // plt::figure();
+    // // Plot relative motion trajectory
+    // // XY plot (radial vs along-track)
+    // plt::subplot(2, 2, 1);
+    // plt::plot(y_data, x_data);
+    // plt::title("Radial vs Along-track");
+    // plt::xlabel("Along-track Y [m]");
+    // plt::ylabel("Radial X [m]");
+    // plt::grid(true);
 
-    // XZ plot (radial vs cross-track)
-    plt::subplot(2, 2, 2);
-    plt::plot(z_data, x_data);
-    plt::title("Radial vs Cross-track");
-    plt::xlabel("Cross-track Z [m]");
-    plt::ylabel("Radial X [m]");
-    plt::grid(true);
+    // // XZ plot (radial vs cross-track)
+    // plt::subplot(2, 2, 2);
+    // plt::plot(z_data, x_data);
+    // plt::title("Radial vs Cross-track");
+    // plt::xlabel("Cross-track Z [m]");
+    // plt::ylabel("Radial X [m]");
+    // plt::grid(true);
 
-    // YZ plot (along-track vs cross-track)
-    plt::subplot(2, 2, 3);
-    plt::plot(z_data, y_data);
-    plt::title("Along-track vs Cross-track");
-    plt::xlabel("Cross-track Z [m]");
-    plt::ylabel("Along-track Y [m]");
-    plt::grid(true);
+    // // YZ plot (along-track vs cross-track)
+    // plt::subplot(2, 2, 3);
+    // plt::plot(z_data, y_data);
+    // plt::title("Along-track vs Cross-track");
+    // plt::xlabel("Cross-track Z [m]");
+    // plt::ylabel("Along-track Y [m]");
+    // plt::grid(true);
 
-    // 3D plot
-    plt::subplot(2, 2, 4);
-    plt::plot3(x_data, y_data, z_data);
-    plt::title("3D Relative Motion");
-    plt::xlabel("Radial X [m]");
-    plt::ylabel("Along-track Y [m]");
-    plt::set_zlabel("Cross-track Z [m]");
-    plt::grid(true);
+    // // 3D plot
+    // plt::subplot(2, 2, 4);
+    // plt::plot3(x_data, y_data, z_data);
+    // plt::title("3D Relative Motion");
+    // plt::xlabel("Radial X [m]");
+    // plt::ylabel("Along-track Y [m]");
+    // plt::set_zlabel("Cross-track Z [m]");
+    // plt::grid(true);
 
-    plt::tight_layout();
-    plt::save("../results/tests/hcw_relative_trajectory.png");
+    // plt::tight_layout();
+    // plt::save("../results/tests/hcw_relative_trajectory.png");
 }
 
 // Helper function to create spacecraft marker coordinates
