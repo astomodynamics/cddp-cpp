@@ -27,7 +27,7 @@ int main() {
     int state_dim = 4;  // [x, y, theta, v]
     int control_dim = 2;  // [acceleration, steering_angle]
     int horizon = 100;
-    double timestep = 0.1;
+    double timestep = 0.05;
     std::string integration_type = "euler";
 
     // Create a bicycle instance 
@@ -53,7 +53,7 @@ int main() {
 
     // Initial state: [x=0, y=0, theta=45deg, v=1.0]
     Eigen::VectorXd initial_state(state_dim);
-    initial_state << 0.0, 0.0, M_PI/4.0, 1.0;
+    initial_state << 0.0, 0.0, M_PI/4.0, 0.0;
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
@@ -62,9 +62,9 @@ int main() {
 
     // Define constraints for [acceleration, steering_angle]
     Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -10.0, -M_PI/3;  // Max deceleration and steering angle
+    control_lower_bound << -10.0, -M_PI/5;  // Max deceleration and steering angle
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 10.0, M_PI/3;    // Max acceleration and steering angle
+    control_upper_bound << 10.0, M_PI/5;    // Max acceleration and steering angle
     
     // Add the constraint to the solver
     cddp_solver.addConstraint(std::string("ControlBoxConstraint"), 
@@ -73,7 +73,7 @@ int main() {
 
     // Set options
     cddp::CDDPOptions options;
-    options.max_iterations = 10;
+    options.max_iterations = 20;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory
@@ -210,7 +210,7 @@ int main() {
             plt::ylim(-1, 6);
             plt::legend();
 
-            std::string filename = plotDirectory + "/bicycle_" + std::to_string(i) + ".png";
+            std::string filename = plotDirectory + "/bicycle_frame_" + std::to_string(i) + ".png";
             plt::save(filename);
             plt::pause(0.01);
         }
@@ -221,4 +221,4 @@ int main() {
 // Installation:
 // $ sudo apt-get install imagemagick
 
-// convert -delay 100 ../results/tests/bicycle_*.png ../results/tests/bicycle.gif
+// convert -delay 100 ../results/tests/bicycle_frame_*.png ../results/tests/bicycle.gif
