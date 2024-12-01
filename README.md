@@ -44,11 +44,19 @@ $$
 
 Simple car-like robot with velocity and steering control:
 
+```bash
+./examples/cddp_dubins_car // after building
+```
+
 <img src="results/tests/dubins_car.gif" width="300" alt="Dubins Car CDDP">
 
 ### Bicycle Model
 
 Bicycle model with velocity and steering control:
+
+```bash
+./examples/cddp_bicycle // after building
+```
 
 <img src="results/tests/bicycle.gif" width="300" alt="Bicycle Model CDDP">
 
@@ -56,13 +64,32 @@ Bicycle model with velocity and steering control:
 
 Simple pendulum with torque control:
 
+```bash
+./examples/cddp_pendulum // after building
+```
+
+
 <img src="results/tests/pendulum.gif" width="300" alt="Pendulum CDDP">
 
 ### Cartpole
 
 Cartpole with cart control:
 
+```bash
+./examples/cddp_cartpole // after building
+```
+
 <img src="results/tests/cartpole.gif" width="300" alt="Cartpole CDDP">
+
+### Quadrotor
+
+Quadrotor with thrust control:
+
+```bash
+./examples/cddp_quadrotor // after building
+```
+
+<img src="results/tests/quadrotor.gif" width="300" alt="Quadrotor CDDP">
 
 ## Installation
 ### Dependencies
