@@ -33,6 +33,7 @@
 #include "dynamics_model/dubins_car.hpp"
 #include "dynamics_model/bicycle.hpp"
 #include "dynamics_model/cartpole.hpp"
+#include "dynamics_model/quadrotor.hpp"
 
 
 #include "matplotlibcpp.hpp"
