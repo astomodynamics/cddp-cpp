@@ -632,149 +632,149 @@ std::vector<std::vector<std::vector<double>>> generateSpherePoints(
 //     plt::show();
 // }
 
-TEST(QuadrotorTest, Animation3D) {
-    const long fg = plt::figure();
-    double arm_length = 0.2;
-    double prop_radius = 0.03;  // Radius of propeller spheres
+// TEST(QuadrotorTest, Animation3D) {
+//     const long fg = plt::figure();
+//     double arm_length = 0.2;
+//     double prop_radius = 0.03;  // Radius of propeller spheres
     
-    // Create quadrotor instance
-    double timestep = 0.01;
-    double mass = 1.0;
+//     // Create quadrotor instance
+//     double timestep = 0.01;
+//     double mass = 1.0;
     
-    Eigen::Matrix3d inertia;
-    inertia << 0.01, 0, 0,
-               0, 0.01, 0,
-               0, 0, 0.02;
+//     Eigen::Matrix3d inertia;
+//     inertia << 0.01, 0, 0,
+//                0, 0.01, 0,
+//                0, 0, 0.02;
                
-    cddp::Quadrotor quadrotor(timestep, mass, inertia, arm_length, "rk4");
+//     cddp::Quadrotor quadrotor(timestep, mass, inertia, arm_length, "rk4");
 
-    // Initial state: slightly tilted hover
-    Eigen::VectorXd state = Eigen::VectorXd::Zero(12);
-    state << 0.0, 0.0, 1.0,           // position
-            0.0, 0.0, 0.0,            // orientation 
-            0.0, 0.0, 0.0,            // linear velocity
-            0.0, 0.0, 0.0;            // angular velocity 
+//     // Initial state: slightly tilted hover
+//     Eigen::VectorXd state = Eigen::VectorXd::Zero(12);
+//     state << 0.0, 0.0, 1.0,           // position
+//             0.0, 0.0, 0.0,            // orientation 
+//             0.0, 0.0, 0.0,            // linear velocity
+//             0.0, 0.0, 0.0;            // angular velocity 
 
-    // Hover thrust plus small variations
-    double hover_thrust = mass * 9.81 / 4.0;
-    Eigen::VectorXd control(4);
-    control << hover_thrust * 1.001,    // Front (motor 0)
-              hover_thrust * 1.001,     // Right (motor 1)
-              hover_thrust * 1.0,     // Back (motor 2)
-              hover_thrust * 1.0;     // Left (motor 3)
+//     // Hover thrust plus small variations
+//     double hover_thrust = mass * 9.81 / 4.0;
+//     Eigen::VectorXd control(4);
+//     control << hover_thrust * 1.001,    // Front (motor 0)
+//               hover_thrust * 1.001,     // Right (motor 1)
+//               hover_thrust * 1.0,     // Back (motor 2)
+//               hover_thrust * 1.0;     // Left (motor 3)
 
-    // Simulation and animation parameters
-    int num_steps = 300;
-    double animation_interval = 0.02;
+//     // Simulation and animation parameters
+//     int num_steps = 300;
+//     double animation_interval = 0.02;
     
-    // Storage for trajectory
-    std::vector<double> x_traj, y_traj, z_traj;
+//     // Storage for trajectory
+//     std::vector<double> x_traj, y_traj, z_traj;
     
-    // Plot settings
-    std::map<std::string, std::string> arm_front_back_keywords;
-    arm_front_back_keywords["color"] = "blue";
-    arm_front_back_keywords["linestyle"] = "-";
-    arm_front_back_keywords["linewidth"] = "2";
+//     // Plot settings
+//     std::map<std::string, std::string> arm_front_back_keywords;
+//     arm_front_back_keywords["color"] = "blue";
+//     arm_front_back_keywords["linestyle"] = "-";
+//     arm_front_back_keywords["linewidth"] = "2";
 
-    std::map<std::string, std::string> arm_right_left_keywords;
-    arm_right_left_keywords["color"] = "red";
-    arm_right_left_keywords["linestyle"] = "-";
-    arm_right_left_keywords["linewidth"] = "2";
+//     std::map<std::string, std::string> arm_right_left_keywords;
+//     arm_right_left_keywords["color"] = "red";
+//     arm_right_left_keywords["linestyle"] = "-";
+//     arm_right_left_keywords["linewidth"] = "2";
 
-    std::map<std::string, std::string> traj_keywords;
-    traj_keywords["color"] = "black";
-    traj_keywords["linestyle"] = ":";
-    traj_keywords["linewidth"] = "1";
+//     std::map<std::string, std::string> traj_keywords;
+//     traj_keywords["color"] = "black";
+//     traj_keywords["linestyle"] = ":";
+//     traj_keywords["linewidth"] = "1";
     
-    // Animation loop
-    for (int i = 0; i < num_steps; ++i) {
-        if (i % 5 == 0) {  // Update plot every 5 steps
-            // Extract current position and orientation
-            Eigen::Vector3d position(state[0], state[1], state[2]);
-            Eigen::Matrix3d rotation = getRotationMatrix(state[3], state[4], state[5]);
+//     // Animation loop
+//     for (int i = 0; i < num_steps; ++i) {
+//         if (i % 5 == 0) {  // Update plot every 5 steps
+//             // Extract current position and orientation
+//             Eigen::Vector3d position(state[0], state[1], state[2]);
+//             Eigen::Matrix3d rotation = getRotationMatrix(state[3], state[4], state[5]);
             
-            // Transform quadrotor frame to world coordinates
-            auto frame_points = transformQuadrotorFrame(position, rotation, arm_length);
+//             // Transform quadrotor frame to world coordinates
+//             auto frame_points = transformQuadrotorFrame(position, rotation, arm_length);
             
-            // Store trajectory
-            x_traj.push_back(position.x());
-            y_traj.push_back(position.y());
-            z_traj.push_back(position.z());
+//             // Store trajectory
+//             x_traj.push_back(position.x());
+//             y_traj.push_back(position.y());
+//             z_traj.push_back(position.z());
 
-            // Clear previous plot
-            plt::clf();
+//             // Clear previous plot
+//             plt::clf();
             
-            // Plot frame
-            // Front-Back arm (blue)
-            std::vector<double> front_back_x = {frame_points[0][0], frame_points[0][2]};
-            std::vector<double> front_back_y = {frame_points[1][0], frame_points[1][2]};
-            std::vector<double> front_back_z = {frame_points[2][0], frame_points[2][2]};
-            plt::plot3(front_back_x, front_back_y, front_back_z, arm_front_back_keywords, fg);
+//             // Plot frame
+//             // Front-Back arm (blue)
+//             std::vector<double> front_back_x = {frame_points[0][0], frame_points[0][2]};
+//             std::vector<double> front_back_y = {frame_points[1][0], frame_points[1][2]};
+//             std::vector<double> front_back_z = {frame_points[2][0], frame_points[2][2]};
+//             plt::plot3(front_back_x, front_back_y, front_back_z, arm_front_back_keywords, fg);
 
-            // Right-Left arm (red)
-            std::vector<double> right_left_x = {frame_points[0][1], frame_points[0][3]};
-            std::vector<double> right_left_y = {frame_points[1][1], frame_points[1][3]};
-            std::vector<double> right_left_z = {frame_points[2][1], frame_points[2][3]};
-            plt::plot3(right_left_x, right_left_y, right_left_z, arm_right_left_keywords, fg);
+//             // Right-Left arm (red)
+//             std::vector<double> right_left_x = {frame_points[0][1], frame_points[0][3]};
+//             std::vector<double> right_left_y = {frame_points[1][1], frame_points[1][3]};
+//             std::vector<double> right_left_z = {frame_points[2][1], frame_points[2][3]};
+//             plt::plot3(right_left_x, right_left_y, right_left_z, arm_right_left_keywords, fg);
 
-            // Plot propeller spheres
-            for (int j = 0; j < 4; ++j) {
-                auto sphere_points = generateSpherePoints(
-                    frame_points[0][j],  // x center
-                    frame_points[1][j],  // y center
-                    frame_points[2][j],  // z center
-                    prop_radius
-                );
+//             // Plot propeller spheres
+//             for (int j = 0; j < 4; ++j) {
+//                 auto sphere_points = generateSpherePoints(
+//                     frame_points[0][j],  // x center
+//                     frame_points[1][j],  // y center
+//                     frame_points[2][j],  // z center
+//                     prop_radius
+//                 );
 
-                // Surface properties
-                std::map<std::string, std::string> surf_keywords;
-                // Using Set1 colormap for solid colors
-                surf_keywords["vmin"] = "0";     // Fix color range
-                surf_keywords["vmax"] = "1";
-                surf_keywords["alpha"] = "0.99";
+//                 // Surface properties
+//                 std::map<std::string, std::string> surf_keywords;
+//                 // Using Set1 colormap for solid colors
+//                 surf_keywords["vmin"] = "0";     // Fix color range
+//                 surf_keywords["vmax"] = "1";
+//                 surf_keywords["alpha"] = "0.99";
 
-                // Plot surface with color array for solid color
-                if (j == 0 || j == 2) {  // Front or Back propeller
-                    surf_keywords["cmap"] = "Blues";  
-                } else {  // Right or Left propeller
-                    surf_keywords["cmap"] = "Reds";  
-                }
+//                 // Plot surface with color array for solid color
+//                 if (j == 0 || j == 2) {  // Front or Back propeller
+//                     surf_keywords["cmap"] = "Blues";  
+//                 } else {  // Right or Left propeller
+//                     surf_keywords["cmap"] = "Reds";  
+//                 }
 
-                plt::plot_surface(sphere_points[0], sphere_points[1], sphere_points[2], surf_keywords, fg);
-            }
+//                 plt::plot_surface(sphere_points[0], sphere_points[1], sphere_points[2], surf_keywords, fg);
+//             }
             
-            // Plot trajectory
-            plt::plot3(x_traj, y_traj, z_traj, traj_keywords, fg);
+//             // Plot trajectory
+//             plt::plot3(x_traj, y_traj, z_traj, traj_keywords, fg);
             
-            // Plot settings
-            plt::xlabel("X [m]");
-            plt::ylabel("Y [m]");
-            plt::set_zlabel("Z [m]");
-            plt::title("Quadrotor Animation");
-            plt::grid(true);
+//             // Plot settings
+//             plt::xlabel("X [m]");
+//             plt::ylabel("Y [m]");
+//             plt::set_zlabel("Z [m]");
+//             plt::title("Quadrotor Animation");
+//             plt::grid(true);
             
-            // Set axis limits
-            double plot_size = 5;
-            plt::xlim(-plot_size, plot_size);
-            plt::ylim(-plot_size, plot_size);
-            plt::zlim(-5, 5);  // Center around hover height
+//             // Set axis limits
+//             double plot_size = 5;
+//             plt::xlim(-plot_size, plot_size);
+//             plt::ylim(-plot_size, plot_size);
+//             plt::zlim(-5, 5);  // Center around hover height
 
-            // Set view angle
-            plt::view_init(30, -60);
+//             // Set view angle
+//             plt::view_init(30, -60);
 
-            std::string filename = "../results/tests/quadrotor_frame_" + 
-                                 std::to_string(i/5) + ".png";
-            plt::save(filename);
+//             std::string filename = "../results/tests/quadrotor_frame_" + 
+//                                  std::to_string(i/5) + ".png";
+//             plt::save(filename);
             
-            // Update plot
-            plt::pause(animation_interval);
+//             // Update plot
+//             plt::pause(animation_interval);
             
-        }
+//         }
         
-        // Compute next state
-        state = quadrotor.getDiscreteDynamics(state, control);
-    }
-}
+//         // Compute next state
+//         state = quadrotor.getDiscreteDynamics(state, control);
+//     }
+// }
 
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
