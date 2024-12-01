@@ -15,6 +15,10 @@ add_executable(test_cartpole dynamics_model/test_cartpole.cpp)
 target_link_libraries(test_cartpole gtest gmock gtest_main cddp Eigen3::Eigen)
 gtest_discover_tests(test_cartpole)
 
+add_executable(test_quadrotor dynamics_model/test_quadrotor.cpp)
+target_link_libraries(test_quadrotor gtest gmock gtest_main cddp Eigen3::Eigen)
+gtest_discover_tests(test_quadrotor)
+
 add_executable(test_objective cddp_core/test_objective.cpp)
 target_link_libraries(test_objective gtest gmock gtest_main cddp)
 gtest_discover_tests(test_objective)
