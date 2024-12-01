@@ -43,22 +43,22 @@ $$
 ### Dubins Car
 
 Simple car-like robot with velocity and steering control:
-<img src="results/tests/dubins_car.gif" width="600" alt="Dubins Car CDDP">
+<img src="results/tests/dubins_car.gif" width="300" alt="Dubins Car CDDP">
 
 ### Bicycle Model
 
 Bicycle model with velocity and steering control:
-<img src="results/tests/bicycle.gif" width="600" alt="Bicycle Model CDDP">
+<img src="results/tests/bicycle.gif" width="300" alt="Bicycle Model CDDP">
 
 ### Pendulum
 
 Simple pendulum with torque control:
-<img src="results/tests/pendulum.gif" width="600" alt="Pendulum CDDP">
+<img src="results/tests/pendulum.gif" width="300" alt="Pendulum CDDP">
 
 ### Cartpole
 
 Cartpole with cart control:
-<img src="results/tests/cartpole.gif" width="600" alt="Cartpole CDDP">
+<img src="results/tests/cartpole.gif" width="300" alt="Cartpole CDDP">
 
 ## Installation
 ### Dependencies
