@@ -12,3 +12,6 @@ target_link_libraries(cddp_pendulum cddp Eigen3::Eigen)
 
 add_executable(cddp_cartpole cddp_cartpole.cpp)
 target_link_libraries(cddp_cartpole cddp Eigen3::Eigen)
+
+add_executable(cddp_quadrotor cddp_quadrotor.cpp)
+target_link_libraries(cddp_quadrotor cddp Eigen3::Eigen)
