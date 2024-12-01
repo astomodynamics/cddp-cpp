@@ -17,7 +17,7 @@ project(
   cddp
   VERSION 0.1.0
   DESCRIPTION "CDDP: A C++ library for MPC"
-  HOMEPAGE_URL  "https://github.com/astomodynamics/CDDP-cpp"
+  HOMEPAGE_URL  "https://github.com/astomodynamics/cddp-cpp"
 )
 
 set(CMAKE_CXX_STANDARD 17) # Enforce C++17 as the minimum standard
