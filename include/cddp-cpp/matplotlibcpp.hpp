@@ -2099,6 +2099,161 @@ inline std::array<double, 2> ylim()
 }
 
 template<typename Numeric>
+void zlim(Numeric bottom, Numeric top)
+{
+    detail::_interpreter::get();
+
+    // Same as with plot_surface: We lazily load the modules here the first time
+    // this function is called because I'm not sure that we can assume "matplotlib 
+    // installed" implies "mpl_toolkits installed" on all platforms, and we don't 
+    // want to require it for people who don't need 3d plots.
+    static PyObject *mpl_toolkitsmod = nullptr, *axis3dmod = nullptr;
+    if (!mpl_toolkitsmod) {
+        PyObject* mpl_toolkits = PyString_FromString("mpl_toolkits");
+        PyObject* axis3d = PyString_FromString("mpl_toolkits.mplot3d");
+        if (!mpl_toolkits || !axis3d) { throw std::runtime_error("couldnt create string"); }
+
+        mpl_toolkitsmod = PyImport_Import(mpl_toolkits);
+        Py_DECREF(mpl_toolkits);
+        if (!mpl_toolkitsmod) { throw std::runtime_error("Error loading module mpl_toolkits!"); }
+
+        axis3dmod = PyImport_Import(axis3d);
+        Py_DECREF(axis3d);
+        if (!axis3dmod) { throw std::runtime_error("Error loading module mpl_toolkits.mplot3d!"); }
+    }
+
+    PyObject* list = PyList_New(2);
+    PyList_SetItem(list, 0, PyFloat_FromDouble(bottom));
+    PyList_SetItem(list, 1, PyFloat_FromDouble(top));
+
+    PyObject* args = PyTuple_New(1);
+    PyTuple_SetItem(args, 0, list);
+
+    PyObject *ax =
+    PyObject_CallObject(detail::_interpreter::get().s_python_function_gca,
+      detail::_interpreter::get().s_python_empty_tuple);
+    if (!ax) throw std::runtime_error("Call to gca() failed.");
+    Py_INCREF(ax);
+
+    PyObject *set_zlim = PyObject_GetAttrString(ax, "set_zlim");
+    if (!set_zlim) throw std::runtime_error("Attribute set_zlim not found.");
+    Py_INCREF(set_zlim);
+
+    PyObject* res = PyObject_Call(set_zlim, args, detail::_interpreter::get().s_python_empty_tuple);
+    if (!res) throw std::runtime_error("Call to set_zlim() failed.");
+
+    Py_DECREF(set_zlim);
+    Py_DECREF(ax);
+    Py_DECREF(args);
+    if (res) Py_DECREF(res);
+}
+
+inline std::array<double, 2> zlim()
+{
+    detail::_interpreter::get();
+
+    PyObject *ax =
+    PyObject_CallObject(detail::_interpreter::get().s_python_function_gca,
+      detail::_interpreter::get().s_python_empty_tuple);
+    if (!ax) throw std::runtime_error("Call to gca() failed.");
+    Py_INCREF(ax);
+
+    PyObject *get_zlim = PyObject_GetAttrString(ax, "get_zlim");
+    if (!get_zlim) throw std::runtime_error("Attribute get_zlim not found.");
+    Py_INCREF(get_zlim);
+
+    PyObject* res = PyObject_CallObject(get_zlim, detail::_interpreter::get().s_python_empty_tuple);
+    if (!res) throw std::runtime_error("Call to get_zlim() failed.");
+
+    Py_DECREF(get_zlim);
+    Py_DECREF(ax);
+
+    if(!res) throw std::runtime_error("Call to zlim() failed.");
+
+    PyObject* left = PyTuple_GetItem(res, 0);
+    PyObject* right = PyTuple_GetItem(res, 1);
+    std::array<double, 2> bounds = { PyFloat_AsDouble(left), PyFloat_AsDouble(right) };
+
+    Py_DECREF(res);
+
+    return bounds;
+}
+
+inline void view_init(double elev=30.0, double azim=-60.0)
+{
+    detail::_interpreter::get();
+
+    // Lazy load 3D plotting modules
+    static PyObject *mpl_toolkitsmod = nullptr, *axis3dmod = nullptr;
+    if (!mpl_toolkitsmod) {
+        PyObject* mpl_toolkits = PyString_FromString("mpl_toolkits");
+        PyObject* axis3d = PyString_FromString("mpl_toolkits.mplot3d");
+        if (!mpl_toolkits || !axis3d) { throw std::runtime_error("couldnt create string"); }
+
+        mpl_toolkitsmod = PyImport_Import(mpl_toolkits);
+        Py_DECREF(mpl_toolkits);
+        if (!mpl_toolkitsmod) { throw std::runtime_error("Error loading module mpl_toolkits!"); }
+
+        axis3dmod = PyImport_Import(axis3d);
+        Py_DECREF(axis3d);
+        if (!axis3dmod) { throw std::runtime_error("Error loading module mpl_toolkits.mplot3d!"); }
+    }
+
+    PyObject *ax =
+    PyObject_CallObject(detail::_interpreter::get().s_python_function_gca,
+      detail::_interpreter::get().s_python_empty_tuple);
+    if (!ax) throw std::runtime_error("Call to gca() failed.");
+    Py_INCREF(ax);
+
+    PyObject *view_init = PyObject_GetAttrString(ax, "view_init");
+    if (!view_init) throw std::runtime_error("Attribute view_init not found.");
+    Py_INCREF(view_init);
+
+    PyObject* args = PyTuple_New(2);
+    PyTuple_SetItem(args, 0, PyFloat_FromDouble(elev));
+    PyTuple_SetItem(args, 1, PyFloat_FromDouble(azim));
+
+    PyObject* res = PyObject_Call(view_init, args, detail::_interpreter::get().s_python_empty_tuple);
+    if (!res) throw std::runtime_error("Call to view_init() failed.");
+
+    Py_DECREF(view_init);
+    Py_DECREF(ax);
+    Py_DECREF(args);
+    if (res) Py_DECREF(res);
+}
+
+inline std::array<double, 2> get_view()
+{
+    detail::_interpreter::get();
+
+    PyObject *ax =
+    PyObject_CallObject(detail::_interpreter::get().s_python_function_gca,
+      detail::_interpreter::get().s_python_empty_tuple);
+    if (!ax) throw std::runtime_error("Call to gca() failed.");
+    Py_INCREF(ax);
+
+    PyObject *elev = PyObject_GetAttrString(ax, "elev");
+    if (!elev) throw std::runtime_error("Attribute elev not found.");
+    
+    PyObject *azim = PyObject_GetAttrString(ax, "azim");
+    if (!azim) {
+        Py_DECREF(elev);
+        throw std::runtime_error("Attribute azim not found.");
+    }
+
+    std::array<double, 2> view = { 
+        PyFloat_AsDouble(elev),
+        PyFloat_AsDouble(azim)
+    };
+
+    Py_DECREF(elev);
+    Py_DECREF(azim);
+    Py_DECREF(ax);
+
+    return view;
+}
+
+template<typename Numeric>
 inline void xticks(const std::vector<Numeric> &ticks, const std::vector<std::string> &labels = {}, const std::map<std::string, std::string>& keywords = {})
 {
     assert(labels.size() == 0 || ticks.size() == labels.size());
