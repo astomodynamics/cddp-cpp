@@ -91,6 +91,16 @@ Quadrotor with thrust control:
 
 <img src="results/tests/quadrotor.gif" width="300" alt="Quadrotor CDDP">
 
+### Manipulator
+
+Manipulator with joint torque control:
+
+```bash
+./examples/cddp_manipulator // after building
+```
+
+<img src="results/tests/manipulator.gif" width="300" alt="Manipulator CDDP">
+
 ## Installation
 ### Dependencies
 * [Eigen](https://formulae.brew.sh/formula/eigen) (Linear Algebra Library in CPP)
