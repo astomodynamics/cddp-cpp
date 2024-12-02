@@ -150,6 +150,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 * add initial guess functionality based on path planner solution
 * add automatic differentiation
 * add nonlinear objective and constraint handling
+* add parallelization
 * add simulation and its plots
   * Quadrotor
   * Quadruped robot
