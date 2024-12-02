@@ -19,6 +19,10 @@
 #include <memory> // For std::unique_ptr
 #include <map>    // For std::map
 #include <cmath>  // For std::log
+#include <thread> // For std::thread
+#include <future> // For std::async
+#include <vector> // For std::vector
+#include <algorithm> 
 #include <Eigen/Dense>
 #include <chrono> // For timing
 #include <execution> // For parallel execution policies
@@ -513,41 +517,37 @@ bool CDDP::solveBackwardPass() {
 
 // Forward pass
 bool CDDP::solveForwardPass() {
-    bool is_feasible = false;
     const int state_dim = system_->getStateDim();
     const int control_dim = system_->getControlDim();
-
-    // Extract control box constraint
-    auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
-
-    int iter = 0;
-    double alpha = options_.backtracking_coeff;
+    // const int num_threads = std::thread::hardware_concurrency(); // Get number of available threads
+    const int num_threads = 1; // For now, use only one thread
     
-    // Pre-allocate matrices
-    Eigen::SparseMatrix<double> P(control_dim, control_dim); // Hessian of QP objective
-    
-    // A is already defined in initializeCDDP
-    // Eigen::SparseMatrix<double> A(state_dim, control_dim);
-    // A.setIdentity();
-    // A.makeCompressed();
-    // osqp_solver_.UpdateConstraintMatrix(A);
+    // Create a struct to hold line search results
+    struct LineSearchResult {
+        bool is_feasible;
+        double alpha;
+        double J_new;
+        double dJ;
+        std::vector<Eigen::VectorXd> X_new;
+        std::vector<Eigen::VectorXd> U_new;
+    };
 
-    // Line-search iteration 
-    for (iter = 0; iter < options_.max_line_search_iterations; ++iter) {
-        // Initialize cost and constraints
-        double J_new = 0.0, dJ = 0.0, expected_dV = 0.0, gradient_norm = 0.0;
-        double L_new = 0.0;
+    // Function to perform a single line search iteration
+    auto performLineSearchIteration = [&](double alpha) -> LineSearchResult {
+        LineSearchResult result;
+        result.alpha = alpha;
+        result.is_feasible = false;
+        
+        // Initialize trajectories
+        result.X_new = X_;
+        result.U_new = U_;
+        result.X_new[0] = initial_state_;
+        result.J_new = 0.0;
 
-        std::vector<Eigen::VectorXd> X_new = X_;
-        std::vector<Eigen::VectorXd> U_new = U_;
-        X_new[0] = initial_state_;
-
+        // Forward simulation
         for (int t = 0; t < horizon_; ++t) {
-            // Get state and control
-            const Eigen::VectorXd& x = X_new[t];
-            const Eigen::VectorXd& u = U_new[t];
-
-            // Deviation from the nominal trajectory
+            const Eigen::VectorXd& x = result.X_new[t];
+            const Eigen::VectorXd& u = result.U_new[t];
             const Eigen::VectorXd& delta_x = x - X_[t];
 
             // Extract Q-function matrices
@@ -555,96 +555,69 @@ bool CDDP::solveForwardPass() {
             const Eigen::MatrixXd& Q_uu = Q_UU_[t];
             const Eigen::MatrixXd& Q_ux = Q_UX_[t];
 
-            // Create QP problem
-            int numNonZeros = Q_uu.nonZeros();
-            P.reserve(numNonZeros);
-            P.setZero();
-            for (int i = 0; i < Q_uu.rows(); ++i) {
-                for (int j = 0; j < Q_uu.cols(); ++j) {
-                    if (Q_uu(i, j) != 0) {
-                        P.insert(i, j) = Q_uu(i, j);
-                    }
-                }
-            }
-            P.makeCompressed(); // Important for efficient storage and operations
-            osqp_solver_.UpdateObjectiveMatrix(P);
-            
-            const Eigen::VectorXd& q = alpha * Q_u + Q_ux * delta_x; // Gradient of QP objective
-            osqp_solver_.SetObjectiveVector(q);  
+            // Create QP problem for control update
+            Eigen::MatrixXd P = Q_uu;
+            Eigen::VectorXd q = alpha * Q_u + Q_ux * delta_x;
 
-            // Lower and upper bounds
-            Eigen::VectorXd lb = 1.0 * (control_box_constraint.getLowerBound() - u);
-            Eigen::VectorXd ub = 1.0 * (control_box_constraint.getUpperBound() - u);    
-            osqp_solver_.SetBounds(lb, ub);
-
-            // Solve the QP problem TODO: Use SDQP instead of OSQP
-            osqp::OsqpExitCode exit_code = osqp_solver_.Solve();
-
-            if (exit_code == osqp::OsqpExitCode::kOptimal) {
-                is_feasible = true;
-            } else {
-                is_feasible = false;
-                alpha *= options_.backtracking_factor;
-                continue;
-            }
-
-            // Extract solution
-            double optimal_objective = osqp_solver_.objective_value();
-            const Eigen::VectorXd& delta_u_ = osqp_solver_.primal_solution();
-
-            Eigen::VectorXd delta_u = - Q_uu.inverse() * (alpha * Q_u + Q_ux * delta_x);
-
-            // Extract solution
-            U_new[t] += delta_u;
+            // Solve QP and update control
+            Eigen::VectorXd delta_u = -Q_uu.inverse() * q;
+            result.U_new[t] += delta_u;
 
             // Compute cost
-            J_new += objective_->running_cost(x, U_new[t], t);
+            result.J_new += objective_->running_cost(x, result.U_new[t], t);
 
-            // Compute new state
-            X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t]);
-
+            // Forward propagate dynamics
+            result.X_new[t + 1] = system_->getDiscreteDynamics(x, result.U_new[t]);
         }
-        J_new += objective_->terminal_cost(X_new.back());
-
-        // Calculate Cost Reduction
-        dJ = J_ - J_new;
-
+        result.J_new += objective_->terminal_cost(result.X_new.back());
+        
+        // Calculate cost reduction
+        result.dJ = J_ - result.J_new;
+        
+        // Check if the solution is acceptable
         double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
-        double reduction_ratio = 0.0;
         if (expected > 0.0) {
-            reduction_ratio = dJ / expected;
-        } else {
-            reduction_ratio = std::copysign(1.0, dJ);
-            std::cout << "Expected improvement is not positive" << std::endl;
+            double reduction_ratio = result.dJ / expected;
+            result.is_feasible = (reduction_ratio > options_.minimum_reduction_ratio);
         }
-        if (reduction_ratio > options_.minimum_reduction_ratio) {
-            // Update state and control
-            X_ = X_new;
-            U_ = U_new;
-            J_ = J_new;
-            dJ_ = dJ;
-            barrier_coeff_ = options_.barrier_coeff / 10.0;
-            return true;
-        } else {
-            alpha *= options_.backtracking_factor;
-        }
+        
+        return result;
+    };
 
-
-        // // Check constraints
-        // is_feasible = true;
-        // for (int t = 0; t < horizon_; ++t) {
-        //     const Eigen::VectorXd& u = U_new[t];
-        //     // Check control box constraint
-        //     if (control_box_constraint != constraint_set_.end()) {
-        //         if (!control_box_constraint->second->isFeasible(u)) {
-        //             is_feasible = false;
-        //             break;
-        //         }
-        //     }
-        // }
+    // Create a vector of alphas to try in parallel
+    std::vector<double> alphas;
+    double alpha = options_.backtracking_coeff;
+    for (int i = 0; i < options_.max_line_search_iterations; ++i) {
+        alphas.push_back(alpha);
+        alpha *= options_.backtracking_factor;
     }
 
-    return false; // Or false if forward pass fails
+    // Launch parallel line search iterations
+    std::vector<std::future<LineSearchResult>> futures;
+    for (double alpha : alphas) {
+        futures.push_back(std::async(std::launch::async, performLineSearchIteration, alpha));
+    }
+
+    // Collect results
+    std::vector<LineSearchResult> results;
+    for (auto& future : futures) {
+        results.push_back(future.get());
+    }
+
+    // Find the best feasible solution
+    auto best_result = std::find_if(results.begin(), results.end(),
+        [](const LineSearchResult& result) { return result.is_feasible; });
+
+    if (best_result != results.end()) {
+        // Update state and control with the best solution
+        X_ = best_result->X_new;
+        U_ = best_result->U_new;
+        J_ = best_result->J_new;
+        dJ_ = best_result->dJ;
+        return true;
+    }
+
+    return false;
 }
 
 // Helper methods
