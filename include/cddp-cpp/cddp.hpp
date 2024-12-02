@@ -34,6 +34,7 @@
 #include "dynamics_model/bicycle.hpp"
 #include "dynamics_model/cartpole.hpp"
 #include "dynamics_model/quadrotor.hpp"
+#include "dynamics_model/manipulator.hpp"
 #include "dynamics_model/spacecraft_linear.hpp"
 
 

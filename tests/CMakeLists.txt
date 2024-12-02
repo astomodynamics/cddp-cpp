@@ -19,6 +19,10 @@ add_executable(test_quadrotor dynamics_model/test_quadrotor.cpp)
 target_link_libraries(test_quadrotor gtest gmock gtest_main cddp Eigen3::Eigen)
 gtest_discover_tests(test_quadrotor)
 
+add_executable(test_manipulator dynamics_model/test_manipulator.cpp)
+target_link_libraries(test_manipulator gtest gmock gtest_main cddp Eigen3::Eigen)
+gtest_discover_tests(test_manipulator)
+
 add_executable(test_spacecraft_linear dynamics_model/test_spacecraft_linear.cpp)
 target_link_libraries(test_spacecraft_linear gtest gmock gtest_main cddp Eigen3::Eigen)
 gtest_discover_tests(test_spacecraft_linear)
