@@ -30,6 +30,8 @@ option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
 option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
 set(GUROBI_ROOT /home/tom/.local/lib/gurobi1103/linux64)
+option(CDDP-CPP_TORCH "Whether to use LibTorch." ON)
+option(CDDP-CPP_TORCH_GPU "Whether to use GPU." ON)
 
 # Find packages
 find_package(Eigen3 REQUIRED) 
@@ -129,6 +131,57 @@ if (CDDP-CPP_GUROBI)
     message(FATAL_ERROR "Could not find Gurobi. Please set GUROBI_ROOT.")
   endif()
 endif()
+
+# LibTorch
+if (CDDP-CPP_TORCH)
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/build/libtorch/share/cmake/Torch/TorchConfig.cmake)
+    message(STATUS "Found LibTorch at ${CMAKE_CURRENT_SOURCE_DIR}/build/libtorch")
+  else()
+    message(STATUS "Downloading LibTorch...")
+    # Download and extract LibTorch
+    if (CDDP-CPP_TORCH_GPU)
+      set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip")
+    else()
+      set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip")
+    endif()
+
+    # Set the download directory
+    set(DOWLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build)
+
+    # Create the download directory
+    file(MAKE_DIRECTORY ${DOWLOAD_DIR})
+
+    # Download the file 
+    file(DOWNLOAD ${LIBTORCH_URL} ${DOWLOAD_DIR}/libtorch-shared-with-deps-latest.zip
+      STATUS DOWNLOAD_STATUS
+      SHOW_PROGRESS
+    )
+
+    # Check if the download was successful
+    list(GET DOWNLOAD_STATUS 0 DOWNLOAD_STATUS_CODE)
+    if(NOT DOWNLOAD_STATUS_CODE EQUAL 0)
+      message(FATAL_ERROR "Failed to download LibTorch.")
+    endif()
+    
+    # Extract the file    
+    execute_process(
+      COMMAND ${CMAKE_COMMAND} -E tar xvf ${DOWLOAD_DIR}/libtorch-shared-with-deps-latest.zip
+      WORKING_DIRECTORY ${DOWLOAD_DIR}
+    )
+
+    # Remove the zip file
+    file(REMOVE ${DOWLOAD_DIR}/libtorch-shared-with-deps-latest.zip)
+  endif()
+
+  # Set the path to the LibTorch installation
+  set(LIBTORCH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build/libtorch)
+
+  find_package(Torch REQUIRED PATHS ${LIBTORCH_DIR} NO_DEFAULT_PATH)
+  target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
+  target_include_directories(${PROJECT_NAME} PUBLIC ${TORCH_INCLUDE_DIRS})
+  message(STATUS "Found LibTorch: ${TORCH_LIBRARIES}")
+endif()
+
 
 # Build and register tests.
 if (CDDP-CPP_BUILD_TESTS)
