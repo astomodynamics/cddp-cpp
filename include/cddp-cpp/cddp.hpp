@@ -21,12 +21,13 @@
 #include <vector>
 #include <Eigen/Dense>
 
-
-
+// #include "cddp-cpp/sdqp.hpp"
 #include "cddp_core/dynamical_system.hpp"
 #include "cddp_core/objective.hpp"
 #include "cddp_core/constraint.hpp"
 #include "cddp_core/cddp_core.hpp"
+
+#include "cddp_core/torch_dynamical_system.hpp"
 
 // Models
 #include "dynamics_model/pendulum.hpp"
