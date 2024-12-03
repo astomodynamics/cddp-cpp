@@ -314,8 +314,9 @@ bool CDDP::solveBackwardPass() {
 
     // Extract control box constraint
     auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    auto state_box_constraint = getConstraint<StateBoxConstraint>("StateBoxConstraint");
 
-    // Terminal cost and its derivatives
+    // Terminal cost derivatives
     V_X_.back() = objective_->getFinalCostGradient(X_.back());
     V_XX_.back() = objective_->getFinalCostHessian(X_.back());
 
@@ -328,10 +329,8 @@ bool CDDP::solveBackwardPass() {
     Eigen::MatrixXd Q_uu(control_dim, control_dim);
     Eigen::MatrixXd Q_ux(control_dim, state_dim);
     Eigen::MatrixXd Q_uu_inv(control_dim, control_dim);
-    Eigen::MatrixXd active_constraint_tabl(2 * (control_dim), horizon_); 
-    Eigen::VectorXd k(control_dim);
-    Eigen::MatrixXd K(control_dim, state_dim);
 
+    // Track optimality error
     double Qu_error = 0.0;
 
     // Backward Riccati recursion
@@ -417,75 +416,101 @@ bool CDDP::solveBackwardPass() {
             return false;
         }
 
-        /*  --- Identify Active Constraint --- */
-        int active_constraint_index = 0;
-        Eigen::MatrixXd C(control_dim, control_dim); // Control constraint matrix
-        Eigen::MatrixXd D(control_dim, state_dim); // State constraint matrix
-
-        // TODO: Implement active set method
-        for (int j = 0; j < control_dim; j++) {
-            if (u(j) <= control_box_constraint.getLowerBound()(j) + active_set_tol) {
+        // Identify active constraints
+        std::vector<Eigen::VectorXd> active_control_constraints;
+        std::vector<Eigen::VectorXd> active_state_constraints;
+        
+        // Check control constraints
+        for (int i = 0; i < control_dim; i++) {
+            if (u[i] <= control_box_constraint->getLowerBound()[i] + active_set_tol) {
                 Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
-                e(j) = 1.0;
-                C.row(active_constraint_index) = -e;  // Note the negative sign
-                D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
-                active_constraint_index += 1;
-            } else if (u(j) >= control_box_constraint.getUpperBound()(j) - active_set_tol) {
+                e[i] = -1;
+                active_control_constraints.push_back(e);
+            }
+            if (u[i] >= control_box_constraint->getUpperBound()[i] - active_set_tol) {
                 Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
-                e(j) = 1.0;  // No negative here
-                C.row(active_constraint_index) = e;
-                D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
-                active_constraint_index += 1;
+                e[i] = 1;
+                active_control_constraints.push_back(e);
             }
         }
 
-        Eigen::MatrixXd active_constraint_table = Eigen::MatrixXd::Zero(2 * (control_dim), horizon_);
-        if (active_constraint_index == 0) {  // No active constraints
-            // Compute the optimal control deviation
-            Eigen::MatrixXd H = Q_uu.inverse();
-            K = -H * Q_ux;
-            k = -H * Q_u;
+        // // Check state constraints for next state
+        // if (t < horizon_ - 1 && state_box_constraint != nullptr) {
+        //     Eigen::VectorXd next_state = system_->getDiscreteDynamics(x, u);
+        //     for (int i = 0; i < state_dim; i++) {
+        //         if (next_state[i] <= state_box_constraint->getLowerBound()[i] + active_set_tol) {
+        //             Eigen::VectorXd state_constraint = Eigen::VectorXd::Zero(state_dim);
+        //             state_constraint[i] = -1;
+        //             active_state_constraints.push_back(state_constraint);
+        //         }
+        //         if (next_state[i] >= state_box_constraint->getUpperBound()[i] - active_set_tol) {
+        //             Eigen::VectorXd state_constraint = Eigen::VectorXd::Zero(state_dim);
+        //             state_constraint[i] = 1;
+        //             active_state_constraints.push_back(state_constraint);
+        //         }
+        //     }
+        // }
+
+        // Compute constrained feedback law
+        Eigen::MatrixXd K;
+        Eigen::VectorXd k;
+
+        if (active_control_constraints.empty() && active_state_constraints.empty()) {
+            // Unconstrained case
+            K = -Q_uu.inverse() * Q_ux;
+            k = -Q_uu.inverse() * Q_u;
         } else {
-            // Extract identified active constraints
-            Eigen::MatrixXd grad_x_g = D.topRows(active_constraint_index);
-            Eigen::MatrixXd grad_u_g = C.topRows(active_constraint_index);
-            
-            // Calculate Lagrange multipliers
-            Eigen::MatrixXd Q_uu_inv = Q_uu.inverse();
-            Eigen::MatrixXd lambda = -(grad_u_g * Q_uu_inv * grad_u_g.transpose()).inverse() * (grad_u_g * Q_uu_inv * Q_u);
+            // Build constraint matrices
+            int n_constraints = active_control_constraints.size() + active_state_constraints.size();
+            Eigen::MatrixXd C = Eigen::MatrixXd::Zero(n_constraints, control_dim);
+            Eigen::MatrixXd D = Eigen::MatrixXd::Zero(n_constraints, state_dim);
 
-            // Find indices where lambda is non-negative
-            std::vector<int> active_indices;
-            for (int i = 0; i < lambda.rows(); ++i) {
-                if (lambda(i) >= 0) {
-                    active_indices.push_back(i);
+            // Fill control constraints
+            for (size_t i = 0; i < active_control_constraints.size(); i++) {
+                C.row(i) = active_control_constraints[i].transpose();
+            }
+
+            // Fill state constraints
+            for (size_t i = 0; i < active_state_constraints.size(); i++) {
+                int idx = active_control_constraints.size() + i;
+                C.row(idx) = active_state_constraints[i].transpose() * B;
+                D.row(idx) = active_state_constraints[i].transpose() * A;
+            }
+
+            // Compute Lagrange multipliers
+            Eigen::MatrixXd Q_uu_inv = Q_uu.inverse();
+            Eigen::VectorXd lambda = -(C * Q_uu_inv * C.transpose()).inverse() * (C * Q_uu_inv * Q_u);
+
+            // Check for negative multipliers
+            std::vector<int> valid_constraints;
+            for (int i = 0; i < lambda.size(); i++) {
+                if (lambda[i] >= 0) {
+                    valid_constraints.push_back(i);
                 }
             }
-            int active_count_new = active_indices.size();
 
-            // Create new constraint matrices
-            Eigen::MatrixXd C_new = Eigen::MatrixXd::Zero(active_count_new, control_dim);
-            Eigen::MatrixXd D_new = Eigen::MatrixXd::Zero(active_count_new, state_dim);
-
-            if (active_count_new > 0) {
-                // Fill new constraint matrices with active constraints
-                for (int i = 0; i < active_count_new; ++i) {
-                    C_new.row(i) = grad_u_g.row(active_indices[i]);
-                    D_new.row(i) = grad_x_g.row(active_indices[i]);
+            if (valid_constraints.empty()) {
+                // All multipliers negative - revert to unconstrained
+                K = -Q_uu_inv * Q_ux;
+                k = -Q_uu_inv * Q_u;
+            } else {
+                // Recompute with valid constraints only
+                Eigen::MatrixXd C_valid(valid_constraints.size(), control_dim);
+                Eigen::MatrixXd D_valid(valid_constraints.size(), state_dim);
+                for (size_t i = 0; i < valid_constraints.size(); i++) {
+                    C_valid.row(i) = C.row(valid_constraints[i]);
+                    D_valid.row(i) = D.row(valid_constraints[i]);
                 }
 
-                // Calculate feedback gains
-                Eigen::MatrixXd W = -(C_new * Q_uu_inv * C_new.transpose()).inverse() * (C_new * Q_uu_inv);
-                Eigen::MatrixXd H = Q_uu_inv * (Eigen::MatrixXd::Identity(control_dim, control_dim) - C_new.transpose() * W);
+                Eigen::MatrixXd W = -(C_valid * Q_uu_inv * C_valid.transpose()).inverse() * 
+                                   (C_valid * Q_uu_inv);
+                Eigen::MatrixXd H = Q_uu_inv * (Eigen::MatrixXd::Identity(control_dim, control_dim) - 
+                                   C_valid.transpose() * W);
                 k = -H * Q_u;
-                K = -H * Q_ux + W.transpose() * D_new;
-            } else {
-                // If no active constraints remain, revert to unconstrained solution
-                Eigen::MatrixXd H = Q_uu.inverse();
-                K = -H * Q_ux;
-                k = -H * Q_u;
+                K = -H * Q_ux + W.transpose() * D_valid;
             }
         }
+
 
         // Store Q-function matrices
         Q_UU_[t] = Q_uu;
@@ -503,9 +528,11 @@ bool CDDP::solveBackwardPass() {
         // Compute optimality gap (Inf-norm) for convergence check
         Qu_error = std::max(Qu_error, Q_u.lpNorm<Eigen::Infinity>());
 
-        // TODO: Add constraint optimality gap analysis
-        optimality_gap_ = Qu_error;
+        
     }
+
+    // TODO: Add constraint optimality gap analysis
+    optimality_gap_ = Qu_error;
 
     return true;
 }
@@ -573,8 +600,8 @@ bool CDDP::solveForwardPass() {
             osqp_solver_.SetObjectiveVector(q);  
 
             // Lower and upper bounds
-            Eigen::VectorXd lb = 1.0 * (control_box_constraint.getLowerBound() - u);
-            Eigen::VectorXd ub = 1.0 * (control_box_constraint.getUpperBound() - u);    
+            Eigen::VectorXd lb = 1.0 * (control_box_constraint->getLowerBound() - u);
+            Eigen::VectorXd ub = 1.0 * (control_box_constraint->getUpperBound() - u);    
             osqp_solver_.SetBounds(lb, ub);
 
             // Solve the QP problem TODO: Use SDQP instead of OSQP
@@ -1128,8 +1155,8 @@ bool CDDP::solveCLDDPBackwardPass() {
         osqp_solver_.SetObjectiveVector(q);  
 
         // Lower and upper bounds
-        Eigen::VectorXd lb = 1.0 * (control_box_constraint.getLowerBound() - u);
-        Eigen::VectorXd ub = 1.0 * (control_box_constraint.getUpperBound() - u);    
+        Eigen::VectorXd lb = 1.0 * (control_box_constraint->getLowerBound() - u);
+        Eigen::VectorXd ub = 1.0 * (control_box_constraint->getUpperBound() - u);    
         osqp_solver_.SetBounds(lb, ub);
 
         // Solve the QP problem TODO: Use SDQP instead of OSQP
