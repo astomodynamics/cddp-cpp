@@ -30,7 +30,7 @@ option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
 option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
 set(GUROBI_ROOT /home/tom/.local/lib/gurobi1103/linux64)
-option(CDDP-CPP_TORCH "Whether to use LibTorch." ON)
+set(CDDP-CPP_TORCH "Whether to use LibTorch." ON) # cannot be turned off
 option(CDDP-CPP_TORCH_GPU "Whether to use GPU." ON)
 
 # Find packages
@@ -64,72 +64,6 @@ if (CDDP-CPP_BUILD_TESTS)
   )
   FetchContent_MakeAvailable(googletest)
   include(GoogleTest)
-endif()
-
-# Include directories
-include_directories(
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${Python3_INCLUDE_DIRS}
-  ${NUMPY_INCLUDE_DIR}
-) 
-
-# Add your library
-set(cddp_core_srcs
-  src/cddp_core/dynamical_system.cpp
-  src/cddp_core/objective.cpp
-  src/cddp_core/constraint.cpp
-  src/cddp_core/cddp_core.cpp
-)
-
-set(dynamics_model_srcs
-  src/dynamics_model/pendulum.cpp
-  src/dynamics_model/dubins_car.cpp
-  src/dynamics_model/bicycle.cpp
-  src/dynamics_model/cartpole.cpp
-  src/dynamics_model/quadrotor.cpp
-  src/dynamics_model/manipulator.cpp
-  src/dynamics_model/spacecraft_linear.cpp
-)
-
-add_library(${PROJECT_NAME} 
-  ${cddp_core_srcs}
-  ${dynamics_model_srcs}
-)
-
-target_link_libraries(${PROJECT_NAME} 
-  Eigen3::Eigen 
-  osqp-cpp 
-  Python3::Python
-  Python3::Module
-  Python3::NumPy
-) 
-
-target_include_directories(${PROJECT_NAME} PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/cddp-cpp>
-  $<INSTALL_INTERFACE:include> 
-)
-
-# Gurobi 
-if (CDDP-CPP_GUROBI)
-  if (NOT GUROBI_ROOT)
-    message(FATAL_ERROR "Please set GUROBI_ROOT.")
-  endif()
-  set(GUROBI_INCLUDE_DIRS ${GUROBI_ROOT}/include) # Set the path to the Gurobi include directory
-  set(GUROBI_LIBRARIES ${GUROBI_ROOT}/lib/libgurobi_c++.a) # Set the path to the Gurobi library
-  find_library(GUROBI_LIBRARY gurobi_c++ PATHS ${GUROBI_ROOT}/lib)
-  find_path(GUROBI_INCLUDE_DIR gurobi_c++.h PATHS ${GUROBI_ROOT}/include)
-  link_directories(${GUROBI_ROOT}/lib) 
-
-  if (GUROBI_LIBRARIES AND GUROBI_INCLUDE_DIR)
-    message(STATUS "Found Gurobi: ${GUROBI_LIBRARIES} ${GUROBI_LIBRARY}")
-    message(STATUS "Gurobi include directory: ${GUROBI_INCLUDE_DIR}")
-    
-    include_directories(${GUROBI_INCLUDE_DIR})
-    target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARIES}  gurobi_c++ 
-    gurobi110) 
-  else()
-    message(FATAL_ERROR "Could not find Gurobi. Please set GUROBI_ROOT.")
-  endif()
 endif()
 
 # LibTorch
@@ -177,11 +111,78 @@ if (CDDP-CPP_TORCH)
   set(LIBTORCH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build/libtorch)
 
   find_package(Torch REQUIRED PATHS ${LIBTORCH_DIR} NO_DEFAULT_PATH)
-  target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
-  target_include_directories(${PROJECT_NAME} PUBLIC ${TORCH_INCLUDE_DIRS})
   message(STATUS "Found LibTorch: ${TORCH_LIBRARIES}")
 endif()
 
+
+# Include directories
+include_directories(
+  ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${Python3_INCLUDE_DIRS}
+  ${NUMPY_INCLUDE_DIR}
+) 
+
+# Add your library
+set(cddp_core_srcs
+  src/cddp_core/dynamical_system.cpp
+  src/cddp_core/objective.cpp
+  src/cddp_core/constraint.cpp
+  src/cddp_core/cddp_core.cpp
+  src/cddp_core/torch_dynamical_system.cpp
+)
+
+set(dynamics_model_srcs
+  src/dynamics_model/pendulum.cpp
+  src/dynamics_model/dubins_car.cpp
+  src/dynamics_model/bicycle.cpp
+  src/dynamics_model/cartpole.cpp
+  src/dynamics_model/quadrotor.cpp
+  src/dynamics_model/manipulator.cpp
+  src/dynamics_model/spacecraft_linear.cpp
+)
+
+add_library(${PROJECT_NAME} 
+  ${cddp_core_srcs}
+  ${dynamics_model_srcs}
+)
+
+target_link_libraries(${PROJECT_NAME} 
+  Eigen3::Eigen 
+  osqp-cpp 
+  Python3::Python
+  Python3::Module
+  Python3::NumPy
+  ${TORCH_LIBRARIES}
+) 
+
+target_include_directories(${PROJECT_NAME} PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/cddp-cpp>
+  $<INSTALL_INTERFACE:include> 
+  ${TORCH_INCLUDE_DIRS}
+)
+
+# Gurobi 
+if (CDDP-CPP_GUROBI)
+  if (NOT GUROBI_ROOT)
+    message(FATAL_ERROR "Please set GUROBI_ROOT.")
+  endif()
+  set(GUROBI_INCLUDE_DIRS ${GUROBI_ROOT}/include) # Set the path to the Gurobi include directory
+  set(GUROBI_LIBRARIES ${GUROBI_ROOT}/lib/libgurobi_c++.a) # Set the path to the Gurobi library
+  find_library(GUROBI_LIBRARY gurobi_c++ PATHS ${GUROBI_ROOT}/lib)
+  find_path(GUROBI_INCLUDE_DIR gurobi_c++.h PATHS ${GUROBI_ROOT}/include)
+  link_directories(${GUROBI_ROOT}/lib) 
+
+  if (GUROBI_LIBRARIES AND GUROBI_INCLUDE_DIR)
+    message(STATUS "Found Gurobi: ${GUROBI_LIBRARIES} ${GUROBI_LIBRARY}")
+    message(STATUS "Gurobi include directory: ${GUROBI_INCLUDE_DIR}")
+    
+    include_directories(${GUROBI_INCLUDE_DIR})
+    target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARIES}  gurobi_c++ 
+    gurobi110) 
+  else()
+    message(FATAL_ERROR "Could not find Gurobi. Please set GUROBI_ROOT.")
+  endif()
+endif()
 
 # Build and register tests.
 if (CDDP-CPP_BUILD_TESTS)

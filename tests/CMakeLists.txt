@@ -71,4 +71,8 @@ if (CDDP-CPP_TORCH)
     add_executable(test_torch test_torch.cpp)
     target_link_libraries(test_torch gtest gmock gtest_main cddp)
     gtest_discover_tests(test_torch)
+
+    add_executable(test_torch_pendulum dynamics_model/test_torch_pendulum.cpp)
+    target_link_libraries(test_torch_pendulum gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_torch_pendulum)
 endif()
