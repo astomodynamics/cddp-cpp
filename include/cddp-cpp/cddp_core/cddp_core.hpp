@@ -135,17 +135,29 @@ public:
         
     // Get a specific constraint by name
     template <typename T>
-    T& getConstraint(const std::string& name) {
+    T* getConstraint(const std::string& name) {
         auto it = constraint_set_.find(name);
+        
+        // Special case for ControlBoxConstraint - must exist
+        if (std::is_same<T, ControlBoxConstraint>::value) {
+            if (it == constraint_set_.end()) {
+                throw std::runtime_error("ControlBoxConstraint not found");
+            }
+            return dynamic_cast<T*>(it->second.get());
+        }
+        
+        // For other constraints, return nullptr if not found
         if (it == constraint_set_.end()) {
-            throw std::runtime_error("Constraint not found: " + name);
+            return nullptr;
         }
-        try {
-            // Note: Returning a non-const reference here
-            return dynamic_cast<T&>(*(it->second)); 
-        } catch (const std::bad_cast& e) {
-            throw std::runtime_error("Invalid constraint type: " + name);
+
+        // Try to cast to the requested type
+        T* cast_constraint = dynamic_cast<T*>(it->second.get());
+        if (!cast_constraint) {
+            return nullptr;
         }
+
+        return cast_constraint;
     }
 
     // Getter for the constraint set
