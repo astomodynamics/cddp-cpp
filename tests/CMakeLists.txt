@@ -65,3 +65,10 @@ if (CDDP-CPP_GUROBI)
     target_link_libraries(test_sdqp gtest gmock gtest_main cddp)
     gtest_discover_tests(test_sdqp)
 endif()
+
+# Test for torch
+if (CDDP-CPP_TORCH)
+    add_executable(test_torch test_torch.cpp)
+    target_link_libraries(test_torch gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_torch)
+endif()
