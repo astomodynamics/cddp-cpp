@@ -22,10 +22,11 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
+    
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends ${{ matrix.torch == 'ON' && matrix.torch_gpu == 'ON' ? 'cuda-toolkit' : '' }}  # Install CUDA Toolkit if needed
+        sudo apt-get install -y --no-install-recommends ${{ matrix.torch == 'ON' && matrix.torch_gpu == 'ON' ? 'cuda-toolkit-12-4' : '' }}  # Install CUDA Toolkit if needed
 
     - name: Configure CMake
       run: |
