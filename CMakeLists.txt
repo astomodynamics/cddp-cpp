@@ -36,13 +36,15 @@ option(CDDP-CPP_TORCH "Whether to use LibTorch" ON)
 option(CDDP-CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
 set(LIBTORCH_DIR /home/tom/.local/lib CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
-# Find packages
-find_package(Eigen3 REQUIRED) 
+# Python Configuration
 set(Python_EXECUTABLE /usr/bin/python3.10) # Or the path to your desired Python interpreter
 execute_process( # Find the NumPy include directory
   COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
   OUTPUT_VARIABLE NUMPY_INCLUDE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE 
 )
+
+# Find packages
+find_package(Eigen3 REQUIRED) 
 find_package(Python3 3.10 EXACT COMPONENTS Interpreter Development NumPy REQUIRED)
 
 # Enable FetchContent for downloading dependencies
@@ -245,20 +247,6 @@ add_subdirectory(examples)
 # Cmake compile commmand:
 # $ mkdir build
 # $ cd build
-# $ cmake  -DCDDP-CPP_GUROBI=ON -DCDDP-CPP_BUILD_TESTS=ON -DGUROBI_ROOT=/home/tom/.local/lib/gurobi1103/linux64 ..
+# $ cmake  -DCDDP-CPP_GUROBI=ON -DCDDP-CPP_BUILD_TESTS=ON -DGUROBI_ROOT=/home/tom/.local/lib/gurobi1103/linux64 -DCDDP-CPP_TORCH=ON -DCDDP-CPP_TORCH_GPU=ON -DLIBTORCH_DIR=/home/tom/.local/lib/libtorch ..
 # $ make -j4
 # $ make test
-
-
-# # Add the main library
-# message(STATUS "CDDP-cpp: Adding CDDP-cpp library...")
-# add_library(cddp src/cddp_core/CDDPProblem.cpp)
-# target_link_libraries(cddp PUBLIC 
-#     Eigen3::Eigen 
-#     PRIVATE osqp-cpp ${CMAKE_DL_LIBS})
-# target_include_directories(cddp PUBLIC 
-#     "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>" 
-#     include/cddp)
-# message(STATUS "CDDP-cpp: Added CDDP-cpp library.")
-
-
