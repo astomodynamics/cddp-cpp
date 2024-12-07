@@ -34,7 +34,7 @@ set(GUROBI_ROOT /home/tom/.local/lib/gurobi1103/linux64)
 # LibTorch Configuration
 option(CDDP-CPP_TORCH "Whether to use LibTorch" ON)
 option(CDDP-CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
-set(LIBTORCH_DIR /home/tom/.local CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
+set(LIBTORCH_DIR /home/tom/.local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Find packages
 find_package(Eigen3 REQUIRED) 
