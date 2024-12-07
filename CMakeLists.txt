@@ -30,8 +30,11 @@ option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
 option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
 set(GUROBI_ROOT /home/tom/.local/lib/gurobi1103/linux64)
-set(CDDP-CPP_TORCH "Whether to use LibTorch." ON) # cannot be turned off
-option(CDDP-CPP_TORCH_GPU "Whether to use GPU." ON)
+
+# LibTorch Configuration
+option(CDDP-CPP_TORCH "Whether to use LibTorch" ON)
+option(CDDP-CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
+set(LIBTORCH_DIR /home/tom/.local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Find packages
 find_package(Eigen3 REQUIRED) 
@@ -68,50 +71,85 @@ endif()
 
 # LibTorch
 if (CDDP-CPP_TORCH)
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/build/libtorch/share/cmake/Torch/TorchConfig.cmake)
-    message(STATUS "Found LibTorch at ${CMAKE_CURRENT_SOURCE_DIR}/build/libtorch")
-  else()
-    message(STATUS "Downloading LibTorch...")
-    # Download and extract LibTorch
-    if (CDDP-CPP_TORCH_GPU)
+  # Function to download and extract LibTorch
+  function(download_libtorch cuda_support download_dir)
+  if(cuda_support)
       set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip")
-    else()
+  else()
       set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip")
-    endif()
-
-    # Set the download directory
-    set(DOWLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build)
-
-    # Create the download directory
-    file(MAKE_DIRECTORY ${DOWLOAD_DIR})
-
-    # Download the file 
-    file(DOWNLOAD ${LIBTORCH_URL} ${DOWLOAD_DIR}/libtorch-shared-with-deps-latest.zip
-      STATUS DOWNLOAD_STATUS
-      SHOW_PROGRESS
-    )
-
-    # Check if the download was successful
-    list(GET DOWNLOAD_STATUS 0 DOWNLOAD_STATUS_CODE)
-    if(NOT DOWNLOAD_STATUS_CODE EQUAL 0)
-      message(FATAL_ERROR "Failed to download LibTorch.")
-    endif()
-    
-    # Extract the file    
-    execute_process(
-      COMMAND ${CMAKE_COMMAND} -E tar xvf ${DOWLOAD_DIR}/libtorch-shared-with-deps-latest.zip
-      WORKING_DIRECTORY ${DOWLOAD_DIR}
-    )
-
-    # Remove the zip file
-    file(REMOVE ${DOWLOAD_DIR}/libtorch-shared-with-deps-latest.zip)
   endif()
 
-  # Set the path to the LibTorch installation
-  set(LIBTORCH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/build/libtorch)
+  set(DOWNLOAD_PATH "${download_dir}/libtorch-shared-with-deps-latest.zip")
 
-  find_package(Torch REQUIRED PATHS ${LIBTORCH_DIR} NO_DEFAULT_PATH)
-  message(STATUS "Found LibTorch: ${TORCH_LIBRARIES}")
+  message(STATUS "Downloading LibTorch from ${LIBTORCH_URL}")
+  file(DOWNLOAD "${LIBTORCH_URL}" "${DOWNLOAD_PATH}"
+      SHOW_PROGRESS
+      STATUS DOWNLOAD_STATUS
+  )
+
+  list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+  list(GET DOWNLOAD_STATUS 1 ERROR_MESSAGE)
+
+  if(NOT STATUS_CODE EQUAL 0)
+      message(FATAL_ERROR "Failed to download LibTorch: ${ERROR_MESSAGE}")
+  endif()
+
+  message(STATUS "Extracting LibTorch...")
+  execute_process(
+      COMMAND ${CMAKE_COMMAND} -E tar xf "${DOWNLOAD_PATH}"
+      WORKING_DIRECTORY "${download_dir}"
+      RESULT_VARIABLE EXTRACT_RESULT
+  )
+
+  if(NOT EXTRACT_RESULT EQUAL 0)
+      message(FATAL_ERROR "Failed to extract LibTorch")
+  endif()
+
+  file(REMOVE "${DOWNLOAD_PATH}")
+  endfunction()
+
+  # Try to find LibTorch in the following priority order:
+  # 1. Local LibTorch directory (if specified)
+  # 2. Previously installed LibTorch under build directory
+  # 3. Download and install new copy
+  set(TORCH_FOUND FALSE)
+    
+  # Priority 1: Check local LibTorch directory
+  if(LIBTORCH_DIR)
+      if(EXISTS "${LIBTORCH_DIR}/share/cmake/Torch/TorchConfig.cmake")
+          find_package(Torch REQUIRED PATHS "${LIBTORCH_DIR}" NO_DEFAULT_PATH)
+          set(TORCH_FOUND TRUE)
+          message(STATUS "Found LibTorch in local directory: ${LIBTORCH_DIR}")
+      else()
+          message(WARNING "Specified LIBTORCH_DIR does not contain a valid LibTorch installation")
+      endif()
+  endif()
+  
+  # Priority 2: Check previously installed LibTorch under build directory
+  if(NOT TORCH_FOUND)
+      set(BUILD_LIBTORCH_DIR "${CMAKE_BINARY_DIR}/libtorch")
+      if(EXISTS "${BUILD_LIBTORCH_DIR}/share/cmake/Torch/TorchConfig.cmake")
+          find_package(Torch REQUIRED PATHS "${BUILD_LIBTORCH_DIR}" NO_DEFAULT_PATH)
+          set(TORCH_FOUND TRUE)
+          message(STATUS "Found LibTorch in build directory: ${BUILD_LIBTORCH_DIR}")
+      endif()
+  endif()
+  
+  # Priority 3: Download and install new copy
+  if(NOT TORCH_FOUND)
+      message(STATUS "LibTorch not found in preferred locations. Downloading fresh copy...")
+      download_libtorch(${CDDP-CPP_TORCH_GPU} "${CMAKE_BINARY_DIR}")
+      find_package(Torch REQUIRED PATHS "${CMAKE_BINARY_DIR}/libtorch" NO_DEFAULT_PATH)
+      message(STATUS "Successfully downloaded and installed LibTorch to: ${CMAKE_BINARY_DIR}/libtorch")
+  endif()
+
+  # Set compilation flags for CUDA if GPU support is enabled
+  if(CDDP-CPP_TORCH_GPU)
+      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
+  endif()
+ 
+  # Export LibTorch variables for other parts of the build
+  set(TORCH_INSTALL_PREFIX ${Torch_DIR}/../../../ CACHE PATH "LibTorch installation directory")
 endif()
 
 
@@ -160,6 +198,11 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   $<INSTALL_INTERFACE:include> 
   ${TORCH_INCLUDE_DIRS}
 )
+
+# Ensure proper CUDA support if enabled
+if(CDDP-CPP_TORCH_GPU)
+  set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES native)
+endif()
 
 # Gurobi 
 if (CDDP-CPP_GUROBI)
