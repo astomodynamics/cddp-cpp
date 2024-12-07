@@ -109,13 +109,15 @@ Manipulator with joint torque control:
 sudo apt-get install libeigen3-dev # For Ubuntu
 brew install eigen # For macOS
 ```
-
 Although the library automatically finds and installs the following dependencies via [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html), if you do not have ones, here is how you can install on your own.
 
 * [OSQP](https://osqp.org/) (QP solver) and [osqp-cpp](https://github.com/google/osqp-cpp) (C++ Wrapper for OSQP)
 ```bash
 conda install -c conda-forge osqp # Optional
 ```
+* [libtorch](https://pytorch.org/get-started/locally/) : This library utilizes Torch for its underlying computations. It will be automatically installed during the build process.
+
+* [[CUDA](https://developer.nvidia.com/cuda-toolkit)(Optional): If you want to leverage GPU acceleration for torch, ensure you have CUDA installed. You can download it from the [NVIDIA website](https://developer.nvidia.com/cuda-12-4-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local).
 
 ### Building
 ```bash
@@ -126,9 +128,6 @@ cmake ..
 make -j4
 make test
 ```
-
-## Basic Usage
-
 
 ## ROS 
 If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Package](https://github.com/astomodynamics/cddp_mpc). You do not need to install this library to use the package. MPC package will automatically install this library as a dependency.
