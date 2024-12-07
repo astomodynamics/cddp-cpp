@@ -11,32 +11,28 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        # Test with and without LibTorch CPU and GPU
+        # Test with LibTorch CPU and GPU
         include:
-          - gurobi: "OFF"
-            torch: "ON"
-            torch_gpu: "ON"
-          - gurobi: "OFF"
-            torch: "ON"
+          - torch: "ON"
+            torch_gpu: "ON" 
+          - torch: "ON"
             torch_gpu: "OFF" 
 
     steps:
     - uses: actions/checkout@v3
-    
+
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends ${{ matrix.torch == 'ON' && matrix.torch_gpu == 'ON' ? 'cuda-toolkit-12-4' : '' }}  # Install CUDA Toolkit if needed
+        sudo apt-get install -y --no-install-recommends cuda-toolkit-12-4 # Install CUDA Toolkit 
 
     - name: Configure CMake
       run: |
         cmake -B ${{ github.workspace }}/build \
           -DCMAKE_BUILD_TYPE=Release \
-          -DCDDP-CPP_GUROBI=${{ matrix.gurobi }} \
           -DCDDP-CPP_BUILD_TESTS=ON \
           -DCDDP-CPP_TORCH=${{ matrix.torch }} \
           -DCDDP-CPP_TORCH_GPU=${{ matrix.torch_gpu }} \
-          ${{ matrix.gurobi == 'ON' ? '-DGUROBI_ROOT=/opt/gurobi' : '' }}  # Adjust GUROBI_ROOT if necessary
 
     - name: Build
       run: cmake --build ${{ github.workspace }}/build --config Release
