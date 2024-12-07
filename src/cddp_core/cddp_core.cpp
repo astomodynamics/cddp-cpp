@@ -424,13 +424,13 @@ bool CDDP::solveBackwardPass() {
 
         // TODO: Implement active set method
         for (int j = 0; j < control_dim; j++) {
-            if (u(j) <= control_box_constraint.getLowerBound()(j) + active_set_tol) {
+            if (u(j) <= control_box_constraint->getLowerBound()(j) + active_set_tol) {
                 Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
                 e(j) = 1.0;
                 C.row(active_constraint_index) = -e;  // Note the negative sign
                 D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
                 active_constraint_index += 1;
-            } else if (u(j) >= control_box_constraint.getUpperBound()(j) - active_set_tol) {
+            } else if (u(j) >= control_box_constraint->getUpperBound()(j) - active_set_tol) {
                 Eigen::VectorXd e = Eigen::VectorXd::Zero(control_dim);
                 e(j) = 1.0;  // No negative here
                 C.row(active_constraint_index) = e;
@@ -573,8 +573,8 @@ bool CDDP::solveForwardPass() {
             osqp_solver_.SetObjectiveVector(q);  
 
             // Lower and upper bounds
-            Eigen::VectorXd lb = 1.0 * (control_box_constraint.getLowerBound() - u);
-            Eigen::VectorXd ub = 1.0 * (control_box_constraint.getUpperBound() - u);    
+            Eigen::VectorXd lb = 1.0 * (control_box_constraint->getLowerBound() - u);
+            Eigen::VectorXd ub = 1.0 * (control_box_constraint->getUpperBound() - u);    
             osqp_solver_.SetBounds(lb, ub);
 
             // Solve the QP problem TODO: Use SDQP instead of OSQP
@@ -1128,8 +1128,8 @@ bool CDDP::solveCLDDPBackwardPass() {
         osqp_solver_.SetObjectiveVector(q);  
 
         // Lower and upper bounds
-        Eigen::VectorXd lb = 1.0 * (control_box_constraint.getLowerBound() - u);
-        Eigen::VectorXd ub = 1.0 * (control_box_constraint.getUpperBound() - u);    
+        Eigen::VectorXd lb = 1.0 * (control_box_constraint->getLowerBound() - u);
+        Eigen::VectorXd ub = 1.0 * (control_box_constraint->getUpperBound() - u);    
         osqp_solver_.SetBounds(lb, ub);
 
         // Solve the QP problem TODO: Use SDQP instead of OSQP
