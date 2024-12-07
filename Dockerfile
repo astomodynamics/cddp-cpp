@@ -45,4 +45,4 @@ COPY . /app
 RUN mkdir build && \
     cd build && \
     cmake .. && \
-    make
+    make -j$(nproc)
