@@ -34,7 +34,7 @@ set(GUROBI_ROOT /home/tom/.local/lib/gurobi1103/linux64)
 # LibTorch Configuration
 option(CDDP-CPP_TORCH "Whether to use LibTorch" ON)
 option(CDDP-CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
-set(LIBTORCH_DIR /home/tom/.local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
+set(LIBTORCH_DIR /home/tom/.local/lib CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Find packages
 find_package(Eigen3 REQUIRED) 
@@ -109,13 +109,20 @@ if (CDDP-CPP_TORCH)
   endfunction()
 
   # Try to find LibTorch in the following priority order:
+  # 0. Default locations
   # 1. Local LibTorch directory (if specified)
   # 2. Previously installed LibTorch under build directory
   # 3. Download and install new copy
-  set(TORCH_FOUND FALSE)
-    
+  find_package(Torch QUIET) # Try finding in default locations first
+  
+  # Priority 0: Check default locations
+  if (TORCH_FOUND)
+    message(STATUS "Found LibTorch in default locations")
+    set(TORCH_FOUND TRUE)
+  endif()
+
   # Priority 1: Check local LibTorch directory
-  if(LIBTORCH_DIR)
+  if(NOT TORCH_FOUND AND LIBTORCH_DIR)
       if(EXISTS "${LIBTORCH_DIR}/share/cmake/Torch/TorchConfig.cmake")
           find_package(Torch REQUIRED PATHS "${LIBTORCH_DIR}" NO_DEFAULT_PATH)
           set(TORCH_FOUND TRUE)
