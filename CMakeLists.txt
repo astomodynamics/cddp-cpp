@@ -73,7 +73,7 @@ endif()
 if (CDDP-CPP_TORCH)
   # Function to download and extract LibTorch
   function(download_libtorch cuda_support download_dir)
-  if(cuda_support)
+  if(cuda_support) # FIXME: Chenge the version of LibTorch to your desired version
       set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip")
   else()
       set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip")
