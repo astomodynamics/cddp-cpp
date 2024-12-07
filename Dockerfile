@@ -35,7 +35,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Set environment variables for LibTorch
-ENV LIBTORCH_DIR=/libtorch
+ENV LIBTORCH_DIR=/libtorch/libtorch
 ENV LD_LIBRARY_PATH=$LIBTORCH_DIR/lib:$LD_LIBRARY_PATH
 
 # Create a directory for your project
@@ -55,7 +55,7 @@ RUN rm -rf build && \
             -DCDDP-CPP_TORCH=ON \
             -DCDDP-CPP_TORCH_GPU=ON \
             -DPython_EXECUTABLE=/usr/bin/python3 \
-            -DLIBTORCH_DIR=/libtorch \
+            -DLIBTORCH_DIR=/libtorch/libtorch \
             .. && \
     make -j$(nproc) && \
     make test
