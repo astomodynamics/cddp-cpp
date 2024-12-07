@@ -8,7 +8,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: nvidia/cuda:12.4.0-base-ubuntu22.04 
     strategy:
       matrix:
         # Test with LibTorch CPU and GPU
@@ -24,7 +24,12 @@ jobs:
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends cuda-toolkit-12-4 # Install CUDA Toolkit 
+        wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
+        sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
+        sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub
+        sudo add-apt-repository "deb https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/ /"
+        sudo apt-get update
+        sudo apt-get -y install cuda-toolkit-12-4
 
     - name: Configure CMake
       run: |
