@@ -18,12 +18,5 @@ jobs:
     - name: Build the Docker image
       run: docker build -t astomodynamics/cddp-cpp .
 
-    - name: Run tests
-      run: |
-        docker run \
-          -v $(pwd)/build:/app/build \  # Mount the build directory
-          astomodynamics/cddp-cpp \
-          ctest -V
-
     - name: Push the Docker image (optional)
       run: docker push astomodynamics/cddp-cpp

@@ -73,39 +73,39 @@ endif()
 if (CDDP-CPP_TORCH)
   # Function to download and extract LibTorch
   function(download_libtorch cuda_support download_dir)
-  if(cuda_support) # FIXME: Chenge the version of LibTorch to your desired version
-      set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip")
-  else()
-      set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip")
-  endif()
+    if(cuda_support) # FIXME: Chenge the version of LibTorch to your desired version
+        set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip")
+    else()
+        set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip")
+    endif()
 
-  set(DOWNLOAD_PATH "${download_dir}/libtorch-shared-with-deps-latest.zip")
+    set(DOWNLOAD_PATH "${download_dir}/libtorch-shared-with-deps-latest.zip")
 
-  message(STATUS "Downloading LibTorch from ${LIBTORCH_URL}")
-  file(DOWNLOAD "${LIBTORCH_URL}" "${DOWNLOAD_PATH}"
-      SHOW_PROGRESS
-      STATUS DOWNLOAD_STATUS
-  )
+    message(STATUS "Downloading LibTorch from ${LIBTORCH_URL}")
+    file(DOWNLOAD "${LIBTORCH_URL}" "${DOWNLOAD_PATH}"
+        SHOW_PROGRESS
+        STATUS DOWNLOAD_STATUS
+    )
 
-  list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
-  list(GET DOWNLOAD_STATUS 1 ERROR_MESSAGE)
+    list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
+    list(GET DOWNLOAD_STATUS 1 ERROR_MESSAGE)
 
-  if(NOT STATUS_CODE EQUAL 0)
-      message(FATAL_ERROR "Failed to download LibTorch: ${ERROR_MESSAGE}")
-  endif()
+    if(NOT STATUS_CODE EQUAL 0)
+        message(FATAL_ERROR "Failed to download LibTorch: ${ERROR_MESSAGE}")
+    endif()
 
-  message(STATUS "Extracting LibTorch...")
-  execute_process(
-      COMMAND ${CMAKE_COMMAND} -E tar xf "${DOWNLOAD_PATH}"
-      WORKING_DIRECTORY "${download_dir}"
-      RESULT_VARIABLE EXTRACT_RESULT
-  )
+    message(STATUS "Extracting LibTorch...")
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E tar xf "${DOWNLOAD_PATH}"
+        WORKING_DIRECTORY "${download_dir}"
+        RESULT_VARIABLE EXTRACT_RESULT
+    )
 
-  if(NOT EXTRACT_RESULT EQUAL 0)
-      message(FATAL_ERROR "Failed to extract LibTorch")
-  endif()
+    if(NOT EXTRACT_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to extract LibTorch")
+    endif()
 
-  file(REMOVE "${DOWNLOAD_PATH}")
+    file(REMOVE "${DOWNLOAD_PATH}")
   endfunction()
 
   # Try to find LibTorch in the following priority order:
