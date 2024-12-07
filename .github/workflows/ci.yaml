@@ -22,21 +22,10 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-
-    - name: Install Gurobi (if needed)
-      if: matrix.gurobi == 'ON'
-      run: |
-        # Replace this with the actual installation instructions for your Gurobi version
-        wget -O gurobi.sh https://packages.gurobi.com/11.0/gurobi11.0.0_linux64.tar.gz 
-        chmod +x gurobi.sh
-        sudo ./gurobi.sh
-        # You might need to accept the license agreement interactively or by modifying the script
-        # Ensure Gurobi is in the PATH or set GUROBI_ROOT appropriately
-
     - name: Install dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y --no-install-recommends ${{{{ matrix.torch == 'ON' && matrix.torch_gpu == 'ON' ? 'cuda' : '' }}}}  # Install CUDA if needed
+        sudo apt-get install -y --no-install-recommends ${{ matrix.torch == 'ON' && matrix.torch_gpu == 'ON' ? 'cuda-toolkit' : '' }}  # Install CUDA Toolkit if needed
 
     - name: Configure CMake
       run: |
