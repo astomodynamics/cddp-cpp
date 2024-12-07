@@ -1,48 +1,45 @@
-name: C++ CI
+# name: C++ CI
 
-on:
-  push:
-    branches: [ master ] 
-  pull_request:
-    branches: [ master ] 
+# on:
+#   push:
+#     branches: [ master ] 
+#   pull_request:
+#     branches: [ master ] 
 
-jobs:
-  build:
-    runs-on: self-hosted
-    strategy:
-      matrix:
-        # Test with LibTorch CPU and GPU
-        include:
-          - torch: "ON"
-            torch_gpu: "ON" 
-          - torch: "ON"
-            torch_gpu: "OFF" 
+# jobs:
+#   build:
+#     runs-on: nvidia/cuda:12.4.0-base-ubuntu22.04 
+#     strategy:
+#       matrix:
+#         # Test with LibTorch CPU and GPU
+#         include:
+#           - torch: "ON"
+#             torch_gpu: "ON" 
+#           - torch: "ON"
+#             torch_gpu: "OFF" 
 
-    steps:
-    - uses: actions/checkout@v3
+#     # - name: Install dependenciesfs
+#     #   run: |
+#     #     sudo apt-get update
+#     #     wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
+#     #     sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
+#     #     wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/cuda-repo-ubuntu2204-12-4-local_12.4.0-550.54.14-1_amd64.deb
+#     #     sudo dpkg -i cuda-repo-ubuntu2204-12-4-local_12.4.0-550.54.14-1_amd64.deb
+#     #     sudo cp /var/cuda-repo-ubuntu2204-12-4-local/cuda-*-keyring.gpg /usr/share/keyrings/
+#     #     sudo apt-get update
+#     #     sudo apt-get -y install cuda-toolkit-12-4
 
-    # - name: Install dependencies
-    #   run: |
-    #     sudo apt-get update
-    #     wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-ubuntu2204.pin
-    #     sudo mv cuda-ubuntu2204.pin /etc/apt/preferences.d/cuda-repository-pin-600
-    #     wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/cuda-repo-ubuntu2204-12-4-local_12.4.0-550.54.14-1_amd64.deb
-    #     sudo dpkg -i cuda-repo-ubuntu2204-12-4-local_12.4.0-550.54.14-1_amd64.deb
-    #     sudo cp /var/cuda-repo-ubuntu2204-12-4-local/cuda-*-keyring.gpg /usr/share/keyrings/
-    #     sudo apt-get update
-    #     sudo apt-get -y install cuda-toolkit-12-4
+#     - name: Configure CMake
+#       run: |
+#         cmake -B ${{ github.workspace }}/build \
+#           -DCMAKE_BUILD_TYPE=Release \
+#           -DCDDP-CPP_BUILD_TESTS=ON \
+#           -DCDDP-CPP_TORCH=${{ matrix.torch }} \
+#           -DCDDP-CPP_TORCH_GPU=${{ matrix.torch_gpu }} \
 
-    - name: Configure CMake
-      run: |
-        cmake -B ${{ github.workspace }}/build \
-          -DCMAKE_BUILD_TYPE=Release \
-          -DCDDP-CPP_BUILD_TESTS=ON \
-          -DCDDP-CPP_TORCH=${{ matrix.torch }} \
-          -DCDDP-CPP_TORCH_GPU=${{ matrix.torch_gpu }} \
+#     - name: Build
+#       run: cmake --build ${{ github.workspace }}/build --config Release
 
-    - name: Build
-      run: cmake --build ${{ github.workspace }}/build --config Release
-
-    - name: Test
-      working-directory: ${{ github.workspace }}/build
-      run: ctest -V
+#     - name: Test
+#       working-directory: ${{ github.workspace }}/build
+#       run: ctest -V
