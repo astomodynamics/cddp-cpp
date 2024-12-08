@@ -138,6 +138,15 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 * ZJU FAST Lab's GitHub repository: <https://github.com/ZJU-FAST-Lab/SDQP>
 * Yuval Tassa's iLQG/DDP trajectory optimization: <https://www.mathworks.com/matlabcentral/fileexchange/52069-ilqg-ddp-trajectory-optimization>
 
+## Third Party Libraries
+
+This project uses the following open-source libraries:
+
+* OSQP (Apache License 2.0)
+* matplotlibcpp (MIT License)
+* sdqp (MIT License)
+* libtorch (BSD 3-Clause License)
+
 ## Citing
 If you use this work in an academic context, please cite this repository.
 

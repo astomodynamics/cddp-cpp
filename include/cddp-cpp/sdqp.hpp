@@ -3,7 +3,7 @@
 
     Copyright (c) 2022 Zhepei Wang (wangzhepei@live.com)
 
-    Modified by Tomo Sasaki (tomo.sasaki.hiro@gmail.com)
+    Modified by 2024 Tomo Sasaki (tomo.sasaki.hiro@gmail.com)
 
     Permission is hereby granted, free of charge, to any person obtaining a copy
     of this software and associated documentation files (the "Software"), to deal
