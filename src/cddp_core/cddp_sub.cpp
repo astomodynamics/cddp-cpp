@@ -22,7 +22,6 @@
 #include <Eigen/Dense>
 #include <chrono> // For timing
 #include <execution> // For parallel execution policies
-#include "cddp-cpp/sdqp.hpp"
 #include "osqp++.h"
 // TODO: gurobi solver compatibility
 // #include "gurobi_c++.h"
