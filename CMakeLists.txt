@@ -176,6 +176,7 @@ set(cddp_core_srcs
   src/cddp_core/constraint.cpp
   src/cddp_core/cddp_core.cpp
   src/cddp_core/cddp_sub.cpp
+  src/cddp_core/cddp_log.cpp
   src/cddp_core/torch_dynamical_system.cpp
 )
 

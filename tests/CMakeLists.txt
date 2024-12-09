@@ -39,6 +39,10 @@ add_executable(test_clddp_core cddp_core/test_clddp_core.cpp)
 target_link_libraries(test_clddp_core gtest gmock gtest_main cddp)
 gtest_discover_tests(test_clddp_core)
 
+add_executable(test_logcddp_core cddp_core/test_logcddp_core.cpp)
+target_link_libraries(test_logcddp_core gtest gmock gtest_main cddp)
+gtest_discover_tests(test_logcddp_core)
+
 add_executable(test_constraint cddp_core/test_constraint.cpp)
 target_link_libraries(test_constraint gtest gmock gtest_main cddp)
 gtest_discover_tests(test_constraint)
