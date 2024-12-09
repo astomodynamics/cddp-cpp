@@ -29,12 +29,12 @@ set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
 option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
-set(GUROBI_ROOT /home/tom/.local/lib/gurobi1103/linux64)
+set(GUROBI_ROOT $ENV{HOME}/.local/lib/gurobi1103/linux64)
 
 # LibTorch Configuration
 option(CDDP-CPP_TORCH "Whether to use LibTorch" ON)
 option(CDDP-CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
-set(LIBTORCH_DIR /home/tom/.local/lib CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
+set(LIBTORCH_DIR $ENV{HOME}/.local/lib CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Python Configuration
 set(Python_EXECUTABLE /usr/bin/python3.10) # Or the path to your desired Python interpreter
@@ -53,7 +53,7 @@ include(FetchContent)
 # OSQP-CPP
 FetchContent_Declare(
   osqp-cpp
-  GIT_REPOSITORY https://github.com/google/osqp-cpp
+  GIT_REPOSITORY https://github.com/astomodynamics/osqp-cpp.git
   GIT_TAG master
 )
 FetchContent_MakeAvailable(osqp-cpp)
