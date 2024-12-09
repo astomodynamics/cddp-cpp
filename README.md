@@ -117,7 +117,7 @@ conda install -c conda-forge osqp # Optional
 ```
 * [libtorch](https://pytorch.org/get-started/locally/) : This library utilizes Torch for its underlying computations. It will be automatically installed during the build process.
 
-* [[CUDA](https://developer.nvidia.com/cuda-toolkit)(Optional): If you want to leverage GPU acceleration for torch, ensure you have CUDA installed. You can download it from the [NVIDIA website](https://developer.nvidia.com/cuda-12-4-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local).
+* [CUDA](https://developer.nvidia.com/cuda-toolkit)(Optional): If you want to leverage GPU acceleration for torch, ensure you have CUDA installed. You can download it from the [NVIDIA website](https://developer.nvidia.com/cuda-12-4-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local).
 
 ### Building
 ```bash
@@ -142,10 +142,11 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 
 This project uses the following open-source libraries:
 
-* OSQP (Apache License 2.0)
-* matplotlibcpp (MIT License)
-* sdqp (MIT License)
-* libtorch (BSD 3-Clause License)
+* [OSQP](https://github.com/google/osqp-cpp) (Apache License 2.0)
+* [osqp-cpp](https://github.com/google/osqp-cpp) (Apache License 2.0)
+* [matplotlibcpp](https://github.com/lava/matplotlib-cpp) (MIT License)
+* [sdqp](https://github.com/ZJU-FAST-Lab/SDQP) (MIT License)
+* [libtorch](https://github.com/pytorch/pytorch) (BSD 3-Clause License)
 
 ## Citing
 If you use this work in an academic context, please cite this repository.
