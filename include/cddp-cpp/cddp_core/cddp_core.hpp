@@ -227,7 +227,6 @@ private:
     double L_; // Lagrangian
     double dL_; // Lagrangian improvement
     double optimality_gap_ = 1e+10;
-    double barrier_coeff_;
 
     // Cost function
     std::unique_ptr<Objective> objective_; // Objective function
@@ -248,6 +247,9 @@ private:
     std::vector<Eigen::MatrixXd> Q_UU_;
     std::vector<Eigen::MatrixXd> Q_UX_;
     std::vector<Eigen::VectorXd> Q_U_; 
+
+    // Log-barrier method
+    std::unique_ptr<LogBarrier> log_barrier_;
 
     // QP sover 
     osqp::OsqpSolver osqp_solver_;
