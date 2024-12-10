@@ -47,6 +47,10 @@ add_executable(test_constraint cddp_core/test_constraint.cpp)
 target_link_libraries(test_constraint gtest gmock gtest_main cddp)
 gtest_discover_tests(test_constraint)
 
+add_executable(test_boxqp cddp_core/test_boxqp.cpp)
+target_link_libraries(test_boxqp gtest gmock gtest_main cddp)
+gtest_discover_tests(test_boxqp)
+
 add_executable(test_finite_difference cddp_core/test_finite_difference.cpp)
 target_link_libraries(test_finite_difference gtest gmock gtest_main cddp)
 gtest_discover_tests(test_finite_difference)
@@ -68,6 +72,11 @@ if (CDDP-CPP_GUROBI)
     add_executable(test_sdqp test_sdqp.cpp)
     target_link_libraries(test_sdqp gtest gmock gtest_main cddp)
     gtest_discover_tests(test_sdqp)
+
+    # Test for qp solver comparison
+    add_executable(test_qp_solvers test_qp_solvers.cpp)
+    target_link_libraries(test_qp_solvers gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_qp_solvers)
 endif()
 
 # Test for torch

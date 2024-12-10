@@ -34,7 +34,7 @@ set(GUROBI_ROOT $ENV{HOME}/.local/lib/gurobi1103/linux64)
 # LibTorch Configuration
 option(CDDP-CPP_TORCH "Whether to use LibTorch" ON)
 option(CDDP-CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
-set(LIBTORCH_DIR $ENV{HOME}/.local/lib CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
+set(LIBTORCH_DIR $ENV{HOME}/.local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Python Configuration
 set(Python_EXECUTABLE /usr/bin/python3.10) # Or the path to your desired Python interpreter
@@ -174,6 +174,7 @@ set(cddp_core_srcs
   src/cddp_core/dynamical_system.cpp
   src/cddp_core/objective.cpp
   src/cddp_core/constraint.cpp
+  src/cddp_core/helper.cpp
   src/cddp_core/cddp_core.cpp
   src/cddp_core/cddp_sub.cpp
   src/cddp_core/cddp_log.cpp
