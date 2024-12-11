@@ -168,7 +168,9 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    // cddp::CDDPSolution solution = cddp_solver.solve();
+    cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
+    // cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
 
     // Extract solution trajectories
     auto X_sol = solution.state_sequence;
@@ -203,29 +205,29 @@ int main() {
     double car_width = 0.9;   
     plotCarBox(goal_state, car_length, car_width, "0.75");  // Light gray
     
-    // Animation loop
-    for(size_t i = 0; i < X_sol.size(); i++) {
-        if(i % 5 == 0) {
-            plt::clf();
+    // // Animation loop
+    // for(size_t i = 0; i < X_sol.size(); i++) {
+    //     if(i % 5 == 0) {
+    //         plt::clf();
             
-            // Plot full trajectory
-            plt::plot(x_hist, y_hist, "b-");
+    //         // Plot full trajectory
+    //         plt::plot(x_hist, y_hist, "b-");
             
-            // Plot current car position
-            plotCarBox(X_sol[i], car_length, car_width, "k");
+    //         // Plot current car position
+    //         plotCarBox(X_sol[i], car_length, car_width, "k");
             
-            // Plot settings
-            plt::grid(true);
-            plt::axis("equal");
-            plt::xlim(-4, 4);
-            plt::ylim(-4, 4);
+    //         // Plot settings
+    //         plt::grid(true);
+    //         plt::axis("equal");
+    //         plt::xlim(-4, 4);
+    //         plt::ylim(-4, 4);
             
-            std::string filename = plotDirectory + "/car_frame_" + 
-                                 std::to_string(i) + ".png";
-            plt::save(filename);
-            plt::pause(0.01);
-        }
-    }
+    //         std::string filename = plotDirectory + "/car_frame_" + 
+    //                              std::to_string(i) + ".png";
+    //         plt::save(filename);
+    //         plt::pause(0.01);
+    //     }
+    // }
 
     return 0;
 }
