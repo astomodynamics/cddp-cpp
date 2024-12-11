@@ -126,7 +126,7 @@ Eigen::VectorXd finite_difference_gradient_backward(const F &f,
 template <typename F>
 Eigen::VectorXd finite_difference_gradient(const F &f,
                                              const Eigen::VectorXd &x,
-                                             double h = 2e-7,
+                                             double h = 2e-5,
                                              int mode = 0)
 {
      if (mode == 0)
@@ -262,7 +262,7 @@ Eigen::MatrixXd finite_difference_jacobian_backward(const F &f,
 template <typename F>
 Eigen::MatrixXd finite_difference_jacobian(const F &f,
                                              const Eigen::VectorXd &x,
-                                             double h = 2e-7,
+                                             double h = 2e-5,
                                              int mode = 0)
 {
      if (mode == 0)
@@ -394,7 +394,7 @@ Eigen::MatrixXd finite_difference_hessian_backward(const F &f,
 template <typename F>
 Eigen::MatrixXd finite_difference_hessian(const F &f,
                                              const Eigen::VectorXd &x,
-                                             double h = 2e-7,
+                                             double h = 2e-5,
                                              int mode = 0) 
 {
      if (mode == 0)

@@ -23,6 +23,7 @@
 
 #include "dynamics_model/car.hpp"
 #include "matplotlibcpp.hpp"
+#include "cddp_core/objective.hpp"
 
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
@@ -190,6 +191,215 @@ TEST(CarTest, JacobianTest) {
             EXPECT_NEAR(B_numerical(i, j), B_known(i, j), 1e-4);
         }
     }
+}
+
+namespace cddp {
+class CarParkingObjective : public NonlinearObjective {
+public:
+    CarParkingObjective(const Eigen::VectorXd& goal_state, double timestep)
+        : NonlinearObjective(timestep), reference_state_(goal_state) {
+        // Control cost coefficients: cu = 1e-2*[1 .01]
+        cu_ = Eigen::Vector2d(1e-2, 1e-4);
+
+        // Final cost coefficients: cf = [.1 .1 1 .3]
+        cf_ = Eigen::Vector4d(0.1, 0.1, 1.0, 0.3);
+
+        // Smoothness scales for final cost: pf = [.01 .01 .01 1]
+        pf_ = Eigen::Vector4d(0.01, 0.01, 0.01, 1.0);
+
+        // Running cost coefficients: cx = 1e-3*[1 1]
+        cx_ = Eigen::Vector2d(1e-3, 1e-3);
+
+        // Smoothness scales for running cost: px = [.1 .1]
+        px_ = Eigen::Vector2d(0.1, 0.1);
+    }
+
+    double running_cost(const Eigen::VectorXd& state, 
+                       const Eigen::VectorXd& control, 
+                       int index) const override {
+        // Control cost: lu = cu*u.^2
+        double lu = cu_.dot(control.array().square().matrix());
+
+        // Running cost on distance from origin: lx = cx*sabs(x(1:2,:),px)
+        Eigen::VectorXd xy_state = state.head(2);
+        double lx = cx_.dot(sabs(xy_state, px_));
+
+        return lu + lx;
+    }
+
+    double terminal_cost(const Eigen::VectorXd& final_state) const override {
+        // Final state cost: llf = cf*sabs(x(:,final),pf);
+        return cf_.dot(sabs(final_state - reference_state_, pf_));
+    }
+
+    const Eigen::VectorXd& getReferenceState() const override { 
+        return reference_state_; 
+    }
+
+private:
+    // Helper function for smooth absolute value (pseudo-Huber)
+    Eigen::VectorXd sabs(const Eigen::VectorXd& x, const Eigen::VectorXd& p) const {
+        return ((x.array().square() / p.array().square() + 1.0).sqrt() * p.array() - p.array()).matrix();
+    }
+
+    Eigen::VectorXd reference_state_;
+    Eigen::Vector2d cu_; // Control cost coefficients
+    Eigen::Vector4d cf_; // Final cost coefficients
+    Eigen::Vector4d pf_; // Smoothness scales for final cost 
+    Eigen::Vector2d cx_; // Running cost coefficients
+    Eigen::Vector2d px_; // Smoothness scales for running cost
+};
+} // namespace cddp
+
+TEST(CarTest , ObjectiveTest) {
+    // Create a car instance
+    double timestep = 0.03;  // From original MATLAB code
+    double wheelbase = 2.0;  // From original MATLAB code
+    std::string integration_type = "euler";
+    cddp::Car car(timestep, wheelbase, integration_type);
+
+    // Create the objective
+    Eigen::VectorXd goal_state(4);
+    goal_state << 0.0, 0.0, 0.0, 0.0;  // Origin with zero angle and velocity
+    cddp::CarParkingObjective objective(goal_state, timestep);
+
+    // Test running cost
+    Eigen::VectorXd state(4);
+    state << 1.0, 1.0, 3*M_PI/2, 0.0;  // Initial state from MATLAB demo
+    Eigen::VectorXd control(2);
+    control << 0.01, 0.01; // Small steering angle and acceleration
+    double running_cost = objective.running_cost(state, control, 0);
+    EXPECT_NEAR(running_cost, 0.0018 , 1e-4);
+
+    // Another test
+    state << 1.0, 1.0, 3*M_PI/2, 1.0;
+    control << 0.3, 0.1;
+    running_cost = objective.running_cost(state, control, 0);
+    EXPECT_NEAR(running_cost, 0.0027, 1e-4);
+
+    control << 0.0, 0.0;
+    running_cost = objective.running_cost(state, control, 0);
+    double terminal_cost = objective.terminal_cost(state);
+    double total_cost = running_cost + terminal_cost;
+
+    EXPECT_NEAR(total_cost, 5.0265, 1e-4);
+
+    // Another test
+    state << 1.0, 2.0, 3*M_PI/2, 1.2;
+    control << 0.0, 0.0;
+    running_cost = objective.running_cost(state, control, 0);
+    terminal_cost = objective.terminal_cost(state);
+    total_cost = running_cost + terminal_cost;
+
+    EXPECT_NEAR(terminal_cost, 5.169, 1e-4);
+}
+
+TEST(CarTest, ObjectiveJacobianTest) {
+    // Create a car instance
+    double timestep = 0.03;  // From original MATLAB code
+    double wheelbase = 2.0;  // From original MATLAB code
+    std::string integration_type = "euler";
+    cddp::Car car(timestep, wheelbase, integration_type);
+
+    // Create the objective
+    Eigen::VectorXd goal_state(4);
+    goal_state << 0.0, 0.0, 0.0, 0.0;  // Origin with zero angle and velocity
+    cddp::CarParkingObjective objective(goal_state, timestep);
+
+    // Test running cost
+    Eigen::VectorXd state(4);
+    state << 1.0, 1.0, 3*M_PI/2, 0.0;  // Initial state from MATLAB demo
+    Eigen::VectorXd control(2);
+    control << 0.01, 0.01;
+
+    Eigen::VectorXd lx = objective.getRunningCostStateGradient(state, control, 0);
+    Eigen::VectorXd lu = objective.getRunningCostControlGradient(state, control, 0);
+
+    Eigen::MatrixXd lxx = objective.getRunningCostStateHessian(state, control, 0);
+    Eigen::MatrixXd luu = objective.getRunningCostControlHessian(state, control, 0);
+    Eigen::MatrixXd lxu = objective.getRunningCostCrossHessian(state, control, 0);
+
+    Eigen::VectorXd lx_known(4);
+    lx_known << 0.0010, 0.0010, 0.0, 0.0;
+    Eigen::VectorXd lu_known(2);
+    lu_known << 0.0002, 0.0000;
+    Eigen::MatrixXd lxx_known(4, 4);
+    lxx_known << 0.9846e-5, -0.0004e-5, 0.0, 0.0,
+                     -0.0004e-5, 0.9846e-5, 0.0, 0.0,
+                     0.0, 0.0, 0.0, 0.0,
+                     0.0, 0.0, 0.0, 0.0;
+    Eigen::MatrixXd luu_known(2, 2);
+    luu_known << 0.02, 0.0,
+                     0.0, 0.0002;
+    Eigen::MatrixXd lxu_known(4, 2);
+    lxu_known << 0.0, 0.0,
+                     0.0, 0.0,
+                     0.0, 0.0,
+                     0.0, 0.0;
+
+    // Compare values via norm of difference
+    EXPECT_NEAR(lx.norm(), lx_known.norm(), 1e-4);
+    EXPECT_NEAR(lu.norm(), lu_known.norm(), 1e-4);
+    EXPECT_NEAR((lxx - lxx_known).norm(), 0.0, 1e-4);
+    EXPECT_NEAR((luu - luu_known).norm(), 0.0, 1e-4);
+    EXPECT_NEAR((lxu - lxu_known).norm(), 0.0, 1e-4);
+
+    // Another test
+    state << 1.0, 1.0, 3*M_PI/2, 1.0;
+    control << 0.3, 0.1;
+
+    lx = objective.getRunningCostStateGradient(state, control, 0);
+    lu = objective.getRunningCostControlGradient(state, control, 0);
+    lxx = objective.getRunningCostStateHessian(state, control, 0);
+    luu = objective.getRunningCostControlHessian(state, control, 0);
+    lxu = objective.getRunningCostCrossHessian(state, control, 0);
+
+    lx_known << 0.0010, 0.0010, 0.0, 0.0;
+    lu_known << 0.0060, 0.0000;
+    lxx_known << 0.9850e-5, 0.0, 0.0, 0.0,
+                0.0, 0.9850e-5, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0;
+    luu_known << 0.02, 0.0,
+                0.0, 0.0002;
+    lxu_known << 0.0, 0.0,
+                0.0, 0.0,
+                0.0, 0.0,
+                0.0, 0.0;   
+    
+    // Compare values via norm of difference
+    EXPECT_NEAR(lx.norm(), lx_known.norm(), 1e-4);
+    EXPECT_NEAR(lu.norm(), lu_known.norm(), 1e-4);
+    EXPECT_NEAR((lxx - lxx_known).norm(), 0.0, 1e-4);
+    EXPECT_NEAR((luu - luu_known).norm(), 0.0, 1e-4);
+    EXPECT_NEAR((lxu - lxu_known).norm(), 0.0, 1e-4);
+
+
+
+    control << 0.0, 0.0;
+    lx = objective.getRunningCostStateGradient(state, control, 0);
+    lu = objective.getRunningCostControlGradient(state, control, 0);
+    lxx = objective.getRunningCostStateHessian(state, control, 0);
+    luu = objective.getRunningCostControlHessian(state, control, 0);
+    lxu = objective.getRunningCostCrossHessian(state, control, 0);
+
+    Eigen::VectorXd phi_x = objective.getFinalCostGradient(state);
+    Eigen::MatrixXd phi_xx = objective.getFinalCostHessian(state);
+
+    Eigen::VectorXd Jx = phi_x;
+    Eigen::MatrixXd Jxx = phi_xx;
+
+    Eigen::VectorXd Jx_known(4);
+    Jx_known << 0.1000, 0.1000, 1.0, 0.2121;
+    Eigen::MatrixXd Jxx_known(4, 4);
+    Jxx_known << 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.1060;
+
+    // Compare values via norm of difference
+    EXPECT_NEAR(Jx.norm(), Jx_known.norm(), 1e-4);
+    EXPECT_NEAR((Jxx - Jxx_known).norm(), 0.0, 1e-4);
 }
 
 int main(int argc, char **argv) {
