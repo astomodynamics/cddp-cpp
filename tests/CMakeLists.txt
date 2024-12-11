@@ -1,30 +1,34 @@
 
 add_executable(test_pendulum dynamics_model/test_pendulum.cpp)
-target_link_libraries(test_pendulum gtest gmock gtest_main cddp Eigen3::Eigen)
+target_link_libraries(test_pendulum gtest gmock gtest_main cddp)
 gtest_discover_tests(test_pendulum)
 
 add_executable(test_dubins_car dynamics_model/test_dubins_car.cpp)
-target_link_libraries(test_dubins_car gtest gmock gtest_main cddp Eigen3::Eigen)
+target_link_libraries(test_dubins_car gtest gmock gtest_main cddp)
 gtest_discover_tests(test_dubins_car)
 
 add_executable(test_bicycle dynamics_model/test_bicycle.cpp)
-target_link_libraries(test_bicycle gtest gmock gtest_main cddp Eigen3::Eigen)
+target_link_libraries(test_bicycle gtest gmock gtest_main cddp)
 gtest_discover_tests(test_bicycle)
 
 add_executable(test_cartpole dynamics_model/test_cartpole.cpp)
-target_link_libraries(test_cartpole gtest gmock gtest_main cddp Eigen3::Eigen)
+target_link_libraries(test_cartpole gtest gmock gtest_main cddp)
 gtest_discover_tests(test_cartpole)
 
+add_executable(test_car dynamics_model/test_car.cpp)
+target_link_libraries(test_car gtest gmock gtest_main cddp)
+gtest_discover_tests(test_car)
+
 add_executable(test_quadrotor dynamics_model/test_quadrotor.cpp)
-target_link_libraries(test_quadrotor gtest gmock gtest_main cddp Eigen3::Eigen)
+target_link_libraries(test_quadrotor gtest gmock gtest_main cddp)
 gtest_discover_tests(test_quadrotor)
 
 add_executable(test_manipulator dynamics_model/test_manipulator.cpp)
-target_link_libraries(test_manipulator gtest gmock gtest_main cddp Eigen3::Eigen)
+target_link_libraries(test_manipulator gtest gmock gtest_main cddp)
 gtest_discover_tests(test_manipulator)
 
 add_executable(test_spacecraft_linear dynamics_model/test_spacecraft_linear.cpp)
-target_link_libraries(test_spacecraft_linear gtest gmock gtest_main cddp Eigen3::Eigen)
+target_link_libraries(test_spacecraft_linear gtest gmock gtest_main cddp)
 gtest_discover_tests(test_spacecraft_linear)
 
 add_executable(test_objective cddp_core/test_objective.cpp)
@@ -57,7 +61,7 @@ gtest_discover_tests(test_finite_difference)
 
 # # Test for eigen vs torch
 add_executable(test_eigen test_eigen.cpp)
-target_link_libraries(test_eigen gtest gmock gtest_main Eigen3::Eigen)
+target_link_libraries(test_eigen gtest gmock gtest_main cddp)
 gtest_discover_tests(test_eigen)
 
 

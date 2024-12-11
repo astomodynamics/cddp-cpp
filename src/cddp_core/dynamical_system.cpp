@@ -47,7 +47,7 @@ Eigen::VectorXd DynamicalSystem::rk4_step(const Eigen::VectorXd& state, const Ei
     return state + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4);
 }
 
-// Implement the core dynamics function
+
 Eigen::VectorXd DynamicalSystem::getDiscreteDynamics(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     if (integration_type_ == "euler") {
         return euler_step(state, control, timestep_);
@@ -61,6 +61,20 @@ Eigen::VectorXd DynamicalSystem::getDiscreteDynamics(const Eigen::VectorXd& stat
         std::cerr << "Integration type not supported!" << std::endl;
         return Eigen::VectorXd::Zero(state.size()); 
     }
+}
+
+Eigen::VectorXd DynamicalSystem::getContinuousDynamics(
+    const Eigen::VectorXd& state,
+    const Eigen::VectorXd& control) const {
+
+    // Get next state using discrete dynamics
+    Eigen::VectorXd next_state = getDiscreteDynamics(state, control);
+    
+    // Compute continuous dynamics using finite difference
+    // dx/dt ≈ (x_{k+1} - x_k) / dt
+    Eigen::VectorXd continuous_dynamics = (next_state - state) / timestep_;
+    
+    return continuous_dynamics;
 }
 
 // TODO:
