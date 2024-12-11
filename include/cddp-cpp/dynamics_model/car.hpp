@@ -34,6 +34,14 @@ namespace cddp {
  * Control vector: [δ, a]
  * - δ: steering angle
  * - a: acceleration
+ * 
+ * This model is based on:
+ * "Control-Limited Differential Dynamic Programming"
+ * by Yuval Tassa, Nicolas Mansard, and Emo Todorov,
+ * ICRA 2014
+ * 
+ * Reference implementation:
+ * @see https://www.mathworks.com/matlabcentral/fileexchange/52069-ilqg-ddp-trajectory-optimization
  */
 class Car : public DynamicalSystem {
 public:
