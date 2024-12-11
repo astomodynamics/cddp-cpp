@@ -62,7 +62,9 @@ public:
      * @return State derivative vector
      */
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
-                                         const Eigen::VectorXd& control) const override;
+                                         const Eigen::VectorXd& control) const override {
+        return DynamicalSystem::getContinuousDynamics(state, control);
+    }
 
     /**
      * @brief Computes the discrete-time dynamics using the specified integration method
@@ -71,9 +73,7 @@ public:
      * @return Next state vector
      */
     Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state, 
-                                       const Eigen::VectorXd& control) const override {
-        return DynamicalSystem::getDiscreteDynamics(state, control);
-    }
+                                       const Eigen::VectorXd& control) const override;
 
     /**
      * @brief Computes the Jacobian of the dynamics with respect to the state
