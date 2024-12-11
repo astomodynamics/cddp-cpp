@@ -77,7 +77,7 @@ Eigen::VectorXd DynamicalSystem::getContinuousDynamics(
     return continuous_dynamics;
 }
 
-// TODO:
+// TODO: Create a finite difference method for not only dynamics but also objective and constraint
 Eigen::MatrixXd DynamicalSystem::getFiniteDifferenceStateJacobian(const Eigen::VectorXd& x, 
                                                             const Eigen::VectorXd& u) const {
     const int n = x.size();
