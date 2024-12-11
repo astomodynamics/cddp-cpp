@@ -28,6 +28,7 @@
 
 #include "cddp_core/cddp_core.hpp"
 #include "cddp_core/helper.hpp"
+#include "cddp_core/boxqp.hpp"
 
 namespace cddp {
 

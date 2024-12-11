@@ -27,6 +27,7 @@
 #include "cddp_core/constraint.hpp"
 #include "cddp_core/cddp_core.hpp"
 #include "cddp_core/helper.hpp"
+#include "cddp_core/boxqp.hpp"
 
 #include "cddp_core/torch_dynamical_system.hpp"
 
