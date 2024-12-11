@@ -64,6 +64,25 @@ TEST(CarTest, DiscreteDynamics) {
     ASSERT_DOUBLE_EQ(car.getTimestep(), 0.03);
     ASSERT_EQ(car.getIntegrationType(), "euler");
 
+    // First Step test
+    state << 1.0, 1.0, 3*M_PI/2, 0.0; 
+    control << 0.01, 0.01;
+    state = car.getDiscreteDynamics(state, control);
+    EXPECT_NEAR(state[0], 1.0, 1e-4);
+    EXPECT_NEAR(state[1], 1.0, 1e-4);
+    EXPECT_NEAR(state[2], 4.7124, 1e-4);
+    EXPECT_NEAR(state[3], 0.0003, 1e-4);
+
+    // Second Step test
+    state << 1.0, 1.0, 3*M_PI/2, 1.0;
+    control << 0.3, 0.1;
+    state = car.getDiscreteDynamics(state, control);
+    EXPECT_NEAR(state[0], 1.0, 1e-4);
+    EXPECT_NEAR(state[1], 0.9713, 1e-4);
+    EXPECT_NEAR(state[2], 4.7168, 1e-4);
+    EXPECT_NEAR(state[3], 1.0030, 1e-4);
+
+
     // // Create directory for saving plot (if it doesn't exist)
     // const std::string plotDirectory = "../plots/test";
     // if (!fs::exists(plotDirectory)) {
