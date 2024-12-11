@@ -91,7 +91,7 @@ protected:
     double timestep_;
     std::string integration_type_; // Integration type: Euler, Heun, RK3, RK4
 
-    // Integration step functions (declare as protected or private)
+    // Integration step functions
     Eigen::VectorXd euler_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const;
     Eigen::VectorXd heun_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const;
     Eigen::VectorXd rk3_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const;

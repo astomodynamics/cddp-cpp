@@ -84,7 +84,7 @@ Eigen::MatrixXd DynamicalSystem::getFiniteDifferenceStateJacobian(const Eigen::V
     Eigen::MatrixXd J(n, n);
     Eigen::VectorXd f0 = getContinuousDynamics(x, u);
     
-    const double h = 1e-6; // Small perturbation value
+    const double h = 1e-8; // Small perturbation value
     Eigen::VectorXd x_perturbed = x;
     for (int i = 0; i < n; ++i) {
         x_perturbed(i) += h;
@@ -101,7 +101,7 @@ Eigen::MatrixXd DynamicalSystem::getFiniteDifferenceControlJacobian(const Eigen:
     Eigen::MatrixXd J(n, m);
     Eigen::VectorXd f0 = getContinuousDynamics(x, u);
     
-    const double h = 1e-6; // Small perturbation value
+    const double h = 1e-8; // Small perturbation value
     Eigen::VectorXd u_perturbed = u;
     for (int i = 0; i < m; ++i) {
         u_perturbed(i) += h;
