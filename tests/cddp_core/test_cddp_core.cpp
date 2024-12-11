@@ -85,10 +85,10 @@ TEST(CDDPTest, Solve) {
 
     ASSERT_TRUE(solution.converged);
 
-    // // Extract solution
-    // auto X_sol = solution.state_sequence; // size: horizon + 1
-    // auto U_sol = solution.control_sequence; // size: horizon
-    // auto t_sol = solution.time_sequence; // size: horizon + 1
+    // Extract solution
+    auto X_sol = solution.state_sequence; // size: horizon + 1
+    auto U_sol = solution.control_sequence; // size: horizon
+    auto t_sol = solution.time_sequence; // size: horizon + 1
 
     // // Create directory for saving plot (if it doesn't exist)
     // const std::string plotDirectory = "../results/tests";
@@ -121,6 +121,8 @@ TEST(CDDPTest, Solve) {
     // plt::subplot(2, 1, 2);
     // plt::plot(v_arr);
     // plt::plot(omega_arr);
+    // plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
+    // plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
     // plt::title("Control Inputs");
     // plt::save(plotDirectory + "/dubincs_car_cddp_test.png");
 

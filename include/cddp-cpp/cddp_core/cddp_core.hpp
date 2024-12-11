@@ -32,46 +32,47 @@
 namespace cddp {
 
 struct CDDPOptions {
-    double cost_tolerance = 1e-2;         // Tolerance for changes in cost function
-    double grad_tolerance = 1e-2;         // Tolerance for cost gradient magnitude
-    int max_iterations = 1;
-    double max_cpu_time = 0.0;            // Maximum CPU time for the solver in seconds
+    double cost_tolerance = 1e-2;                   // Tolerance for changes in cost function
+    double grad_tolerance = 1e-2;                   // Tolerance for cost gradient magnitude
+    int max_iterations = 1;                         // Maximum number of iterations
+    double max_cpu_time = 0.0;                      // Maximum CPU time for the solver in seconds
 
     // Line search method
-    int max_line_search_iterations = 1; // Maximum iterations for line search
-    double backtracking_coeff = 1.0;      // Maximum step size for line search backtracking
-    double backtracking_min = 0.5;    // Coefficient for line search backtracking
-    double backtracking_factor = std::pow(2, -1);  // Factor for line search backtracking
-    double minimum_reduction_ratio = 1e-6;      // Minimum reduction for line search
+    int max_line_search_iterations = 11;            // Maximum iterations for line search
+    double backtracking_coeff = 1.0;                // Maximum step size for line search backtracking
+    double backtracking_min = 0.5;                  // Coefficient for line search backtracking
+    double backtracking_factor = std::pow(2, -1);   // Factor for line search backtracking
+    double minimum_reduction_ratio = 1e-6;          // Minimum reduction for line search
 
     // log-barrier method
-    double barrier_coeff = 1e-2;          // Coefficient for log-barrier method
-    double barrier_factor = 0.90;        // Factor for log-barrier method
-    double barrier_tolerance = 1e-6;     // Tolerance for log-barrier method
-    double relaxation_coeff = 1.0;             // Relaxation for log-barrier method
+    double barrier_coeff = 1e-2;                    // Coefficient for log-barrier method
+    double barrier_factor = 0.90;                   // Factor for log-barrier method
+    double barrier_tolerance = 1e-6;                // Tolerance for log-barrier method
+    double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
+    int barrier_order = 2;                          // Order for log-barrier method
 
     // Active set method
-    double active_set_tolerance = 1e-6;  // Tolerance for active set method
+    double active_set_tolerance = 1e-6;             // Tolerance for active set method
 
     // Regularization options
-    std::string regularization_type = "control";          // different regularization types: ["none", "control", "state", "both"]
+    std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
     
-    double regularization_state = 1e-6;       // Regularization for state
-    double regularization_state_step = 1.0;  // Regularization step for state
-    double regularization_state_max = 1e6;      // Maximum regularization
-    double regularization_state_min = 1e-6;     // Minimum regularization
-    double regularization_state_factor = 1.5;  // Factor for state regularization
+    double regularization_state = 1e-6;             // Regularization for state
+    double regularization_state_step = 1.0;         // Regularization step for state
+    double regularization_state_max = 1e6;          // Maximum regularization
+    double regularization_state_min = 1e-6;         // Minimum regularization
+    double regularization_state_factor = 1.5;       // Factor for state regularization
 
-    double regularization_control = 1e-6;       // Regularization for control
-    double regularization_control_step = 1.0;  // Regularization step for control
-    double regularization_control_max = 1e6;      // Maximum regularization
-    double regularization_control_min = 1e-6;     // Minimum regularization
-    double regularization_control_factor = 1.5;  // Factor for control regularization
+    double regularization_control = 1e-6;           // Regularization for control
+    double regularization_control_step = 1.0;       // Regularization step for control
+    double regularization_control_max = 1e6;        // Maximum regularization
+    double regularization_control_min = 1e-6;       // Minimum regularization
+    double regularization_control_factor = 1.5;     // Factor for control regularization
 
     // Other options
-    bool verbose = true;         // Option for debug printing
-    bool is_ilqr = true;                  // Option for iLQR
-    bool use_parallel = false;            // Option for parallel computation
+    bool verbose = true;                            // Option for debug printing
+    bool is_ilqr = true;                            // Option for iLQR
+    bool use_parallel = false;                      // Option for parallel computation
 };
 
 struct CDDPSolution {
@@ -81,6 +82,7 @@ struct CDDPSolution {
     std::vector<double> cost_sequence;
     std::vector<double> lagrangian_sequence;
     int iterations;
+    double alpha;
     bool converged;
     double solve_time;
 };
@@ -168,6 +170,7 @@ public:
     // Solve the problem
     CDDPSolution solve();
     CDDPSolution solveCLDDP();
+    CDDPSolution solveLogCDDP();
 
 private:
     // Initialization methods
@@ -180,6 +183,9 @@ private:
 
     bool solveCLDDPForwardPass();
     bool solveCLDDPBackwardPass();
+
+    bool solveLogCDDPForwardPass();
+    bool solveLogCDDPBackwardPass();
 
     // Helper methods
     void printSolverInfo();
@@ -222,7 +228,9 @@ private:
     double L_; // Lagrangian
     double dL_; // Lagrangian improvement
     double optimality_gap_ = 1e+10;
-    double barrier_coeff_;
+
+    // Line search
+    double alpha_; // Line search step size
 
     // Cost function
     std::unique_ptr<Objective> objective_; // Objective function
@@ -243,6 +251,9 @@ private:
     std::vector<Eigen::MatrixXd> Q_UU_;
     std::vector<Eigen::MatrixXd> Q_UX_;
     std::vector<Eigen::VectorXd> Q_U_; 
+
+    // Log-barrier method
+    std::unique_ptr<LogBarrier> log_barrier_;
 
     // QP sover 
     osqp::OsqpSolver osqp_solver_;

@@ -124,7 +124,7 @@ namespace sdqp
         return previ;
     }
 
-    int min_norm(const double *halves,
+    inline int min_norm(const double *halves,
                 const int n,
                 const int m,
                 double *opt,

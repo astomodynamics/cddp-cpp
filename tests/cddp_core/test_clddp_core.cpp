@@ -15,6 +15,7 @@
 */
 #include <iostream>
 #include <vector>
+#include <filesystem>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -84,16 +85,23 @@ TEST(CDDPTest, SolveCLDDP) {
 
     ASSERT_TRUE(solution.converged);
 
-    // // Extract solution
-    // auto X_sol = solution.state_sequence; // size: horizon + 1
-    // auto U_sol = solution.control_sequence; // size: horizon
-    // auto t_sol = solution.time_sequence; // size: horizon + 1
+    // Extract solution
+    auto X_sol = solution.state_sequence; // size: horizon + 1
+    auto U_sol = solution.control_sequence; // size: horizon
+    auto t_sol = solution.time_sequence; // size: horizon + 1
+
+    // // Create directory for saving plot (if it doesn't exist)
+    // const std::string plotDirectory = "../results/tests";
+    // if (!fs::exists(plotDirectory)) {
+    //     fs::create_directory(plotDirectory);
+    // }
 
     // // Plot the solution (x-y plane)
-    // std::vector<double> x_arr, y_arr;
+    // std::vector<double> x_arr, y_arr, theta_arr;
     // for (const auto& x : X_sol) {
     //     x_arr.push_back(x(0));
     //     y_arr.push_back(x(1));
+    //     theta_arr.push_back(x(2));
     // }
 
     // // Plot the solution (control inputs)
@@ -113,11 +121,84 @@ TEST(CDDPTest, SolveCLDDP) {
     // plt::subplot(2, 1, 2);
     // plt::plot(v_arr);
     // plt::plot(omega_arr);
+    // // Plot boundaries
+    // plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
+    // plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
     // plt::title("Control Inputs");
-    // plt::show();
+    // plt::save(plotDirectory + "/dubincs_car_clcddp_test.png");
 
-    // // Assertions
-    // ASSERT_TRUE(solution.converged); // Check if the solver converged
-    // // Add more assertions based on expected behavior
+    // // Create figure and axes
+    // plt::figure_size(800, 600);
+    // plt::title("Dubins Car Trajectory");
+    // plt::xlabel("x");
+    // plt::ylabel("y");
+    // plt::xlim(-1, 3); // Adjust limits as needed
+    // plt::ylim(-1, 3); // Adjust limits as needed
+
+    // // Car dimensions
+    // double car_length = 0.2;
+    // double car_width = 0.1;
+
+    // // Animation function
+    // for (int i = 0; i < X_sol.size(); ++i) {
+
+    //     if (i % 5 == 0) {
+    //         // Clear previous plot
+	// 		plt::clf();
+
+    //         // Plot car as a box with heading
+    //         double x = x_arr[i];
+    //         double y = y_arr[i];
+    //         double theta = theta_arr[i];
+            
+    //         // Calculate car corner points
+    //         std::vector<double> car_x(5);
+    //         std::vector<double> car_y(5);
+
+    //         car_x[0] = x + car_length/2 * cos(theta) - car_width/2 * sin(theta);
+    //         car_y[0] = y + car_length/2 * sin(theta) + car_width/2 * cos(theta);
+
+    //         car_x[1] = x + car_length/2 * cos(theta) + car_width/2 * sin(theta);
+    //         car_y[1] = y + car_length/2 * sin(theta) - car_width/2 * cos(theta);
+
+    //         car_x[2] = x - car_length/2 * cos(theta) + car_width/2 * sin(theta);
+    //         car_y[2] = y - car_length/2 * sin(theta) - car_width/2 * cos(theta);
+
+    //         car_x[3] = x - car_length/2 * cos(theta) - car_width/2 * sin(theta);
+    //         car_y[3] = y - car_length/2 * sin(theta) + car_width/2 * cos(theta);
+
+    //         car_x[4] = car_x[0]; // Close the shape
+    //         car_y[4] = car_y[0];
+
+    //         // Plot the car
+    //         plt::plot(car_x, car_y, "k-");        
+
+    //         // Plot trajectory up to current point
+    //         plt::plot(std::vector<double>(x_arr.begin(), x_arr.begin() + i + 1), 
+    //                 std::vector<double>(y_arr.begin(), y_arr.begin() + i + 1), "b-");
+
+    //         // Add plot title
+    //         plt::title("Dubins Car Trajectory");
+
+    //         // Set labels
+    //         plt::xlabel("x");
+    //         plt::ylabel("y");
+
+    //         // Adjust limits as needed
+    //         plt::xlim(-1, 3); 
+    //         plt::ylim(-1, 3); 
+
+    //         // Enable legend
+    //         plt::legend();
+
+    //         // Save current frame as an image
+    //         std::string filename = plotDirectory + "/dubins_car_" + std::to_string(i) + ".png";
+    //         plt::save(filename);
+            
+    //         // Display plot continuously
+    //         plt::pause(0.01); // Pause for a short time
+
+    //     }
+    // };
 
 }
