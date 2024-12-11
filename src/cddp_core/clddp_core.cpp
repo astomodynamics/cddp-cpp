@@ -225,6 +225,11 @@ bool CDDP::solveCLDDPBackwardPass() {
         Q_x = l_x + A.transpose() * V_x;
         Q_u = l_u + B.transpose() * V_x;
         Q_xx = l_xx + A.transpose() * V_xx * A;
+if (t > 400) {
+std::cout << "Q_x: " << Q_x.transpose() << std::endl;
+std::cout << "Q_u: " << Q_u.transpose() << std::endl;
+
+}
 
         if (options_.regularization_type == "state" || options_.regularization_type == "both") {
             Q_ux = l_ux + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
@@ -339,7 +344,7 @@ bool CDDP::solveCLDDPBackwardPass() {
         Eigen::Vector2d dV_step;
         dV_step << Q_u.dot(k), 0.5 * k.dot(Q_uu * k);
         dV_ = dV_ + dV_step;
-// std::cout << "dV: " << dV_ << std::endl;
+// std::cout << "dV: " << dV_.transpose() << std::endl;
         V_X_[t] = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
         V_XX_[t] = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
         V_XX_[t] = 0.5 * (V_XX_[t] + V_XX_[t].transpose()); // Symmetrize Hessian

@@ -181,8 +181,7 @@ int main() {
     options.verbose = true;
     options.cost_tolerance = 1e-7;
     options.grad_tolerance = 1e-4;
-    options.regularization_type = "both";
-    options.regularization_state = 1.0;
+    options.regularization_type = "control";
     options.regularization_control = 1.0;
     cddp_solver.setOptions(options);
 
