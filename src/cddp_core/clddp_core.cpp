@@ -55,7 +55,7 @@ CDDPSolution CDDP::solveCLDDP() {
     solution.cost_sequence.push_back(J_);
 
     if (options_.verbose) {
-        printIteration(0, J_, 0.0, optimality_gap_, regularization_state_, regularization_control_); // Initial iteration information
+        printIteration(0, J_, 0.0, optimality_gap_, regularization_state_, regularization_control_, alpha_); // Initial iteration information
     }
 
     // Start timer
@@ -124,7 +124,7 @@ CDDPSolution CDDP::solveCLDDP() {
 
         // Print iteration information
         if (options_.verbose) {
-            printIteration(iter, J_, 0.0, optimality_gap_, regularization_state_, regularization_control_); 
+            printIteration(iter, J_, 0.0, optimality_gap_, regularization_state_, regularization_control_, alpha_); 
         }
        
        if (forward_pass_success) {
@@ -423,6 +423,7 @@ bool CDDP::solveCLDDPForwardPass() {
             U_ = U_new;
             J_ = J_new;
             dJ_ = dJ;
+            alpha_ = alpha;
             return true;
         } else {
             alpha *= options_.backtracking_factor;

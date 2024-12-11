@@ -48,7 +48,7 @@ public:
 
     double terminal_cost(const Eigen::VectorXd& final_state) const override {
         // Final state cost: llf = cf*sabs(x(:,final),pf);
-        return cf_.dot(sabs(final_state - reference_state_, pf_));
+        return cf_.dot(sabs(final_state, pf_)) + running_cost(final_state, Eigen::VectorXd::Zero(2), 0);
     }
 
     const Eigen::VectorXd& getReferenceState() const override { 
@@ -155,7 +155,7 @@ int main() {
     initial_state << 1.0, 1.0, 1.5*M_PI, 0.0;  // [1; 1; pi*3/2; 0] from MATLAB
 
     Eigen::VectorXd goal_state(state_dim);
-    goal_state << 0.0, 0.0, 0.0, 0.0;  // Origin with zero angle and velocity
+    goal_state << 0.0, 0.0, 0.0, 0.0;  // NOT USED IN THIS EXAMPLE
 
     // Create the nonlinear objective
     auto objective = std::make_unique<cddp::CarParkingObjective>(goal_state, timestep);
@@ -177,8 +177,10 @@ int main() {
 
     // Solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 10;
+    options.max_iterations = 1;
     options.verbose = true;
+    options.cost_tolerance = 1e-7;
+    options.grad_tolerance = 1e-4;
     options.regularization_type = "both";
     options.regularization_state = 1.0;
     options.regularization_control = 1.0;
@@ -190,9 +192,26 @@ int main() {
     
     // Random initialization
     for(auto& u : U) {
-        u(0) = d(gen);  // Random steering
-        u(1) = d(gen);  // Random acceleration
+        // u(0) = d(gen);  // Random steering
+        // u(1) = d(gen);  // Random acceleration
+        u(0) = 0.01;
+        u(1) = 0.01;
     }
+
+    X[0] = initial_state;
+
+    double J = 0.0;
+
+    // Simulate initial trajectory
+    for(size_t t = 0; t < horizon; t++) {
+        J += cddp_solver.getObjective().running_cost(X[t], U[t], t);
+        X[t + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t]);
+    }
+    J += cddp_solver.getObjective().terminal_cost(X.back());
+    std::cout << "Initial cost: " << J << std::endl;
+    std::cout << "Initial state: " << X[0].transpose() << std::endl;
+    std::cout << "Final state: " << X.back().transpose() << std::endl;
+
     
     cddp_solver.setInitialTrajectory(X, U);
 

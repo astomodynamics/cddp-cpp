@@ -18,7 +18,8 @@
 
 #include <iostream> // For std::cout, std::cerr
 #include <memory> // For std::unique_ptr
-#include <map>    // For std::map
+#include <map>    // For std::map`
+#include <iomanip> // For std::setw
 #include <Eigen/Dense>
 #include <vector>
 #include <regex>
@@ -109,17 +110,12 @@ public:
 
     // Getters
     const DynamicalSystem& getSystem() const { return *system_; }
+    const Objective& getObjective() const { return *objective_; }
     const Eigen::VectorXd& getInitialState() const { return initial_state_; }
     const Eigen::VectorXd& getReferenceState() const { return reference_state_; }
     int getHorizon() const { return horizon_; }
     double getTimestep() const { return timestep_; }
     const CDDPOptions& getOptions() const { return options_; }
-    // Get the objective, cast to the appropriate type if needed
-    template <typename T>
-    const T& getObjective() const { 
-        return dynamic_cast<const T&>(*objective_); 
-    }
-
 
     // Setters
     void setDynamicalSystem(std::unique_ptr<DynamicalSystem> system) { system_ = std::move(system); }
@@ -173,40 +169,6 @@ public:
     CDDPSolution solveLogCDDP();
 
 private:
-    // Initialization methods
-    void initializeCDDP(); // Initialize the CDDP solver
-
-    // Solver methods
-    bool solveForwardPass();
-    ForwardPassInfo solveForwardPassIteration(double alpha);
-    bool solveBackwardPass();
-
-    bool solveCLDDPForwardPass();
-    bool solveCLDDPBackwardPass();
-
-    bool solveLogCDDPForwardPass();
-    bool solveLogCDDPBackwardPass();
-
-    // Helper methods
-    void printSolverInfo();
-    void printIteration(int iter, double cost, double lagrangian, double grad_norm, double lambda_state, double lambda_control);
-    void printOptions(const CDDPOptions& options);
-    void printSolution(const CDDPSolution& solution);
-    bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
-
-    // Log-barrier method
-    double getLogBarrierCost(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff);
-    std::tuple<Eigen::VectorXd, Eigen::VectorXd> getLogBarrierCostGradients(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff) {
-        return {getLogBarrierCostStateGradient(constraint, state, control, barrier_coeff, relaxation_coeff), getLogBarrierCostControlGradient(constraint, state, control, barrier_coeff, relaxation_coeff)};
-    }
-    Eigen::VectorXd getLogBarrierCostStateGradient(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff);
-    Eigen::VectorXd getLogBarrierCostControlGradient(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff);
-    std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> getLogBarrierCostHessians(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff) {
-        return {getLogBarrierCostStateHessian(constraint, state, control, barrier_coeff, relaxation_coeff), getLogBarrierCostControlHessian(constraint, state, control, barrier_coeff, relaxation_coeff), Eigen::MatrixXd::Zero(control.size(), state.size())};
-    }
-    Eigen::MatrixXd getLogBarrierCostStateHessian(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff);
-    Eigen::MatrixXd getLogBarrierCostControlHessian(const Constraint& constraint, const Eigen::VectorXd& state, const Eigen::VectorXd& control, double barrier_coeff, double relaxation_coeff);
-
     // Problem Data
     std::unique_ptr<DynamicalSystem> system_;         // Eigen-based dynamical system
     // std::unique_ptr<torch::nn::Module> torch_system_; // Torch-based dynamical system (learned dynamics model)
@@ -263,6 +225,130 @@ private:
     double regularization_state_step_;
     double regularization_control_;
     double regularization_control_step_;   
+
+    // Initialization methods
+    void initializeCDDP(); // Initialize the CDDP solver
+
+    // Solver methods
+    bool solveForwardPass();
+    ForwardPassInfo solveForwardPassIteration(double alpha);
+    bool solveBackwardPass();
+
+    bool solveCLDDPForwardPass();
+    bool solveCLDDPBackwardPass();
+
+    bool solveLogCDDPForwardPass();
+    bool solveLogCDDPBackwardPass();
+
+    // Helper methods
+    bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
+
+    
+
+    void printSolverInfo()
+    {
+        std::cout << "\n";
+        std::cout << "\033[34m"; // Set text color to blue
+        std::cout << "+---------------------------------------------------------+" << std::endl;
+        std::cout << "|    ____ ____  ____  ____    _          ____             |" << std::endl;
+        std::cout << "|   / ___|  _ \\|  _ \\|  _ \\  (_)_ __    / ___| _     _    |" << std::endl;
+        std::cout << "|  | |   | | | | | | | |_) | | | '_ \\  | |   _| |_ _| |_  |" << std::endl;
+        std::cout << "|  | |___| |_| | |_| |  __/  | | | | | | |__|_   _|_   _| |" << std::endl;
+        std::cout << "|   \\____|____/|____/|_|     |_|_| |_|  \\____||_|   |_|   |" << std::endl;
+        std::cout << "+---------------------------------------------------------+" << std::endl;
+        std::cout << "\n";
+        std::cout << "Constrained Differential Dynamic Programming\n";
+        std::cout << "Author: Tomo Sasaki (@astomodynamics)\n";
+        std::cout << "----------------------------------------------------------\n";
+        std::cout << "\033[0m"; // Reset text color
+        std::cout << "\n";
+    }
+
+    void printOptions(const CDDPOptions &options)
+    {
+        std::cout << "\n========================================\n";
+        std::cout << "           CDDP Options\n";
+        std::cout << "========================================\n";
+
+        std::cout << "Cost Tolerance: " << std::setw(10) << options.cost_tolerance << "\n";
+        std::cout << "Grad Tolerance: " << std::setw(10) << options.grad_tolerance << "\n";
+        std::cout << "Max Iterations: " << std::setw(10) << options.max_iterations << "\n";
+        std::cout << "Max CPU Time: " << std::setw(10) << options.max_cpu_time << "\n";
+
+        std::cout << "\nLine Search:\n";
+        std::cout << "  Max Iterations: " << std::setw(5) << options.max_line_search_iterations << "\n";
+        std::cout << "  Backtracking Coeff: " << std::setw(5) << options.backtracking_coeff << "\n";
+        std::cout << "  Backtracking Min: " << std::setw(5) << options.backtracking_min << "\n";
+        std::cout << "  Backtracking Factor: " << std::setw(5) << options.backtracking_factor << "\n";
+
+        std::cout << "\nLog-Barrier:\n";
+        std::cout << "  Barrier Coeff: " << std::setw(5) << options.barrier_coeff << "\n";
+        std::cout << "  Barrier Factor: " << std::setw(5) << options.barrier_factor << "\n";
+        std::cout << "  Barrier Tolerance: " << std::setw(5) << options.barrier_tolerance << "\n";
+        std::cout << "  Relaxation Coeff: " << std::setw(5) << options.relaxation_coeff << "\n";
+
+        std::cout << "\nRegularization:\n";
+        std::cout << "  Regularization Type: " << options.regularization_type << "\n";
+        std::cout << "  Regularization State: " << std::setw(5) << options.regularization_state << "\n";
+        std::cout << "  Regularization State Step: " << std::setw(5) << options.regularization_state_step << "\n";
+        std::cout << "  Regularization State Max: " << std::setw(5) << options.regularization_state_max << "\n";
+        std::cout << "  Regularization State Min: " << std::setw(5) << options.regularization_state_min << "\n";
+        std::cout << "  Regularization State Factor: " << std::setw(5) << options.regularization_state_factor << "\n";
+
+        std::cout << "  Regularization Control: " << std::setw(5) << options.regularization_control << "\n";
+        std::cout << "  Regularization Control Step: " << std::setw(5) << options.regularization_control_step << "\n";
+        std::cout << "  Regularization Control Max: " << std::setw(5) << options.regularization_control_max << "\n";
+        std::cout << "  Regularization Control Min: " << std::setw(5) << options.regularization_control_min << "\n";
+        std::cout << "  Regularization Control Factor: " << std::setw(5) << options.regularization_control_factor << "\n";
+
+        std::cout << "\nOther:\n";
+        std::cout << "  Print Iterations: " << (options.verbose ? "Yes" : "No") << "\n";
+        std::cout << "  iLQR: " << (options.is_ilqr ? "Yes" : "No") << "\n";
+
+        std::cout << "========================================\n\n";
+    }
+
+    void printIteration(int iter, double cost, double lagrangian, double grad_norm, 
+                    double lambda_state, double lambda_control, double step_size)
+    {
+        // Print header for better readability every 10 iterations
+        if (iter % 10 == 0)
+        {
+            std::cout << std::setw(10) << "Iteration"
+                    << std::setw(15) << "Objective"
+                    << std::setw(15) << "Lagrangian"
+                    << std::setw(15) << "Grad Norm"
+                    << std::setw(15) << "Step Size"
+                    << std::setw(15) << "Reg (State)"
+                    << std::setw(15) << "Reg (Control)"
+                    << std::endl;
+            std::cout << std::string(95, '-') << std::endl;
+        }
+
+        // Print iteration details
+        std::cout << std::setw(10) << iter
+                << std::setw(15) << std::setprecision(6) << cost
+                << std::setw(15) << std::setprecision(6) << lagrangian
+                << std::setw(15) << std::setprecision(6) << grad_norm
+                << std::setw(15) << std::setprecision(6) << step_size
+                << std::setw(15) << std::setprecision(6) << lambda_state
+                << std::setw(15) << std::setprecision(6) << lambda_control
+                << std::endl;
+    }
+
+    void printSolution(const CDDPSolution &solution)
+    {
+        std::cout << "\n========================================\n";
+        std::cout << "           CDDP Solution\n";
+        std::cout << "========================================\n";
+
+        std::cout << "Converged: " << (solution.converged ? "Yes" : "No") << "\n";
+        std::cout << "Iterations: " << solution.iterations << "\n";
+        std::cout << "Solve Time: " << std::setprecision(4) << solution.solve_time << " micro sec\n";
+        std::cout << "Final Cost: " << std::setprecision(6) << solution.cost_sequence.back() << "\n"; // Assuming cost_sequence is not empty
+
+        std::cout << "========================================\n\n";
+    }
 };
 }
 #endif // CDDP_CDDP_CORE_HPP
