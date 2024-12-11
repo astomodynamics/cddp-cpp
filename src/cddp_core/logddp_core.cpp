@@ -323,13 +323,9 @@ bool CDDP::solveLogCDDPForwardPass()
             Eigen::VectorXd du = alpha * k_[t] + K_[t] * dx;
             U_new[t] = u + du;
 
-            // Check constraints (using strict inequalities)
-            for (int i = 0; i < control_dim; ++i) {
-                if (U_new[t](i) < control_box_constraint->getLowerBound()(i) || 
-                    U_new[t](i) > control_box_constraint->getUpperBound()(i)) {
-                    is_feasible = false;
-                    break;
-                }
+            // Clamp control input
+            if (control_box_constraint != nullptr) {
+                U_new[t] = control_box_constraint->clamp(U_new[t]);
             }
 
             if (!is_feasible) {
