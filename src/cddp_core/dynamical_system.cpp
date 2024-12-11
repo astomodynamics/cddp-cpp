@@ -63,15 +63,9 @@ Eigen::VectorXd DynamicalSystem::getDiscreteDynamics(const Eigen::VectorXd& stat
     }
 }
 
-Eigen::VectorXd DynamicalSystem::getContinuosDynamics(
+Eigen::VectorXd DynamicalSystem::getContinuousDynamics(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control,
-    double dt) const {
-
-    // If no dt provided, use system timestep
-    if (dt < 0) {
-        dt = timestep_;
-    }
+    const Eigen::VectorXd& control) const {
 
     // Get next state using discrete dynamics
     Eigen::VectorXd next_state = getDiscreteDynamics(state, control);
