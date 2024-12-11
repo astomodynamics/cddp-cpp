@@ -9,11 +9,10 @@
 +---------------------------------------------------------+
 ```
 
-**This library is actively under construction.** Please wait for proper release after starring this repo :star:
-Also, I am writing this library for practical experience with C++. Any suggestions are helpful to me.
+**This library is under active development.**  Star the repo :star: to stay updated on its progress and eventual release. I welcome any suggestions as I'm building this library to gain practical C++ experience.
 
 ## Overview
-This is an optimal control solver library using constrained differential dynamic programming (CDDP) written in C++ based on Xie's [paper](https://zhaomingxie.github.io/projects/CDDP/CDDP.pdf). This library is particularly useful for mobile robot trajectory optimization and model predictive control (MPC).
+This is an optimal control solver library using constrained differential dynamic programming (CDDP) written in C++. This library is particularly useful for mobile robot trajectory optimization and model predictive control (MPC).
 
 The CDDP library solves problems in the form:
 
@@ -36,8 +35,6 @@ $$
 $$
 \quad k = 0,1,\cdots N-1
 $$
-
-**Author: Tomohiro Sasaki** 
 
 ## Examples
 ### Dubins Car
