@@ -30,7 +30,7 @@ public:
 
     // Core dynamics function: xdot = f(x_t, u_t)
     virtual Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
-                                  const Eigen::VectorXd& control) const = 0;
+                                  const Eigen::VectorXd& control) const;
     
     // Discrete dynamics function: x_{t+1} = f(x_t, u_t)
     virtual Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state, 
