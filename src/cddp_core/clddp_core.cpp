@@ -161,8 +161,6 @@ CDDPSolution CDDP::solveCLDDP() {
     solution.solve_time = duration.count(); // Time in microseconds
     printSolution(solution);
 
-    std::cout << "cost sequence: " << solution.cost_sequence.back() << std::endl;
-
     return solution;
 }
 
