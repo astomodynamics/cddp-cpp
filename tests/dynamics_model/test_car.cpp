@@ -109,6 +109,89 @@ TEST(CarTest, DiscreteDynamics) {
     // plt::show();
 }
 
+TEST(CarTest, JacobianTest) {
+    // Create a car instance
+    double timestep = 0.03;  // From original MATLAB code
+    double wheelbase = 2.0;  // From original MATLAB code
+    std::string integration_type = "euler";
+    cddp::Car car(timestep, wheelbase, integration_type);
+
+    // Initial state and control (from MATLAB demo)
+    Eigen::VectorXd state(4);
+    state << 1.0, 1.0, 3*M_PI/2, 0.0;  // Initial state from MATLAB demo
+    Eigen::VectorXd control(2);
+    control << 0.01, 0.01; // Small steering angle and acceleration
+
+    // Compute the Jacobians
+    Eigen::MatrixXd A_numerical = car.getStateJacobian(state, control);
+    A_numerical *= timestep;
+    A_numerical.diagonal().array() += 1.0; 
+    
+    Eigen::MatrixXd B_numerical = car.getControlJacobian(state, control);
+    B_numerical *= timestep;
+
+    Eigen::MatrixXd A_known(4, 4);
+    Eigen::MatrixXd B_known(4, 2);
+
+    // Test values
+    A_known << 1.0, 0.0, 0.0, 0.0,
+               0.0, 1.0, 0.0, -0.03,
+               0.0, 0.0, 1.0, 0.0001,
+               0.0, 0.0, 0.0, 1.0;
+
+    B_known << 0.0, 0.0,
+                0.0, 0.0,
+                0.0, 0.0,
+                0.0, 0.03;
+    
+    // Compare values
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            EXPECT_NEAR(A_numerical(i, j), A_known(i, j), 1e-4);
+        }
+    }
+
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 2; ++j) {
+            EXPECT_NEAR(B_numerical(i, j), B_known(i, j), 1e-4);
+        }
+    }
+
+    // Next test
+    state << 1.0, 1.0, 3*M_PI/2, 1.0;
+    control << 0.3, 0.1;
+
+    A_numerical = car.getStateJacobian(state, control);
+    A_numerical *= timestep;
+    A_numerical.diagonal().array() += 1.0;
+
+    B_numerical = car.getControlJacobian(state, control);
+    B_numerical *= timestep;
+    
+    A_known << 1.0, 0.0, 0.0287, 0.0,
+               0.0, 1.0, 0.0, -0.0287,
+               0.0, 0.0, 1.0, 0.0044,
+               0.0, 0.0, 0.0, 1.0;
+
+    B_known << 0.0, 0.0,
+                0.0087, 0.0,
+                0.0143, 0.0,
+                0.0, 0.03;
+
+    // Compare values
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 4; ++j) {
+            EXPECT_NEAR(A_numerical(i, j), A_known(i, j), 1e-4);
+        }
+    }
+
+    for (int i = 0; i < 4; ++i) {
+        for (int j = 0; j < 2; ++j) {
+            EXPECT_NEAR(B_numerical(i, j), B_known(i, j), 1e-4);
+        }
+    }
+}
+
 int main(int argc, char **argv) {
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
