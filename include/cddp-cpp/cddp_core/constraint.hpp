@@ -62,6 +62,10 @@ public:
         return Eigen::MatrixXd::Identity(control.size(), control.size()); 
     }
 
+    Eigen::VectorXd clamp(const Eigen::VectorXd& control) const {
+        return control.cwiseMax(lower_bound_).cwiseMin(upper_bound_);
+    }
+
 private:
     Eigen::VectorXd lower_bound_;
     Eigen::VectorXd upper_bound_;
@@ -153,7 +157,7 @@ public:
     * @param bound_type Which bounds to include in barrier
     */
    LogBarrier(double barrier_coeff = 1e-2, double relaxation_coeff = 1.0,
-              int barrier_order = 2, BoundType bound_type = BOTH_BOUNDS);
+              int barrier_order = 2);
 
    /**
     * @brief Evaluate barrier function for given constraint
@@ -171,28 +175,28 @@ public:
     * @param constraint Constraint being enforced
     * @param state Current state
     * @param control Current control input 
-    * @param is_relaxed Whether constraint is in relaxed region
+    * @param barrier_value Value of barrier function
     * @return Tuple of state and control gradients
     */
    std::tuple<Eigen::VectorXd, Eigen::VectorXd> getGradients(
            const Constraint& constraint, 
            const Eigen::VectorXd& state,
            const Eigen::VectorXd& control,
-           bool is_relaxed) const;
+           double barrier_value) const;
 
    /**
     * @brief Get Hessians of barrier function
     * @param constraint Constraint being enforced  
     * @param state Current state
     * @param control Current control input
-    * @param is_relaxed Whether constraint is in relaxed region
+    * @param barrier_value  Value of barrier function
     * @return Tuple of state, control and cross Hessians
     */
    std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> getHessians(
            const Constraint& constraint,
            const Eigen::VectorXd& state, 
            const Eigen::VectorXd& control,
-           bool is_relaxed) const;
+           double barrier_value) const;
 
    /**
     * @brief Get current barrier coefficient

@@ -27,6 +27,7 @@
 // #include "gurobi_c++.h"
 
 #include "cddp_core/cddp_core.hpp"
+#include "cddp_core/helper.hpp"
 
 namespace cddp {
 
@@ -58,9 +59,13 @@ CDDPSolution CDDP::solveCLDDP() {
 
     // Start timer
     auto start_time = std::chrono::high_resolution_clock::now();
+    int iter = 0;
 
     // Main loop of CDDP
-    for (int iter = 1; iter <= options_.max_iterations; ++iter) {
+    while (iter < options_.max_iterations)
+    {
+        ++iter;
+
         // Check maximum CPU time
         if (options_.max_cpu_time > 0) {
             auto end_time = std::chrono::high_resolution_clock::now();
@@ -134,10 +139,11 @@ CDDPSolution CDDP::solveCLDDP() {
                 regularization_control_ = 0.0;
             }
 
+            // Append Latest Cost
+            solution.cost_sequence.push_back(J_);
+
             if (dJ_ < options_.cost_tolerance) {
                 solution.converged = true;
-                // Append Latest Cost
-                solution.cost_sequence.push_back(J_);
                 solution.iterations = iter;
                 break;
             }
@@ -147,8 +153,7 @@ CDDPSolution CDDP::solveCLDDP() {
     // Finalize solution
     solution.control_sequence = U_;
     solution.state_sequence = X_;
-    solution.cost_sequence.push_back(J_);
-    solution.iterations = solution.converged ? solution.iterations : options_.max_iterations;
+    solution.iterations = solution.converged ? iter : options_.max_iterations;
 
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
@@ -185,6 +190,12 @@ bool CDDP::solveCLDDPBackwardPass() {
     Eigen::VectorXd k(control_dim);
     Eigen::MatrixXd K(control_dim, state_dim);
     Eigen::SparseMatrix<double> P(control_dim, control_dim); // Hessian of QP objective
+
+    // Create BoxQP solver
+    cddp::BoxQPOptions qp_options;
+    qp_options.verbose = false;
+    qp_options.maxIter = 100;
+    cddp::BoxQPSolver qp_solver(qp_options);
 
     double Qu_error = 0.0;
 
@@ -252,37 +263,74 @@ bool CDDP::solveCLDDPBackwardPass() {
         Q_UX_[t] = Q_ux;
         Q_U_[t] = Q_u;
 
-        /*    Solve Box QP Problem    */   
-        int numNonZeros = Q_uu.nonZeros(); 
-        P.reserve(numNonZeros);
-        P.setZero();
-        for (int i = 0; i < Q_uu.rows(); ++i) {
-            for (int j = 0; j < Q_uu.cols(); ++j) {
-                if (Q_uu(i, j) != 0) {
-                    P.insert(i, j) = Q_uu(i, j);
-                }
-            }
+        if (control_box_constraint == nullptr) {
+            const Eigen::MatrixXd &H = Q_uu.inverse();
+            k = -H * Q_u;
+            K = -H * Q_ux;
+        } else {
+
+            // Solve Box QP Problem using BoxQPSolver
+            Eigen::VectorXd lower = control_box_constraint->getLowerBound() - u;
+            Eigen::VectorXd upper = control_box_constraint->getUpperBound() - u;
+
+            cddp::BoxQPResult qp_result = qp_solver.solve(Q_uu, Q_u, lower, upper, u);
+
+            // if (qp_result.status != cddp::BoxQPStatus::SMALL_GRADIENT && 
+            //     qp_result.status != cddp::BoxQPStatus::SMALL_IMPROVEMENT) {   
+            //     std::cout << "BoxQP solver failed with status: " << static_cast<int>(qp_result.status) << std::endl;
+            //     return false;
+            // }
+
+            // Extract solution
+            k = qp_result.x;  // Feedforward term
+
+            const auto &H = qp_result.Hfree;
+            const auto &free = qp_result.free;
+
+            // const Eigen::MatrixXd &Q_ux_free = Q_ux(free, Eigen::all);
+
+            // Compute gain for free dimensions
+            // Eigen::MatrixXd K_free = H.solve(-Q_ux_free);
+
+
+            // // Fill in the gain matrix
+            // K.setZero();
+            // K(Eigen::all, free) = K_free;
+
+
+            /*    Solve Box QP Problem    */   
+            // int numNonZeros = Q_uu.nonZeros(); 
+            // P.reserve(numNonZeros);
+            // P.setZero();
+            // for (int i = 0; i < Q_uu.rows(); ++i) {
+            //     for (int j = 0; j < Q_uu.cols(); ++j) {
+            //         if (Q_uu(i, j) != 0) {
+            //             P.insert(i, j) = Q_uu(i, j);
+            //         }
+            //     }
+            // }
+            // P.makeCompressed(); // Important for efficient storage and operations
+            // osqp_solver_.UpdateObjectiveMatrix(P);
+
+            // const Eigen::VectorXd& q = Q_u; // Gradient of QP objective
+            // osqp_solver_.SetObjectiveVector(q);  
+
+            // // Lower and upper bounds
+            // Eigen::VectorXd lb = 1.0 * (control_box_constraint->getLowerBound() - u);
+            // Eigen::VectorXd ub = 1.0 * (control_box_constraint->getUpperBound() - u);    
+            // osqp_solver_.SetBounds(lb, ub);
+
+            // // Solve the QP problem TODO: Use SDQP instead of OSQP
+            // osqp::OsqpExitCode exit_code = osqp_solver_.Solve();
+
+            // // Extract solution
+            // double optimal_objective = osqp_solver_.objective_value();
+            // k = osqp_solver_.primal_solution();
+
+            // // Compute gain matrix
+            K = -Q_uu.inverse() * Q_ux;
+
         }
-        P.makeCompressed(); // Important for efficient storage and operations
-        osqp_solver_.UpdateObjectiveMatrix(P);
-
-        const Eigen::VectorXd& q = Q_u; // Gradient of QP objective
-        osqp_solver_.SetObjectiveVector(q);  
-
-        // Lower and upper bounds
-        Eigen::VectorXd lb = 1.0 * (control_box_constraint->getLowerBound() - u);
-        Eigen::VectorXd ub = 1.0 * (control_box_constraint->getUpperBound() - u);    
-        osqp_solver_.SetBounds(lb, ub);
-
-        // Solve the QP problem TODO: Use SDQP instead of OSQP
-        osqp::OsqpExitCode exit_code = osqp_solver_.Solve();
-
-        // Extract solution
-        double optimal_objective = osqp_solver_.objective_value();
-        k = osqp_solver_.primal_solution();
-
-        // Compute feedback gain
-        K = -Q_uu.inverse() * Q_ux;
 
         // Store feedforward and feedback gain
         k_[t] = k;
@@ -314,6 +362,8 @@ bool CDDP::solveCLDDPForwardPass() {
     int iter = 0;
     double alpha = options_.backtracking_coeff;
 
+    auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+
     // Line-search iteration 
     for (iter = 0; iter < options_.max_line_search_iterations; ++iter) {
         // Initialize cost and constraints
@@ -337,6 +387,11 @@ bool CDDP::solveCLDDPForwardPass() {
 
             // Create a new solution
             U_new[t] = u + alpha * k + K * delta_x;
+
+            // Clamp control input
+            if (control_box_constraint != nullptr) {
+                U_new[t] = control_box_constraint->clamp(U_new[t]);
+            }
 
             // Compute cost
             J_new += objective_->running_cost(x, U_new[t], t);
