@@ -38,7 +38,7 @@ struct CDDPOptions {
     double max_cpu_time = 0.0;                      // Maximum CPU time for the solver in seconds
 
     // Line search method
-    int max_line_search_iterations = 1;             // Maximum iterations for line search
+    int max_line_search_iterations = 11;            // Maximum iterations for line search
     double backtracking_coeff = 1.0;                // Maximum step size for line search backtracking
     double backtracking_min = 0.5;                  // Coefficient for line search backtracking
     double backtracking_factor = std::pow(2, -1);   // Factor for line search backtracking
@@ -82,6 +82,7 @@ struct CDDPSolution {
     std::vector<double> cost_sequence;
     std::vector<double> lagrangian_sequence;
     int iterations;
+    double alpha;
     bool converged;
     double solve_time;
 };
@@ -227,6 +228,9 @@ private:
     double L_; // Lagrangian
     double dL_; // Lagrangian improvement
     double optimality_gap_ = 1e+10;
+
+    // Line search
+    double alpha_; // Line search step size
 
     // Cost function
     std::unique_ptr<Objective> objective_; // Objective function
