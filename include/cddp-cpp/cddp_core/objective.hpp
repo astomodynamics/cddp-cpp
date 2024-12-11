@@ -131,6 +131,120 @@ private:
     double timestep_;                 // Timestep
 };
 
+/**
+ * @brief NonlinearObjective class for general nonlinear cost functions
+ * 
+ * This class implements a general nonlinear objective function with finite difference
+ * methods for computing gradients and Hessians. It extends the base Objective class
+ * and provides utilities for numerical differentiation.
+ */
+class NonlinearObjective : public Objective {
+public:
+    /**
+     * @brief Constructor for NonlinearObjective
+     * @param timestep Time step for cost scaling
+     */
+    NonlinearObjective(double timestep = 0.1);
+
+    /**
+     * @brief Evaluate total cost over trajectory
+     * @param states Vector of states
+     * @param controls Vector of controls
+     * @return Total cost over trajectory
+     */
+    double evaluate(const std::vector<Eigen::VectorXd>& states,
+                   const std::vector<Eigen::VectorXd>& controls) const override;
+
+    /**
+     * @brief Evaluate running cost at a single timestep
+     * @param state Current state
+     * @param control Current control
+     * @param index Time index
+     * @return Running cost value
+     */
+    double running_cost(const Eigen::VectorXd& state,
+                       const Eigen::VectorXd& control,
+                       int index) const override;
+
+    /**
+     * @brief Evaluate terminal cost
+     * @param final_state Final state
+     * @return Terminal cost value
+     */
+    double terminal_cost(const Eigen::VectorXd& final_state) const override;
+
+    /**
+     * @brief Get gradient of running cost w.r.t state using finite differences
+     * @param state Current state
+     * @param control Current control
+     * @param index Time index
+     * @return Gradient vector w.r.t state
+     */
+    Eigen::VectorXd getRunningCostStateGradient(const Eigen::VectorXd& state,
+                                               const Eigen::VectorXd& control,
+                                               int index) const override;
+
+    /**
+     * @brief Get gradient of running cost w.r.t control using finite differences
+     * @param state Current state
+     * @param control Current control
+     * @param index Time index
+     * @return Gradient vector w.r.t control
+     */
+    Eigen::VectorXd getRunningCostControlGradient(const Eigen::VectorXd& state,
+                                                 const Eigen::VectorXd& control,
+                                                 int index) const override;
+
+    /**
+     * @brief Get gradient of terminal cost using finite differences
+     * @param final_state Final state
+     * @return Gradient vector of terminal cost
+     */
+    Eigen::VectorXd getFinalCostGradient(const Eigen::VectorXd& final_state) const override;
+
+    /**
+     * @brief Get Hessian of running cost w.r.t state using finite differences
+     * @param state Current state
+     * @param control Current control
+     * @param index Time index
+     * @return Hessian matrix w.r.t state
+     */
+    Eigen::MatrixXd getRunningCostStateHessian(const Eigen::VectorXd& state,
+                                              const Eigen::VectorXd& control,
+                                              int index) const override;
+
+    /**
+     * @brief Get Hessian of running cost w.r.t control using finite differences
+     * @param state Current state
+     * @param control Current control
+     * @param index Time index
+     * @return Hessian matrix w.r.t control
+     */
+    Eigen::MatrixXd getRunningCostControlHessian(const Eigen::VectorXd& state,
+                                                const Eigen::VectorXd& control,
+                                                int index) const override;
+
+    /**
+     * @brief Get cross-term Hessian of running cost using finite differences
+     * @param state Current state
+     * @param control Current control
+     * @param index Time index
+     * @return Cross-term Hessian matrix
+     */
+    Eigen::MatrixXd getRunningCostCrossHessian(const Eigen::VectorXd& state,
+                                              const Eigen::VectorXd& control,
+                                              int index) const override;
+
+    /**
+     * @brief Get Hessian of terminal cost using finite differences
+     * @param final_state Final state
+     * @return Hessian matrix of terminal cost
+     */
+    Eigen::MatrixXd getFinalCostHessian(const Eigen::VectorXd& final_state) const override;
+
+private:
+    double timestep_;  ///< Time step for cost scaling
+};
 
 } // namespace cddp
 
