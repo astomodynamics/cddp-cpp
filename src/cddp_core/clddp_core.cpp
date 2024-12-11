@@ -268,24 +268,24 @@ bool CDDP::solveCLDDPBackwardPass() {
             k = -H * Q_u;
             K = -H * Q_ux;
         } else {
+            // TODO: Migrate to BoxQP solver
+            // // Solve Box QP Problem using BoxQPSolver
+            // Eigen::VectorXd lower = control_box_constraint->getLowerBound() - u;
+            // Eigen::VectorXd upper = control_box_constraint->getUpperBound() - u;
 
-            // Solve Box QP Problem using BoxQPSolver
-            Eigen::VectorXd lower = control_box_constraint->getLowerBound() - u;
-            Eigen::VectorXd upper = control_box_constraint->getUpperBound() - u;
+            // cddp::BoxQPResult qp_result = qp_solver.solve(Q_uu, Q_u, lower, upper, u);
 
-            cddp::BoxQPResult qp_result = qp_solver.solve(Q_uu, Q_u, lower, upper, u);
+            // // if (qp_result.status != cddp::BoxQPStatus::SMALL_GRADIENT && 
+            // //     qp_result.status != cddp::BoxQPStatus::SMALL_IMPROVEMENT) {   
+            // //     std::cout << "BoxQP solver failed with status: " << static_cast<int>(qp_result.status) << std::endl;
+            // //     return false;
+            // // }
 
-            // if (qp_result.status != cddp::BoxQPStatus::SMALL_GRADIENT && 
-            //     qp_result.status != cddp::BoxQPStatus::SMALL_IMPROVEMENT) {   
-            //     std::cout << "BoxQP solver failed with status: " << static_cast<int>(qp_result.status) << std::endl;
-            //     return false;
-            // }
+            // // Extract solution
+            // k = qp_result.x;  // Feedforward term
 
-            // Extract solution
-            k = qp_result.x;  // Feedforward term
-
-            const auto &H = qp_result.Hfree;
-            const auto &free = qp_result.free;
+            // const auto &H = qp_result.Hfree;
+            // const auto &free = qp_result.free;
 
             // const Eigen::MatrixXd &Q_ux_free = Q_ux(free, Eigen::all);
 
@@ -299,33 +299,33 @@ bool CDDP::solveCLDDPBackwardPass() {
 
 
             /*    Solve Box QP Problem    */   
-            // int numNonZeros = Q_uu.nonZeros(); 
-            // P.reserve(numNonZeros);
-            // P.setZero();
-            // for (int i = 0; i < Q_uu.rows(); ++i) {
-            //     for (int j = 0; j < Q_uu.cols(); ++j) {
-            //         if (Q_uu(i, j) != 0) {
-            //             P.insert(i, j) = Q_uu(i, j);
-            //         }
-            //     }
-            // }
-            // P.makeCompressed(); // Important for efficient storage and operations
-            // osqp_solver_.UpdateObjectiveMatrix(P);
+            int numNonZeros = Q_uu.nonZeros(); 
+            P.reserve(numNonZeros);
+            P.setZero();
+            for (int i = 0; i < Q_uu.rows(); ++i) {
+                for (int j = 0; j < Q_uu.cols(); ++j) {
+                    if (Q_uu(i, j) != 0) {
+                        P.insert(i, j) = Q_uu(i, j);
+                    }
+                }
+            }
+            P.makeCompressed(); // Important for efficient storage and operations
+            osqp_solver_.UpdateObjectiveMatrix(P);
 
-            // const Eigen::VectorXd& q = Q_u; // Gradient of QP objective
-            // osqp_solver_.SetObjectiveVector(q);  
+            const Eigen::VectorXd& q = Q_u; // Gradient of QP objective
+            osqp_solver_.SetObjectiveVector(q);  
 
-            // // Lower and upper bounds
-            // Eigen::VectorXd lb = 1.0 * (control_box_constraint->getLowerBound() - u);
-            // Eigen::VectorXd ub = 1.0 * (control_box_constraint->getUpperBound() - u);    
-            // osqp_solver_.SetBounds(lb, ub);
+            // Lower and upper bounds
+            Eigen::VectorXd lb = 1.0 * (control_box_constraint->getLowerBound() - u);
+            Eigen::VectorXd ub = 1.0 * (control_box_constraint->getUpperBound() - u);    
+            osqp_solver_.SetBounds(lb, ub);
 
-            // // Solve the QP problem TODO: Use SDQP instead of OSQP
-            // osqp::OsqpExitCode exit_code = osqp_solver_.Solve();
+            // Solve the QP problem TODO: Use SDQP instead of OSQP
+            osqp::OsqpExitCode exit_code = osqp_solver_.Solve();
 
-            // // Extract solution
-            // double optimal_objective = osqp_solver_.objective_value();
-            // k = osqp_solver_.primal_solution();
+            // Extract solution
+            double optimal_objective = osqp_solver_.objective_value();
+            k = osqp_solver_.primal_solution();
 
             // // Compute gain matrix
             K = -Q_uu.inverse() * Q_ux;
