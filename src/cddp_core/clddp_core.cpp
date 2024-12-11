@@ -242,7 +242,7 @@ bool CDDP::solveCLDDPBackwardPass() {
         if (options_.regularization_type == "control" || options_.regularization_type == "both") {
             Q_uu += options_.regularization_control * Eigen::MatrixXd::Identity(control_dim, control_dim);
         } 
-
+// std::cout << "Q_uu: " << Q_uu << std::endl;
         // Check eigenvalues of Q_uu
         Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
         Eigen::VectorXd eigenvalues = es.eigenvalues().real();
@@ -340,6 +340,7 @@ bool CDDP::solveCLDDPBackwardPass() {
         Eigen::Vector2d dV_step;
         dV_step << Q_u.dot(k), 0.5 * k.dot(Q_uu * k);
         dV_ = dV_ + dV_step;
+// std::cout << "dV: " << dV_ << std::endl;
         V_X_[t] = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
         V_XX_[t] = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
         V_XX_[t] = 0.5 * (V_XX_[t] + V_XX_[t].transpose()); // Symmetrize Hessian

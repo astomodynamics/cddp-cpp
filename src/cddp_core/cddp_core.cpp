@@ -90,12 +90,6 @@ void CDDP::initializeCDDP()
         U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
     }
 
-    // Set initial state for all sequence
-    for (int t = 0; t < horizon_ + 1; ++t)
-    {
-        X_[t] = initial_state_;
-    }
-
     // Initialize cost
     J_ = 0.0;
 
@@ -170,6 +164,68 @@ void CDDP::initializeCDDP()
     {
         std::cerr << "OSQP Solver is not initialized" << std::endl;
     }
+
+    for (int t = 0; t < horizon_ + 1; ++t)
+    {
+        X_[t] = initial_state_;
+    }
+    
+    // // Initialize trajectory by forward pass
+    // auto control_box_constraint = getConstraint<ControlBoxConstraint>("ControlBoxConstraint");
+    // // Line-search iteration 
+    // double alpha = options_.backtracking_coeff;
+    // for (int iter = 0; iter < options_.max_line_search_iterations; ++iter) {
+    //     // Initialize cost and constraints
+    //     double J_new = 0.0;
+    //     double L_new = 0.0;
+    //     bool is_feasible = true;
+
+    //     std::vector<Eigen::VectorXd> X_new = X_;
+    //     std::vector<Eigen::VectorXd> U_new = U_;
+    //     X_new[0] = initial_state_;
+
+    //     for (int t = 0; t < horizon_; ++t)
+    //     {
+    //         const Eigen::VectorXd &x = X_new[t];
+    //         const Eigen::VectorXd &u = U_new[t];
+
+    //         Eigen::VectorXd dx = x - X_[t];
+    //         Eigen::VectorXd du = alpha * k_[t] + K_[t] * dx;
+    //         U_new[t] = u + du;
+
+    //         // Clamp control input
+    //         if (control_box_constraint != nullptr) {
+    //             U_new[t] = control_box_constraint->clamp(U_new[t]);
+    //         }
+
+    //         const double step_cost = objective_->running_cost(x, U_new[t], t);
+    //         const double barrier_cost = log_barrier_->evaluate(*control_box_constraint, x, u);
+
+    //         J_new += step_cost;
+    //         L_new += (step_cost + barrier_cost);
+
+    //         X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t]);
+    //     }
+
+    //     J_new += objective_->terminal_cost(X_new.back());
+    //     L_new += objective_->terminal_cost(X_new.back());
+
+    //     double dJ = J_ - J_new;
+    //     double dL = L_ - L_new;
+        
+    //     if (dJ < 0) {
+    //         std::cerr << "CDDP: Cost increase in forward pass" << std::endl;
+    //         alpha *= options_.backtracking_coeff;
+    //         continue;
+    //     } else {
+    //         X_ = X_new;
+    //         U_ = U_new;
+    //         J_ = J_new;
+    //         L_ = L_new;
+    //         // break;
+    //     }
+    //     alpha *= options_.backtracking_coeff;
+    // }
 }
 
 // Solve the problem
