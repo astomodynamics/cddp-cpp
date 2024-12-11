@@ -294,7 +294,7 @@ Eigen::MatrixXd NonlinearObjective::getFinalCostHessian(
         return terminal_cost(s);
     };
     
-    return finite_difference_hessian(cost_func, final_state, 1e-5);
+    return finite_difference_hessian(cost_func, final_state, 2e-5);
 }
 
 } // namespace cddp
