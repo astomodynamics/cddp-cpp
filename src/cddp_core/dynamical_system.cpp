@@ -72,7 +72,7 @@ Eigen::VectorXd DynamicalSystem::getContinuousDynamics(
     
     // Compute continuous dynamics using finite difference
     // dx/dt ≈ (x_{k+1} - x_k) / dt
-    Eigen::VectorXd continuous_dynamics = (next_state - state) / dt;
+    Eigen::VectorXd continuous_dynamics = (next_state - state) / timestep_;
     
     return continuous_dynamics;
 }
