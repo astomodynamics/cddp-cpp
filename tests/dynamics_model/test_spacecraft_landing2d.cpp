@@ -74,109 +74,109 @@ TEST(SpacecraftLanding2DTest, DiscreteDynamics) {
     ASSERT_DOUBLE_EQ(spacecraft.getTimestep(), 0.1);
     ASSERT_EQ(spacecraft.getIntegrationType(), "rk4");
 
-    // Plot results
-    plt::figure_size(800, 1200);
+    // // Plot results
+    // plt::figure_size(800, 1200);
     
-    // Position plot
-    plt::subplot(4, 1, 1);
-    plt::named_plot("x", time_data, x_data, "b-");
-    plt::named_plot("y", time_data, y_data, "r-");
-    plt::title("Position vs Time");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Position [m]");
-    plt::legend();
+    // // Position plot
+    // plt::subplot(4, 1, 1);
+    // plt::named_plot("x", time_data, x_data, "b-");
+    // plt::named_plot("y", time_data, y_data, "r-");
+    // plt::title("Position vs Time");
+    // plt::xlabel("Time [s]");
+    // plt::ylabel("Position [m]");
+    // plt::legend();
     
-    // Velocity plot
-    plt::subplot(4, 1, 2);
-    plt::named_plot("v_x", time_data, x_vel_data, "b-");
-    plt::named_plot("v_y", time_data, y_vel_data, "r-");
-    plt::title("Velocity vs Time");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Velocity [m/s]");
-    plt::legend();
+    // // Velocity plot
+    // plt::subplot(4, 1, 2);
+    // plt::named_plot("v_x", time_data, x_vel_data, "b-");
+    // plt::named_plot("v_y", time_data, y_vel_data, "r-");
+    // plt::title("Velocity vs Time");
+    // plt::xlabel("Time [s]");
+    // plt::ylabel("Velocity [m/s]");
+    // plt::legend();
 
-    // Attitude plot
-    plt::subplot(4, 1, 3);
-    plt::named_plot("theta", time_data, theta_data, "b-");
-    plt::named_plot("omega", time_data, w_data, "r-");
-    plt::title("Attitude vs Time");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Angle [rad], Angular Velocity [rad/s]");
-    plt::legend();
+    // // Attitude plot
+    // plt::subplot(4, 1, 3);
+    // plt::named_plot("theta", time_data, theta_data, "b-");
+    // plt::named_plot("omega", time_data, w_data, "r-");
+    // plt::title("Attitude vs Time");
+    // plt::xlabel("Time [s]");
+    // plt::ylabel("Angle [rad], Angular Velocity [rad/s]");
+    // plt::legend();
 
-    // Energy plot
-    plt::subplot(4, 1, 4);
-    plt::plot(time_data, energy_data, "g-");
-    plt::title("Total Energy vs Time");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Energy [J]");
+    // // Energy plot
+    // plt::subplot(4, 1, 4);
+    // plt::plot(time_data, energy_data, "g-");
+    // plt::title("Total Energy vs Time");
+    // plt::xlabel("Time [s]");
+    // plt::ylabel("Energy [J]");
 
-    // Save plot
-    plt::save("../results/tests/spacecraft_landing2d_test.png");
+    // // Save plot
+    // plt::save("../results/tests/spacecraft_landing2d_test.png");
 
-    // Animation
-    plt::figure_size(800, 800);
-    plt::title("Spacecraft Landing Animation");
-    plt::xlabel("x [m]");
-    plt::ylabel("y [m]");
+    // // Animation
+    // plt::figure_size(800, 800);
+    // plt::title("Spacecraft Landing Animation");
+    // plt::xlabel("x [m]");
+    // plt::ylabel("y [m]");
 
-    // Reset state to initial conditions
-    state << 1000.0, 0.0, 2000.0, -100.0, 0.1, 0.0;
+    // // Reset state to initial conditions
+    // state << 1000.0, 0.0, 2000.0, -100.0, 0.1, 0.0;
 
-    // Create animation frames
-    for (int i = 0; i < num_steps + 1; ++i) {
-        if (i % 5 == 0) {  // Create frame every 5 steps
-            plt::clf();
+    // // Create animation frames
+    // for (int i = 0; i < num_steps + 1; ++i) {
+    //     if (i % 5 == 0) {  // Create frame every 5 steps
+    //         plt::clf();
 
-            double x = state[0];
-            double y = state[2];
-            double theta = state[4];
+    //         double x = state[0];
+    //         double y = state[2];
+    //         double theta = state[4];
 
-            // Calculate spacecraft corners
-            std::vector<double> spacecraft_x, spacecraft_y;
+    //         // Calculate spacecraft corners
+    //         std::vector<double> spacecraft_x, spacecraft_y;
             
-            // Calculate corners based on length and width
-            double l = spacecraft.getLength() / 2.0;
-            double w = spacecraft.getWidth() / 2.0;
+    //         // Calculate corners based on length and width
+    //         double l = spacecraft.getLength() / 2.0;
+    //         double w = spacecraft.getWidth() / 2.0;
             
-            // Define vertices of spacecraft shape
-            std::vector<double> vertices_x = {-w, w, w, -w, -w};  // Last point closes the shape
-            std::vector<double> vertices_y = {-l, -l, l, l, -l};
+    //         // Define vertices of spacecraft shape
+    //         std::vector<double> vertices_x = {-w, w, w, -w, -w};  // Last point closes the shape
+    //         std::vector<double> vertices_y = {-l, -l, l, l, -l};
             
-            // Transform vertices
-            spacecraft_x.resize(vertices_x.size());
-            spacecraft_y.resize(vertices_y.size());
+    //         // Transform vertices
+    //         spacecraft_x.resize(vertices_x.size());
+    //         spacecraft_y.resize(vertices_y.size());
             
-            for (size_t j = 0; j < vertices_x.size(); ++j) {
-                // Rotation and translation
-                spacecraft_x[j] = x + (vertices_x[j] * cos(theta) - vertices_y[j] * sin(theta));
-                spacecraft_y[j] = y + (vertices_x[j] * sin(theta) + vertices_y[j] * cos(theta));
-            }
+    //         for (size_t j = 0; j < vertices_x.size(); ++j) {
+    //             // Rotation and translation
+    //             spacecraft_x[j] = x + (vertices_x[j] * cos(theta) - vertices_y[j] * sin(theta));
+    //             spacecraft_y[j] = y + (vertices_x[j] * sin(theta) + vertices_y[j] * cos(theta));
+    //         }
 
-            // Plot spacecraft body
-            plt::plot(spacecraft_x, spacecraft_y, "b-");
+    //         // Plot spacecraft body
+    //         plt::plot(spacecraft_x, spacecraft_y, "b-");
             
-            // Plot thrust vector if thrust is non-zero
-            if (control[0] > 0) {
-                double thrust_magnitude = 50.0;  // Visual scale for thrust
-                double thrust_dir = theta + control[1];
-                std::vector<double> thrust_x = {x, x - thrust_magnitude * sin(thrust_dir)};
-                std::vector<double> thrust_y = {y, y - thrust_magnitude * cos(thrust_dir)};
-                plt::plot(thrust_x, thrust_y, "r-");
-            }
+    //         // Plot thrust vector if thrust is non-zero
+    //         if (control[0] > 0) {
+    //             double thrust_magnitude = 50.0;  // Visual scale for thrust
+    //             double thrust_dir = theta + control[1];
+    //             std::vector<double> thrust_x = {x, x - thrust_magnitude * sin(thrust_dir)};
+    //             std::vector<double> thrust_y = {y, y - thrust_magnitude * cos(thrust_dir)};
+    //             plt::plot(thrust_x, thrust_y, "r-");
+    //         }
 
-            // Set axis limits with some margin around the trajectory
-            plt::xlim(0, 1200);
-            plt::ylim(0, 2200);
+    //         // Set axis limits with some margin around the trajectory
+    //         plt::xlim(0, 1200);
+    //         plt::ylim(0, 2200);
 
-            // Save frame
-            std::string filename = "../results/tests/spacecraft_" + std::to_string(i) + ".png";
-            plt::save(filename);
-        }
+    //         // Save frame
+    //         std::string filename = "../results/tests/spacecraft_" + std::to_string(i) + ".png";
+    //         plt::save(filename);
+    //     }
 
-        // Update state
-        state = spacecraft.getDiscreteDynamics(state, control);
-    }
+    //     // Update state
+    //     state = spacecraft.getDiscreteDynamics(state, control);
+    // }
 }
 
 // TEST(SpacecraftLanding2DTest, Jacobians) {
