@@ -189,6 +189,7 @@ set(dynamics_model_srcs
   src/dynamics_model/quadrotor.cpp
   src/dynamics_model/manipulator.cpp
   src/dynamics_model/spacecraft_linear.cpp
+  src/dynamics_model/spacecraft_landing2d.cpp
 )
 
 add_library(${PROJECT_NAME} 
