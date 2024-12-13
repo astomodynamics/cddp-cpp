@@ -78,15 +78,20 @@ Eigen::VectorXd SpacecraftLanding2D::getContinuousDynamics(
 Eigen::MatrixXd SpacecraftLanding2D::getStateJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    Eigen::MatrixXd A = getFiniteDifferenceStateJacobian(state, control);
-    return A;
+    auto f = [&](const Eigen::VectorXd& x) {
+        return getContinuousDynamics(x, control);
+    };
+
+    return finite_difference_jacobian(f, state);
 }
 
 Eigen::MatrixXd SpacecraftLanding2D::getControlJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    Eigen::MatrixXd B = getFiniteDifferenceControlJacobian(state, control);
-    return B;
+    auto f = [&](const Eigen::VectorXd& u) {
+        return getContinuousDynamics(state, u);
+    };
+    return finite_difference_jacobian(f, control);
 }
 
 Eigen::MatrixXd SpacecraftLanding2D::getStateHessian(
