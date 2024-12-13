@@ -40,6 +40,7 @@
 #include "dynamics_model/quadrotor.hpp"
 #include "dynamics_model/manipulator.hpp"
 #include "dynamics_model/spacecraft_linear.hpp"
+#include "dynamics_model/spacecraft_landing2d.hpp"
 
 
 #include "matplotlibcpp.hpp"
