@@ -33,8 +33,8 @@
 namespace cddp {
 
 struct CDDPOptions {
-    double cost_tolerance = 1e-2;                   // Tolerance for changes in cost function
-    double grad_tolerance = 1e-2;                   // Tolerance for cost gradient magnitude
+    double cost_tolerance = 1e-7;                   // Tolerance for changes in cost function
+    double grad_tolerance = 1e-4;                   // Tolerance for cost gradient magnitude
     int max_iterations = 1;                         // Maximum number of iterations
     double max_cpu_time = 0.0;                      // Maximum CPU time for the solver in seconds
 
@@ -42,7 +42,7 @@ struct CDDPOptions {
     int max_line_search_iterations = 11;            // Maximum iterations for line search
     double backtracking_coeff = 1.0;                // Maximum step size for line search backtracking
     double backtracking_min = 0.5;                  // Coefficient for line search backtracking
-    double backtracking_factor = std::pow(2, -1);   // Factor for line search backtracking
+    double backtracking_factor = std::pow(10, (-3.0/10.0));   // Factor for line search backtracking
     double minimum_reduction_ratio = 1e-6;          // Minimum reduction for line search
 
     // log-barrier method
@@ -62,13 +62,13 @@ struct CDDPOptions {
     double regularization_state_step = 1.0;         // Regularization step for state
     double regularization_state_max = 1e6;          // Maximum regularization
     double regularization_state_min = 1e-6;         // Minimum regularization
-    double regularization_state_factor = 1.5;       // Factor for state regularization
+    double regularization_state_factor = 1.6;       // Factor for state regularization
 
     double regularization_control = 1e-6;           // Regularization for control
     double regularization_control_step = 1.0;       // Regularization step for control
-    double regularization_control_max = 1e6;        // Maximum regularization
+    double regularization_control_max = 1e10;        // Maximum regularization
     double regularization_control_min = 1e-6;       // Minimum regularization
-    double regularization_control_factor = 1.5;     // Factor for control regularization
+    double regularization_control_factor = 1.6;     // Factor for control regularization
 
     // Other options
     bool verbose = true;                            // Option for debug printing
@@ -190,6 +190,8 @@ private:
     double L_; // Lagrangian
     double dL_; // Lagrangian improvement
     double optimality_gap_ = 1e+10;
+    double expected_;
+    double reduction_;
 
     // Line search
     double alpha_; // Line search step size
@@ -312,14 +314,37 @@ private:
                     double lambda_state, double lambda_control, double step_size)
     {
         // Print header for better readability every 10 iterations
+        // if (iter % 10 == 0)
+        // {
+        //     std::cout << std::setw(10) << "Iteration"
+        //             << std::setw(15) << "Objective"
+        //             << std::setw(15) << "Lagrangian"
+        //             << std::setw(15) << "Grad Norm"
+        //             << std::setw(15) << "Step Size"
+        //             << std::setw(15) << "Reg (State)"
+        //             << std::setw(15) << "Reg (Control)"
+        //             << std::endl;
+        //     std::cout << std::string(95, '-') << std::endl;
+        // }
+
+        // // Print iteration details
+        // std::cout << std::setw(10) << iter
+        //         << std::setw(15) << std::setprecision(6) << cost
+        //         << std::setw(15) << std::setprecision(6) << lagrangian
+        //         << std::setw(15) << std::setprecision(6) << grad_norm
+        //         << std::setw(15) << std::setprecision(6) << step_size
+        //         << std::setw(15) << std::setprecision(6) << lambda_state
+        //         << std::setw(15) << std::setprecision(6) << lambda_control
+        //         << std::endl;
+
         if (iter % 10 == 0)
         {
             std::cout << std::setw(10) << "Iteration"
                     << std::setw(15) << "Objective"
                     << std::setw(15) << "Lagrangian"
                     << std::setw(15) << "Grad Norm"
-                    << std::setw(15) << "Step Size"
-                    << std::setw(15) << "Reg (State)"
+                    << std::setw(15) << "reduction"
+                    << std::setw(15) << "expected"
                     << std::setw(15) << "Reg (Control)"
                     << std::endl;
             std::cout << std::string(95, '-') << std::endl;

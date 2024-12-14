@@ -124,7 +124,7 @@ CDDPSolution CDDP::solveCLDDP() {
 
         // Print iteration information
         if (options_.verbose) {
-            printIteration(iter, J_, 0.0, optimality_gap_, regularization_state_, regularization_control_, alpha_); 
+            printIteration(iter, J_, 0.0, optimality_gap_, expected_, regularization_control_, alpha_); 
         }
        
        if (forward_pass_success) {
@@ -184,11 +184,14 @@ bool CDDP::solveCLDDPBackwardPass() {
     Eigen::VectorXd Q_u(control_dim);
     Eigen::MatrixXd Q_xx(state_dim, state_dim);
     Eigen::MatrixXd Q_uu(control_dim, control_dim);
+    Eigen::MatrixXd Q_uu_reg(control_dim, control_dim);
     Eigen::MatrixXd Q_ux(control_dim, state_dim);
+    Eigen::MatrixXd Q_ux_reg(control_dim, state_dim);
     Eigen::MatrixXd Q_uu_inv(control_dim, control_dim);
     Eigen::VectorXd k(control_dim);
     Eigen::MatrixXd K(control_dim, state_dim);
     Eigen::SparseMatrix<double> P(control_dim, control_dim); // Hessian of QP objective
+    dV_ = Eigen::Vector2d::Zero();
 
     // Create BoxQP solver
     cddp::BoxQPOptions qp_options;
@@ -225,42 +228,60 @@ bool CDDP::solveCLDDPBackwardPass() {
         Q_x = l_x + A.transpose() * V_x;
         Q_u = l_u + B.transpose() * V_x;
         Q_xx = l_xx + A.transpose() * V_xx * A;
-if (t > 400) {
-std::cout << "Q_x: " << Q_x.transpose() << std::endl;
-std::cout << "Q_u: " << Q_u.transpose() << std::endl;
-
-}
-
-        if (options_.regularization_type == "state" || options_.regularization_type == "both") {
-            Q_ux = l_ux + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
-            Q_uu = l_uu + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * B;
-        } else {
-            Q_ux = l_ux + B.transpose() * V_xx * A;
-            Q_uu = l_uu + B.transpose() * V_xx * B;
-        }
+        Q_ux = l_ux + B.transpose() * V_xx * A;
+        Q_uu = l_uu + B.transpose() * V_xx * B;
 
         // Symmetrize Q_uu for cholensky decomposition
         Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
-        // Control Regularization
-        if (options_.regularization_type == "control" || options_.regularization_type == "both") {
-            Q_uu += options_.regularization_control * Eigen::MatrixXd::Identity(control_dim, control_dim);
-        } 
-// std::cout << "Q_uu: " << Q_uu << std::endl;
-        // Check eigenvalues of Q_uu
-        Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
-        Eigen::VectorXd eigenvalues = es.eigenvalues().real();
-        if (eigenvalues.minCoeff() <= 0) {
-            // Add regularization
-            // Q_uu.diagonal() += 1e-6;
-            std::cout << "Q_uu is not positive definite at " << t << std::endl;
+        // // Check eigenvalues of Q_uu
+        // Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
+        // Eigen::VectorXd eigenvalues = es.eigenvalues().real();
+        // if (eigenvalues.minCoeff() <= 0) {
+        //     // Add regularization
+        //     // Q_uu.diagonal() += 1e-6;
+        //     std::cout << "Q_uu is not positive definite at " << t << std::endl;
 
-            eigenvalues = es.eigenvalues().real();
-            if (eigenvalues.minCoeff() <= 0) {
-                std::cout << "Q_uu is still not positive definite" << std::endl;
-                return false;
-            }
+        //     eigenvalues = es.eigenvalues().real();
+        //     if (eigenvalues.minCoeff() <= 0) {
+        //         std::cout << "Q_uu is still not positive definite" << std::endl;
+        //         return false;
+        //     }
+        // }
+
+        if (options_.regularization_type == "state" || options_.regularization_type == "both") {
+            Q_ux_reg = l_ux + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
+            Q_uu_reg = l_uu + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * B + regularization_control_ * Eigen::MatrixXd::Identity(control_dim, control_dim);
+        } else {
+            Q_ux_reg = Q_ux;
+            Q_uu_reg = Q_uu;
         }
+
+        
+
+// if (t > 490) {
+//     std::cout << "t: " << t << std::endl;
+// std::cout << "V_x: " << V_x.transpose() << std::endl;
+// std::cout << "V_xx: " << V_xx << std::endl;
+// // std::cout << "l_x: " << l_x.transpose() << std::endl;
+// // std::cout << "l_u: " << l_u.transpose() << std::endl;
+// // std::cout << "l_xx: " << l_xx << std::endl;
+// // std::cout << "l_uu: " << l_uu << std::endl;
+// // std::cout << "l_ux: " << l_ux << std::endl;
+// // std::cout << "A: " << A << std::endl;
+// // std::cout << "B: " << B << std::endl;
+// // std::cout << "Q_x: " << Q_x.transpose() << std::endl;
+// // std::cout << "Q_u: " << Q_u.transpose() << std::endl;
+// std::cout << "Q_xx: " << Q_xx << std::endl;
+// std::cout << "Q_uu: " << Q_uu << std::endl;
+// std::cout << "Q_ux: " << Q_ux << std::endl;
+// }
+
+// if (t > 490) {
+//     std::cout << "Q_uu: " << Q_uu << std::endl;
+// }
+
+        
 
         // Store Q-function matrices
         Q_UU_[t] = Q_uu;
@@ -303,11 +324,11 @@ std::cout << "Q_u: " << Q_u.transpose() << std::endl;
 
 
             /*    Solve Box QP Problem    */   
-            int numNonZeros = Q_uu.nonZeros(); 
+            int numNonZeros = Q_uu_reg.nonZeros(); 
             P.reserve(numNonZeros);
             P.setZero();
-            for (int i = 0; i < Q_uu.rows(); ++i) {
-                for (int j = 0; j < Q_uu.cols(); ++j) {
+            for (int i = 0; i < Q_uu_reg.rows(); ++i) {
+                for (int j = 0; j < Q_uu_reg.cols(); ++j) {
                     if (Q_uu(i, j) != 0) {
                         P.insert(i, j) = Q_uu(i, j);
                     }
@@ -332,7 +353,7 @@ std::cout << "Q_u: " << Q_u.transpose() << std::endl;
             k = osqp_solver_.primal_solution();
 
             // // Compute gain matrix
-            K = -Q_uu.inverse() * Q_ux;
+            K = -Q_uu_reg.inverse() * Q_ux_reg;
 
         }
 
@@ -344,7 +365,6 @@ std::cout << "Q_u: " << Q_u.transpose() << std::endl;
         Eigen::Vector2d dV_step;
         dV_step << Q_u.dot(k), 0.5 * k.dot(Q_uu * k);
         dV_ = dV_ + dV_step;
-// std::cout << "dV: " << dV_.transpose() << std::endl;
         V_X_[t] = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
         V_XX_[t] = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
         V_XX_[t] = 0.5 * (V_XX_[t] + V_XX_[t].transpose()); // Symmetrize Hessian
@@ -355,6 +375,10 @@ std::cout << "Q_u: " << Q_u.transpose() << std::endl;
         // TODO: Add constraint optimality gap analysis
         optimality_gap_ = Qu_error;
     }
+
+    expected_ = dV_(0);
+
+    std::cout << "dV: " << dV_.transpose() << std::endl;
 
     return true;
 }

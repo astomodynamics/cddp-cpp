@@ -94,10 +94,24 @@ void CDDP::initializeCDDP()
     J_ = 0.0;
 
     alpha_ = options_.backtracking_coeff;
-    regularization_state_ = options_.regularization_state;
-    regularization_state_step_ = options_.regularization_state_step;
-    regularization_control_ = options_.regularization_control;
-    regularization_control_step_ = options_.regularization_control_step;
+    if (options_.regularization_type == "state" || options_.regularization_type == "both")
+    {
+        regularization_state_ = options_.regularization_state;
+        regularization_state_step_ = options_.regularization_state_step;
+    } else {
+        regularization_state_ = 0.0;
+        regularization_state_step_ = 1.0;
+    }
+    
+    if (options_.regularization_type == "control" || options_.regularization_type == "both")
+    {
+        regularization_control_ = options_.regularization_control;
+        regularization_control_step_ = options_.regularization_control_step;
+    } else {
+        regularization_control_ = 0.0;
+        regularization_control_step_ = 1.0;
+    }
+
 
     // Initialize gains and value function approximation
     k_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
