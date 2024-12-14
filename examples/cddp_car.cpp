@@ -177,12 +177,12 @@ int main() {
 
     // Solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 2;
+    options.max_iterations = 1;
     options.verbose = true;
     options.cost_tolerance = 1e-7;
     options.grad_tolerance = 1e-4;
     options.regularization_type = "control";
-    options.regularization_control = 1.0;
+    // options.regularization_control = 1.0;
     cddp_solver.setOptions(options);
 
     // Initialize with random controls
@@ -224,58 +224,58 @@ int main() {
     auto U_sol = solution.control_sequence;
     auto t_sol = solution.time_sequence;
 
-    // Create directory for plots
-    const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    // // Create directory for plots
+    // const std::string plotDirectory = "../results/tests";
+    // if (!fs::exists(plotDirectory)) {
+    //     fs::create_directories(plotDirectory);
+    // }
 
-    // Prepare visualization data
-    std::vector<double> x_hist, y_hist, theta_hist, v_hist;
-    for(const auto& x : X_sol) {
-        x_hist.push_back(x(0));
-        y_hist.push_back(x(1));
-        theta_hist.push_back(x(2));
-        v_hist.push_back(x(3));
-    }
+    // // Prepare visualization data
+    // std::vector<double> x_hist, y_hist, theta_hist, v_hist;
+    // for(const auto& x : X_sol) {
+    //     x_hist.push_back(x(0));
+    //     y_hist.push_back(x(1));
+    //     theta_hist.push_back(x(2));
+    //     v_hist.push_back(x(3));
+    // }
 
     // Visualization matching MATLAB style
-    plt::figure_size(800, 800);
+    // plt::figure_size(800, 800);
     
-    // Set plot limits and properties matching MATLAB
-    plt::xlim(-4, 4);
-    plt::ylim(-4, 4);
-    plt::grid(true);
+    // // Set plot limits and properties matching MATLAB
+    // plt::xlim(-4, 4);
+    // plt::ylim(-4, 4);
+    // plt::grid(true);
     
-    // Plot goal configuration
-    double car_length = 2.1;  // From MATLAB body = [0.9 2.1 0.3]
-    double car_width = 0.9;   
-    Eigen::VectorXd empty_control = Eigen::VectorXd::Zero(control_dim);
-    plotCarBox(goal_state, empty_control, car_length, car_width, "r");
+    // // Plot goal configuration
+    // double car_length = 2.1;  // From MATLAB body = [0.9 2.1 0.3]
+    // double car_width = 0.9;   
+    // Eigen::VectorXd empty_control = Eigen::VectorXd::Zero(control_dim);
+    // plotCarBox(goal_state, empty_control, car_length, car_width, "r");
     
-    // Animation loop
-    for(size_t i = 0; i < X_sol.size(); i++) {
-        if(i % 5 == 0) {
-            plt::clf();
+    // // Animation loop
+    // for(size_t i = 0; i < X_sol.size(); i++) {
+    //     if(i % 5 == 0) {
+    //         plt::clf();
             
-            // Plot full trajectory
-            plt::plot(x_hist, y_hist, "b-");
+    //         // Plot full trajectory
+    //         plt::plot(x_hist, y_hist, "b-");
             
-            // Plot current car position
-            plotCarBox(X_sol[i], U_sol[i], car_length, car_width, "k");
+    //         // Plot current car position
+    //         plotCarBox(X_sol[i], U_sol[i], car_length, car_width, "k");
             
-            // Plot settings
-            plt::grid(true);
-            plt::axis("equal");
-            plt::xlim(-4, 4);
-            plt::ylim(-4, 4);
+    //         // Plot settings
+    //         plt::grid(true);
+    //         plt::axis("equal");
+    //         plt::xlim(-4, 4);
+    //         plt::ylim(-4, 4);
             
-            std::string filename = plotDirectory + "/car_frame_" + 
-                                 std::to_string(i) + ".png";
-            plt::save(filename);
-            plt::pause(0.01);
-        }
-    }
+    //         std::string filename = plotDirectory + "/car_frame_" + 
+    //                              std::to_string(i) + ".png";
+    //         plt::save(filename);
+    //         plt::pause(0.01);
+    //     }
+    // }
 
     return 0;
 }

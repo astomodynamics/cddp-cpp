@@ -60,7 +60,7 @@ struct CDDPOptions {
     
     double regularization_state = 1e-6;             // Regularization for state
     double regularization_state_step = 1.0;         // Regularization step for state
-    double regularization_state_max = 1e6;          // Maximum regularization
+    double regularization_state_max = 1e10;          // Maximum regularization
     double regularization_state_min = 1e-6;         // Minimum regularization
     double regularization_state_factor = 1.6;       // Factor for state regularization
 
