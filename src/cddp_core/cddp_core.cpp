@@ -94,6 +94,13 @@ void CDDP::initializeCDDP()
     J_ = 0.0;
 
     alpha_ = options_.backtracking_coeff;
+    for (int i = 0; i < options_.max_line_search_iterations; ++i)
+    {
+        alphas_.push_back(alpha_);
+        alpha_ *= options_.backtracking_factor;
+    }
+    alpha_ = options_.backtracking_coeff;
+
     if (options_.regularization_type == "state" || options_.regularization_type == "both")
     {
         regularization_state_ = options_.regularization_state;
@@ -140,7 +147,7 @@ void CDDP::initializeCDDP()
 
     // Initialize OSQP setting
     osqp::OsqpSettings settings;
-    settings.warm_start = true;
+    // settings.warm_start = true;
     settings.verbose = false;
     settings.max_iter = 1000;
     settings.eps_abs = 1e-3;

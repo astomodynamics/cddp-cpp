@@ -96,6 +96,7 @@ struct ForwardPassResult {
     std::vector<Eigen::VectorXd> control_sequence;
     double cost;
     double lagrangian;
+    double alpha;
     bool success;
 };
 

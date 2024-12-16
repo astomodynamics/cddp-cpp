@@ -35,9 +35,9 @@ public:
                  const Eigen::VectorXd& goal_state,
                  double timestep) 
         : QuadraticObjective(
-            timestep * Eigen::MatrixXd::Identity(state_dim, state_dim),  // Q
-            0.1 * timestep * Eigen::MatrixXd::Identity(control_dim, control_dim), // R
-            Eigen::MatrixXd::Identity(state_dim, state_dim),  // Qf 
+            0.5 * timestep * Eigen::MatrixXd::Identity(state_dim, state_dim),  // Q
+            0.5 * 0.1 * timestep * Eigen::MatrixXd::Identity(control_dim, control_dim), // R
+            0.5 * timestep * Eigen::MatrixXd::Identity(state_dim, state_dim),  // Qf 
             goal_state) {}
 };
 
@@ -82,7 +82,7 @@ void plotStateTrajectories(const std::vector<Eigen::VectorXd>& X_sol,
 
 int main() {
     // Problem parameters
-    int state_dim = 10;    // State dimension
+    int state_dim = 4;    // State dimension
     int control_dim = 2;   // Control dimension
     int horizon = 1000;    // Time horizon
     double timestep = 0.01;  // Time step
@@ -93,12 +93,16 @@ int main() {
         std::make_unique<cddp::LTISystem>(state_dim, control_dim, timestep, integration_type);
 
     // Initial and goal states
-    Eigen::VectorXd initial_state = Eigen::VectorXd::Random(state_dim);
+    Eigen::VectorXd initial_state = Eigen::VectorXd::Zero(state_dim);
+    initial_state << 0.8378, 0.3794, 1.4796, 0.2382;
     Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
 
     // Create cost objective
-    auto objective = std::make_unique<cddp::LTIObjective>(
-        state_dim, control_dim, goal_state, timestep);
+    Eigen::MatrixXd Q = 0.5 * Eigen::MatrixXd::Identity(state_dim, state_dim); // Q
+    Eigen::MatrixXd R = 0.5 * 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim); // R
+    Eigen::MatrixXd Qf = 0.5 * timestep * Eigen::MatrixXd::Identity(state_dim, state_dim);  // Qf 
+    std::vector<Eigen::VectorXd> empty_reference_states;
+    auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
@@ -115,8 +119,9 @@ int main() {
 
     // Solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 50;
+    options.max_iterations = 1;
     options.verbose = true;
+    options.regularization_type = "control";
     cddp_solver.setOptions(options);
 
     // Initialize trajectories
@@ -128,21 +133,23 @@ int main() {
     std::mt19937 gen(rd());
     std::normal_distribution<double> d(0.0, 0.1);
     for(auto& u : U) {
-        u = 0.1 * Eigen::VectorXd::Random(control_dim);
+        u = 0.01 * Eigen::VectorXd::Ones(control_dim);
     }
 
     X[0] = initial_state;
 
     // Simulate initial trajectory
     double J = 0.0;
+    double cost = 0.0;
     for(size_t t = 0; t < horizon; t++) {
-        J += cddp_solver.getObjective().running_cost(X[t], U[t], t);
+        cost = cddp_solver.getObjective().running_cost(X[t], U[t], t);
+        J += cost;
         X[t + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t]);
     }
     J += cddp_solver.getObjective().terminal_cost(X.back());
-    std::cout << "Initial cost: " << J << std::endl;
     std::cout << "Initial state: " << X[0].transpose() << std::endl;
     std::cout << "Final state: " << X.back().transpose() << std::endl;
+    std::cout << "Initial cost: " << J << std::endl;
     
     cddp_solver.setInitialTrajectory(X, U);
 
@@ -163,7 +170,7 @@ int main() {
     }
 
     // Plot state trajectories
-    plotStateTrajectories(X_sol, plotDirectory);
+    // plotStateTrajectories(X_sol, plotDirectory);
 
     // Print statistics
     std::cout << "\nOptimization Results:" << std::endl;

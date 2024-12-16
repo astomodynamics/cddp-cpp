@@ -59,7 +59,7 @@ struct BoxQPResult
      Eigen::VectorXd x;                  ///< Solution vector
      BoxQPStatus status;                 ///< Result status
      Eigen::LDLT<Eigen::MatrixXd> Hfree; ///< Subspace Cholesky factor
-     Eigen::VectorXi free;               ///< Set of free dimensions
+     Eigen::VectorXi free;               ///< Set of free variables
      double final_value;                 ///< Final objective value
      double final_grad_norm;             ///< Final gradient norm
      int iterations;                     ///< Number of iterations taken
