@@ -142,7 +142,7 @@ void CDDP::initializeCDDP()
     osqp::OsqpSettings settings;
     settings.warm_start = true;
     settings.verbose = false;
-    // settings.max_iter = 1000;
+    settings.max_iter = 1000;
     settings.eps_abs = 1e-3;
     settings.eps_rel = 1e-2;
     // settings.eps_prim_inf = 1e-4;
