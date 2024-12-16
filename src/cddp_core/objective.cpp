@@ -37,6 +37,7 @@ QuadraticObjective::QuadraticObjective(
     double timestep)
     : Q_(Q), R_(R), Qf_(Qf), reference_state_(reference_state), reference_states_(reference_states), timestep_(timestep) {
 
+    // NOTE: Scale Q and R by timestep (Continuous-time fomulation)
     Q_ = Q * timestep_;
     R_ = R * timestep_;
     // Check dimensions
