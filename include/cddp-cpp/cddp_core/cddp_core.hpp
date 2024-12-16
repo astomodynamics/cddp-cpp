@@ -23,6 +23,8 @@
 #include <Eigen/Dense>
 #include <vector>
 #include <regex>
+#include <future>
+#include <thread>
 #include "osqp++.h"
 // #include "torch/torch.h"
 
@@ -73,7 +75,8 @@ struct CDDPOptions {
     // Other options
     bool verbose = true;                            // Option for debug printing
     bool is_ilqr = true;                            // Option for iLQR
-    bool use_parallel = false;                      // Option for parallel computation
+    bool use_parallel = true;                      // Option for parallel computation
+    int num_threads = std::thread::hardware_concurrency(); // Number of threads to use
 };
 
 struct CDDPSolution {
@@ -88,13 +91,11 @@ struct CDDPSolution {
     double solve_time;
 };
 
-struct ForwardPassInfo {
-    std::vector<Eigen::VectorXd> X;
-    std::vector<Eigen::VectorXd> U;
-    double J;
-    double dJ;
-    double L; 
-    double dL; 
+struct ForwardPassResult {
+    std::vector<Eigen::VectorXd> state_sequence;
+    std::vector<Eigen::VectorXd> control_sequence;
+    double cost;
+    double lagrangian;
     bool success;
 };
 
@@ -195,6 +196,7 @@ private:
 
     // Line search
     double alpha_; // Line search step size
+    std::vector<double> alphas_;
 
     // Cost function
     std::unique_ptr<Objective> objective_; // Objective function
@@ -233,10 +235,10 @@ private:
 
     // Solver methods
     bool solveForwardPass();
-    ForwardPassInfo solveForwardPassIteration(double alpha);
+    ForwardPassResult solveForwardPassIteration(double alpha);
     bool solveBackwardPass();
 
-    bool solveCLDDPForwardPass();
+    ForwardPassResult solveCLDDPForwardPass(double alpha);
     bool solveCLDDPBackwardPass();
 
     bool solveLogCDDPForwardPass();
@@ -306,6 +308,8 @@ private:
         std::cout << "\nOther:\n";
         std::cout << "  Print Iterations: " << (options.verbose ? "Yes" : "No") << "\n";
         std::cout << "  iLQR: " << (options.is_ilqr ? "Yes" : "No") << "\n";
+        std::cout << "  Use Parallel: " << (options.use_parallel ? "Yes" : "No") << "\n";
+        std::cout << "  Num Threads: " << options.num_threads << "\n";
 
         std::cout << "========================================\n\n";
     }
