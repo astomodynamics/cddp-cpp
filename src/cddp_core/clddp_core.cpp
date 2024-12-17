@@ -85,7 +85,9 @@ CDDPSolution CDDP::solveCLDDP() {
             backward_pass_success = solveCLDDPBackwardPass();
 
             if (!backward_pass_success) {
-                std::cerr << "CDDP: Backward pass failed" << std::endl;
+                if (options_.debug) {
+                    std::cerr << "CDDP: Backward pass failed" << std::endl;
+                }
 
                 // Increase regularization
                 regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
@@ -95,7 +97,7 @@ CDDPSolution CDDP::solveCLDDP() {
 
                 if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
                     if (options_.verbose) {
-                        std::cerr << "CDDP: Regularization limit reached" << std::endl;
+                        std::cerr << "CDDP Backward Pass: Regularization limit reached" << std::endl;
                     }
                     break; // Exit if regularization limit reached
                 }
@@ -236,7 +238,7 @@ CDDPSolution CDDP::solveCLDDP() {
 
             // Check regularization limit
             if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
-                std::cerr << "CDDP: Regularization limit reached" << std::endl;
+                std::cerr << "CDDP Forward Pass: Regularization limit reached" << std::endl;
                 solution.converged = false;
                 break;
             }

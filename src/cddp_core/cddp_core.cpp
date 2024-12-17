@@ -25,6 +25,7 @@
 #include "osqp++.h"
 
 #include "cddp_core/cddp_core.hpp"
+#include "cddp_core/qp_solver.hpp"
 
 namespace cddp
 {
@@ -326,7 +327,9 @@ CDDPSolution CDDP::solve()
             backward_pass_success = solveBackwardPass();
 
             if (!backward_pass_success) {
-                std::cerr << "CDDP: Backward pass failed" << std::endl;
+                if (options_.debug) {
+                    std::cerr << "CDDP: Backward pass failed" << std::endl;
+                }
 
                 // Increase regularization
                 regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
@@ -336,7 +339,7 @@ CDDPSolution CDDP::solve()
 
                 if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
                     if (options_.verbose) {
-                        std::cerr << "CDDP: Regularization limit reached" << std::endl;
+                        std::cerr << "CDDP Backward Pass: Regularization limit reached" << std::endl;
                     }
                     break; // Exit if regularization limit reached
                 }
@@ -424,28 +427,39 @@ CDDPSolution CDDP::solve()
                 std::cout << "Best alpha: " << best_result.alpha << std::endl;
             }
 
-            double expected_cost_reduction = -best_result.alpha * (dV_(0) + 0.5 * best_result.alpha * dV_(1));
-            double cost_reduction_ratio;
-            
-            // Check if cost reduction is positive
-            if (expected_cost_reduction > 0.0) {
-                cost_reduction_ratio = (J_ - best_result.cost) / expected_cost_reduction;
-            } else {
-                cost_reduction_ratio = std::copysign(1.0, J_ - best_result.cost);
-                if (options_.debug) {
-                    std::cerr << "CDDP: Expected cost reduction is non-positive" << std::endl;
-                }
-            } 
+            double cost_reduction = J_ - best_result.cost;
 
-            // Check if cost reduction is sufficient
-            if (cost_reduction_ratio > options_.minimum_reduction_ratio) {
+            if (cost_reduction > 0.0) {
                 forward_pass_success = true;
             } else {
                 alpha_ = std::numeric_limits<double>::infinity();
                 if (options_.debug) {
-                    std::cerr << "CDDP: Cost reduction ratio is too small" << std::endl;
+                    std::cerr << "CDDP: Cost reduction is non-positive" << std::endl;
                 }
             }
+
+            // double expected_cost_reduction = -best_result.alpha * (dV_(0) + 0.5 * best_result.alpha * dV_(1));
+            // double cost_reduction_ratio;
+            
+            // // Check if cost reduction is positive
+            // if (expected_cost_reduction > 0.0) {
+            //     cost_reduction_ratio = (J_ - best_result.cost) / expected_cost_reduction;
+            // } else {
+            //     cost_reduction_ratio = std::copysign(1.0, J_ - best_result.cost);
+            //     if (options_.debug) {
+            //         std::cerr << "CDDP: Expected cost reduction is non-positive" << std::endl;
+            //     }
+            // } 
+
+            // // Check if cost reduction is sufficient
+            // if (cost_reduction_ratio > options_.minimum_reduction_ratio) {
+            //     forward_pass_success = true;
+            // } else {
+            //     alpha_ = std::numeric_limits<double>::infinity();
+            //     if (options_.debug) {
+            //         std::cerr << "CDDP: Cost reduction ratio is too small" << std::endl;
+            //     }
+            // }
         }
 
         if (forward_pass_success) {
@@ -479,7 +493,7 @@ CDDPSolution CDDP::solve()
 
             // Check regularization limit
             if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
-                std::cerr << "CDDP: Regularization limit reached" << std::endl;
+                std::cerr << "CDDP Forward Pass: Regularization limit reached" << std::endl;
                 solution.converged = false;
                 break;
             }
@@ -600,7 +614,7 @@ bool CDDP::solveBackwardPass() {
         }
 
         // Check eigenvalues of Q_uu
-        Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
+        Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu_reg);
         Eigen::VectorXd eigenvalues = es.eigenvalues().real();
         if (eigenvalues.minCoeff() <= 0) {
             eigenvalues = es.eigenvalues().real();
@@ -641,9 +655,12 @@ bool CDDP::solveBackwardPass() {
         if (active_constraint_index == 0)
         { // No active constraints
             // Compute the optimal control deviation
-            Eigen::MatrixXd H = Q_uu.inverse();
-            K = -H * Q_ux;
+            Eigen::MatrixXd H = Q_uu_reg.inverse();
+            K = -H * Q_ux_reg;
             k = -H * Q_u;
+            // if (options_.debug) {
+            //     std::cout << "No control box constraint" << std::endl;
+            // }
         }
         else
         {
@@ -652,7 +669,7 @@ bool CDDP::solveBackwardPass() {
             Eigen::MatrixXd grad_u_g = C.topRows(active_constraint_index);
 
             // Calculate Lagrange multipliers
-            Eigen::MatrixXd Q_uu_inv = Q_uu.inverse();
+            Eigen::MatrixXd Q_uu_inv = Q_uu_reg.inverse();
             Eigen::MatrixXd lambda = -(grad_u_g * Q_uu_inv * grad_u_g.transpose()).inverse() * (grad_u_g * Q_uu_inv * Q_u);
 
             // Find indices where lambda is non-negative
@@ -683,20 +700,20 @@ bool CDDP::solveBackwardPass() {
                 Eigen::MatrixXd W = -(C_new * Q_uu_inv * C_new.transpose()).inverse() * (C_new * Q_uu_inv);
                 Eigen::MatrixXd H = Q_uu_inv * (Eigen::MatrixXd::Identity(control_dim, control_dim) - C_new.transpose() * W);
                 k = -H * Q_u;
-                K = -H * Q_ux + W.transpose() * D_new;
+                K = -H * Q_ux_reg + W.transpose() * D_new;
             }
             else
             {
                 // If no active constraints remain, revert to unconstrained solution
-                Eigen::MatrixXd H = Q_uu.inverse();
-                K = -H * Q_ux;
+                Eigen::MatrixXd H = Q_uu_reg.inverse();
+                K = -H * Q_ux_reg;
                 k = -H * Q_u;
             }
         }
 
         // Store Q-function matrices
-        Q_UU_[t] = Q_uu;
-        Q_UX_[t] = Q_ux;
+        Q_UU_[t] = Q_uu_reg;
+        Q_UX_[t] = Q_ux_reg;
         Q_U_[t] = Q_u;
 
         // Compute value function approximation
@@ -718,7 +735,6 @@ bool CDDP::solveBackwardPass() {
         std::cout << "Qu_error: " << Qu_error << std::endl;
         std::cout << "dV: " << dV_.transpose() << std::endl;
     }
-    std::cout << "Qu_error: " << Qu_error << std::endl;
 
     return true;
 }
@@ -752,46 +768,37 @@ ForwardPassResult CDDP::solveForwardPass(double alpha)
             const Eigen::MatrixXd &Q_uu = Q_UU_[t];
             const Eigen::MatrixXd &Q_ux = Q_UX_[t];
 
-            // Create QP problem
-            int numNonZeros = Q_uu.nonZeros();
-            P.reserve(numNonZeros);
-            P.setZero();
-            for (int i = 0; i < Q_uu.rows(); ++i)
-            {
-                for (int j = 0; j < Q_uu.cols(); ++j)
-                {
-                    if (Q_uu(i, j) != 0)
-                    {
-                        P.insert(i, j) = Q_uu(i, j);
-                    }
-                }
-            }
-            P.makeCompressed(); // Important for efficient storage and operations
-            osqp_solver_.UpdateObjectiveMatrix(P);
-
             const Eigen::VectorXd &q = alpha * Q_u + Q_ux * delta_x; // Gradient of QP objective
-            osqp_solver_.SetObjectiveVector(q);
 
-            // Lower and upper bounds
-            Eigen::VectorXd lb = 1.0 * (control_box_constraint->getLowerBound() - u);
-            Eigen::VectorXd ub = 1.0 * (control_box_constraint->getUpperBound() - u);
-            osqp_solver_.SetBounds(lb, ub);
+            // Create constraint matrices
+            Eigen::MatrixXd A(2*control_dim, control_dim);
+            Eigen::VectorXd b(2*control_dim);
 
-            // Solve the QP problem TODO: Use SDQP instead of OSQP
-            osqp::OsqpExitCode exit_code = osqp_solver_.Solve();
+            // Apply values
+            A.topRows(control_dim) = Eigen::MatrixXd::Identity(control_dim, control_dim);
+            A.bottomRows(control_dim) = -Eigen::MatrixXd::Identity(control_dim, control_dim);
+            b.topRows(control_dim) = control_box_constraint->getUpperBound() - u;
+            b.bottomRows(control_dim) = u - control_box_constraint->getLowerBound();
+            
+            QPSolverOptions options;
+            options.verbose = false;
+            QPSolver solver(options);
 
-            if (exit_code == osqp::OsqpExitCode::kOptimal)
-            {
+            solver.setDimensions(state_dim, 2*control_dim);
+            solver.setHessian(Q_uu);
+            solver.setGradient(q);
+            solver.setConstraints(A, b);
+
+            QPResult qp_result = solver.solve();
+
+            if (qp_result.status == cddp::QPStatus::OPTIMAL) {
                 is_feasible = true;
-            }
-            else
-            {
+            } else {
                 is_feasible = false;
             }
 
             // Extract solution
-            double optimal_objective = osqp_solver_.objective_value();
-            const Eigen::VectorXd &delta_u = osqp_solver_.primal_solution();
+            const Eigen::VectorXd &delta_u = qp_result.x;
 
             // Extract solution
             U_new[t] += delta_u;
@@ -804,11 +811,16 @@ ForwardPassResult CDDP::solveForwardPass(double alpha)
     }
     J_new += objective_->terminal_cost(X_new.back());
     double dJ = J_ - J_new;
-    double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
-    double reduction_ratio = expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
+    // double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
+    // double reduction_ratio = expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
 
     // Check if cost reduction is sufficient
-    if (reduction_ratio > options_.minimum_reduction_ratio && is_feasible) {
+    // if (reduction_ratio > options_.minimum_reduction_ratio && is_feasible) {
+    //     result.success = true;
+    // } else {
+    //     result.success = false;
+    // }
+    if (is_feasible) {
         result.success = true;
     } else {
         result.success = false;
