@@ -339,14 +339,14 @@ bool CDDP::solveLogCDDPBackwardPass() {
         auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
         auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
 
-        // // Add log barrier terms
-        // const double barrier_cost = log_barrier_->evaluate(*control_box_constraint, x, u);
-        // l += barrier_cost;
+        // Add log barrier terms
+        const double barrier_cost = log_barrier_->evaluate(*control_box_constraint, x, u);
+        l += barrier_cost;
 
         // // Get barrier gradients
-        // auto [barrier_x, barrier_u] = log_barrier_->getGradients(*control_box_constraint, x, u, barrier_cost);
-        // l_x += barrier_x;
-        // l_u += barrier_u;
+        auto [barrier_x, barrier_u] = log_barrier_->getGradients(*control_box_constraint, x, u, barrier_cost);
+        l_x += barrier_x;
+        l_u += barrier_u;
 
         // // Get barrier Hessians
         // auto [barrier_xx, barrier_uu, barrier_ux] = log_barrier_->getHessians(*control_box_constraint, x, u, barrier_cost);

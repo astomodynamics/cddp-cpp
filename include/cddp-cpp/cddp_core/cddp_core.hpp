@@ -48,10 +48,10 @@ struct CDDPOptions {
     double minimum_reduction_ratio = 1e-6;          // Minimum reduction for line search
 
     // log-barrier method
-    double barrier_coeff = 1e-2;                    // Coefficient for log-barrier method
+    double barrier_coeff = 1e-3;                    // Coefficient for log-barrier method
     double barrier_factor = 0.90;                   // Factor for log-barrier method
     double barrier_tolerance = 1e-6;                // Tolerance for log-barrier method
-    double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
+    double relaxation_coeff = 2.0;                  // Relaxation for log-barrier method
     int barrier_order = 2;                          // Order for log-barrier method
 
     // Active set method
