@@ -175,6 +175,7 @@ set(cddp_core_srcs
   src/cddp_core/objective.cpp
   src/cddp_core/constraint.cpp
   src/cddp_core/helper.cpp
+  src/cddp_core/boxqp.cpp
   src/cddp_core/cddp_core.cpp
   src/cddp_core/clddp_core.cpp
   src/cddp_core/logddp_core.cpp
@@ -191,6 +192,7 @@ set(dynamics_model_srcs
   src/dynamics_model/manipulator.cpp
   src/dynamics_model/spacecraft_linear.cpp
   src/dynamics_model/spacecraft_landing2d.cpp
+  src/dynamics_model/lti_system.cpp
 )
 
 add_library(${PROJECT_NAME} 

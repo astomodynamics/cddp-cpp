@@ -107,8 +107,14 @@ TEST(BicycleTest, Jacobians) {
     Eigen::MatrixXd B_analytical = bicycle.getControlJacobian(state, control);
 
     // Get numerical Jacobians
-    Eigen::MatrixXd A_numerical = bicycle.getFiniteDifferenceStateJacobian(state, control);
-    Eigen::MatrixXd B_numerical = bicycle.getFiniteDifferenceControlJacobian(state, control);
+    auto f_A = [&](const Eigen::VectorXd& x) {
+        return bicycle.getContinuousDynamics(x, control);
+    };
+    auto f_B = [&](const Eigen::VectorXd& u) {
+        return bicycle.getContinuousDynamics(state, u);
+    };
+    Eigen::MatrixXd A_numerical = finite_difference_jacobian(f_A, state);
+    Eigen::MatrixXd B_numerical = finite_difference_jacobian(f_B, control);
 
     // Test dimensions
     ASSERT_EQ(A_analytical.rows(), 4);

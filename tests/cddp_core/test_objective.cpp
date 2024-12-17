@@ -122,4 +122,138 @@ TEST(ObjectiveFunctionTests, QuadraticObjective) {
     ASSERT_TRUE(compareVectors(final_cost_grad, 2.0 * Qf * (state - goal_state)));
     ASSERT_TRUE(compareMatrices(final_cost_hess, 2.0 * Qf));
 }
+
+
+class TestNonlinearObjective : public cddp::NonlinearObjective {
+public:
+    TestNonlinearObjective(double timestep = 0.1) : NonlinearObjective(timestep) {}
+
+    // Example nonlinear running cost: (x'x)^2 + (u'u)^2
+    double running_cost(const Eigen::VectorXd& state, 
+                       const Eigen::VectorXd& control,
+                       int index) const override {
+        double state_cost = std::pow(state.squaredNorm(), 2);
+        double control_cost = std::pow(control.squaredNorm(), 2);
+        return (state_cost + control_cost) * timestep_;
+    }
+
+    // Example nonlinear terminal cost: exp(x'x)
+    double terminal_cost(const Eigen::VectorXd& final_state) const override {
+        return std::exp(final_state.squaredNorm());
+    }
+private: 
+    double timestep_;
+};
+
+TEST(ObjectiveFunctionTests, NonlinearObjective) {
+    // Set up test data
+    int state_dim = 2;
+    int control_dim = 2;
+    int horizon = 3;
+    double timestep = 0.1;
+
+    TestNonlinearObjective objective(timestep);
+
+    // Create test trajectories
+    std::vector<Eigen::VectorXd> states(horizon + 1);
+    std::vector<Eigen::VectorXd> controls(horizon);
+
+    for (int i = 0; i <= horizon; i++) {
+        states[i] = Eigen::VectorXd::Ones(state_dim) * 0.5;
+    }
+    for (int i = 0; i < horizon; i++) {
+        controls[i] = Eigen::VectorXd::Ones(control_dim) * 0.3;
+    }
+
+    // Test evaluate
+    double total_cost = objective.evaluate(states, controls);
+    double expected_cost = 0.0;
     
+    // Calculate expected cost manually
+    for (int i = 0; i < horizon; i++) {
+        expected_cost += objective.running_cost(states[i], controls[i], i);
+    }
+    expected_cost += objective.terminal_cost(states.back());
+    
+    EXPECT_NEAR(total_cost, expected_cost, 1e-6);
+
+    // Test running cost gradients using finite differences
+    Eigen::VectorXd state = states[0];
+    Eigen::VectorXd control = controls[0];
+    
+    auto [state_grad, control_grad] = objective.getRunningCostGradients(state, control, 0);
+    
+    // Test that gradients have correct dimensions
+    EXPECT_EQ(state_grad.size(), state_dim);
+    EXPECT_EQ(control_grad.size(), control_dim);
+
+    // Verify gradients using finite differences
+    double eps = 1e-6;
+    for (int i = 0; i < state_dim; i++) {
+        Eigen::VectorXd state_plus = state;
+        Eigen::VectorXd state_minus = state;
+        state_plus(i) += eps;
+        state_minus(i) -= eps;
+        
+        double grad_fd = (objective.running_cost(state_plus, control, 0) - 
+                         objective.running_cost(state_minus, control, 0)) / (2 * eps);
+        EXPECT_NEAR(state_grad(i), grad_fd, 1e-5);
+    }
+
+    // Test terminal cost gradient
+    Eigen::VectorXd final_grad = objective.getFinalCostGradient(state);
+    
+    // Verify terminal gradient using finite differences
+    for (int i = 0; i < state_dim; i++) {
+        Eigen::VectorXd state_plus = state;
+        Eigen::VectorXd state_minus = state;
+        state_plus(i) += eps;
+        state_minus(i) -= eps;
+        
+        double grad_fd = (objective.terminal_cost(state_plus) - 
+                         objective.terminal_cost(state_minus)) / (2 * eps);
+        EXPECT_NEAR(final_grad(i), grad_fd, 1e-5);
+    }
+
+    // Test Hessians
+    auto [state_hess, control_hess, cross_hess] = objective.getRunningCostHessians(state, control, 0);
+    
+    // Check dimensions
+    EXPECT_EQ(state_hess.rows(), state_dim);
+    EXPECT_EQ(state_hess.cols(), state_dim);
+    EXPECT_EQ(control_hess.rows(), control_dim);
+    EXPECT_EQ(control_hess.cols(), control_dim);
+    EXPECT_EQ(cross_hess.rows(), control_dim);
+    EXPECT_EQ(cross_hess.cols(), state_dim);
+
+    // Verify state Hessian using finite differences
+    for (int i = 0; i < state_dim; i++) {
+        for (int j = 0; j < state_dim; j++) {
+            Eigen::VectorXd state_pp = state;
+            Eigen::VectorXd state_pm = state;
+            Eigen::VectorXd state_mp = state;
+            Eigen::VectorXd state_mm = state;
+            
+            state_pp(i) += eps; state_pp(j) += eps;
+            state_pm(i) += eps; state_pm(j) -= eps;
+            state_mp(i) -= eps; state_mp(j) += eps;
+            state_mm(i) -= eps; state_mm(j) -= eps;
+            
+            double hess_fd = (objective.running_cost(state_pp, control, 0) -
+                            objective.running_cost(state_pm, control, 0) -
+                            objective.running_cost(state_mp, control, 0) +
+                            objective.running_cost(state_mm, control, 0)) / (4 * eps * eps);
+            
+            if (i == j) {  // Allow larger tolerance for diagonal elements due to numerical issues
+                EXPECT_NEAR(state_hess(i,j), hess_fd, 1e-4);
+            } else {
+                EXPECT_NEAR(state_hess(i,j), hess_fd, 1e-5);
+            }
+        }
+    }
+
+    // Test terminal cost Hessian
+    Eigen::MatrixXd final_hess = objective.getFinalCostHessian(state);
+    EXPECT_EQ(final_hess.rows(), state_dim);
+    EXPECT_EQ(final_hess.cols(), state_dim);
+}

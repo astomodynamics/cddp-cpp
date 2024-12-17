@@ -56,79 +56,37 @@ Eigen::VectorXd Car::getDiscreteDynamics(
 Eigen::MatrixXd Car::getStateJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    const int n = STATE_DIM;
-    Eigen::MatrixXd J(n, n);
-    const double h = 2e-17; // Small perturbation value
+    // Use the finite difference Jacobian helper function
+    auto dynamics_func = [this, &control](const Eigen::VectorXd& s) {
+        return this->getDiscreteDynamics(s, control);
+    };
     
-    // Get nominal output
-    Eigen::VectorXd f0 = getDiscreteDynamics(state, control);
-    
-    // Compute Jacobian column by column using finite differences
-    Eigen::VectorXd perturbed_state = state;
-    for (int i = 0; i < n; ++i) {
-        // Perturb state element
-        perturbed_state(i) = state(i) + h;
-        
-        // Get perturbed output
-        Eigen::VectorXd f1 = getDiscreteDynamics(perturbed_state, control);
-        
-        // Compute derivative using central difference
-        J.col(i) = (f1 - f0) / h;
-        
-        // Reset perturbation
-        perturbed_state(i) = state(i);
-    }
-    
-    // Expected output of the state Jacobian is continuous dynamics Jacobian so modify this discrete one
-    // Ref: in cddp_core.cpp
-    /*
-        // Convert continuous dynamics to discrete time
-        A = timestep_ * Fx;
-        A.diagonal().array() += 1.0; // More efficient way to add identity
-        B = timestep_ * Fu;
-     */
+    // Get discretized Jacobian 
+    Eigen::MatrixXd J = finite_difference_jacobian(dynamics_func, state);
+
+    // Convert discrete Jacobian to continuous time Jacobian
+    // A = timestep_ * Fx + I -> Fx = (A - I)/timestep_
     J.diagonal().array() -= 1.0;
     J /= timestep_;
+    
     return J;
 }
 
 Eigen::MatrixXd Car::getControlJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    const int n = STATE_DIM;
-    const int m = CONTROL_DIM;
-    Eigen::MatrixXd J(n, m);
-    const double h = 2e-17; // Small perturbation value
+    // Use the finite difference Jacobian helper function
+    auto dynamics_func = [this, &state](const Eigen::VectorXd& c) {
+        return this->getDiscreteDynamics(state, c); 
+    };
     
-    // Get nominal output
-    Eigen::VectorXd f0 = getDiscreteDynamics(state, control);
-    
-    // Compute Jacobian column by column using finite differences
-    Eigen::VectorXd perturbed_control = control;
-    for (int i = 0; i < m; ++i) {
-        // Perturb control element
-        perturbed_control(i) = control(i) + h;
-        
-        // Get perturbed output
-        Eigen::VectorXd f1 = getDiscreteDynamics(state, perturbed_control);
-        
-        // Compute derivative using forward difference
-        J.col(i) = (f1 - f0) / h;
-        
-        // Reset perturbation
-        perturbed_control(i) = control(i);
-    }
+    // Get discretized Jacobian
+    Eigen::MatrixXd J = finite_difference_jacobian(dynamics_func, control);
 
-    // Expected output of the control Jacobian is continuous dynamics Jacobian so modify this discrete one
-    // Ref: in cddp_core.cpp
-    /*
-        // Convert continuous dynamics to discrete time
-        A = timestep_ * Fx;
-        A.diagonal().array() += 1.0; // More efficient way to add identity
-        B = timestep_ * Fu;
-     */
+    // Convert discrete Jacobian to continuous time Jacobian
+    // B = timestep_ * Fu -> Fu = B/timestep_
     J /= timestep_;
-
+    
     return J;
 }
 
