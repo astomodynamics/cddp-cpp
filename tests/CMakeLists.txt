@@ -84,6 +84,8 @@ add_executable(test_logcddp_core cddp_core/test_logcddp_core.cpp)
 target_link_libraries(test_logcddp_core gtest gmock gtest_main cddp)
 gtest_discover_tests(test_logcddp_core)
 
+add_executable(test_animation test_animation.cpp)
+target_link_libraries(test_animation gtest gmock gtest_main cddp)
 
 # Test for Eigen installation
 add_executable(test_eigen test_eigen.cpp)
