@@ -33,7 +33,7 @@
 
 namespace sdqp
 {
-    const double eps = 1.0e-12;
+    const double eps = 1.0e-6;
 
     enum
     {
