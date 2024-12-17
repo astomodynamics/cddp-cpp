@@ -60,16 +60,16 @@ CDDPSolution CDDP::solveLogCDDP()
     // Evaluate Lagrangian
     L_ = J_;
 
-    // Loop over horizon # TODO: Multi-threading?
-    for (int t = 0; t < horizon_; ++t)
+    // Loop over horizon # TODO: Vectorize
+    // Evaluate state constraint violation
+    for (const auto &constraint : constraint_set_)
     {
-        // Evaluate state constraint violation
-        for (const auto &constraint : constraint_set_)
+        for (int t = 0; t < horizon_; ++t)
         {
-            double value = log_barrier_->evaluate(*constraint.second, X_[t], U_[t]);
             L_ += log_barrier_->evaluate(*constraint.second, X_[t], U_[t]);
         }
     }
+    
 
     if (options_.verbose)
     {
@@ -310,8 +310,6 @@ bool CDDP::solveLogCDDPBackwardPass() {
     cddp::BoxQPOptions qp_options;
     qp_options.verbose = false;
     qp_options.maxIter = 1000;
-    // qp_options.eps_abs = 1e-3;
-    // qp_options.eps_rel = 1e-2;
     cddp::BoxQPSolver qp_solver(qp_options);
 
     double Qu_error = 0.0;
@@ -349,10 +347,10 @@ bool CDDP::solveLogCDDPBackwardPass() {
         l_u += barrier_u;
 
         // // Get barrier Hessians
-        // auto [barrier_xx, barrier_uu, barrier_ux] = log_barrier_->getHessians(*control_box_constraint, x, u, barrier_cost);
-        // l_xx += barrier_xx;
-        // l_uu += barrier_uu;
-        // l_ux += barrier_ux;
+        auto [barrier_xx, barrier_uu, barrier_ux] = log_barrier_->getHessians(*control_box_constraint, x, u, barrier_cost);
+        l_xx += barrier_xx;
+        l_uu += barrier_uu;
+        l_ux += barrier_ux;
 
         // Q-function matrices
         Q_x = l_x + A.transpose() * V_x;

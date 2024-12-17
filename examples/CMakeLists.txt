@@ -26,6 +26,9 @@ target_link_libraries(cddp_cartpole cddp Eigen3::Eigen)
 add_executable(cddp_dubins_car cddp_dubins_car.cpp)
 target_link_libraries(cddp_dubins_car cddp Eigen3::Eigen)
 
+add_executable(cddp_safe_dubins_car cddp_safe_dubins_car.cpp)
+target_link_libraries(cddp_safe_dubins_car cddp Eigen3::Eigen)
+
 add_executable(cddp_manipulator cddp_manipulator.cpp)
 target_link_libraries(cddp_manipulator cddp Eigen3::Eigen)
 

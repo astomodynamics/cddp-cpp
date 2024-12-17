@@ -101,27 +101,29 @@ private:
     Eigen::VectorXd upper_bound_;
 };
 
-// CircleConstraint (assuming the circle is centered at the origin)
-class CircleConstraint : public Constraint {
+
+class BallConstraint : public Constraint {
 public:
-    CircleConstraint(double radius) : Constraint("CircleConstraint"), radius_(radius) {}
+    BallConstraint(double radius, const Eigen::VectorXd& state_origin) : Constraint("BallConstraint"), radius_(radius), state_origin_() {}
 
     Eigen::VectorXd evaluate(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override {
-        Eigen::Vector2d position(state(0), state(1)); // Assuming the first two elements of the state are x and y position
-        return Eigen::VectorXd::Constant(1, position.squaredNorm()); 
+        Eigen::VectorXd constraint(1);
+        constraint << (state - state_origin_).squaredNorm() - radius_ * radius_;
+        return constraint;
     }
 
+    // Large lower bound to ensure constraint is always satisfied
     Eigen::VectorXd getLowerBound() const override {
-        return Eigen::VectorXd::Constant(1, 0.0); 
+        return Eigen::VectorXd::Constant(1, -1e+8);
     }
 
     Eigen::VectorXd getUpperBound() const override {
-        return Eigen::VectorXd::Constant(1, radius_ * radius_); 
+        return Eigen::VectorXd::Constant(1, 0.0); 
     }
 
     Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override {
         Eigen::MatrixXd jacobian(1, state.size());
-        jacobian << 2 * state(0), 2 * state(1), Eigen::RowVectorXd::Zero(state.size() - 2); // Assuming x and y are the first two state elements
+        jacobian << 2.0 * (state - state_origin_).transpose();
         return jacobian;
     }
 
@@ -131,7 +133,10 @@ public:
 
 private:
     double radius_;
+    Eigen::VectorXd state_origin_;
 };
+
+
 
 /**
 * @brief Log barrier function for constrained optimization
