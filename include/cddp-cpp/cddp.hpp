@@ -44,6 +44,7 @@
 #include "dynamics_model/lti_system.hpp"
 
 #include "matplotlibcpp.hpp"
+#include "animation.hpp"
 
 
 #endif // CDDP_HPP
