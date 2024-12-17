@@ -57,9 +57,9 @@ Bicycle model with velocity and steering control:
 
 <img src="results/tests/bicycle.gif" width="300" alt="Bicycle Model CDDP">
 
-### Car
+### Control-limited Car
 
-Car model with velocity and steering control:
+Car model with limited velocity and steering control:
 
 ```bash
 ./examples/cddp_car // after building
