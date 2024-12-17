@@ -26,8 +26,6 @@
 #include <thread>
 #include "osqp++.h"
 #include "sdqp.hpp"
-// TODO: gurobi solver compatibility
-// #include "gurobi_c++.h"
 
 #include "cddp_core/cddp_core.hpp"
 #include "cddp_core/helper.hpp"
@@ -75,7 +73,9 @@ CDDPSolution CDDP::solveCLDDP() {
             auto end_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
             if (duration.count() * 1e-6 > options_.max_cpu_time) {
-                std::cerr << "CDDP: Maximum CPU time reached. Returning current solution" << std::endl;
+                if (options_.verbose) {
+                    std::cerr << "CDDP: Maximum CPU time reached. Returning current solution" << std::endl;
+                }
                 break;
             }
         }
@@ -94,13 +94,10 @@ CDDPSolution CDDP::solveCLDDP() {
                 regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
                 regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_min);
 
-// std::cout << "Regularization state: " << regularization_state_ << std::endl;
-// std::cout << "Regularization control: " << regularization_control_ << std::endl;
-// std::cout << "Regularization state step: " << regularization_state_step_ << std::endl;
-// std::cout << "Regularization control step: " << regularization_control_step_ << std::endl;
-
                 if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
-                    std::cerr << "CDDP: Regularization limit reached" << std::endl;
+                    if (options_.verbose) {
+                        std::cerr << "CDDP: Regularization limit reached" << std::endl;
+                    }
                     break; // Exit if regularization limit reached
                 }
                 continue; // Continue if backward pass fails
@@ -108,73 +105,140 @@ CDDPSolution CDDP::solveCLDDP() {
         }
         
         // Check termination due to small cost improvement
-        if (optimality_gap_ < options_.grad_tolerance && regularization_state_ < 1e-4 && regularization_control_ < 1e-4) {
+        if (optimality_gap_ < options_.grad_tolerance) {
             regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
-            regularization_state_ *= regularization_state_step_;
-            if (regularization_state_ <= options_.regularization_state_min) {
-                regularization_state_ = 0.0;
-            }
+            regularization_state_ *= regularization_state_step_ * (regularization_state_ > options_.regularization_state_min ? 1.0 : 0.0);
             regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
-            regularization_control_ *= regularization_control_step_;
-            if (regularization_control_ <= options_.regularization_control_min) {
-                regularization_control_ = 0.0;
+            regularization_control_ *= regularization_control_step_ * (regularization_control_ > options_.regularization_control_min ? 1.0 : 0.0);
+            
+            if (regularization_state_ < 1e-5 && regularization_control_ < 1e-5) {
+                solution.converged = true;
+                break;
             }
-
-            solution.converged = true;
-            break;
+            
         }
 
-        // 2. Multi-threaded Forward pass
-        std::vector<std::future<ForwardPassResult>> futures;
-
-        // Launch threads for parallel forward passes
-        for (double alpha : alphas_) {
-            futures.push_back(std::async(std::launch::async, 
-                [this, alpha]() { return solveCLDDPForwardPass(alpha); }));
-        }
-
-        // Find best result from all threads
-        bool forward_pass_success = false;
+        // 2. Forward pass (either single-threaded or multi-threaded)
         ForwardPassResult best_result;
         best_result.cost = std::numeric_limits<double>::infinity();
+        bool forward_pass_feasible = false;
+        bool forward_pass_success = false;
 
-        for (auto& future : futures) {
-            ForwardPassResult result = future.get();
-            if (result.success && result.cost < best_result.cost) {
-                best_result = result;
-                forward_pass_success = true;
+        if (!options_.use_parallel) {
+            // Single-threaded execution with early termination
+            for (double alpha : alphas_) {
+                ForwardPassResult result = solveCLDDPForwardPass(alpha);
+                
+                if (result.success && result.cost < best_result.cost) {
+                    best_result = result;
+                    forward_pass_feasible = true;
+                    
+                    // Check for early termination
+                    double expected_cost_reduction = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
+                    if (expected_cost_reduction > 0.0) {
+                        double cost_reduction_ratio = (J_ - result.cost) / expected_cost_reduction;
+                        if (cost_reduction_ratio > options_.minimum_reduction_ratio) {
+                            if (options_.debug) {
+                                std::cout << "CDDP: Early termination due to successful forward pass" << std::endl;
+                            }
+                            break;
+                        }
+                    }
+                }
             }
-
-            std::cout << "Alpha: " << result.alpha << " Cost: " << result.cost << std::endl;
+        } else { 
+            // TODO: Improve multi-threaded execution
+            // Multi-threaded execution 
+            std::vector<std::future<ForwardPassResult>> futures;
+            futures.reserve(alphas_.size());
+            
+            // Launch all forward passes in parallel
+            for (double alpha : alphas_) {
+                futures.push_back(std::async(std::launch::async, 
+                    [this, alpha]() { return solveCLDDPForwardPass(alpha); }));
+            }
+            
+            // Collect results from all threads
+            for (auto& future : futures) {
+                try {
+                    if (future.valid()) {
+                        ForwardPassResult result = future.get();
+                        if (result.success && result.cost < best_result.cost) {
+                            best_result = result;
+                            forward_pass_feasible = true;
+                        }
+                    }
+                } catch (const std::exception& e) {
+                    if (options_.verbose) {
+                        std::cerr << "CDDP: Forward pass thread failed: " << e.what() << std::endl;
+                    }
+                    continue;
+                }
+            }
         }
 
-        // Update solution if successful
+        // Update solution if a feasible forward pass was found
+        if (forward_pass_feasible) {
+            if (options_.debug) {
+                std::cout << "Best cost: " << best_result.cost << std::endl;
+                std::cout << "Best alpha: " << best_result.alpha << std::endl;
+            }
+
+            double expected_cost_reduction = -best_result.alpha * (dV_(0) + 0.5 * best_result.alpha * dV_(1));
+            double cost_reduction_ratio;
+            
+            // Check if cost reduction is positive
+            if (expected_cost_reduction > 0.0) {
+                cost_reduction_ratio = (J_ - best_result.cost) / expected_cost_reduction;
+            } else {
+                cost_reduction_ratio = std::copysign(1.0, J_ - best_result.cost);
+                if (options_.debug) {
+                    std::cerr << "CDDP: Expected cost reduction is non-positive" << std::endl;
+                }
+            } 
+
+            // Check if cost reduction is sufficient
+            if (cost_reduction_ratio > options_.minimum_reduction_ratio) {
+                forward_pass_success = true;
+            } else {
+                alpha_ = std::numeric_limits<double>::infinity();
+                if (options_.debug) {
+                    std::cerr << "CDDP: Cost reduction ratio is too small" << std::endl;
+                }
+            }
+        }
+
         if (forward_pass_success) {
             X_ = best_result.state_sequence;
             U_ = best_result.control_sequence;
+            dJ_ = J_ - best_result.cost;
             J_ = best_result.cost;
             alpha_ = best_result.alpha;
-
-            std::cout << "Best cost: " << best_result.cost << std::endl;
-            std::cout << "Best alpha: " << best_result.alpha << std::endl;
-
+            // solution.lagrangian_sequence.push_back(best_result.lagrangian);
+            solution.cost_sequence.push_back(J_);
+            
             // Decrease regularization
             regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
-            regularization_state_ *= regularization_state_step_;
-            if (regularization_state_ <= options_.regularization_state_min) {
-                regularization_state_ = 0.0;
-            }
+            regularization_state_ *= regularization_state_step_ * (regularization_state_ > options_.regularization_state_min ? 1.0 : 0.0);
             regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
-            regularization_control_ *= regularization_control_step_;
-            if (regularization_control_ <= options_.regularization_control_min) {
-                regularization_control_ = 0.0;
-            }
+            regularization_control_ *= regularization_control_step_ * (regularization_control_ > options_.regularization_control_min ? 1.0 : 0.0);
 
-            solution.cost_sequence.push_back(J_);
-
+            // Check termination
             if (dJ_ < options_.cost_tolerance) {
                 solution.converged = true;
-                solution.iterations = iter;
+                break;
+            }
+        } else {
+            // Increase regularization
+            regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
+            regularization_state_ = std::max(regularization_state_ * regularization_state_step_, options_.regularization_state_max);
+            regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
+            regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_max);
+
+            // Check regularization limit
+            if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
+                std::cerr << "CDDP: Regularization limit reached" << std::endl;
+                solution.converged = false;
                 break;
             }
         }
@@ -183,16 +247,19 @@ CDDPSolution CDDP::solveCLDDP() {
         if (options_.verbose) {
             printIteration(iter, J_, 0.0, optimality_gap_, expected_, regularization_control_, alpha_); 
         }
+
+
     }
-
-    // Finalize solution
-    solution.control_sequence = U_;
-    solution.state_sequence = X_;
-    solution.iterations = solution.converged ? iter : options_.max_iterations;
-
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
+
+    // Finalize solution
+    solution.state_sequence = X_;
+    solution.control_sequence = U_;
+    solution.alpha = alpha_;
+    solution.iterations = iter;
     solution.solve_time = duration.count(); // Time in microseconds
+    
     printSolution(solution);
 
     return solution;
@@ -397,8 +464,11 @@ bool CDDP::solveCLDDPBackwardPass() {
 
     expected_ = dV_(0);
 
-    std::cout << "dV: " << dV_.transpose() << std::endl;
-
+    if (options_.debug) {
+        std::cout << "Qu_error: " << Qu_error << std::endl;
+        std::cout << "dV: " << dV_.transpose() << std::endl;
+    }
+    
     return true;
 }
 

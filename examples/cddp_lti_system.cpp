@@ -119,9 +119,12 @@ int main() {
 
     // Solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 1;
+    options.max_iterations = 10;
     options.verbose = true;
     options.regularization_type = "control";
+    options.num_threads = 11;
+    options.use_parallel = true;
+    options.debug = true;
     cddp_solver.setOptions(options);
 
     // Initialize trajectories

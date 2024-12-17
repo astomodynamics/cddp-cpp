@@ -74,9 +74,10 @@ struct CDDPOptions {
 
     // Other options
     bool verbose = true;                            // Option for debug printing
+    bool debug = false;                             // Option for debug mode
     bool is_ilqr = true;                            // Option for iLQR
     bool use_parallel = true;                      // Option for parallel computation
-    int num_threads = std::thread::hardware_concurrency(); // Number of threads to use
+    int num_threads = max_line_search_iterations; // Number of threads to use
 };
 
 struct CDDPSolution {
