@@ -49,16 +49,21 @@ Eigen::VectorXd Manipulator::getContinuousDynamics(
 
 Eigen::MatrixXd Manipulator::getStateJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    
-    // Use finite difference approximation for state Jacobian
-    return getFiniteDifferenceStateJacobian(state, control);
+
+    auto f = [&](const Eigen::VectorXd& x) {
+        return getContinuousDynamics(x, control);
+    };
+
+    return finite_difference_jacobian(f, state);
 }
 
 Eigen::MatrixXd Manipulator::getControlJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    // Use finite difference approximation for control Jacobian
-    return getFiniteDifferenceControlJacobian(state, control);
+    auto f = [&](const Eigen::VectorXd& u) {
+        return getContinuousDynamics(state, u);
+    };
+    return finite_difference_jacobian(f, control);
 }
 
 Eigen::MatrixXd Manipulator::getStateHessian(

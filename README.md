@@ -57,6 +57,16 @@ Bicycle model with velocity and steering control:
 
 <img src="results/tests/bicycle.gif" width="300" alt="Bicycle Model CDDP">
 
+### Car
+
+Car model with velocity and steering control:
+
+```bash
+./examples/cddp_car // after building
+```
+
+<img src="results/tests/car_motion.gif" width="300" alt="Car Model CDDP">
+
 ### Pendulum
 
 Simple pendulum with torque control:

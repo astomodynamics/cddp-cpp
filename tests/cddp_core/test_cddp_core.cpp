@@ -73,6 +73,7 @@ TEST(CDDPTest, Solve) {
     // Set options
     cddp::CDDPOptions options;
     options.max_iterations = 10;
+    options.cost_tolerance = 1e-2;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory

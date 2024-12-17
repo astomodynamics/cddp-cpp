@@ -3,7 +3,7 @@
 #include "gtest/gtest.h"
 #include <chrono>
 
-#include "cddp_core/helper.hpp"
+#include "cddp_core/boxqp.hpp"
 #include "cddp-cpp/sdqp.hpp"
 #include "osqp++.h"
 #include "gurobi_c++.h"

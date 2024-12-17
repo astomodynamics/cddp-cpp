@@ -16,6 +16,9 @@
 
 #include "dynamics_model/cartpole.hpp"
 #include <cmath>
+#include <iostream>
+#include <Eigen/Dense>
+#include "cddp_core/helper.hpp"
 
 namespace cddp {
 
@@ -62,17 +65,20 @@ Eigen::VectorXd CartPole::getContinuousDynamics(
 Eigen::MatrixXd CartPole::getStateJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
 
-    Eigen::MatrixXd A = getFiniteDifferenceStateJacobian(state, control);
-    
-    return A;
+    auto f = [&](const Eigen::VectorXd& x) {
+        return getContinuousDynamics(x, control);
+    };
+
+    return finite_difference_jacobian(f, state);
 }
 
 Eigen::MatrixXd CartPole::getControlJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    Eigen::MatrixXd B = getFiniteDifferenceControlJacobian(state, control);
-    
-    return B;
+    auto f = [&](const Eigen::VectorXd& u) {
+        return getContinuousDynamics(state, u);
+    };
+    return finite_difference_jacobian(f, control);
 }
 
 

@@ -17,6 +17,7 @@
 #define CDDP_DYNAMICAL_SYSTEM_HPP
 
 #include <Eigen/Dense>
+#include "cddp_core/helper.hpp"
 
 namespace cddp {
 class DynamicalSystem {
@@ -49,10 +50,6 @@ public:
                                                             const Eigen::VectorXd& control) const {
         return {getStateJacobian(state, control), getControlJacobian(state, control)};
     }
-
-    Eigen::MatrixXd getFiniteDifferenceStateJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const;
-    
-    Eigen::MatrixXd getFiniteDifferenceControlJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const;
 
     // TODO: Add methods for Hessian calculations
     // Hessian of dynamics w.r.t state: d^2f/dx^2
@@ -91,7 +88,7 @@ protected:
     double timestep_;
     std::string integration_type_; // Integration type: Euler, Heun, RK3, RK4
 
-    // Integration step functions (declare as protected or private)
+    // Integration step functions
     Eigen::VectorXd euler_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const;
     Eigen::VectorXd heun_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const;
     Eigen::VectorXd rk3_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const;

@@ -73,7 +73,7 @@ namespace cddp
 
         if (options_.verbose)
         {
-            printIteration(0, J_, L_, optimality_gap_, regularization_state_, regularization_control_); // Initial iteration information
+            printIteration(0, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_); // Initial iteration information
         }
 
         // Start timer
@@ -141,7 +141,7 @@ namespace cddp
 
             // Print iteration information
             if (options_.verbose) {
-                printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_);
+                printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_);
             }
 
            if (forward_pass_success) {
@@ -372,6 +372,7 @@ bool CDDP::solveLogCDDPForwardPass()
                 L_ = L_new;
                 dJ_ = dJ;
                 dL_ = dL;
+                alpha_ = alpha;
                 double barrier_coeff = log_barrier_->getBarrierCoeff() * options_.barrier_factor;
                 log_barrier_->setBarrierCoeff(barrier_coeff);
 
