@@ -245,7 +245,7 @@ CDDPSolution CDDP::solveCLDDP() {
 
         // Print iteration information
         if (options_.verbose) {
-            printIteration(iter, J_, 0.0, optimality_gap_, expected_, regularization_control_, alpha_); 
+            printIteration(iter, J_, 0.0, optimality_gap_, regularization_state_, regularization_control_, alpha_); 
         }
 
 
@@ -481,7 +481,7 @@ ForwardPassResult CDDP::solveCLDDPForwardPass(double alpha) {
     double reduction_ratio = expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
 
     // Check if cost reduction is sufficient
-    result.success = true;
+    result.success = reduction_ratio > options_.minimum_reduction_ratio;
     result.state_sequence = X_new;
     result.control_sequence = U_new;
     result.cost = J_new;

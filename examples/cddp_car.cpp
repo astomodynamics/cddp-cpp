@@ -183,7 +183,7 @@ int main() {
 
     // Solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 500;
+    options.max_iterations = 200;
     options.verbose = true;
     options.cost_tolerance = 1e-7;
     options.grad_tolerance = 1e-4;
@@ -221,8 +221,8 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    // cddp::CDDPSolution solution = cddp_solver.solve();
-    cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
+    cddp::CDDPSolution solution = cddp_solver.solve();
+    // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
     // cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
 
     // Extract solution trajectories
