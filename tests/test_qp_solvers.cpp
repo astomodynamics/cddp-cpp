@@ -1,17 +1,18 @@
-#include <iostream>
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
-#include <chrono>
+/*
+ Copyright 2024 Tomo Sasaki
 
-#include "cddp_core/boxqp.hpp"
-#include "cddp-cpp/sdqp.hpp"
-#include "osqp++.h"
-#include "gurobi_c++.h"
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
 
-using namespace std;
-using namespace Eigen;
-using namespace cddp;
+      https://www.apache.org/licenses/LICENSE-2.0
 
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
 #include <iostream>
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -19,8 +20,8 @@ using namespace cddp;
 
 #include "cddp_core/qp_solver.hpp"
 #include "cddp_core/boxqp.hpp"
-#include "cddp-cpp/sdqp.hpp"
 #include "osqp++.h"
+#include "gurobi_c++.h"
 
 using namespace std;
 using namespace Eigen;
@@ -131,18 +132,6 @@ TEST(QPSolver, ComparisonTest) {
         printResults("OSQP", osqp_solver.primal_solution(), 
                     osqp_solver.objective_value(), elapsed.count(), 
                     static_cast<int>(status));
-    }
-
-    // 2. Test SDQP
-    {
-        VectorXd x(n);
-
-        auto start_time = std::chrono::high_resolution_clock::now();
-        double minobj = sdqp::sdqp(Q, q, A, b, x);
-        auto end_time = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = end_time - start_time;
-
-        printResults("SDQP", x, minobj, elapsed.count(), 0);
     }
 
     // 3. Test BoxQP for comparison - only uses simple bounds
