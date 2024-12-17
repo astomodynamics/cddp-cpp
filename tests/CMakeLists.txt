@@ -98,12 +98,6 @@ if (CDDP-CPP_GUROBI)
     target_link_libraries(test_gurobi gtest gmock gtest_main cddp)
     gtest_discover_tests(test_gurobi)     
 
-
-    # Test for SDQP
-    add_executable(test_sdqp test_sdqp.cpp)
-    target_link_libraries(test_sdqp gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_sdqp)
-
     # Test for qp solver comparison
     add_executable(test_qp_solvers test_qp_solvers.cpp)
     target_link_libraries(test_qp_solvers gtest gmock gtest_main cddp)
