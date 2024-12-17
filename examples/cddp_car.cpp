@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <random>
 #include <cmath>
+#include "animation.hpp"
 #include "cddp.hpp"
 
 namespace plt = matplotlibcpp;
@@ -114,17 +115,14 @@ void plotCarBox(const Eigen::VectorXd& state, Eigen::VectorXd& control,
     plt::plot(base_x, base_y, keywords);
 
     // Plot steering direction
-    // Calculate front axle center point
     double front_x = x + length/2 * cos(theta);
     double front_y = y + length/2 * sin(theta);
     
-    // Calculate steering indicator endpoint
-    double steering_length = width/2;  // Length of steering indicator line
-    double steering_angle = theta + steering;  // Global steering angle
+    double steering_length = width/2;
+    double steering_angle = theta + steering;
     double steering_end_x = front_x + steering_length * cos(steering_angle);
     double steering_end_y = front_y + steering_length * sin(steering_angle);
     
-    // Plot steering indicator
     std::vector<double> steer_x = {front_x, steering_end_x};
     std::vector<double> steer_y = {front_y, steering_end_y};
     keywords["color"] = "green";
@@ -133,7 +131,15 @@ void plotCarBox(const Eigen::VectorXd& state, Eigen::VectorXd& control,
 }
 
 int main() {
-    // Problem parameters
+    // Set up animation configuration
+    Animation::AnimationConfig config;
+    config.width = 800;
+    config.height = 800;
+    config.frame_skip = 5;  // Save every 5th frame
+    config.frame_delay = 10;  // 10/100 = 0.1 seconds between frames
+    Animation animation(config);
+
+   // Problem parameters
     int state_dim = 4;     // [x y theta v]
     int control_dim = 2;   // [wheel_angle acceleration]
     int horizon = 500;     // Same as MATLAB example
@@ -224,61 +230,44 @@ int main() {
     auto U_sol = solution.control_sequence;
     auto t_sol = solution.time_sequence;
 
-    // Create directory for plots
-    const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
-
-    // Prepare visualization data
-    std::vector<double> x_hist, y_hist, theta_hist, v_hist;
+    // Prepare trajectory data
+    std::vector<double> x_hist, y_hist;
     for(const auto& x : X_sol) {
         x_hist.push_back(x(0));
         y_hist.push_back(x(1));
-        theta_hist.push_back(x(2));
-        v_hist.push_back(x(3));
     }
 
-    // Visualization matching MATLAB style
-    plt::figure_size(800, 800);
-    
-    // Set plot limits and properties matching MATLAB
-    plt::xlim(-4, 4);
-    plt::ylim(-4, 4);
-    plt::grid(true);
-    
-    // Plot goal configuration
-    double car_length = 2.1;  // From MATLAB body = [0.9 2.1 0.3]
-    double car_width = 0.9;   
+    // Car dimensions
+    double car_length = 2.1;
+    double car_width = 0.9;
+
+    // Create animation
     Eigen::VectorXd empty_control = Eigen::VectorXd::Zero(control_dim);
-    plotCarBox(goal_state, empty_control, car_length, car_width, "r");
-    
-    // Animation loop
     for(size_t i = 0; i < X_sol.size(); i++) {
-        if(i % 5 == 0) {
-            plt::clf();
-            
-            // Plot full trajectory
-            plt::plot(x_hist, y_hist, "b-");
-            
-            // Plot current car position
-            plotCarBox(X_sol[i], U_sol[i], car_length, car_width, "k");
-            
-            // Plot settings
-            plt::grid(true);
-            plt::axis("equal");
-            plt::xlim(-4, 4);
-            plt::ylim(-4, 4);
-            
-            std::string filename = plotDirectory + "/car_frame_" + 
-                                 std::to_string(i) + ".png";
-            plt::save(filename);
-            plt::pause(0.01);
-        }
+        animation.newFrame();
+        
+        // Plot full trajectory
+        plt::plot(x_hist, y_hist, "b-");
+        
+        // Plot goal configuration
+        plotCarBox(goal_state, empty_control, car_length, car_width, "r");
+        
+        // Plot current car position
+        plotCarBox(X_sol[i], U_sol[i], car_length, car_width, "k");
+        
+        // Plot settings
+        plt::grid(true);
+        // plt::axis("equal");
+        plt::xlim(-4, 4);
+        plt::ylim(-4, 4);
+        
+        animation.saveFrame(i);
     }
+
+    // Create the final GIF
+    animation.createGif("car_parking.gif");
 
     return 0;
 }
 
-// Create animation from frames using ImageMagick:
-// convert -delay 1 ../results/tests/car_frame_*.png ../results/tests/car_motion.gif
+// convert -delay 3 ../results/frames/frame_*.png ../results/animations/car_parking.gif
