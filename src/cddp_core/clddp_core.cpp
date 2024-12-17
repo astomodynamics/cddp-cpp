@@ -22,9 +22,8 @@
 #include <Eigen/Dense>
 #include <chrono> // For timing
 #include <execution> // For parallel execution policies
-#include <future>
-#include <thread>
-#include "osqp++.h"
+#include <future> // For multi-threading
+#include <thread> // For multi-threading    
 
 #include "cddp_core/cddp_core.hpp"
 #include "cddp_core/helper.hpp"
@@ -244,7 +243,7 @@ CDDPSolution CDDP::solveCLDDP() {
 
         // Print iteration information
         if (options_.verbose) {
-            printIteration(iter, J_, 0.0, optimality_gap_, expected_, regularization_control_, alpha_); 
+            printIteration(iter, J_, 0.0, optimality_gap_, regularization_state_, regularization_control_, alpha_); 
         }
 
 
@@ -268,7 +267,6 @@ bool CDDP::solveCLDDPBackwardPass() {
     // Initialize variables
     const int state_dim = system_->getStateDim();
     const int control_dim = system_->getControlDim();
-    const auto active_set_tol = options_.active_set_tolerance;
 
     // Extract control box constraint
     auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
@@ -290,7 +288,6 @@ bool CDDP::solveCLDDPBackwardPass() {
     Eigen::MatrixXd Q_uu_inv(control_dim, control_dim);
     Eigen::VectorXd k(control_dim);
     Eigen::MatrixXd K(control_dim, state_dim);
-    Eigen::SparseMatrix<double> P(control_dim, control_dim); // Hessian of QP objective
     dV_ = Eigen::Vector2d::Zero();
 
     // Create BoxQP solver
@@ -333,8 +330,9 @@ bool CDDP::solveCLDDPBackwardPass() {
         Q_ux = l_ux + B.transpose() * V_xx * A;
         Q_uu = l_uu + B.transpose() * V_xx * B;
 
-        // Symmetrize Q_uu for cholensky decomposition
-        Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
+        // TODO: Apply Cholesky decomposition to Q_uu later?
+        // // Symmetrize Q_uu for Cholesky decomposition
+        // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
         if (options_.regularization_type == "state" || options_.regularization_type == "both") {
             Q_ux_reg = l_ux + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
@@ -359,11 +357,6 @@ bool CDDP::solveCLDDPBackwardPass() {
             }
             return false;
         }
-
-        // Store Q-function matrices
-        Q_UU_[t] = Q_uu;
-        Q_UX_[t] = Q_ux;
-        Q_U_[t] = Q_u;
 
         if (control_box_constraint == nullptr) {
             const Eigen::MatrixXd &H = Q_uu_reg.inverse();
@@ -480,7 +473,7 @@ ForwardPassResult CDDP::solveCLDDPForwardPass(double alpha) {
     double reduction_ratio = expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
 
     // Check if cost reduction is sufficient
-    result.success = true;
+    result.success = reduction_ratio > options_.minimum_reduction_ratio;
     result.state_sequence = X_new;
     result.control_sequence = U_new;
     result.cost = J_new;
