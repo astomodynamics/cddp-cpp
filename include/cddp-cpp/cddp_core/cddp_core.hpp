@@ -223,9 +223,6 @@ private:
     // Log-barrier method
     std::unique_ptr<LogBarrier> log_barrier_;
 
-    // QP sover 
-    osqp::OsqpSolver osqp_solver_;
-
     // Regularization parameters
     double regularization_state_;
     double regularization_state_step_;
@@ -243,7 +240,7 @@ private:
     ForwardPassResult solveCLDDPForwardPass(double alpha);
     bool solveCLDDPBackwardPass();
 
-    bool solveLogCDDPForwardPass();
+    ForwardPassResult solveLogCDDPForwardPass(double alpha);
     bool solveLogCDDPBackwardPass();
 
     // Helper methods
