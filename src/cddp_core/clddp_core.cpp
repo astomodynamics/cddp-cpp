@@ -25,7 +25,6 @@
 #include <future>
 #include <thread>
 #include "osqp++.h"
-#include "sdqp.hpp"
 
 #include "cddp_core/cddp_core.hpp"
 #include "cddp_core/helper.hpp"
