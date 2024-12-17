@@ -222,8 +222,8 @@ int main() {
 
     // Solve the problem
     // cddp::CDDPSolution solution = cddp_solver.solve();
-    // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
-    cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
+    cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
+    // cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
 
     // // Extract solution trajectories
     // auto X_sol = solution.state_sequence;
