@@ -223,9 +223,6 @@ private:
     // Log-barrier method
     std::unique_ptr<LogBarrier> log_barrier_;
 
-    // QP sover 
-    osqp::OsqpSolver osqp_solver_;
-
     // Regularization parameters
     double regularization_state_;
     double regularization_state_step_;
@@ -243,7 +240,7 @@ private:
     ForwardPassResult solveCLDDPForwardPass(double alpha);
     bool solveCLDDPBackwardPass();
 
-    bool solveLogCDDPForwardPass();
+    ForwardPassResult solveLogCDDPForwardPass(double alpha);
     bool solveLogCDDPBackwardPass();
 
     // Helper methods
@@ -320,37 +317,14 @@ private:
                     double lambda_state, double lambda_control, double step_size)
     {
         // Print header for better readability every 10 iterations
-        // if (iter % 10 == 0)
-        // {
-        //     std::cout << std::setw(10) << "Iteration"
-        //             << std::setw(15) << "Objective"
-        //             << std::setw(15) << "Lagrangian"
-        //             << std::setw(15) << "Grad Norm"
-        //             << std::setw(15) << "Step Size"
-        //             << std::setw(15) << "Reg (State)"
-        //             << std::setw(15) << "Reg (Control)"
-        //             << std::endl;
-        //     std::cout << std::string(95, '-') << std::endl;
-        // }
-
-        // // Print iteration details
-        // std::cout << std::setw(10) << iter
-        //         << std::setw(15) << std::setprecision(6) << cost
-        //         << std::setw(15) << std::setprecision(6) << lagrangian
-        //         << std::setw(15) << std::setprecision(6) << grad_norm
-        //         << std::setw(15) << std::setprecision(6) << step_size
-        //         << std::setw(15) << std::setprecision(6) << lambda_state
-        //         << std::setw(15) << std::setprecision(6) << lambda_control
-        //         << std::endl;
-
         if (iter % 10 == 0)
         {
             std::cout << std::setw(10) << "Iteration"
                     << std::setw(15) << "Objective"
                     << std::setw(15) << "Lagrangian"
                     << std::setw(15) << "Grad Norm"
-                    << std::setw(15) << "reduction"
-                    << std::setw(15) << "expected"
+                    << std::setw(15) << "Step Size"
+                    << std::setw(15) << "Reg (State)"
                     << std::setw(15) << "Reg (Control)"
                     << std::endl;
             std::cout << std::string(95, '-') << std::endl;
