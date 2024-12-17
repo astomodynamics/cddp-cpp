@@ -124,7 +124,7 @@ int main() {
     options.regularization_type = "control";
     options.num_threads = 11;
     options.use_parallel = true;
-    options.debug = true;
+    options.debug = false;
     cddp_solver.setOptions(options);
 
     // Initialize trajectories
