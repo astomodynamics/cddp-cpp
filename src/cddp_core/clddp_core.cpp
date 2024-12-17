@@ -335,22 +335,7 @@ bool CDDP::solveCLDDPBackwardPass() {
         Q_uu = l_uu + B.transpose() * V_xx * B;
 
         // Symmetrize Q_uu for cholensky decomposition
-        // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
-
-        // // Check eigenvalues of Q_uu
-        // Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
-        // Eigen::VectorXd eigenvalues = es.eigenvalues().real();
-        // if (eigenvalues.minCoeff() <= 0) {
-        //     // Add regularization
-        //     // Q_uu.diagonal() += 1e-6;
-        //     std::cout << "Q_uu is not positive definite at " << t << std::endl;
-
-        //     eigenvalues = es.eigenvalues().real();
-        //     if (eigenvalues.minCoeff() <= 0) {
-        //         std::cout << "Q_uu is still not positive definite" << std::endl;
-        //         return false;
-        //     }
-        // }
+        Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
         if (options_.regularization_type == "state" || options_.regularization_type == "both") {
             Q_ux_reg = l_ux + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
@@ -364,6 +349,18 @@ bool CDDP::solveCLDDPBackwardPass() {
             Q_uu_reg.diagonal().array() += regularization_control_;
         }
 
+        // Check eigenvalues of Q_uu
+        Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
+        Eigen::VectorXd eigenvalues = es.eigenvalues().real();
+        if (eigenvalues.minCoeff() <= 0) {
+            eigenvalues = es.eigenvalues().real();
+
+            if (options_.debug) {
+                std::cerr << "CDDP: Q_uu is still not positive definite" << std::endl;
+            }
+            return false;
+        }
+
         // Store Q-function matrices
         Q_UU_[t] = Q_uu;
         Q_UX_[t] = Q_ux;
@@ -373,7 +370,9 @@ bool CDDP::solveCLDDPBackwardPass() {
             const Eigen::MatrixXd &H = Q_uu_reg.inverse();
             k = -H * Q_u;
             K = -H * Q_ux_reg;
-            std::cout << "No control box constraint" << std::endl;
+            if (options_.debug) {
+                std::cout << "No control box constraint" << std::endl;
+            }
         } else {
             // Solve QP by boxQP
             Eigen::VectorXd lb = control_box_constraint->getLowerBound() - u;
@@ -384,7 +383,9 @@ bool CDDP::solveCLDDPBackwardPass() {
             
             if (qp_result.status == BoxQPStatus::HESSIAN_NOT_PD || 
                 qp_result.status == BoxQPStatus::NO_DESCENT) {
-                std::cerr << "CDDP: BoxQP failed at time step " << t << std::endl;
+                    if (options_.debug) {
+                        std::cerr << "CDDP: BoxQP failed at time step " << t << std::endl;
+                    }
                 return false;
             }
             
@@ -435,31 +436,6 @@ bool CDDP::solveCLDDPBackwardPass() {
 
         // TODO: Add constraint optimality gap analysis
         optimality_gap_ = Qu_error;
-
-// if (t > 990) {
-//     std::cout << "t: " << t << std::endl;
-//     std::cout << "V_x: " << V_x.transpose() << std::endl;
-//     std::cout << "V_xx: " << V_xx << std::endl;
-//     // std::cout << "l_x: " << l_x.transpose() << std::endl;
-//     // std::cout << "l_u: " << l_u.transpose() << std::endl;
-//     // std::cout << "l_xx: " << l_xx << std::endl;
-//     // std::cout << "l_uu: " << l_uu << std::endl;
-//     // std::cout << "l_ux: " << l_ux << std::endl;
-//     // std::cout << "A: " << A << std::endl;
-//     // std::cout << "B: " << B << std::endl;
-//     // std::cout << "Q_x: " << Q_x.transpose() << std::endl;
-//     std::cout << "Q_u: " << Q_u.transpose() << std::endl;
-//     // std::cout << "Q_xx: " << Q_xx << std::endl;
-//     // std::cout << "Q_uu: " << Q_uu << std::endl;
-//     // std::cout << "Q_ux: " << Q_ux << std::endl;
-//     std::cout << "Q_uu_reg: " << Q_uu_reg << std::endl;
-
-//     std::cout << "dV: " << dV_.transpose() << std::endl;
-//     // std::cout << "V_X: " << V_X_[t].transpose() << std::endl;
-//     // std::cout << "V_XX: " << V_XX_[t] << std::endl;
-//     std::cout << "k: " << k.transpose() << std::endl;
-//     std::cout << "K: " << K << std::endl;
-// }
     }
 
     expected_ = dV_(0);
