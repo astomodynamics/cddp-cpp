@@ -69,7 +69,11 @@ int main() {
 
     // Set options
     cddp::CDDPOptions options;
-    options.max_iterations = 10;
+    options.max_iterations = 50;
+    options.cost_tolerance = 1e-3;
+    options.max_line_search_iterations = 11;
+    options.regularization_type = "control";
+    options.regularization_control = 1e-8;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory
@@ -79,6 +83,26 @@ int main() {
 
     // Solve the problem
     cddp::CDDPSolution solution = cddp_solver.solve();
+    // >>>
+    // ========================================
+    //            CDDP Solution
+    // ========================================
+    // Converged: Yes
+    // Iterations: 6
+    // Solve Time: 4704 micro sec
+    // Final Cost: 1.72276
+    // ========================================
+    
+    // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
+    // >>>
+    // ========================================
+    //         CDDP Solution
+    // ========================================
+    // Converged: Yes
+    // Iterations: 7
+    // Solve Time: 4320 micro sec
+    // Final Cost: 1.72283
+    // ========================================
 
     // Extract solution
     auto X_sol = solution.state_sequence; // size: horizon + 1
