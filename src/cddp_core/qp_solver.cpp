@@ -29,29 +29,48 @@ void QPSolver::setDimensions(int num_vars, int num_constraints) {
     num_vars_ = num_vars;
     num_constraints_ = num_constraints;
     
-    // Pre-allocate matrices
+    // Pre-allocate original matrices
     Q_.resize(num_vars_, num_vars_);
-    c_.resize(num_vars_);
+    q_.resize(num_vars_);
     A_.resize(num_constraints_, num_vars_);
-    b_.resize(num_constraints_);
+    lb_.resize(num_constraints_);
+    ub_.resize(num_constraints_);
+    
+    // Pre-allocate transformed matrices (2x constraints due to lb and ub)
+    A_transformed_.resize(2 * num_constraints_, num_vars_);
+    b_transformed_.resize(2 * num_constraints_);
     
     // Pre-allocate workspace
-    halves_.resize(num_vars_ + 1, num_constraints_);
-    work_vectors_.resize((num_constraints_ + 2) * (num_vars_ + 2) * (num_vars_ - 1) / 2 + 1 - num_vars_);
-    work_indices_.resize(2 * num_constraints_ + 1);
+    halves_.resize(num_vars_ + 1, 2 * num_constraints_);
+    work_vectors_.resize((2 * num_constraints_ + 2) * (num_vars_ + 2) * (num_vars_ - 1) / 2 + 1 - num_vars_);
+    work_indices_.resize(4 * num_constraints_ + 1);
 }
 
 void QPSolver::setHessian(const Eigen::MatrixXd& Q) {
     Q_ = Q;
 }
 
-void QPSolver::setGradient(const Eigen::VectorXd& c) {
-    c_ = c;
+void QPSolver::setGradient(const Eigen::VectorXd& q) {
+    q_ = q;
 }
 
-void QPSolver::setConstraints(const Eigen::MatrixXd& A, const Eigen::VectorXd& b) {
+void QPSolver::setConstraints(const Eigen::MatrixXd& A, 
+                             const Eigen::VectorXd& lb, 
+                             const Eigen::VectorXd& ub) {
     A_ = A;
-    b_ = b;
+    lb_ = lb;
+    ub_ = ub;
+    reformulateConstraints();
+}
+
+void QPSolver::reformulateConstraints() {
+    // Convert lb <= Ax <= ub to the form Ax' <= b'
+    // by stacking [A; -A]x <= [-lb; ub]
+    A_transformed_.topRows(num_constraints_) = A_;
+    A_transformed_.bottomRows(num_constraints_) = -A_;
+    
+    b_transformed_.head(num_constraints_) = -lb_;
+    b_transformed_.tail(num_constraints_) = ub_;
 }
 
 QPResult QPSolver::solve() {
@@ -76,23 +95,23 @@ QPResult QPSolver::solve() {
     }
 
     // Transform problem using Cholesky factorization
-    const Eigen::MatrixXd As = llt.matrixU().solve<Eigen::OnTheRight>(A_);
-    const Eigen::VectorXd v = llt.solve(c_);
-    const Eigen::VectorXd bs = A_ * v + b_;
+    const Eigen::MatrixXd As = llt.matrixU().solve<Eigen::OnTheRight>(A_transformed_);
+    const Eigen::VectorXd v = llt.solve(q_);
+    const Eigen::VectorXd bs = A_transformed_ * v + b_transformed_;
 
     // Scale rows of A
     const Eigen::VectorXd scale = As.rowwise().norm();
     halves_.topRows(As.cols()) = (As.array().colwise() / scale.array()).transpose();
     halves_.bottomRows(1) = (-bs.array() / scale.array()).transpose();
 
-    // Solve minimum norm problem
+    // Solve minimum norm problem with transformed constraints
     QPStatus status = solveMinNorm(result.x);
 
     if (status == QPStatus::OPTIMAL) {
         // Transform solution back
         llt.matrixU().solveInPlace(result.x);
         result.x -= v;
-        result.objective_value = 0.5 * result.x.dot(Q_ * result.x) + c_.dot(result.x);
+        result.objective_value = 0.5 * result.x.dot(Q_ * result.x) + q_.dot(result.x);
     } else {
         result.objective_value = std::numeric_limits<double>::infinity();
     }

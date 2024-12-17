@@ -160,7 +160,7 @@ TEST(QPSolver, ComparisonTest) {
         solver.setDimensions(n, m);
         solver.setHessian(Q);
         solver.setGradient(q);
-        solver.setConstraints(A, b);
+        solver.setConstraints(A, lb, ub);
 
         auto start_time = std::chrono::high_resolution_clock::now();
         QPResult result = solver.solve();

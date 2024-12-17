@@ -85,17 +85,20 @@ public:
     void setHessian(const Eigen::MatrixXd& Q);
 
     /**
-     * @brief Set the linear cost vector c
-     * @param c Linear cost vector
+     * @brief Set the linear cost vector q
+     * @param q Linear cost vector
      */
-    void setGradient(const Eigen::VectorXd& c);
+    void setGradient(const Eigen::VectorXd& q);
 
     /**
      * @brief Set the constraint matrix A and vector b
      * @param A Constraint matrix
-     * @param b Constraint vector
+     * @param lb Lower bound vector
+     * @param ub Upper bound vector
      */
-    void setConstraints(const Eigen::MatrixXd& A, const Eigen::VectorXd& b);
+    void setConstraints(const Eigen::MatrixXd& A,
+                        const Eigen::VectorXd& lb,
+                        const Eigen::VectorXd& ub);
 
     /**
      * @brief Solve the QP problem
@@ -109,14 +112,24 @@ private:
     int num_constraints_;
     
     Eigen::MatrixXd Q_;  // Quadratic cost matrix
-    Eigen::VectorXd c_;  // Linear cost vector
+    Eigen::VectorXd q_;  // Linear cost vector
     Eigen::MatrixXd A_;  // Constraint matrix
-    Eigen::VectorXd b_;  // Constraint vector
+    Eigen::VectorXd lb_; // Lower bounds
+    Eigen::VectorXd ub_; // Upper bounds
+
+    // Transformed problem matrices (after reformulation)
+    Eigen::MatrixXd A_transformed_;  // [A; -A]
+    Eigen::VectorXd b_transformed_;  // [-lb; ub]
 
     // Work matrices/vectors
     Eigen::MatrixXd halves_;
     std::vector<Eigen::VectorXd> work_vectors_;
     std::vector<int> work_indices_;
+
+    /**
+     * @brief Reformulate constraints to standard form
+     */
+    void reformulateConstraints();
 
     /**
      * @brief Solve minimum norm problem (internal)
