@@ -38,6 +38,8 @@ struct SQPOptions {
     double eta = 0.1;                  // Merit function parameter
     double tau = 0.5;                  // Line search parameter
     bool verbose = false;              // Print debug info
+
+    int line_search_max_iterations = 20; // Maximum line search backtracking iterations
     
     // OSQP specific options
     double osqp_eps_abs = 1e-5;        // Absolute tolerance
@@ -162,7 +164,9 @@ public:
      */
     // Get a specific constraint by name
     template <typename T>
-    T* getConstraint(const std::string& name) {
+    T* getConstraint(const std::string& name) const {
+        // 'find' is a const operation on standard associative containers 
+        // and does not modify 'constraint_set_'
         auto it = constraint_set_.find(name);
         
         // Special case for ControlBoxConstraint - must exist
@@ -186,6 +190,7 @@ public:
 
         return cast_constraint;
     }
+
 
 private:
     // Member variables
@@ -232,7 +237,8 @@ private:
                          Eigen::VectorXd& l,
                          Eigen::VectorXd& u);
 
-    double computeConstraintViolation(const std::vector<Eigen::VectorXd>& constraint_values) const;
+    double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X,
+                                      const std::vector<Eigen::VectorXd>& U) const;
 
     // Merit function for line search
     double computeMeritFunction(const std::vector<Eigen::VectorXd>& X,

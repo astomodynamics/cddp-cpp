@@ -63,7 +63,7 @@ TEST(SQPTest, SolveDubinsCar) {
 
     // Create SQP solver
     cddp::SQPOptions options;
-    options.max_iterations = 1;
+    options.max_iterations = 10;
     options.ftol = 1e-4;
     options.xtol = 1e-4;
     options.verbose = true;
@@ -86,13 +86,19 @@ TEST(SQPTest, SolveDubinsCar) {
         std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound)
     );
 
-    auto constraint = sqp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    auto constraint = sqp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint"); 
+    Eigen::VectorXd lb = constraint->getLowerBound();
     ASSERT_NE(constraint, nullptr);
+    ASSERT_EQ(lb.size(), control_dim);
+    ASSERT_EQ(lb, control_lower_bound);
 
     // Set initial trajectory
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
     sqp_solver.setInitialTrajectory(X, U);
+
+    // double cost = objective->evaluate(X, U);
+    // std::cout  << "Initial cost: " << cost << std::endl;
 
     // Solve the problem
     cddp::SQPResult solution = sqp_solver.solve();
@@ -108,9 +114,9 @@ TEST(SQPTest, SolveDubinsCar) {
     ASSERT_EQ(solution.U.size(), horizon);
 
 
-    // // Check initial and final states
-    // EXPECT_NEAR((solution.X.front() - initial_state).norm(), 0.0, 1e-3);
-    // EXPECT_NEAR((solution.X.back() - goal_state).norm(), 0.0, 0.1);
+    // Check initial and final states
+    EXPECT_NEAR((solution.X.front() - initial_state).norm(), 0.0, 1e-3);
+    EXPECT_NEAR((solution.X.back() - goal_state).norm(), 0.0, 0.1);
 
     // // Check control bounds
     // for (const auto& u : solution.U) {

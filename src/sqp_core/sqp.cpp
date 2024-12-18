@@ -132,14 +132,23 @@ SQPResult SQPSolver::solve() {
     std::vector<Eigen::VectorXd> X_curr = X_;
     std::vector<Eigen::VectorXd> U_curr = U_;
 
+    // Initialize J_curr and viol_curr
+    double J_curr = objective_->evaluate(X_curr, U_curr);
+    double viol_curr = computeConstraintViolation(X_curr, U_curr);
+
+    if (options_.verbose) {
+        std::cout << "Initial cost: " << J_curr << std::endl;
+        std::cout << "Initial constraint violation: " << viol_curr << std::endl;
+    }
+
     // Set up OSQP solver instance
     osqp::OsqpInstance instance;
     osqp::OsqpSolver solver;
 
     // Main SQP loop
-    for (int iter = 0; iter < 1; ++iter) {
+    for (int iter = 0; iter < options_.max_iterations; ++iter) {
         result.iterations++;
-        // TODO: Implement full SQP iteration
+
         // 1. Form QP subproblem
         Eigen::SparseMatrix<double> H, A;
         Eigen::VectorXd g, l, u;
@@ -178,81 +187,86 @@ SQPResult SQPSolver::solve() {
             break;
         }
 
-        // // 3. Extract solution updates
-        // std::vector<Eigen::VectorXd> dX, dU;
-        // extractUpdates(solver.primal_solution(), dX, dU);
+        // 3. Extract solution updates
+        std::vector<Eigen::VectorXd> dX, dU;
+        extractUpdates(solver.primal_solution(), dX, dU);
 
-        // // 4. Line search
-        // double alpha = lineSearch(X_curr, U_curr, dX, dU);
-        // if (alpha < options_.xtol) {
-        //     if (options_.verbose) {
-        //         std::cout << "Line search failed at iteration " << iter << std::endl;
-        //     }
-        //     break;
-        // }
+        // 4. Line search
+        double alpha = lineSearch(X_curr, U_curr, dX, dU);
+        if (alpha < options_.xtol) {
+            if (options_.verbose) {
+                std::cout << "Line search failed at iteration " << iter << std::endl;
+            }
+            break;
+        }
 
-        // // 5. Update trajectories
-        // std::vector<Eigen::VectorXd> X_new, U_new;
-        // updateTrajectories(X_curr, U_curr, dX, dU, alpha, X_new, U_new);
+        // 5. Update trajectories
+        std::vector<Eigen::VectorXd> X_new, U_new;
+        updateTrajectories(X_curr, U_curr, dX, dU, alpha, X_new, U_new);
 
-        // // 6. Check for convergence
-        // double J_new = objective_->evaluate(X_new, U_new);
-        // double viol_new = computeConstraintViolation(X_new);
+        // 6. Check for convergence
+        double J_new = objective_->evaluate(X_new, U_new);
+        double viol_new = computeConstraintViolation(X_new, U_new);
         
-        // result.obj_history.push_back(J_new);
-        // result.viol_history.push_back(viol_new);
+        result.obj_history.push_back(J_new);
+        result.viol_history.push_back(viol_new);
 
-        // // Compute relative changes
-        // double dJ = std::abs(J_new - J_curr) / (std::abs(J_curr) + 1e-10);
-        // double max_step = 0.0;
-        // for (size_t i = 0; i < U_new.size(); ++i) {
-        //     max_step = std::max(max_step, (U_new[i] - U_curr[i]).lpNorm<Eigen::Infinity>());
-        // }
+        // Compute relative changes
+        double dJ = std::abs(J_new - J_curr) / (std::abs(J_curr) + 1e-10);
+        double max_step = 0.0;
+        for (size_t i = 0; i < U_new.size(); ++i) {
+            max_step = std::max(max_step, (U_new[i] - U_curr[i]).lpNorm<Eigen::Infinity>());
+        }
 
-        // // Check convergence criteria
-        // if (dJ < options_.ftol && max_step < options_.xtol && viol_new < options_.gtol) {
-        //     result.success = true;
-        //     if (options_.verbose) {
-        //         std::cout << "SQP converged at iteration " << iter << std::endl;
-        //         std::cout << "Final cost: " << J_new << ", violation: " << viol_new << std::endl;
-        //     }
-        //     break;
-        // }
+        // Check convergence criteria
+        if (dJ < options_.ftol && max_step < options_.xtol && viol_new < options_.gtol) {
+            result.success = true;
+            if (options_.verbose) {
+                std::cout << "SQP converged at iteration " << iter << std::endl;
+                std::cout << "Final cost: " << J_new << ", violation: " << viol_new << std::endl;
+            }
+            J_curr = J_new;
+            viol_curr = viol_new;
+            break;
+        }
 
-        // // Update current solution
-        // X_curr = X_new;
-        // U_curr = U_new;
-        // J_curr = J_new;
-        // viol_curr = viol_new;
+        // Update current solution
+        X_curr = X_new;
+        U_curr = U_new;
+        J_curr = J_new;
+        viol_curr = viol_new;
 
-        // if (options_.verbose) {
-        //     std::cout << "Iter " << iter 
-        //              << ": cost=" << J_curr 
-        //              << ", viol=" << viol_curr 
-        //              << ", step=" << alpha 
-        //              << std::endl;
-        // }
+        if (options_.verbose) {
+            std::cout << "Iter " << iter 
+                      << ": cost=" << J_curr 
+                      << ", viol=" << viol_curr 
+                      << ", step=" << alpha 
+                      << std::endl;
+        }
     }
 
-    // // Store final results
-    // result.X = X_curr;
-    // result.U = U_curr;
-    // result.objective_value = J_curr;
-    // result.constraint_violation = viol_curr;
+    // Store final results
+    result.X = X_curr;
+    result.U = U_curr;
+    result.objective_value = J_curr;
+    result.constraint_violation = viol_curr;
 
-    // auto end_time = std::chrono::high_resolution_clock::now();
-    // result.solve_time = std::chrono::duration<double>(end_time - start_time).count();
+    auto end_time = std::chrono::high_resolution_clock::now();
+    result.solve_time = std::chrono::duration<double>(end_time - start_time).count();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
-    // if (options_.verbose) {
-    //     std::cout << "\nSQP finished in " << result.iterations << " iterations" << std::endl;
-    //     std::cout << "Solve time: " << result.solve_time << " seconds" << std::endl;
-    //     std::cout << "Final cost: " << result.objective_value << std::endl;
-    //     std::cout << "Final constraint violation: " << result.constraint_violation << std::endl;
-    //     std::cout << "Success: " << (result.success ? "true" : "false") << std::endl;
-    // }
+    if (options_.verbose) {
+        std::cout << "\nSQP finished in " << result.iterations << " iterations" << std::endl;
+        std::cout << "Solve time: " << result.solve_time << " seconds" << std::endl;
+        std::cout << "          : " << duration.count() << " microseconds" << std::endl;
+        std::cout << "Final cost: " << result.objective_value << std::endl;
+        std::cout << "Final constraint violation: " << result.constraint_violation << std::endl;
+        std::cout << "Success: " << (result.success ? "true" : "false") << std::endl;
+    }
 
     return result;
 }
+
 
 void SQPSolver::formQPSubproblem(const std::vector<Eigen::VectorXd>& X,
                                  const std::vector<Eigen::VectorXd>& U,
@@ -261,66 +275,78 @@ void SQPSolver::formQPSubproblem(const std::vector<Eigen::VectorXd>& X,
                                  Eigen::SparseMatrix<double>& A,
                                  Eigen::VectorXd& l,
                                  Eigen::VectorXd& u) {
-    // Regularization
     const double reg = 1e-6; 
 
-    // Get problem dimensions
     const int nx = system_->getStateDim();
     const int nu = system_->getControlDim();
     const int N  = U.size();  // horizon
 
+    // Compute linearized dynamics
     std::vector<Eigen::MatrixXd> A_dyn, B_dyn;
     computeLinearizedDynamics(X, U, A_dyn, B_dyn);
 
     // Decision variables: z = [x_0; x_1; ...; x_N; u_0; ...; u_{N-1}]
-    // Dimensions
     const int n_states = (N+1)*nx;
     const int n_controls = N*nu;
     const int n_dec = n_states + n_controls;
 
+    // Get reference state and (optionally) reference input
+    // If no reference input, use zero vector
     Eigen::VectorXd x_ref = objective_->getReferenceState(); 
-
+    Eigen::VectorXd u_ref = Eigen::VectorXd::Zero(nu); // Adjust if you have a reference input
+    
     std::vector<Eigen::Triplet<double>> H_triplets;
-    H_triplets.reserve((n_states*nx + n_controls*nu)); // Rough reservation
+    H_triplets.reserve(n_dec * (nx+nu));
 
     g = Eigen::VectorXd::Zero(n_dec);
 
-    // State cost blocks: Q for each x_t
+    // Build quadratic cost for states and controls
+    // State costs for t=0,...,N-1
     for (int t = 0; t < N; ++t) {
         Eigen::MatrixXd Q = objective_->getRunningCostStateHessian(X[t], U[t], t);
+        // Convert to QP form: H_x_t = 2Q
+        Q *= 2.0;
+        // Gradient w.r.t x_t: g_x_t = -2Q x_ref
+        Eigen::VectorXd q_x = -Q * x_ref;
+
+        int x_idx = t*nx;
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < nx; ++j) {
                 double val = Q(i,j);
                 if (i == j) val += reg;
                 if (std::fabs(val) > 1e-12) {
-                    H_triplets.push_back({t*nx + i, t*nx + j, val});
+                    H_triplets.push_back({x_idx + i, x_idx + j, val});
                 }
             }
         }
-        Eigen::VectorXd q_x = -Q * x_ref;
-        g.segment(t*nx, nx) += q_x;
+        g.segment(x_idx, nx) += q_x;
     }
 
-    // Terminal cost QN for x_N
+    // Terminal cost at x_N
     {
-        int t = N;
-        Eigen::MatrixXd QN = objective_->getFinalCostHessian(X[t]);
+        Eigen::MatrixXd QN = objective_->getFinalCostHessian(X[N]);
+        QN *= 2.0;  // same reasoning as above
+        Eigen::VectorXd q_xN = -QN * x_ref;
+        int x_idx = N*nx;
         for (int i = 0; i < nx; ++i) {
             for (int j = 0; j < nx; ++j) {
                 double val = QN(i,j);
                 if (i == j) val += reg;
                 if (std::fabs(val) > 1e-12) {
-                    H_triplets.push_back({t*nx + i, t*nx + j, val});
+                    H_triplets.push_back({x_idx + i, x_idx + j, val});
                 }
             }
         }
-        Eigen::VectorXd q_xN = -QN * x_ref;
-        g.segment(N*nx, nx) += q_xN;
+        g.segment(x_idx, nx) += q_xN;
     }
 
-    // Control cost blocks: R for each u_t
+    // Control costs
     for (int t = 0; t < N; ++t) {
         Eigen::MatrixXd R = objective_->getRunningCostControlHessian(X[t], U[t], t);
+        R *= 2.0;  // For QP form
+        // Gradient w.r.t u_t: g_u_t = -2 R u_ref
+        Eigen::VectorXd q_u = -R * u_ref;
+
         int u_idx_start = n_states + t*nu;
         for (int i = 0; i < nu; ++i) {
             for (int j = 0; j < nu; ++j) {
@@ -331,18 +357,29 @@ void SQPSolver::formQPSubproblem(const std::vector<Eigen::VectorXd>& X,
                 }
             }
         }
+        g.segment(u_idx_start, nu) += q_u;
     }
 
-    // Build equality constraints
+    // Build constraints
+    // Equality constraints:
+    // x_0 = initial_state_
+    // For t=0..N-1: x_{t+1} = A_dyn[t]*x_t + B_dyn[t]*u_t
+
     std::vector<Eigen::Triplet<double>> A_triplets;
 
-    int eq_row = 0;
+    // Total eq constraints: (N+1)*nx
+    int n_eq = (N+1)*nx;
+
+    // Initial state constraint:
+    for (int i = 0; i < nx; ++i) {
+        A_triplets.push_back({i, i, 1.0}); // x_0(i) = initial_state_(i)
+    }
+
+    int eq_row = nx;
     for (int t = 0; t < N; ++t) {
-        // x_{t+1} part
         for (int i = 0; i < nx; ++i) {
             // x_{t+1}
             A_triplets.push_back({eq_row + i, (t+1)*nx + i, 1.0});
-
             // -A_dyn[t]*x_t
             for (int j = 0; j < nx; ++j) {
                 double val = -A_dyn[t](i,j);
@@ -350,7 +387,6 @@ void SQPSolver::formQPSubproblem(const std::vector<Eigen::VectorXd>& X,
                     A_triplets.push_back({eq_row + i, t*nx + j, val});
                 }
             }
-
             // -B_dyn[t]*u_t
             for (int j = 0; j < nu; ++j) {
                 double val = -B_dyn[t](i,j);
@@ -362,87 +398,54 @@ void SQPSolver::formQPSubproblem(const std::vector<Eigen::VectorXd>& X,
         eq_row += nx;
     }
 
-    for (int i = 0; i < nx; ++i) {
-        A_triplets.push_back({i, i, 1.0}); // x_0(i)
-    }
+    // Inequality constraints:
+    // z = [x_0; ...; x_N; u_0; ...; u_{N-1}]
+    // Suppose we have state bounds xmin, xmax and control bounds umin, umax
+    auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    Eigen::VectorXd xmin, xmax, umin, umax;
+    // Obtain these from your system or constraints:
+    xmin = Eigen::VectorXd::Constant(nx, -1e+8);  // Large negative number
+    xmax = Eigen::VectorXd::Constant(nx, 1e+8);  // Large number
+    umin = control_box_constraint->getLowerBound();
+    umax = control_box_constraint->getUpperBound();
 
-    // Clear eq_row logic and rebuild:
-    A_triplets.clear();
+    // Number of inequality constraints = (N+1)*nx + N*nu
+    // We add them as Aineq = I * z
+    int n_ineq = (N+1)*nx + N*nu;
+    int n_con = n_eq + n_ineq;
 
-    // Initial state constraint:
-    for (int i = 0; i < nx; ++i) {
-        A_triplets.push_back({i, i, 1.0}); // x_0(i)
-    }
-
-    eq_row = nx; // next set of eq constraints start at row nx
-
-    for (int t = 0; t < N; ++t) {
-        for (int i = 0; i < nx; ++i) {
-            A_triplets.push_back({eq_row + i, (t+1)*nx + i, 1.0});
-            for (int j = 0; j < nx; ++j) {
-                double val = -A_dyn[t](i,j);
-                if (std::fabs(val) > 1e-12) {
-                    A_triplets.push_back({eq_row + i, t*nx + j, val});
-                }
-            }
-            for (int j = 0; j < nu; ++j) {
-                double val = -B_dyn[t](i,j);
-                if (std::fabs(val) > 1e-12) {
-                    A_triplets.push_back({eq_row + i, n_states + t*nu + j, val});
-                }
-            }
-        }
-        eq_row += nx;
-    }
-
-    // Total eq constraints: (N+1)*nx
-    int n_eq = (N+1)*nx;
-    int n_ineq = (N+1)*nx + N*nu; 
-
-    // So total constraints: n_con = n_eq + n_ineq
-    int n_con = n_eq + ( (N+1)*nx + N*nu );
-
-    // Resize l, u
     l.resize(n_con);
     u.resize(n_con);
 
-    // Set equality part: first n_eq rows
-    // For initial state: x_0 - initial_state_ = 0
+    // Equality constraints bounds:
+    // initial state: x_0 = initial_state_
     for (int i = 0; i < nx; ++i) {
         l(i) = initial_state_(i);
         u(i) = initial_state_(i);
     }
 
-    // For dynamics: they must be zero
+    // dynamics: 0 = x_{t+1} - A_dyn[t]x_t - B_dyn[t]u_t
     for (int i = nx; i < n_eq; ++i) {
         l(i) = 0.0;
         u(i) = 0.0;
     }
 
-    // Now add Aineq = I
+    // Inequality constraints (Aineq = I):
     int ineq_start = n_eq;
     for (int i = 0; i < n_ineq; ++i) {
         A_triplets.push_back({ineq_start + i, i, 1.0});
     }
-    
-    auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
-    Eigen::VectorXd xmin, xmax, umin, umax;
-    xmin = Eigen::VectorXd::Constant(nx, -1e6);
-    xmax = Eigen::VectorXd::Constant(nx, 1e6);
-    umin = control_box_constraint->getLowerBound();
-    umax =  control_box_constraint->getUpperBound();
 
-    // Fill in l and u for Aineq * z <= u and Aineq * z >= l
-    // Aineq = I, so l(i), u(i) are just the bounds on z(i).
-    // z = [x_0; ...; x_N; u_0; ...; u_{N-1}]
-    // For states:
+    // Fill in state and control bounds
+    // States: for t=0..N
     for (int t = 0; t <= N; ++t) {
         for (int i = 0; i < nx; ++i) {
             l(ineq_start + t*nx + i) = xmin(i);
             u(ineq_start + t*nx + i) = xmax(i);
         }
     }
-    // For controls:
+
+    // Controls: for t=0..N-1
     for (int t = 0; t < N; ++t) {
         for (int i = 0; i < nu; ++i) {
             int idx = ineq_start + (N+1)*nx + t*nu + i;
@@ -463,42 +466,168 @@ void SQPSolver::formQPSubproblem(const std::vector<Eigen::VectorXd>& X,
     H = 0.5 * (H + H_t);
 }
 
+void SQPSolver::extractUpdates(const Eigen::VectorXd& qp_solution,
+                               std::vector<Eigen::VectorXd>& dX,
+                               std::vector<Eigen::VectorXd>& dU) {
+    const int nx = system_->getStateDim();
+    const int nu = system_->getControlDim();
+    const int N  = static_cast<int>(U_.size());  // horizon
 
+    // Resize output vectors
+    dX.resize(N+1);
+    dU.resize(N);
 
-double SQPSolver::computeConstraintViolation(const std::vector<Eigen::VectorXd>& constraint_values) const {
-    // TODO: Implement constraint violation computation
-    return 0.0;
+    // Number of state decision variables
+    const int n_states = (N+1)*nx;
+    // Number of control decision variables
+    const int n_controls = N*nu;
+    // Total decision variables
+    const int n_dec = n_states + n_controls;
+
+    if (qp_solution.size() != n_dec) {
+        throw std::runtime_error("QP solution size does not match expected dimensions.");
+    }
+
+    // Extract dX
+    // x_t is located at indices [t*nx : (t+1)*nx - 1]
+    for (int t = 0; t <= N; ++t) {
+        dX[t] = qp_solution.segment(t * nx, nx);
+    }
+
+    // Extract dU
+    // u_t is located at indices [n_states + t*nu : n_states + (t+1)*nu - 1]
+    for (int t = 0; t < N; ++t) {
+        dU[t] = qp_solution.segment(n_states + t * nu, nu);
+    }
 }
+
+double SQPSolver::computeConstraintViolation(const std::vector<Eigen::VectorXd>& X,
+                                             const std::vector<Eigen::VectorXd>& U) const {
+    double total_violation = 0.0;
+
+    const int N = static_cast<int>(U.size());
+    const int nx = system_->getStateDim();
+    const int nu = system_->getControlDim();
+
+    for (int t = 0; t <= N; ++t) {
+        const Eigen::VectorXd& x_t = X[t];
+        
+        // For the last time step, there may be no control input
+        Eigen::VectorXd u_t;
+        if (t < N) {
+            u_t = U[t];
+        } else {
+            // If there's no control at the final step, we can pass a zero vector
+            // or simply the last known control if your problem needs it.
+            u_t = Eigen::VectorXd::Zero(nu);
+        }
+
+        auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+        Eigen::VectorXd g_val = control_box_constraint->evaluate(x_t, u_t);
+        Eigen::VectorXd lb = control_box_constraint->getLowerBound();
+        Eigen::VectorXd ub = control_box_constraint->getUpperBound();
+
+        // Compute the violation for each element of the constraint
+        for (int i = 0; i < g_val.size(); ++i) {
+            double val = g_val(i);
+
+            double lower_diff = lb(i) - val; // positive if below lower bound
+            double upper_diff = val - ub(i); // positive if above upper bound
+
+            if (lower_diff > 0) {
+                total_violation += lower_diff;
+            }
+            if (upper_diff > 0) {
+                total_violation += upper_diff;
+            }
+        }
+        
+    }
+
+    return total_violation;
+}
+
+
 
 double SQPSolver::computeMeritFunction(const std::vector<Eigen::VectorXd>& X,
-                                     const std::vector<Eigen::VectorXd>& U,
-                                     double eta) const {
-    // TODO: Implement merit function
+                                       const std::vector<Eigen::VectorXd>& U,
+                                       double eta) const {
+    // Evaluate the objective (cost)
+    double cost = objective_->evaluate(X, U);
+
+    // Compute constraint violation measure
+    double viol = computeConstraintViolation(X, U);
+
+    // Merit function: cost + eta * violation
+    double merit = cost + eta * viol;
+
+    return merit;
+}
+
+
+double SQPSolver::lineSearch(const std::vector<Eigen::VectorXd>& X,
+                             const std::vector<Eigen::VectorXd>& U,
+                             const std::vector<Eigen::VectorXd>& dX,
+                             const std::vector<Eigen::VectorXd>& dU) {
+    double alpha = 1.0;                       // Initial step size
+    double eta = options_.eta;                // Merit function penalty parameter
+    double beta = options_.tau;               // Backtracking factor
+    int max_ls_iters = options_.line_search_max_iterations; // Separate line search iterations
+
+    // Compute current merit
+    double old_merit = computeMeritFunction(X, U, eta);
+
+    std::vector<Eigen::VectorXd> X_new(X.size());
+    std::vector<Eigen::VectorXd> U_new(U.size());
+
+    for (int iter = 0; iter < max_ls_iters; ++iter) {
+        // Compute candidate trajectories
+        for (size_t t = 0; t < X.size(); ++t) {
+            X_new[t] = X[t] + alpha * dX[t];
+        }
+        for (size_t t = 0; t < U.size(); ++t) {
+            U_new[t] = U[t] + alpha * dU[t];
+        }
+
+        double new_merit = computeMeritFunction(X_new, U_new, eta);
+
+        // Check improvement
+        if (new_merit < old_merit) {
+            // Sufficient improvement found
+            return alpha;
+        }
+
+        // Reduce step size and try again
+        alpha *= beta;
+    }
+
+    // If no improvement found, return a small step size (e.g. 0)
     return 0.0;
 }
 
-double SQPSolver::lineSearch(const std::vector<Eigen::VectorXd>& X,
-                           const std::vector<Eigen::VectorXd>& U,
-                           const std::vector<Eigen::VectorXd>& dX,
-                           const std::vector<Eigen::VectorXd>& dU) {
-    // TODO: Implement line search
-    return 1.0;
-}
-
-void SQPSolver::extractUpdates(const Eigen::VectorXd& qp_solution,
-                             std::vector<Eigen::VectorXd>& dX,
-                             std::vector<Eigen::VectorXd>& dU) {
-    // TODO: Implement update extraction
-}
 
 void SQPSolver::updateTrajectories(const std::vector<Eigen::VectorXd>& X,
-                                 const std::vector<Eigen::VectorXd>& U,
-                                 const std::vector<Eigen::VectorXd>& dX,
-                                 const std::vector<Eigen::VectorXd>& dU,
-                                 double alpha,
-                                 std::vector<Eigen::VectorXd>& X_new,
-                                 std::vector<Eigen::VectorXd>& U_new) {
-    // TODO: Implement trajectory update
+                                   const std::vector<Eigen::VectorXd>& U,
+                                   const std::vector<Eigen::VectorXd>& dX,
+                                   const std::vector<Eigen::VectorXd>& dU,
+                                   double alpha,
+                                   std::vector<Eigen::VectorXd>& X_new,
+                                   std::vector<Eigen::VectorXd>& U_new) {
+    const int N = static_cast<int>(U.size()); // Horizon length
+
+    // Resize output trajectories
+    X_new.resize(N + 1);
+    U_new.resize(N);
+
+    // Update states
+    for (int t = 0; t <= N; ++t) {
+        X_new[t] = X[t] + alpha * dX[t];
+    }
+
+    // Update controls
+    for (int t = 0; t < N; ++t) {
+        U_new[t] = U[t] + alpha * dU[t];
+    }
 }
 
 } // namespace cddp
