@@ -13,8 +13,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#ifndef CDDP_SQP_SOLVER_HPP
-#define CDDP_SQP_SOLVER_HPP
+#ifndef CDDP_SQP_ZHPP
+#define CDDP_SQP_HPP
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
@@ -32,6 +32,7 @@ namespace cddp {
  */
 struct SQPOptions {
     int max_iterations = 100;           // Maximum number of iterations
+    int min_iterations = 1;             // Minimum number of iterations
     double ftol = 1e-6;                // Function value tolerance
     double xtol = 1e-6;                // Step size tolerance
     double gtol = 1e-6;                // Gradient tolerance
@@ -40,6 +41,15 @@ struct SQPOptions {
     bool verbose = false;              // Print debug info
 
     int line_search_max_iterations = 20; // Maximum line search backtracking iterations
+
+    // Trust region parameters
+    double trust_region_radius = 100.0;      // Initial trust region radius
+    double trust_region_radius_max = 1e6;         // Maximum trust region radius
+    double trust_region_eta1 = 0.25;     // Trust region parameter for contraction
+    double trust_region_eta2 = 0.75;     // Trust region parameter for expansion
+    double trust_region_gamma1 = 0.5;    // Trust region contraction factor
+    double trust_region_gamma2 = 2.0;    // Trust region expansion factor
+    double merit_penalty = 100.0;          // Penalty for merit function
     
     // OSQP specific options
     double osqp_eps_abs = 1e-5;        // Absolute tolerance
@@ -231,6 +241,7 @@ private:
      */
     void formQPSubproblem(const std::vector<Eigen::VectorXd>& X,
                          const std::vector<Eigen::VectorXd>& U,
+                         double trust_region_radius,
                          Eigen::SparseMatrix<double>& H,
                          Eigen::VectorXd& g,
                          Eigen::SparseMatrix<double>& A,
@@ -256,12 +267,17 @@ private:
                        std::vector<Eigen::VectorXd>& dX,
                        std::vector<Eigen::VectorXd>& dU);
 
+    void trustRegionUpdate(const std::vector<Eigen::VectorXd>& X,
+                            const std::vector<Eigen::VectorXd>& U,
+                            const std::vector<Eigen::VectorXd>& dX,
+                            const std::vector<Eigen::VectorXd>& dU,
+                            double& trust_region_radius);
+
     // Update trajectories with step
     void updateTrajectories(const std::vector<Eigen::VectorXd>& X,
                           const std::vector<Eigen::VectorXd>& U,
                           const std::vector<Eigen::VectorXd>& dX,
                           const std::vector<Eigen::VectorXd>& dU,
-                          double alpha,
                           std::vector<Eigen::VectorXd>& X_new,
                           std::vector<Eigen::VectorXd>& U_new);
 
@@ -276,4 +292,4 @@ private:
 
 } // namespace cddp
 
-#endif // CDDP_SQP_SOLVER_HPP
+#endif // CDDP_SQP_HPP
