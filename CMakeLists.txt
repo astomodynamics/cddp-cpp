@@ -26,7 +26,7 @@ set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
 set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 
 # SQP Configuration
-set(CDDP-CPP_SQP "Whether to use SQP solver" ON)
+set(CDDP-CPP_SQP "Whether to use SQP solver" ON) # Cannot be turned off in this version
 
 # Gurobi Configuration
 option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
@@ -224,6 +224,8 @@ if (CDDP-CPP_SQP)
   FetchContent_MakeAvailable(osqp-cpp)
   FetchContent_GetProperties(osqp-cpp)
   target_link_libraries(${PROJECT_NAME} osqp-cpp)
+  # add sqp solver to cddp
+  target_sources(${PROJECT_NAME} PRIVATE src/sqp_core/sqp.cpp)
 endif()
 
 # Gurobi 
