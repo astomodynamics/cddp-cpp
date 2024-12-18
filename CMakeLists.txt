@@ -25,7 +25,10 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Enforce C++17 as the minimum standard
 set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
 set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 
-# Options.
+# SQP Configuration
+set(CDDP-CPP_SQP "Whether to use SQP solver" ON)
+
+# Gurobi Configuration
 option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
 option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
@@ -49,15 +52,6 @@ find_package(Python3 3.10 EXACT COMPONENTS Interpreter Development NumPy REQUIRE
 
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
-
-# OSQP-CPP
-FetchContent_Declare(
-  osqp-cpp
-  GIT_REPOSITORY https://github.com/astomodynamics/osqp-cpp.git
-  GIT_TAG master
-)
-FetchContent_MakeAvailable(osqp-cpp)
-FetchContent_GetProperties(osqp-cpp)
 
 # Googletest
 if (CDDP-CPP_BUILD_TESTS)
@@ -203,7 +197,6 @@ add_library(${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME} 
   Eigen3::Eigen 
-  osqp-cpp 
   Python3::Python
   Python3::Module
   Python3::NumPy
@@ -219,6 +212,18 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 # Ensure proper CUDA support if enabled
 if(CDDP-CPP_TORCH_GPU)
   set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES native)
+endif()
+
+if (CDDP-CPP_SQP)
+  # OSQP-CPP
+  FetchContent_Declare(
+    osqp-cpp
+    GIT_REPOSITORY https://github.com/astomodynamics/osqp-cpp.git
+    GIT_TAG master
+  )
+  FetchContent_MakeAvailable(osqp-cpp)
+  FetchContent_GetProperties(osqp-cpp)
+  target_link_libraries(${PROJECT_NAME} osqp-cpp)
 endif()
 
 # Gurobi 

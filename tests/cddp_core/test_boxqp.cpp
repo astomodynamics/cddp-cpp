@@ -20,7 +20,6 @@
 
 #include "cddp_core/qp_solver.hpp"
 #include "cddp_core/boxqp.hpp"
-#include "osqp++.h"
 
 using namespace std;
 using namespace Eigen;
@@ -80,58 +79,6 @@ TEST(QPSolver, ComparisonTest) {
     ub = VectorXd::Constant(m/2, 2.0);
 
     std::cout << "\n====== Comparing QP Solvers ======\n" << std::endl;
-    // 1. Test OSQP
-    {
-        // Convert to sparse matrices
-        SparseMatrix<double> P(n, n);
-        SparseMatrix<double> G(m/2, n);
-        // The first half of b is the upper bound, the second half is the lower bound
-        VectorXd uppper = b.head(m/2);
-        VectorXd lower = b.tail(m/2);
-
-        // Convert Q to sparse
-        for (int i = 0; i < n; i++) {
-            for (int j = 0; j < n; j++) {
-                if (Q(i,j) != 0) {
-                    P.insert(i, j) = Q(i,j);
-                }
-            }
-        }
-        P.makeCompressed();
-
-        // Convert A to sparse
-        for (int i = 0; i < m / 2; i++) {
-            for (int j = 0; j < n; j++) {
-                if (A(i,j) != 0) {
-                    G.insert(i, j) = A(i,j);
-                }
-            }
-        }
-        G.makeCompressed();
-
-        osqp::OsqpSolver osqp_solver;
-        osqp::OsqpInstance instance;
-        osqp::OsqpSettings settings;
-
-        instance.objective_matrix = P;
-        instance.objective_vector = q;
-        instance.constraint_matrix = G;
-        instance.upper_bounds = ub;
-        instance.lower_bounds = lb;
-
-        settings.verbose = false;
-
-        osqp_solver.Init(instance, settings);
-
-        auto start_time = std::chrono::high_resolution_clock::now();
-        auto status = osqp_solver.Solve();
-        auto end_time = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = end_time - start_time;
-
-        printResults("OSQP", osqp_solver.primal_solution(), 
-                    osqp_solver.objective_value(), elapsed.count(), 
-                    static_cast<int>(status));
-    }
 
     // 3. Test BoxQP for comparison - only uses simple bounds
     {
