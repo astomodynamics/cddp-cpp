@@ -74,6 +74,8 @@ TEST(CDDPTest, Solve) {
     cddp::CDDPOptions options;
     options.max_iterations = 10;
     options.cost_tolerance = 1e-2;
+    options.use_parallel = false;
+    options.num_threads = 1;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory
@@ -82,7 +84,8 @@ TEST(CDDPTest, Solve) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    // cddp::CDDPSolution solution = cddp_solver.solve();
+    cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
 
     ASSERT_TRUE(solution.converged);
 
@@ -207,3 +210,92 @@ TEST(CDDPTest, Solve) {
 // $ sudo apt-get install imagemagick
 
 // convert -delay 100 ../results/tests/dubins_car_*.png ../results/tests/dubins_car.gif 
+
+
+/*
+[==========] Running 1 test from 1 test suite.
+[----------] Global test environment set-up.
+[----------] 1 test from CDDPTest
+[ RUN      ] CDDPTest.Solve
+QuadraticObjective: Using single reference state
+
++---------------------------------------------------------+
+|    ____ ____  ____  ____    _          ____             |
+|   / ___|  _ \|  _ \|  _ \  (_)_ __    / ___| _     _    |
+|  | |   | | | | | | | |_) | | | '_ \  | |   _| |_ _| |_  |
+|  | |___| |_| | |_| |  __/  | | | | | | |__|_   _|_   _| |
+|   \____|____/|____/|_|     |_|_| |_|  \____||_|   |_|   |
++---------------------------------------------------------+
+
+Constrained Differential Dynamic Programming
+Author: Tomo Sasaki (@astomodynamics)
+----------------------------------------------------------
+
+ControlBoxConstraint is set
+
+========================================
+           CDDP Options
+========================================
+Cost Tolerance:       0.01
+Grad Tolerance:     0.0001
+Max Iterations:         10
+Max CPU Time:          0
+
+Line Search:
+  Max Iterations:    11
+  Backtracking Coeff:     1
+  Backtracking Min:   0.5
+  Backtracking Factor: 0.501187
+
+Log-Barrier:
+  Barrier Coeff:  0.01
+  Barrier Factor:   0.9
+  Barrier Tolerance: 1e-06
+  Relaxation Coeff:     1
+
+Regularization:
+  Regularization Type: control
+  Regularization State: 1e-06
+  Regularization State Step:     1
+  Regularization State Max: 1e+10
+  Regularization State Min: 1e-06
+  Regularization State Factor:   1.6
+  Regularization Control: 1e-06
+  Regularization Control Step:     1
+  Regularization Control Max: 1e+10
+  Regularization Control Min: 1e-06
+  Regularization Control Factor:   1.6
+
+Other:
+  Print Iterations: Yes
+  iLQR: Yes
+  Use Parallel: No
+  Num Threads: 1
+========================================
+
+ Iteration      Objective     Lagrangian      Grad Norm      Step Size    Reg (State)  Reg (Control)
+-----------------------------------------------------------------------------------------------
+         0        212.337              0          1e+10              1              0          1e-06
+         1        28.0008              0              3              1              0              0
+         2        4.29703              0        1.46969              1              0              0
+         3        1.90259              0       0.144653              1              0              0
+         4        1.76336              0      0.0974113              1              0              0
+         5        1.74059              0      0.0191161              1              0              0
+         6        1.72368              0      0.0146293              1              0              0
+
+========================================
+           CDDP Solution
+========================================
+Converged: Yes
+Iterations: 7
+Solve Time: 2285 micro sec
+Final Cost: 1.72283
+========================================
+
+[       OK ] CDDPTest.Solve (2 ms)
+[----------] 1 test from CDDPTest (2 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (2 ms total)
+[  PASSED  ] 1 test.
+*/

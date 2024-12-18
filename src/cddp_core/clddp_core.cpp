@@ -292,10 +292,12 @@ bool CDDP::solveCLDDPBackwardPass() {
 
     // Create BoxQP solver
     cddp::BoxQPOptions qp_options;
-    qp_options.verbose = false;
-    qp_options.maxIter = 1000;
-    // qp_options.eps_abs = 1e-3;
-    // qp_options.eps_rel = 1e-2;
+    // qp_options.verbose = false;
+    // qp_options.maxIter = 1000;
+    // qp_options.minGrad = 1e-8;
+    // qp_options.minRelImprove = 1e-8;
+    // qp_options.minStep = 1e-22;
+    // qp_options.armijo = 0.1;
     cddp::BoxQPSolver qp_solver(qp_options);
 
     double Qu_error = 0.0;
@@ -347,11 +349,9 @@ bool CDDP::solveCLDDPBackwardPass() {
         }
 
         // Check eigenvalues of Q_uu
-        Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu);
-        Eigen::VectorXd eigenvalues = es.eigenvalues().real();
+        Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu_reg);
+        const Eigen::VectorXd& eigenvalues = es.eigenvalues().real();
         if (eigenvalues.minCoeff() <= 0) {
-            eigenvalues = es.eigenvalues().real();
-
             if (options_.debug) {
                 std::cerr << "CDDP: Q_uu is still not positive definite" << std::endl;
             }
@@ -367,9 +367,9 @@ bool CDDP::solveCLDDPBackwardPass() {
             }
         } else {
             // Solve QP by boxQP
-            Eigen::VectorXd lb = control_box_constraint->getLowerBound() - u;
-            Eigen::VectorXd ub = control_box_constraint->getUpperBound() - u;
-            Eigen::VectorXd x0 = Eigen::VectorXd::Zero(control_dim); // Initial guess
+            const Eigen::VectorXd& lb = control_box_constraint->getLowerBound() - u;
+            const Eigen::VectorXd& ub = control_box_constraint->getUpperBound() - u;
+            const Eigen::VectorXd& x0 = k_[t]; // Initial guess
             
             cddp::BoxQPResult qp_result = qp_solver.solve(Q_uu_reg, Q_u, lb, ub, x0);
             
