@@ -201,15 +201,29 @@ private:
     std::unique_ptr<Objective> objective_;
     std::map<std::string, std::unique_ptr<Constraint>> constraint_set_; 
 
-    std::vector<Eigen::VectorXd> X_;
-    std::vector<Eigen::VectorXd> U_;
+    std::vector<Eigen::VectorXd> X_; // State trajectory
+    std::vector<Eigen::VectorXd> U_; // Control trajectory
     double J_;
+
+    std::vector<Eigen::MatrixXd> A_; // State Jacobians
+    std::vector<Eigen::MatrixXd> B_; // Control Jacobians
 
     /**
      * @brief Dynamics propagatition
      */
     void propagateDynamics(const Eigen::VectorXd& x, std::vector<Eigen::VectorXd>& U);
 
+    /**
+     * @brief Formulate QP subproblem
+     * 
+     * @param X State trajectory
+     * @param U Control trajectory
+     * @param H Hessian matrix (in-place)
+     * @param g Gradient vector (in-place)
+     * @param A Constraint matrix (in-place)
+     * @param l Lower bound (in-place)
+     * @param u Upper bound (in-place)
+     */
     void formQPSubproblem(const std::vector<Eigen::VectorXd>& X,
                          const std::vector<Eigen::VectorXd>& U,
                          Eigen::SparseMatrix<double>& H,

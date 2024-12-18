@@ -63,54 +63,50 @@ TEST(SQPTest, SolveDubinsCar) {
 
     // Create SQP solver
     cddp::SQPOptions options;
-    options.max_iterations = 100;
+    options.max_iterations = 1;
     options.ftol = 1e-4;
     options.xtol = 1e-4;
     options.verbose = true;
+    options.osqp_verbose = true;
 
     // Create SQP solver
     cddp::SQPSolver sqp_solver(initial_state, goal_state, horizon, timestep);
     sqp_solver.setDynamicalSystem(std::move(system));
     sqp_solver.setObjective(std::move(objective));
+    sqp_solver.setOptions(options);
 
-
-    // // Define control constraints
-    // Eigen::VectorXd control_lower_bound(control_dim);
-    // control_lower_bound << -1.0, -M_PI;
-    // Eigen::VectorXd control_upper_bound(control_dim);
-    // control_upper_bound << 1.0, M_PI;
+    // Define control constraints
+    Eigen::VectorXd control_lower_bound(control_dim);
+    control_lower_bound << -1.0, -M_PI;
+    Eigen::VectorXd control_upper_bound(control_dim);
+    control_upper_bound << 1.0, M_PI;
     
-    // // Add control box constraint
-    // sqp_solver.addConstraint("ControlBoxConstraint", 
-    //     std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound)
-    // );
+    // Add control box constraint
+    sqp_solver.addConstraint("ControlBoxConstraint", 
+        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound)
+    );
 
-    // // Set initial trajectory
-    // std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
-    // std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
-    
-    // // Initialize with straight line state trajectory and zero controls
-    // for (int i = 0; i <= horizon; ++i) {
-    //     double t = static_cast<double>(i) / horizon;
-    //     X[i] = (1 - t) * initial_state + t * goal_state;
-    //     if (i < horizon) {
-    //         U[i] = Eigen::VectorXd::Zero(control_dim);
-    //     }
-    // }
-    // sqp_solver.setInitialTrajectory(X, U);
+    auto constraint = sqp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    ASSERT_NE(constraint, nullptr);
 
-    // // Solve the problem
-    // cddp::SQPResult solution = sqp_solver.solve(initial_state);
+    // Set initial trajectory
+    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    sqp_solver.setInitialTrajectory(X, U);
 
-    // // Verify solution
+    // Solve the problem
+    cddp::SQPResult solution = sqp_solver.solve();
+
+    // Verify solution
     // ASSERT_TRUE(solution.success);
-    // EXPECT_GT(solution.iterations, 0);
+    EXPECT_GT(solution.iterations, 0);
     // EXPECT_LT(solution.iterations, options.max_iterations);
-    // EXPECT_GT(solution.solve_time, 0.0);
+    EXPECT_GT(solution.solve_time, 0.0);
 
-    // // Verify trajectories
-    // ASSERT_EQ(solution.X.size(), horizon + 1);
-    // ASSERT_EQ(solution.U.size(), horizon);
+    // Verify trajectories
+    ASSERT_EQ(solution.X.size(), horizon + 1);
+    ASSERT_EQ(solution.U.size(), horizon);
+
 
     // // Check initial and final states
     // EXPECT_NEAR((solution.X.front() - initial_state).norm(), 0.0, 1e-3);
