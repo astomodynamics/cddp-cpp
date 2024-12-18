@@ -187,11 +187,13 @@ public:
      * 
      * @tparam T Type of constraint
      * @param name Name of the constraint
-     * @return T* Pointer to the constraint
+     * @return T* Pointer to the constraint 
      */
     // Get a specific constraint by name
     template <typename T>
-    T* getConstraint(const std::string& name) {
+    T* getConstraint(const std::string& name) const {
+        // 'find' is a const operation on standard associative containers 
+        // and does not modify 'constraint_set_'
         auto it = constraint_set_.find(name);
         
         // Special case for ControlBoxConstraint - must exist
@@ -215,6 +217,7 @@ public:
 
         return cast_constraint;
     }
+
 
     // Getter for the constraint set
     const std::map<std::string, std::unique_ptr<Constraint>>& getConstraintSet() const { 
