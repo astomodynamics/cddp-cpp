@@ -140,7 +140,8 @@ make test
 If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Package](https://github.com/astomodynamics/cddp_mpc). You do not need to install this library to use the package. MPC package will automatically install this library as a dependency.
 
 ## References
-* Zhaoming Xie, C. Karen Liu, and Kris Hauser, "Differential Dynamic Programming with Nonlinear Constraints," 2017 IEEE International Conference on Robotics and Automation (ICRA), 2017.
+* Z. Xie, C. K. Liu and K. Hauser, "Differential dynamic programming with nonlinear constraints," 2017 IEEE International Conference on Robotics and Automation (ICRA), 2017, pp. 695-702, doi: <10.1109/ICRA.2017.7989086>.
+* Y. Tassa, N. Mansard and E. Todorov, "Control-limited differential dynamic programming," 2014 IEEE International Conference on Robotics and Automation (ICRA), 2014, pp. 1168-1175, doi: <10.1109/ICRA.2014.6907001>.
 * Zhamming Xie's GitHub repository: <https://github.com/ZhaomingXie/CDDP>
 * ZJU FAST Lab's GitHub repository: <https://github.com/ZJU-FAST-Lab/SDQP>
 * Yuval Tassa's iLQG/DDP trajectory optimization: <https://www.mathworks.com/matlabcentral/fileexchange/52069-ilqg-ddp-trajectory-optimization>
@@ -152,7 +153,6 @@ This project uses the following open-source libraries:
 * [OSQP](https://github.com/google/osqp-cpp) (Apache License 2.0)
 * [osqp-cpp](https://github.com/google/osqp-cpp) (Apache License 2.0)
 * [matplotlibcpp](https://github.com/lava/matplotlib-cpp) (MIT License)
-* [sdqp](https://github.com/ZJU-FAST-Lab/SDQP) (MIT License)
 * [libtorch](https://github.com/pytorch/pytorch) (BSD 3-Clause License)
 
 ## Citing
@@ -167,7 +167,8 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 * add initial guess functionality based on path planner solution
 * add automatic differentiation
 * add nonlinear objective and constraint handling
-* add parallelization
+* improve parallelization
+* improve boxqp
 * add simulation and its plots
   * Quadrotor
   * Quadruped robot

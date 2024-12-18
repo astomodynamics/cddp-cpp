@@ -87,6 +87,12 @@ gtest_discover_tests(test_logcddp_core)
 add_executable(test_animation test_animation.cpp)
 target_link_libraries(test_animation gtest gmock gtest_main cddp)
 
+if (CDDP-CPP_SQP)
+    add_executable(test_sqp sqp_core/test_sqp.cpp)
+    target_link_libraries(test_sqp gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_sqp)
+endif()
+
 # Test for Eigen installation
 add_executable(test_eigen test_eigen.cpp)
 target_link_libraries(test_eigen gtest gmock gtest_main cddp)

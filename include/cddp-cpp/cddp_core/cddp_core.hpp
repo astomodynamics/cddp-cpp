@@ -121,22 +121,79 @@ public:
     const CDDPOptions& getOptions() const { return options_; }
 
     // Setters
-    void setDynamicalSystem(std::unique_ptr<DynamicalSystem> system) { system_ = std::move(system); }
     // void setDynamicalSystem(std::unique_ptr<torch::nn::Module> system) { torch_system_ = std::move(system); } 
+    
+    /**
+     * @brief Set the Dynamical System object
+     * @param system Dynamical system object (unique_ptr)
+     */
+    void setDynamicalSystem(std::unique_ptr<DynamicalSystem> system) { system_ = std::move(system); }
+
+    /**
+     * @brief Set the Initial state
+     * @param initial_state Initial state
+     */
     void setInitialState(const Eigen::VectorXd& initial_state) { initial_state_ = initial_state; }
+
+    /**
+     * @brief Set the Reference state
+     * @param reference_state  Reference state
+     */
     void setReferenceState(const Eigen::VectorXd& reference_state) { reference_state_ = reference_state; }
+
+    /**
+     * @brief Set the time horizon for the problem
+     * @param horizon Time horizon
+     */
     void setHorizon(int horizon) { horizon_ = horizon; }
+
+    /**
+     * @brief Set the time step for the problem
+     * @param timestep Time step
+     */
     void setTimestep(double timestep) { timestep_ = timestep; }
+
+    /**
+     * @brief Set the options for the solver
+     * @param options Solver options
+     */
     void setOptions(const CDDPOptions& options) { options_ = options; }
+
+    /**
+     * @brief Set the Objective function
+     * @param objective Objective function object (unique_ptr)
+     */
     void setObjective(std::unique_ptr<Objective> objective) { objective_ = std::move(objective); }
+
+    /**
+     * @brief Set the Initial Trajectory 
+     * @param X state trajectory
+     * @param U control trajectory
+     */
     void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) { X_ = X; U_ = U; }
+    
+    /**
+     * @brief Add a constraint to the problem
+     * 
+     * @param constraint_name constraint name given by the user
+     * @param constraint constraint object
+     */
     void addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
         constraint_set_[constraint_name] = std::move(constraint);
     }
-        
+
+    /**
+     * @brief Get a specific constraint by name
+     * 
+     * @tparam T Type of constraint
+     * @param name Name of the constraint
+     * @return T* Pointer to the constraint 
+     */
     // Get a specific constraint by name
     template <typename T>
-    T* getConstraint(const std::string& name) {
+    T* getConstraint(const std::string& name) const {
+        // 'find' is a const operation on standard associative containers 
+        // and does not modify 'constraint_set_'
         auto it = constraint_set_.find(name);
         
         // Special case for ControlBoxConstraint - must exist
@@ -160,6 +217,7 @@ public:
 
         return cast_constraint;
     }
+
 
     // Getter for the constraint set
     const std::map<std::string, std::unique_ptr<Constraint>>& getConstraintSet() const { 
