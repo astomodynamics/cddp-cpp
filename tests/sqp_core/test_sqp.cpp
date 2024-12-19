@@ -39,13 +39,12 @@ TEST(SQPTest, SolveDubinsCar) {
     );
 
     // Create objective function
-    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd Q = 5 * Eigen::MatrixXd::Zero(state_dim, state_dim);
     Eigen::MatrixXd R = 0.5 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf << 50.0, 0.0, 0.0,
-          0.0, 50.0, 0.0,
-          0.0, 0.0, 10.0;
-    Qf = 0.5 * Qf;
+    Qf << 1200.0, 0.0, 0.0,
+          0.0, 1200.0, 0.0,
+          0.0, 0.0, 700.0;
 
     // Goal state
     Eigen::VectorXd goal_state(state_dim);

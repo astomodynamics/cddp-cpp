@@ -13,7 +13,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#ifndef CDDP_SQP_ZHPP
+#ifndef CDDP_SQP_HPP
 #define CDDP_SQP_HPP
 
 #include <Eigen/Dense>

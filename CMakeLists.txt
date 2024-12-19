@@ -28,6 +28,9 @@ set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 # SQP Configuration
 set(CDDP-CPP_SQP "Whether to use SQP solver" ON) # Cannot be turned off in this version
 
+# CasADi Configuration
+set(CDDP-CPP_CASADI "Whether to use CasADi" OFF)
+
 # Gurobi Configuration
 option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
 option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." OFF)
@@ -49,6 +52,25 @@ execute_process( # Find the NumPy include directory
 # Find packages
 find_package(Eigen3 REQUIRED) 
 find_package(Python3 3.10 EXACT COMPONENTS Interpreter Development NumPy REQUIRED)
+
+if (CDDP-CPP_CASADI)
+  # Assuming that CasADi is installed in /usr/local/include/casadi by:
+  # sudo apt install gfortran liblapack-dev pkg-config --install-recommends
+  # sudo apt install swig
+  # cd
+  # git clone https://github.com/casadi/casadi.git -b main
+  # cd casadi
+  # mkdir build
+  # cd build
+  # cmake -DWITH_PYTHON=ON -DWITH_IPOPT=ON -DWITH_OPENMP=ON -DWITH_THREAD=ON ..
+  # make
+  # sudo make install
+  # echo "export LD_LIBRARY_PATH=/home/<path_to_casadi>/casadi/build/lib:$LD_LIBRARY_PATH" >> ~/.bashrc && source ~/.bashrc
+  find_package(casadi REQUIRED)
+  set(CASADI_INCLUDE_DIR /usr/local/include/casadi)
+  find_library(CASADI_LIBRARY NAMES casadi HINTS ${CASADI_INCLUDE_DIR}/../lib $ENV{CASADI_PREFIX}/lib)
+  set(CASADI_LIBRARIES ${CASADI_LIBRARIES} ${CASADI_LIBRARY})
+endif()
 
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
@@ -226,6 +248,11 @@ if (CDDP-CPP_SQP)
   target_link_libraries(${PROJECT_NAME} osqp-cpp)
   # add sqp solver to cddp
   target_sources(${PROJECT_NAME} PRIVATE src/sqp_core/sqp.cpp)
+endif()
+
+if (CDDP-CPP_CASADI)
+  target_include_directories(${PROJECT_NAME} PUBLIC ${CASADI_INCLUDE_DIR})
+  target_link_libraries(${PROJECT_NAME} ${CASADI_LIBRARIES})
 endif()
 
 # Gurobi 
