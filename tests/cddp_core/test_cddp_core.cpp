@@ -37,12 +37,12 @@ TEST(CDDPTest, Solve) {
     std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::DubinsCar>(timestep, integration_type); // Create unique_ptr
 
     // Create objective function
-    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd Q = 5 * Eigen::MatrixXd::Zero(state_dim, state_dim);
     Eigen::MatrixXd R = 0.5 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf << 50.0, 0.0, 0.0,
-          0.0, 50.0, 0.0,
-          0.0, 0.0, 10.0;
+    Qf << 1200.0, 0.0, 0.0,
+          0.0, 1200.0, 0.0,
+          0.0, 0.0, 700.0;
     Qf = 0.5 * Qf;
     Eigen::VectorXd goal_state(state_dim);
     goal_state << 2.0, 2.0, M_PI/2.0;
@@ -72,7 +72,7 @@ TEST(CDDPTest, Solve) {
 
     // Set options
     cddp::CDDPOptions options;
-    options.max_iterations = 10;
+    options.max_iterations = 30;
     options.cost_tolerance = 1e-2;
     options.use_parallel = false;
     options.num_threads = 1;
