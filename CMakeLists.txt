@@ -29,7 +29,7 @@ set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 set(CDDP-CPP_SQP "Whether to use SQP solver" ON) # Cannot be turned off in this version
 
 # CasADi Configuration
-set(CDDP-CPP_CASADI "Whether to use CasADi" ON)
+set(CDDP-CPP_CASADI "Whether to use CasADi" OFF)
 
 # Gurobi Configuration
 option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
