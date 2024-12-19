@@ -93,6 +93,12 @@ if (CDDP-CPP_SQP)
     gtest_discover_tests(test_sqp)
 endif()
 
+if (CDDP-CPP_CASADI)
+    add_executable(test_casadi test_casadi_solver.cpp)
+    target_link_libraries(test_casadi gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_casadi)
+endif()
+
 # Test for Eigen installation
 add_executable(test_eigen test_eigen.cpp)
 target_link_libraries(test_eigen gtest gmock gtest_main cddp)
