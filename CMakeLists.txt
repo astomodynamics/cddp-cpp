@@ -31,6 +31,9 @@ set(CDDP_CPP_SQP "Whether to use SQP solver" ON) # Cannot be turned off in this 
 # CasADi Configuration
 set(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
 
+# CasADi Configuration
+set(CDDP-CPP_CASADI "Whether to use CasADi" OFF)
+
 # Gurobi Configuration
 option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
 option(CDDP_CPP_GUROBI "Whether to use Gurobi solver." OFF)
