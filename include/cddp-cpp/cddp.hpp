@@ -47,7 +47,5 @@
 #include "matplotlibcpp.hpp"
 #include "animation.hpp"
 
-#include "sqp_core/sqp.hpp"
-
 
 #endif // CDDP_HPP
