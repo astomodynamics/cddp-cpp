@@ -26,13 +26,10 @@ set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
 set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 
 # SQP Configuration
-set(CDDP_CPP_SQP "Whether to use SQP solver" ON) # Cannot be turned off in this version
+option(CDDP_CPP_SQP "Whether to use SQP solver" OFF)
 
 # CasADi Configuration
-set(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
-
-# CasADi Configuration
-set(CDDP-CPP_CASADI "Whether to use CasADi" OFF)
+option(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
 
 # Gurobi Configuration
 option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)

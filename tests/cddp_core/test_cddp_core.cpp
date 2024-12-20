@@ -84,8 +84,8 @@ TEST(CDDPTest, Solve) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    // cddp::CDDPSolution solution = cddp_solver.solve();
-    cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
+    cddp::CDDPSolution solution = cddp_solver.solve();
+    // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
 
     ASSERT_TRUE(solution.converged);
 
