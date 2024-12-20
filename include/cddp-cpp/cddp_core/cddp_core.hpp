@@ -25,7 +25,6 @@
 #include <regex>
 #include <future>
 #include <thread>
-#include "osqp++.h"
 // #include "torch/torch.h"
 
 #include "cddp_core/dynamical_system.hpp" 

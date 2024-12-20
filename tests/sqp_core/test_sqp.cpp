@@ -21,6 +21,7 @@
 #include "gtest/gtest.h"
 
 #include "cddp.hpp"
+#include "sqp_core/sqp.hpp"
 
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;

@@ -22,9 +22,9 @@
 #include <Eigen/Dense>
 #include <chrono>    // For timing
 #include <execution> // For parallel execution policies
-#include "osqp++.h"
 
 #include "cddp_core/cddp_core.hpp"
+#include "cddp_core/qp_solver.hpp"
 
 namespace cddp
 {
@@ -659,26 +659,6 @@ bool CDDP::solveForwardPass()
     int iter = 0;
     double alpha = options_.backtracking_coeff;
 
-    // Initialize OSQP setting
-    osqp::OsqpSettings settings;
-    // settings.warm_start = true;
-    settings.verbose = false;
-    settings.max_iter = 1000;
-    settings.eps_abs = 1e-3;
-    settings.eps_rel = 1e-2;
-    // settings.eps_prim_inf = 1e-4;
-    // settings.eps_dual_inf = 1e-4;
-    // settings.alpha = 1.6;
-
-    // Initialize QP solver instance
-    osqp::OsqpSolver osqp_solver;
-
-    // Pre-allocate matrices
-    Eigen::SparseMatrix<double> P(control_dim, control_dim); // Hessian of QP objective
-    Eigen::SparseMatrix<double> A(control_dim, control_dim);
-    A.setIdentity();
-    A.makeCompressed();
-
     // Line-search iteration
     for (iter = 0; iter < options_.max_line_search_iterations; ++iter)
     {
@@ -704,58 +684,34 @@ bool CDDP::solveForwardPass()
             const Eigen::MatrixXd &Q_uu = Q_UU_[t];
             const Eigen::MatrixXd &Q_ux = Q_UX_[t];
 
-            // Create QP problem
-            int numNonZeros = Q_uu.nonZeros();
-            P.reserve(numNonZeros);
-            P.setZero();
-            for (int i = 0; i < Q_uu.rows(); ++i)
-            {
-                for (int j = 0; j < Q_uu.cols(); ++j)
-                {
-                    if (Q_uu(i, j) != 0)
-                    {
-                        P.insert(i, j) = Q_uu(i, j);
-                    }
-                }
-            }
-            P.makeCompressed(); // Important for efficient storage and operations
-
             const Eigen::VectorXd &q = alpha * Q_u + Q_ux * delta_x; // Gradient of QP objective
 
             // Lower and upper bounds
-            Eigen::VectorXd lb = control_box_constraint->getLowerBound() - u;
-            Eigen::VectorXd ub = control_box_constraint->getUpperBound() - u;
+            const Eigen::VectorXd& lb = control_box_constraint->getLowerBound() - u;
+            const Eigen::VectorXd& ub = control_box_constraint->getUpperBound() - u;
 
+            // Create b vector
+            Eigen::VectorXd b(2 * control_dim);
+            b << ub, -lb;
 
-            // Initialize QP solver instance
-            osqp::OsqpInstance instance;
+            // Create A matrix
+            Eigen::MatrixXd A(2 * control_dim, control_dim); // Upper is identity, lower is -identity
+            A.setIdentity();
+            A.block(control_dim, 0, control_dim, control_dim) = -Eigen::MatrixXd::Identity(control_dim, control_dim);
 
-            instance.objective_matrix = P;
-            instance.objective_vector = q;
-            instance.constraint_matrix = A;
-            instance.lower_bounds = lb;
-            instance.upper_bounds = ub;
+            QPSolverOptions options;
+            options.verbose = false;
+            QPSolver solver(options);
 
-            // Initialize the solver
-            osqp_solver.Init(instance, settings);
+            solver.setDimensions(state_dim, 2*control_dim);
+            solver.setHessian(Q_uu);
+            solver.setGradient(q);
+            solver.setConstraints(A, b);
 
-
-            // Solve the QP problem TODO: Use SDQP instead of OSQP
-            osqp::OsqpExitCode exit_code = osqp_solver.Solve();
-
-            if (exit_code == osqp::OsqpExitCode::kOptimal)
-            {
-                is_feasible = true;
-            }
-            else
-            {
-                is_feasible = false;
-                alpha *= options_.backtracking_factor;
-                continue;
-            }
+            QPResult result = solver.solve();
 
             // Extract solution
-            const Eigen::VectorXd &delta_u = osqp_solver.primal_solution();
+            const Eigen::VectorXd &delta_u = result.x;
 
             // Extract solution
             U_new[t] += delta_u;
