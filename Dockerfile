@@ -51,9 +51,10 @@ RUN rm -rf build && \
     cd build && \
     cmake \
             -DCMAKE_BUILD_TYPE=Release \
-            -DCDDP-CPP_BUILD_TESTS=ON \
-            -DCDDP-CPP_TORCH=ON \
-            -DCDDP-CPP_TORCH_GPU=ON \
+            -DCDDP_CPP_BUILD_TESTS=ON \
+            -DCDDP_CPP_TORCH=ON \
+            -DCDDP_CPP_TORCH_GPU=ON \
+            -DCDDP_CPP_CASADI=OFF \
             -DPython_EXECUTABLE=/usr/bin/python3 \
             -DLIBTORCH_DIR=/libtorch/libtorch \
             .. && \
