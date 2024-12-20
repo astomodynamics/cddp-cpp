@@ -87,13 +87,13 @@ gtest_discover_tests(test_logcddp_core)
 add_executable(test_animation test_animation.cpp)
 target_link_libraries(test_animation gtest gmock gtest_main cddp)
 
-if (CDDP-CPP_SQP)
+if (CDDP_CPP_SQP)
     add_executable(test_sqp sqp_core/test_sqp.cpp)
     target_link_libraries(test_sqp gtest gmock gtest_main cddp)
     gtest_discover_tests(test_sqp)
 endif()
 
-if (CDDP-CPP_CASADI)
+if (CDDP_CPP_CASADI)
     add_executable(test_casadi test_casadi_solver.cpp)
     target_link_libraries(test_casadi gtest gmock gtest_main cddp)
     gtest_discover_tests(test_casadi)
@@ -105,7 +105,7 @@ target_link_libraries(test_eigen gtest gmock gtest_main cddp)
 gtest_discover_tests(test_eigen)
 
 # Test for gurobi
-if (CDDP-CPP_GUROBI)
+if (CDDP_CPP_GUROBI)
     add_executable(test_gurobi test_gurobi.cpp)
     target_link_libraries(test_gurobi gtest gmock gtest_main cddp)
     gtest_discover_tests(test_gurobi)     
@@ -117,7 +117,7 @@ if (CDDP-CPP_GUROBI)
 endif()
 
 # Test for torch
-if (CDDP-CPP_TORCH)
+if (CDDP_CPP_TORCH)
     add_executable(test_torch test_torch.cpp)
     target_link_libraries(test_torch gtest gmock gtest_main cddp)
     gtest_discover_tests(test_torch)

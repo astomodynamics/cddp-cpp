@@ -26,20 +26,23 @@ set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
 set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 
 # SQP Configuration
-set(CDDP-CPP_SQP "Whether to use SQP solver" ON) # Cannot be turned off in this version
+set(CDDP_CPP_SQP "Whether to use SQP solver" ON) # Cannot be turned off in this version
+
+# CasADi Configuration
+set(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
 
 # CasADi Configuration
 set(CDDP-CPP_CASADI "Whether to use CasADi" OFF)
 
 # Gurobi Configuration
-option(CDDP-CPP_BUILD_TESTS "Whether to build tests." ON)
-option(CDDP-CPP_GUROBI "Whether to use Gurobi solver." OFF)
+option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
+option(CDDP_CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
 set(GUROBI_ROOT $ENV{HOME}/.local/lib/gurobi1103/linux64)
 
 # LibTorch Configuration
-option(CDDP-CPP_TORCH "Whether to use LibTorch" ON)
-option(CDDP-CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
+option(CDDP_CPP_TORCH "Whether to use LibTorch" ON)
+option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
 set(LIBTORCH_DIR $ENV{HOME}/.local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Python Configuration
@@ -53,7 +56,7 @@ execute_process( # Find the NumPy include directory
 find_package(Eigen3 REQUIRED) 
 find_package(Python3 3.10 EXACT COMPONENTS Interpreter Development NumPy REQUIRED)
 
-if (CDDP-CPP_CASADI)
+if (CDDP_CPP_CASADI)
   # Assuming that CasADi is installed in /usr/local/include/casadi by:
   # sudo apt install gfortran liblapack-dev pkg-config --install-recommends
   # sudo apt install swig
@@ -76,7 +79,7 @@ endif()
 include(FetchContent)
 
 # Googletest
-if (CDDP-CPP_BUILD_TESTS)
+if (CDDP_CPP_BUILD_TESTS)
   enable_testing()
   FetchContent_Declare(
     googletest
@@ -88,7 +91,7 @@ if (CDDP-CPP_BUILD_TESTS)
 endif()
 
 # LibTorch
-if (CDDP-CPP_TORCH)
+if (CDDP_CPP_TORCH)
   # Function to download and extract LibTorch
   function(download_libtorch cuda_support download_dir)
     if(cuda_support) # FIXME: Chenge the version of LibTorch to your desired version
@@ -163,13 +166,13 @@ if (CDDP-CPP_TORCH)
   # Priority 3: Download and install new copy
   if(NOT TORCH_FOUND)
       message(STATUS "LibTorch not found in preferred locations. Downloading fresh copy...")
-      download_libtorch(${CDDP-CPP_TORCH_GPU} "${CMAKE_BINARY_DIR}")
+      download_libtorch(${CDDP_CPP_TORCH_GPU} "${CMAKE_BINARY_DIR}")
       find_package(Torch REQUIRED PATHS "${CMAKE_BINARY_DIR}/libtorch" NO_DEFAULT_PATH)
       message(STATUS "Successfully downloaded and installed LibTorch to: ${CMAKE_BINARY_DIR}/libtorch")
   endif()
 
   # Set compilation flags for CUDA if GPU support is enabled
-  if(CDDP-CPP_TORCH_GPU)
+  if(CDDP_CPP_TORCH_GPU)
       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
   endif()
  
@@ -232,11 +235,11 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 # Ensure proper CUDA support if enabled
-if(CDDP-CPP_TORCH_GPU)
+if(CDDP_CPP_TORCH_GPU)
   set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES native)
 endif()
 
-if (CDDP-CPP_SQP)
+if (CDDP_CPP_SQP)
   # OSQP-CPP
   FetchContent_Declare(
     osqp-cpp
@@ -250,13 +253,13 @@ if (CDDP-CPP_SQP)
   target_sources(${PROJECT_NAME} PRIVATE src/sqp_core/sqp.cpp)
 endif()
 
-if (CDDP-CPP_CASADI)
+if (CDDP_CPP_CASADI)
   target_include_directories(${PROJECT_NAME} PUBLIC ${CASADI_INCLUDE_DIR})
   target_link_libraries(${PROJECT_NAME} ${CASADI_LIBRARIES})
 endif()
 
 # Gurobi 
-if (CDDP-CPP_GUROBI)
+if (CDDP_CPP_GUROBI)
   if (NOT GUROBI_ROOT)
     message(FATAL_ERROR "Please set GUROBI_ROOT.")
   endif()
@@ -279,7 +282,7 @@ if (CDDP-CPP_GUROBI)
 endif()
 
 # Build and register tests.
-if (CDDP-CPP_BUILD_TESTS)
+if (CDDP_CPP_BUILD_TESTS)
   add_subdirectory(tests) 
 endif()
 
@@ -289,6 +292,6 @@ add_subdirectory(examples)
 # Cmake compile commmand:
 # $ mkdir build
 # $ cd build
-# $ cmake  -DCDDP-CPP_GUROBI=ON -DCDDP-CPP_BUILD_TESTS=ON -DGUROBI_ROOT=/home/tom/.local/lib/gurobi1103/linux64 -DCDDP-CPP_TORCH=ON -DCDDP-CPP_TORCH_GPU=ON -DLIBTORCH_DIR=/home/tom/.local/lib/libtorch ..
+# $ cmake  -DCDDP_CPP_GUROBI=ON -DCDDP_CPP_BUILD_TESTS=ON -DGUROBI_ROOT=/home/tom/.local/lib/gurobi1103/linux64 -DCDDP_CPP_TORCH=ON -DCDDP_CPP_TORCH_GPU=ON -DLIBTORCH_DIR=/home/tom/.local/lib/libtorch ..
 # $ make -j4
 # $ make test
