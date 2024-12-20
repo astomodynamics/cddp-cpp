@@ -38,7 +38,7 @@ option(GUROBI_ROOT "Path to Gurobi installation" "")
 set(GUROBI_ROOT $ENV{HOME}/.local/lib/gurobi1103/linux64)
 
 # LibTorch Configuration
-option(CDDP_CPP_TORCH "Whether to use LibTorch" ON)
+set(CDDP_CPP_TORCH "Whether to use LibTorch" ON)
 option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
 set(LIBTORCH_DIR $ENV{HOME}/.local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 

@@ -20,6 +20,7 @@
 #include <memory>
 #include <vector>
 #include <Eigen/Dense>
+#include <torch/torch.h>
 
 // #include "cddp-cpp/sdqp.hpp"
 #include "cddp_core/dynamical_system.hpp"
@@ -31,6 +32,7 @@
 #include "cddp_core/qp_solver.hpp"
 
 #include "cddp_core/torch_dynamical_system.hpp"
+#include "cddp_core/torch_objective.hpp"
 
 // Models
 #include "dynamics_model/pendulum.hpp"
