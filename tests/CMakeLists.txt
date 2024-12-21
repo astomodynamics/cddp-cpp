@@ -26,6 +26,10 @@ add_executable(test_cartpole dynamics_model/test_cartpole.cpp)
 target_link_libraries(test_cartpole gtest gmock gtest_main cddp)
 gtest_discover_tests(test_cartpole)
 
+add_executable(test_dreyfus_rocket dynamics_model/test_dreyfus_rocket.cpp)
+target_link_libraries(test_dreyfus_rocket gtest gmock gtest_main cddp)
+gtest_discover_tests(test_dreyfus_rocket)
+
 add_executable(test_dubins_car dynamics_model/test_dubins_car.cpp)
 target_link_libraries(test_dubins_car gtest gmock gtest_main cddp)
 gtest_discover_tests(test_dubins_car)
@@ -54,6 +58,9 @@ add_executable(test_spacecraft_linear dynamics_model/test_spacecraft_linear.cpp)
 target_link_libraries(test_spacecraft_linear gtest gmock gtest_main cddp)
 gtest_discover_tests(test_spacecraft_linear)
 
+add_executable(test_spacecraft_nonlinear dynamics_model/test_spacecraft_nonlinear.cpp)
+target_link_libraries(test_spacecraft_nonlinear gtest gmock gtest_main cddp)
+gtest_discover_tests(test_spacecraft_nonlinear)
 
 # Core tests
 add_executable(test_boxqp cddp_core/test_boxqp.cpp)
