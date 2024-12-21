@@ -41,6 +41,7 @@
 #include "dynamics_model/quadrotor.hpp"
 #include "dynamics_model/manipulator.hpp"
 #include "dynamics_model/spacecraft_linear.hpp"
+#include "dynamics_model/spacecraft_nonlinear.hpp"
 #include "dynamics_model/spacecraft_landing2d.hpp"
 #include "dynamics_model/lti_system.hpp"
 
