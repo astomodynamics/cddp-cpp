@@ -25,6 +25,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Enforce C++17 as the minimum standard
 set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
 set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 
+# Options
+option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
+
 # SQP Configuration
 option(CDDP_CPP_SQP "Whether to use SQP solver" OFF)
 
@@ -32,7 +35,6 @@ option(CDDP_CPP_SQP "Whether to use SQP solver" OFF)
 option(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
 
 # Gurobi Configuration
-option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
 option(CDDP_CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
 set(GUROBI_ROOT $ENV{HOME}/.local/lib/gurobi1103/linux64)
