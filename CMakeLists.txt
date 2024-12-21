@@ -209,6 +209,7 @@ set(dynamics_model_srcs
   src/dynamics_model/manipulator.cpp
   src/dynamics_model/spacecraft_linear.cpp
   src/dynamics_model/spacecraft_nonlinear.cpp
+  src/dynamics_model/dreyfus_rocket.cpp
   src/dynamics_model/spacecraft_landing2d.cpp
   src/dynamics_model/lti_system.cpp
 )
