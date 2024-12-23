@@ -129,11 +129,11 @@ void CDDP::initializeCDDP()
     Q_U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
 
     // Initialize constraints if empty
-    if (constraint_set_.empty())
-    {
-        std::cerr << "CDDP: No constraints are set" << std::endl;
-    } // if control constraints are set
-    else if (constraint_set_.find("ControlBoxConstraint") != constraint_set_.end())
+    // if (constraint_set_.empty())
+    // {
+    //     std::cerr << "CDDP: No constraints are set" << std::endl;
+    // } // if control constraints are set
+    if (constraint_set_.find("ControlBoxConstraint") != constraint_set_.end())
     {
         std::cout << "ControlBoxConstraint is set" << std::endl;
     }

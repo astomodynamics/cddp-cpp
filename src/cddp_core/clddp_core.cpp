@@ -319,7 +319,11 @@ bool CDDP::solveCLDDPBackwardPass() {
         A = timestep_ * Fx; 
         A.diagonal().array() += 1.0; // More efficient way to add identity
         B = timestep_ * Fu;
-
+if (t > 90) {
+std::cout << "t: " << t << std::endl;
+std::cout << "A: " << A << std::endl;
+std::cout << "B: " << B << std::endl;
+}
         // Get cost and its derivatives
         double l = objective_->running_cost(x, u, t);
         auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
@@ -362,9 +366,6 @@ bool CDDP::solveCLDDPBackwardPass() {
             const Eigen::MatrixXd &H = Q_uu_reg.inverse();
             k = -H * Q_u;
             K = -H * Q_ux_reg;
-            if (options_.debug) {
-                std::cout << "No control box constraint" << std::endl;
-            }
         } else {
             // Solve QP by boxQP
             const Eigen::VectorXd& lb = control_box_constraint->getLowerBound() - u;

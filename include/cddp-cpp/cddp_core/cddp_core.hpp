@@ -195,13 +195,13 @@ public:
         // and does not modify 'constraint_set_'
         auto it = constraint_set_.find(name);
         
-        // Special case for ControlBoxConstraint - must exist
-        if (std::is_same<T, ControlBoxConstraint>::value) {
-            if (it == constraint_set_.end()) {
-                throw std::runtime_error("ControlBoxConstraint not found");
-            }
-            return dynamic_cast<T*>(it->second.get());
-        }
+        // // Special case for ControlBoxConstraint - must exist
+        // if (std::is_same<T, ControlBoxConstraint>::value) {
+        //     // if (it == constraint_set_.end()) {
+        //     //     throw std::runtime_error("ControlBoxConstraint not found");
+        //     // }
+        //     return dynamic_cast<T*>(it->second.get());
+        // }
         
         // For other constraints, return nullptr if not found
         if (it == constraint_set_.end()) {
