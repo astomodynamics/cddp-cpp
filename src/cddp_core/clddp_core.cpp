@@ -319,11 +319,7 @@ bool CDDP::solveCLDDPBackwardPass() {
         A = timestep_ * Fx; 
         A.diagonal().array() += 1.0; // More efficient way to add identity
         B = timestep_ * Fu;
-if (t > 90) {
-std::cout << "t: " << t << std::endl;
-std::cout << "A: " << A << std::endl;
-std::cout << "B: " << B << std::endl;
-}
+
         // Get cost and its derivatives
         double l = objective_->running_cost(x, u, t);
         auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
@@ -411,6 +407,17 @@ std::cout << "B: " << B << std::endl;
                 }
             }
         }
+
+if (t > 90) {
+std::cout << "t: " << t << std::endl;
+std::cout << "A: " << A << std::endl;
+std::cout << "B: " << B << std::endl;
+std::cout << "l_x: " << l_x << std::endl;
+std::cout << "l_u: " << l_u << std::endl;
+std::cout << "l_xx: " << l_xx_ << std::endl;
+std::cout << "l_uu: " << l_uu << std::endl;
+std::cout << "l_ux: " << l_ux_ << std::endl;
+}
 
         // Store feedforward and feedback gain
         k_[t] = k;
