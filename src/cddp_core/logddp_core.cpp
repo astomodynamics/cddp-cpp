@@ -34,27 +34,30 @@ namespace cddp
 
 CDDPSolution CDDP::solveLogCDDP()
 {
-    // Initialize CDDP solver
-    initializeCDDP();
-
-    if (options_.verbose)
-    {
-        printOptions(options_);
+    // Initialize if not done
+    if (!initialized_) {
+        initializeCDDP();
     }
 
-    // Initialize solution
+    if (!initialized_) {
+        std::cerr << "CDDP: Initialization failed" << std::endl;
+        throw std::runtime_error("CDDP: Initialization failed");
+    }
+
+    // Prepare solution struct
     CDDPSolution solution;
     solution.converged = false;
+    solution.alpha = alpha_;
+    solution.iterations = 0;
+    solution.solve_time = 0.0;
     solution.time_sequence.reserve(horizon_ + 1);
-    for (int t = 0; t <= horizon_; ++t)
-    {
+    for (int t = 0; t <= horizon_; ++t) {
         solution.time_sequence.push_back(timestep_ * t);
     }
-    solution.cost_sequence.reserve(options_.max_iterations);
-    solution.lagrangian_sequence.reserve(options_.max_iterations); 
-
-    // Evaluate initial cost
-    J_ = objective_->evaluate(X_, U_);
+    solution.control_sequence.reserve(horizon_);
+    solution.state_sequence.reserve(horizon_ + 1);
+    solution.cost_sequence.reserve(options_.max_iterations); // Reserve space for efficiency
+    solution.lagrangian_sequence.reserve(options_.max_iterations); // Reserve space for efficiency
     solution.cost_sequence.push_back(J_);
 
     // Evaluate Lagrangian
@@ -70,6 +73,7 @@ CDDPSolution CDDP::solveLogCDDP()
             L_ += log_barrier_->evaluate(*constraint.second, X_[t], U_[t]);
         }
     }
+    solution.lagrangian_sequence.push_back(L_);
 
     if (options_.verbose)
     {
@@ -83,6 +87,7 @@ CDDPSolution CDDP::solveLogCDDP()
     // Main loop of CDDP
     while (iter < options_.max_iterations) {
         ++iter;
+        solution.iterations = iter;
 
         // Check maximum CPU time
         if (options_.max_cpu_time > 0) {
@@ -136,28 +141,24 @@ CDDPSolution CDDP::solveLogCDDP()
         // 2. Forward pass (either single-threaded or multi-threaded)
         ForwardPassResult best_result;
         best_result.cost = std::numeric_limits<double>::infinity();
-        bool forward_pass_feasible = false;
+        best_result.lagrangian = std::numeric_limits<double>::infinity();
         bool forward_pass_success = false;
 
         if (!options_.use_parallel) {
             // Single-threaded execution with early termination
             for (double alpha : alphas_) {
-                ForwardPassResult result = solveCLDDPForwardPass(alpha);
+                ForwardPassResult result = solveLogCDDPForwardPass(alpha);
                 
                 if (result.success && result.cost < best_result.cost) {
                     best_result = result;
-                    forward_pass_feasible = true;
+                    forward_pass_success = true;
                     
                     // Check for early termination
-                    double expected_cost_reduction = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
-                    if (expected_cost_reduction > 0.0) {
-                        double cost_reduction_ratio = (J_ - result.cost) / expected_cost_reduction;
-                        if (cost_reduction_ratio > options_.minimum_reduction_ratio) {
-                            if (options_.debug) {
-                                std::cout << "CDDP: Early termination due to successful forward pass" << std::endl;
-                            }
-                            break;
+                    if (result.success) {
+                        if (options_.debug) {
+                            std::cout << "CDDP: Early termination due to successful forward pass" << std::endl;
                         }
+                        break;
                     }
                 }
             }
@@ -180,7 +181,7 @@ CDDPSolution CDDP::solveLogCDDP()
                         ForwardPassResult result = future.get();
                         if (result.success && result.cost < best_result.cost) {
                             best_result = result;
-                            forward_pass_feasible = true;
+                            forward_pass_success = true;
                         }
                     }
                 } catch (const std::exception& e) {
@@ -193,41 +194,16 @@ CDDPSolution CDDP::solveLogCDDP()
         }
 
         // Update solution if a feasible forward pass was found
-        if (forward_pass_feasible) {
+        if (forward_pass_success) {
             if (options_.debug) {
                 std::cout << "Best cost: " << best_result.cost << std::endl;
                 std::cout << "Best alpha: " << best_result.alpha << std::endl;
             }
-
-            double expected_cost_reduction = -best_result.alpha * (dV_(0) + 0.5 * best_result.alpha * dV_(1));
-            double cost_reduction_ratio;
-            
-            // Check if cost reduction is positive
-            if (expected_cost_reduction > 0.0) {
-                cost_reduction_ratio = (J_ - best_result.cost) / expected_cost_reduction;
-            } else {
-                cost_reduction_ratio = std::copysign(1.0, J_ - best_result.cost);
-                if (options_.debug) {
-                    std::cerr << "CDDP: Expected cost reduction is non-positive" << std::endl;
-                }
-            } 
-
-            // Check if cost reduction is sufficient
-            if (cost_reduction_ratio > options_.minimum_reduction_ratio) {
-                forward_pass_success = true;
-            } else {
-                alpha_ = std::numeric_limits<double>::infinity();
-                if (options_.debug) {
-                    std::cerr << "CDDP: Cost reduction ratio is too small" << std::endl;
-                }
-            }
-        }
-
-        if (forward_pass_success) {
             X_ = best_result.state_sequence;
             U_ = best_result.control_sequence;
             dJ_ = J_ - best_result.cost;
             J_ = best_result.cost;
+            dL_ = L_ - best_result.lagrangian;
             L_ = best_result.lagrangian;
             alpha_ = best_result.alpha;
             solution.cost_sequence.push_back(J_);
@@ -261,7 +237,7 @@ CDDPSolution CDDP::solveLogCDDP()
 
         // Print iteration information
         if (options_.verbose) {
-            printIteration(iter, J_, L_, optimality_gap_, expected_, regularization_control_, alpha_); 
+            printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_); 
         }
     }
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -271,10 +247,11 @@ CDDPSolution CDDP::solveLogCDDP()
     solution.state_sequence = X_;
     solution.control_sequence = U_;
     solution.alpha = alpha_;
-    solution.iterations = iter;
     solution.solve_time = duration.count(); // Time in microseconds
     
-    printSolution(solution);
+    if (options_.verbose) {
+        printSolution(solution); 
+    }
 
     return solution;
 }
@@ -287,9 +264,9 @@ bool CDDP::solveLogCDDPBackwardPass() {
     // Get control box constraint
     auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
 
-    // Terminal cost and derivatives
-    V_X_.back() = objective_->getFinalCostGradient(X_.back());
-    V_XX_.back() = objective_->getFinalCostHessian(X_.back());
+    // Terminal cost and its derivatives]
+    Eigen::VectorXd V_x = objective_->getFinalCostGradient(X_.back());
+    Eigen::MatrixXd V_xx = objective_->getFinalCostHessian(X_.back());
 
     // Pre-allocate matrices
     Eigen::MatrixXd A(state_dim, state_dim);
@@ -306,60 +283,37 @@ bool CDDP::solveLogCDDPBackwardPass() {
     Eigen::MatrixXd K(control_dim, state_dim);
     dV_ = Eigen::Vector2d::Zero();
 
-    // Create BoxQP solver
-    cddp::BoxQPOptions qp_options;
-    qp_options.verbose = false;
-    qp_options.maxIter = 1000;
-    // qp_options.eps_abs = 1e-3;
-    // qp_options.eps_rel = 1e-2;
-    cddp::BoxQPSolver qp_solver(qp_options);
-
     double Qu_error = 0.0;
 
-    // Backward pass
-    for (int t = horizon_ - 1; t >= 0; --t)
-    {
-        const Eigen::VectorXd &x = X_[t];
-        const Eigen::VectorXd &u = U_[t];
+    // Backward Riccati recursion
+    for (int t = horizon_ - 1; t >= 0; --t) {
+        // Get state and control
+        const Eigen::VectorXd& x = X_[t];
+        const Eigen::VectorXd& u = U_[t];
 
-        // Get value function
-        const Eigen::VectorXd &V_x = V_X_[t + 1];
-        const Eigen::MatrixXd &V_xx = V_XX_[t + 1];
-
-        // Get dynamics Jacobians
+        // Get continuous dynamics Jacobians
         const auto [Fx, Fu] = system_->getJacobians(x, u);
 
-        // Discrete dynamics
-        A = timestep_ * Fx;
+        // Convert continuous dynamics to discrete time
+        A = timestep_ * Fx; 
         A.diagonal().array() += 1.0;
         B = timestep_ * Fu;
 
-        // Get cost derivatives
+        // Get cost and its derivatives
         double l = objective_->running_cost(x, u, t);
         auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
         auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
 
-        // // Add log barrier terms
-        // const double barrier_cost = log_barrier_->evaluate(*control_box_constraint, x, u);
-        // l += barrier_cost;
-
-        // // Get barrier gradients
-        // auto [barrier_x, barrier_u] = log_barrier_->getGradients(*control_box_constraint, x, u, barrier_cost);
-        // l_x += barrier_x;
-        // l_u += barrier_u;
-
-        // // Get barrier Hessians
-        // auto [barrier_xx, barrier_uu, barrier_ux] = log_barrier_->getHessians(*control_box_constraint, x, u, barrier_cost);
-        // l_xx += barrier_xx;
-        // l_uu += barrier_uu;
-        // l_ux += barrier_ux;
-
-        // Q-function matrices
+        // Compute Q-function matrices 
         Q_x = l_x + A.transpose() * V_x;
         Q_u = l_u + B.transpose() * V_x;
         Q_xx = l_xx + A.transpose() * V_xx * A;
         Q_ux = l_ux + B.transpose() * V_xx * A;
         Q_uu = l_uu + B.transpose() * V_xx * B;
+
+        // TODO: Apply Cholesky decomposition to Q_uu later?
+        // // Symmetrize Q_uu for Cholesky decomposition
+        // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
         if (options_.regularization_type == "state" || options_.regularization_type == "both") {
             Q_ux_reg = l_ux + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
@@ -375,10 +329,8 @@ bool CDDP::solveLogCDDPBackwardPass() {
 
         // Check eigenvalues of Q_uu
         Eigen::EigenSolver<Eigen::MatrixXd> es(Q_uu_reg);
-        Eigen::VectorXd eigenvalues = es.eigenvalues().real();
+        const Eigen::VectorXd& eigenvalues = es.eigenvalues().real();
         if (eigenvalues.minCoeff() <= 0) {
-            eigenvalues = es.eigenvalues().real();
-
             if (options_.debug) {
                 std::cerr << "CDDP: Q_uu is still not positive definite" << std::endl;
             }
@@ -389,17 +341,15 @@ bool CDDP::solveLogCDDPBackwardPass() {
             const Eigen::MatrixXd &H = Q_uu_reg.inverse();
             k = -H * Q_u;
             K = -H * Q_ux_reg;
-            if (options_.debug) {
-                std::cout << "No control box constraint" << std::endl;
-            }
         } else {
             // Solve QP by boxQP
-            Eigen::VectorXd lb = control_box_constraint->getLowerBound() - u;
-            Eigen::VectorXd ub = control_box_constraint->getUpperBound() - u;
-            Eigen::VectorXd x0 = Eigen::VectorXd::Zero(control_dim); // Initial guess
+            const Eigen::VectorXd& lb = control_box_constraint->getLowerBound() - u;
+            const Eigen::VectorXd& ub = control_box_constraint->getUpperBound() - u;
+            const Eigen::VectorXd& x0 = k_[t]; // Initial guess
             
-            cddp::BoxQPResult qp_result = qp_solver.solve(Q_uu_reg, Q_u, lb, ub, x0);
+            cddp::BoxQPResult qp_result = boxqp_solver_.solve(Q_uu_reg, Q_u, lb, ub, x0);
             
+            // TODO: Better status check
             if (qp_result.status == BoxQPStatus::HESSIAN_NOT_PD || 
                 qp_result.status == BoxQPStatus::NO_DESCENT) {
                     if (options_.debug) {
@@ -446,9 +396,9 @@ bool CDDP::solveLogCDDPBackwardPass() {
         Eigen::Vector2d dV_step;
         dV_step << Q_u.dot(k), 0.5 * k.dot(Q_uu * k);
         dV_ = dV_ + dV_step;
-        V_X_[t] = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
-        V_XX_[t] = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
-        V_XX_[t] = 0.5 * (V_XX_[t] + V_XX_[t].transpose()); // Symmetrize Hessian
+        V_x = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
+        V_xx = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
+        V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize Hessian
 
         // Compute optimality gap (Inf-norm) for convergence check
         Qu_error = std::max(Qu_error, Q_u.lpNorm<Eigen::Infinity>());
@@ -461,11 +411,18 @@ bool CDDP::solveLogCDDPBackwardPass() {
         std::cout << "Qu_error: " << Qu_error << std::endl;
         std::cout << "dV: " << dV_.transpose() << std::endl;
     }
+    
     return true;
 }
 
 ForwardPassResult CDDP::solveLogCDDPForwardPass(double alpha) {
+    // Prepare result struct
     ForwardPassResult result;
+    result.success = false;
+    result.cost = std::numeric_limits<double>::infinity();
+    result.lagrangian = std::numeric_limits<double>::infinity();
+    result.alpha = alpha;
+
     const int state_dim = system_->getStateDim();
     const int control_dim = system_->getControlDim();
 
@@ -508,7 +465,6 @@ ForwardPassResult CDDP::solveLogCDDPForwardPass(double alpha) {
     result.control_sequence = U_new;
     result.cost = J_new;
     result.lagrangian = L_new;
-    result.alpha = alpha;
 
     return result;
 }
