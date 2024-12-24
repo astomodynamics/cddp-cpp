@@ -62,22 +62,22 @@ TEST(CDDPTest, Solve) {
 
     // Define constraints
     Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -100.0, -10*M_PI;
+    control_lower_bound << -1.0, -3.1415;
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 100.0, 10*M_PI;
+    control_upper_bound << 1.0, 3.1415;
     
     // Add the constraint to the solver
-    // cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-    // auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+    auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
 
     // Set options
     cddp::CDDPOptions options;
-    options.max_iterations = 2;
+    options.max_iterations = 20;
     options.cost_tolerance = 1e-2;
     options.use_parallel = true;
     options.num_threads = 10;
     options.verbose = true;
-    options.debug = true;
+    options.debug = false;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory
@@ -86,8 +86,8 @@ TEST(CDDPTest, Solve) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    // cddp::CDDPSolution solution = cddp_solver.solve();
-    cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
+    cddp::CDDPSolution solution = cddp_solver.solve();
+    // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
 
     ASSERT_TRUE(solution.converged);
 

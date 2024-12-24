@@ -408,19 +408,6 @@ bool CDDP::solveCLDDPBackwardPass() {
             }
         }
 
-if (t > 90) {
-std::cout << "t: " << t << std::endl;
-// std::cout << "A: " << A << std::endl;
-// std::cout << "B: " << B << std::endl;
-// std::cout << "l_x: " << l_x << std::endl;
-// std::cout << "l_u: " << l_u << std::endl;
-// std::cout << "l_xx: " << l_xx << std::endl;
-// std::cout << "l_uu: " << l_uu << std::endl;
-// std::cout << "l_ux: " << l_ux << std::endl;
-std::cout << "k: " << k << std::endl;
-std::cout << "K: " << K << std::endl;
-}
-
         // Store feedforward and feedback gain
         k_[t] = k;
         K_[t] = K;
