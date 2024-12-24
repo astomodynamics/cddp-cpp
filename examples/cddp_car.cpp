@@ -189,6 +189,9 @@ int main() {
     options.grad_tolerance = 1e-4;
     options.regularization_type = "control";
     // options.regularization_control = 1.0;
+    options.debug = true;
+    options.use_parallel = true;
+    options.num_threads = 10;
     cddp_solver.setOptions(options);
 
     // Initialize with random controls
@@ -221,51 +224,51 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    // cddp::CDDPSolution solution = cddp_solver.solve();
-    cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
+    cddp::CDDPSolution solution = cddp_solver.solve();
+    // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
     // cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
 
-    // // Extract solution trajectories
-    // auto X_sol = solution.state_sequence;
-    // auto U_sol = solution.control_sequence;
-    // auto t_sol = solution.time_sequence;
+    // Extract solution trajectories
+    auto X_sol = solution.state_sequence;
+    auto U_sol = solution.control_sequence;
+    auto t_sol = solution.time_sequence;
 
-    // // Prepare trajectory data
-    // std::vector<double> x_hist, y_hist;
-    // for(const auto& x : X_sol) {
-    //     x_hist.push_back(x(0));
-    //     y_hist.push_back(x(1));
-    // }
+    // Prepare trajectory data
+    std::vector<double> x_hist, y_hist;
+    for(const auto& x : X_sol) {
+        x_hist.push_back(x(0));
+        y_hist.push_back(x(1));
+    }
 
-    // // Car dimensions
-    // double car_length = 2.1;
-    // double car_width = 0.9;
+    // Car dimensions
+    double car_length = 2.1;
+    double car_width = 0.9;
 
-    // // Create animation
-    // Eigen::VectorXd empty_control = Eigen::VectorXd::Zero(control_dim);
-    // for(size_t i = 0; i < X_sol.size(); i++) {
-    //     animation.newFrame();
+    // Create animation
+    Eigen::VectorXd empty_control = Eigen::VectorXd::Zero(control_dim);
+    for(size_t i = 0; i < X_sol.size(); i++) {
+        animation.newFrame();
         
-    //     // Plot full trajectory
-    //     plt::plot(x_hist, y_hist, "b-");
+        // Plot full trajectory
+        plt::plot(x_hist, y_hist, "b-");
         
-    //     // Plot goal configuration
-    //     plotCarBox(goal_state, empty_control, car_length, car_width, "r");
+        // Plot goal configuration
+        plotCarBox(goal_state, empty_control, car_length, car_width, "r");
         
-    //     // Plot current car position
-    //     plotCarBox(X_sol[i], U_sol[i], car_length, car_width, "k");
+        // Plot current car position
+        plotCarBox(X_sol[i], U_sol[i], car_length, car_width, "k");
         
-    //     // Plot settings
-    //     plt::grid(true);
-    //     // plt::axis("equal");
-    //     plt::xlim(-4, 4);
-    //     plt::ylim(-4, 4);
+        // Plot settings
+        plt::grid(true);
+        // plt::axis("equal");
+        plt::xlim(-4, 4);
+        plt::ylim(-4, 4);
         
-    //     animation.saveFrame(i);
-    // }
+        animation.saveFrame(i);
+    }
 
-    // // Create the final GIF
-    // animation.createGif("car_parking.gif");
+    // Create the final GIF
+    animation.createGif("car_parking.gif");
 
     return 0;
 }

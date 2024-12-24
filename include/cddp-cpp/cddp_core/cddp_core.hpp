@@ -179,7 +179,7 @@ public:
      * @param X state trajectory
      * @param U control trajectory
      */
-    void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) { X_ = X; U_ = U; }
+    void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U);
     
     /**
      * @brief Add a constraint to the problem
@@ -230,15 +230,12 @@ public:
 
     // Solve the problem
     CDDPSolution solve();
-    CDDPSolution solveCLDDP();
     CDDPSolution solveLogCDDP();
+    CDDPSolution solveCDDP();
 private:
     // Solver methods
     ForwardPassResult solveForwardPass(double alpha);
     bool solveBackwardPass();
-
-    ForwardPassResult solveCLDDPForwardPass(double alpha);
-    bool solveCLDDPBackwardPass();
 
     ForwardPassResult solveLogCDDPForwardPass(double alpha);
     bool solveLogCDDPBackwardPass();

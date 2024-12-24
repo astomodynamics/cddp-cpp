@@ -142,7 +142,7 @@ CDDPSolution CDDP::solveLogCDDP()
         if (!options_.use_parallel) {
             // Single-threaded execution with early termination
             for (double alpha : alphas_) {
-                ForwardPassResult result = solveCLDDPForwardPass(alpha);
+                ForwardPassResult result = solveLogCDDPForwardPass(alpha);
                 
                 if (result.success && result.cost < best_result.cost) {
                     best_result = result;
