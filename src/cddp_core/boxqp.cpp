@@ -43,12 +43,12 @@ BoxQPResult BoxQPSolver::solve(const Eigen::MatrixXd& H, const Eigen::VectorXd& 
     double old_value = std::numeric_limits<double>::infinity();
     
     // Main iteration loop
-    for (int iter = 0; iter < options_.maxIter; ++iter) {
+    for (int iter = 0; iter < options_.max_iterations; ++iter) {
         result.iterations = iter + 1;
         
         // Check relative improvement
-        if (iter > 0 && std::abs(old_value - value) < options_.minRelImprove * std::abs(old_value)) {
-            result.status = BoxQPStatus::SMALL_IMPROVEMENT;
+        if (iter > 0 && std::abs(old_value - value) < options_.min_rel_improve * std::abs(old_value)) {
+            result.status = BoxQPStatus::SUCCESS;
             break;
         }
         old_value = value;
@@ -113,8 +113,8 @@ BoxQPResult BoxQPSolver::solve(const Eigen::MatrixXd& H, const Eigen::VectorXd& 
         grad_norm = std::sqrt(grad_norm);
         result.final_grad_norm = grad_norm;
 
-        if (grad_norm < options_.minGrad) {
-            result.status = BoxQPStatus::SMALL_GRADIENT;
+        if (grad_norm < options_.min_grad) {
+            result.status = BoxQPStatus::SUCCESS;
             break;
         }
 
@@ -210,7 +210,7 @@ std::pair<bool, std::pair<double, Eigen::VectorXd>> BoxQPSolver::lineSearch(
     double step = 1.0;
     const double sdotg = search.dot(gradient);
     
-    while (step > options_.minStep) {
+    while (step > options_.min_step) {
         // Compute candidate
         Eigen::VectorXd x_new = projectOntoBox(x + step * search, lower, upper);
         
@@ -222,7 +222,7 @@ std::pair<bool, std::pair<double, Eigen::VectorXd>> BoxQPSolver::lineSearch(
             return {true, {step, x_new}};
         }
         
-        step *= options_.stepDec;
+        step *= options_.step_dec;
     }
     
     return {false, {0.0, x}};

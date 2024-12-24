@@ -27,13 +27,13 @@ namespace cddp
  */
 struct BoxQPOptions
 {
-     int maxIter = 100;           ///< Maximum number of iterations
-     double minGrad = 1e-8;       ///< Minimum norm of non-fixed gradient
-     double minRelImprove = 1e-8; ///< Minimum relative improvement
-     double stepDec = 0.6;        ///< Factor for decreasing stepsize
-     double minStep = 1e-22;      ///< Minimal stepsize for linesearch
-     double armijo = 0.1;         ///< Armijo parameter
-     bool verbose = false;        ///< Print debug info
+     int max_iterations = 100;      ///< Maximum number of iterations
+     double min_grad = 1e-8;        ///< Minimum norm of non-fixed gradient
+     double min_rel_improve = 1e-8; ///< Minimum relative improvement
+     double step_dec = 0.6;         ///< Factor for decreasing stepsize
+     double min_step = 1e-22;       ///< Minimal stepsize for linesearch
+     double armijo = 0.1;           ///< Armijo parameter
+     bool verbose = false;          ///< Print debug info
 };
 
 /**
@@ -46,9 +46,8 @@ enum class BoxQPStatus
      MAX_ITER_EXCEEDED = 1, ///< Maximum iterations exceeded
      MAX_LS_EXCEEDED = 2,   ///< Maximum line search iterations exceeded
      NO_BOUNDS = 3,         ///< No bounds, returning Newton point
-     SMALL_IMPROVEMENT = 4, ///< Improvement smaller than tolerance
-     SMALL_GRADIENT = 5,    ///< Gradient norm smaller than tolerance
-     ALL_CLAMPED = 6        ///< All dimensions are clamped
+     SUCCESS = 4,           ///< Converged successfully
+     ALL_CLAMPED = 5        ///< All dimensions are clamped
 };
 
 /**

@@ -157,8 +157,7 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve using different CDDP variants
-    // cddp::CDDPSolution solution = cddp_solver.solve();
-    cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
+    cddp::CDDPSolution solution = cddp_solver.solve();
     // cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
 
     // Extract solution trajectories

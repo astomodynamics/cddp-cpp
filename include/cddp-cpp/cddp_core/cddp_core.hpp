@@ -30,6 +30,7 @@
 #include "cddp_core/dynamical_system.hpp" 
 #include "cddp_core/objective.hpp"
 #include "cddp_core/constraint.hpp"
+#include "cddp_core/boxqp.hpp"
 
 namespace cddp {
 
@@ -53,9 +54,6 @@ struct CDDPOptions {
     double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
     int barrier_order = 2;                          // Order for log-barrier method
 
-    // Active set method
-    double active_set_tolerance = 1e-6;             // Tolerance for active set method
-
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
     
@@ -77,6 +75,15 @@ struct CDDPOptions {
     bool is_ilqr = true;                            // Option for iLQR
     bool use_parallel = true;                      // Option for parallel computation
     int num_threads = max_line_search_iterations; // Number of threads to use
+
+    // Boxqp options
+    double boxqp_max_iterations = 100;              // Maximum number of iterations for boxqp
+    double boxqp_min_grad = 1e-8;                   // Minimum gradient norm for boxqp
+    double boxqp_min_rel_improve = 1e-8;            // Minimum relative improvement for boxqp
+    double boxqp_step_dec = 0.6;                    // Step decrease factor for boxqp
+    double boxqp_min_step = 1e-22;                  // Minimum step size for boxqp
+    double boxqp_armijo = 0.1;                      // Armijo parameter for boxqp
+    bool boxqp_verbose = false;                     // Print debug info for boxqp
 };
 
 struct CDDPSolution {
@@ -106,7 +113,10 @@ public:
     CDDP(const Eigen::VectorXd& initial_state, 
          const Eigen::VectorXd& reference_state,
          int horizon,
-         double timestep); 
+         double timestep,
+         std::unique_ptr<DynamicalSystem> system = nullptr,
+        std::unique_ptr<Objective> objective = nullptr,
+        const CDDPOptions& options = CDDPOptions()); 
 
     // Accessor methods
 
@@ -169,7 +179,7 @@ public:
      * @param X state trajectory
      * @param U control trajectory
      */
-    void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) { X_ = X; U_ = U; }
+    void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U);
     
     /**
      * @brief Add a constraint to the problem
@@ -195,14 +205,6 @@ public:
         // and does not modify 'constraint_set_'
         auto it = constraint_set_.find(name);
         
-        // Special case for ControlBoxConstraint - must exist
-        if (std::is_same<T, ControlBoxConstraint>::value) {
-            if (it == constraint_set_.end()) {
-                throw std::runtime_error("ControlBoxConstraint not found");
-            }
-            return dynamic_cast<T*>(it->second.get());
-        }
-        
         // For other constraints, return nullptr if not found
         if (it == constraint_set_.end()) {
             return nullptr;
@@ -223,62 +225,74 @@ public:
         return constraint_set_; 
     }
 
+    // Initialization methods
+    void initializeCDDP();
+
     // Solve the problem
     CDDPSolution solve();
-    CDDPSolution solveCLDDP();
     CDDPSolution solveLogCDDP();
+    CDDPSolution solveASCDDP();
+private:
+    // Solver methods
+    ForwardPassResult solveForwardPass(double alpha);
+    bool solveBackwardPass();
+
+    ForwardPassResult solveLogCDDPForwardPass(double alpha);
+    bool solveLogCDDPBackwardPass();
+
+    ForwardPassResult solveASCDDPForwardPass(double alpha);
+    bool solveASCDDPBackwardPass();
+
+    // Helper methods
+    bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
+
+    void printSolverInfo();
+
+    void printOptions(const CDDPOptions& options);
+
+    void printIteration(int iter, double cost, double lagrangian, 
+                        double grad_norm, double lambda_state, 
+                        double lambda_control, double alpha);
+    
+    void printSolution(const CDDPSolution& solution);
 
 private:
+    bool initialized_ = false; // Initialization flag
     // Problem Data
     std::unique_ptr<DynamicalSystem> system_;         // Eigen-based dynamical system
     // std::unique_ptr<torch::nn::Module> torch_system_; // Torch-based dynamical system (learned dynamics model)
+    std::unique_ptr<Objective> objective_; // Objective function
+    std::map<std::string, std::unique_ptr<Constraint>> constraint_set_; 
+    std::unique_ptr<LogBarrier> log_barrier_;
     Eigen::VectorXd initial_state_;      // Initial state of the system
     Eigen::VectorXd reference_state_;      // Desired reference state
     int horizon_;                      // Time horizon for the problem
     double timestep_;                  // Time step for the problem
-
-    // Options
     CDDPOptions options_;              // Options for the solver
 
     // Intermediate trajectories
     std::vector<Eigen::VectorXd> X_;                  // State trajectory
     std::vector<Eigen::VectorXd> U_;                  // Control trajectory
 
-    // Intermediate cost
+    // Cost and Lagrangian
     double J_; // Cost 
     double dJ_; // Cost improvement
     double L_; // Lagrangian
     double dL_; // Lagrangian improvement
-    double optimality_gap_ = 1e+10;
-    double expected_;
-    double reduction_;
+    Eigen::VectorXd dV_;
 
     // Line search
     double alpha_; // Line search step size
     std::vector<double> alphas_;
 
-    // Cost function
-    std::unique_ptr<Objective> objective_; // Objective function
-
-    // Constraints
-    std::map<std::string, std::unique_ptr<Constraint>> constraint_set_; 
-
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_;
     std::vector<Eigen::MatrixXd> K_;
 
-    // Intermediate value function
-    Eigen::VectorXd dV_;
-    std::vector<Eigen::VectorXd> V_X_;
-    std::vector<Eigen::MatrixXd> V_XX_;
-
     // Q-function matrices
     std::vector<Eigen::MatrixXd> Q_UU_;
     std::vector<Eigen::MatrixXd> Q_UX_;
-    std::vector<Eigen::VectorXd> Q_U_; 
-
-    // Log-barrier method
-    std::unique_ptr<LogBarrier> log_barrier_;
+    std::vector<Eigen::VectorXd> Q_U_;     
 
     // Regularization parameters
     double regularization_state_;
@@ -286,131 +300,11 @@ private:
     double regularization_control_;
     double regularization_control_step_;   
 
-    // Initialization methods
-    void initializeCDDP(); // Initialize the CDDP solver
+    // Boxqp solver
+    BoxQPOptions boxqp_options_;
+    BoxQPSolver boxqp_solver_;
 
-    // Solver methods
-    bool solveForwardPass();
-    ForwardPassResult solveForwardPassIteration(double alpha);
-    bool solveBackwardPass();
-
-    ForwardPassResult solveCLDDPForwardPass(double alpha);
-    bool solveCLDDPBackwardPass();
-
-    ForwardPassResult solveLogCDDPForwardPass(double alpha);
-    bool solveLogCDDPBackwardPass();
-
-    // Helper methods
-    bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
-
-    
-
-    void printSolverInfo()
-    {
-        std::cout << "\n";
-        std::cout << "\033[34m"; // Set text color to blue
-        std::cout << "+---------------------------------------------------------+" << std::endl;
-        std::cout << "|    ____ ____  ____  ____    _          ____             |" << std::endl;
-        std::cout << "|   / ___|  _ \\|  _ \\|  _ \\  (_)_ __    / ___| _     _    |" << std::endl;
-        std::cout << "|  | |   | | | | | | | |_) | | | '_ \\  | |   _| |_ _| |_  |" << std::endl;
-        std::cout << "|  | |___| |_| | |_| |  __/  | | | | | | |__|_   _|_   _| |" << std::endl;
-        std::cout << "|   \\____|____/|____/|_|     |_|_| |_|  \\____||_|   |_|   |" << std::endl;
-        std::cout << "+---------------------------------------------------------+" << std::endl;
-        std::cout << "\n";
-        std::cout << "Constrained Differential Dynamic Programming\n";
-        std::cout << "Author: Tomo Sasaki (@astomodynamics)\n";
-        std::cout << "----------------------------------------------------------\n";
-        std::cout << "\033[0m"; // Reset text color
-        std::cout << "\n";
-    }
-
-    void printOptions(const CDDPOptions &options)
-    {
-        std::cout << "\n========================================\n";
-        std::cout << "           CDDP Options\n";
-        std::cout << "========================================\n";
-
-        std::cout << "Cost Tolerance: " << std::setw(10) << options.cost_tolerance << "\n";
-        std::cout << "Grad Tolerance: " << std::setw(10) << options.grad_tolerance << "\n";
-        std::cout << "Max Iterations: " << std::setw(10) << options.max_iterations << "\n";
-        std::cout << "Max CPU Time: " << std::setw(10) << options.max_cpu_time << "\n";
-
-        std::cout << "\nLine Search:\n";
-        std::cout << "  Max Iterations: " << std::setw(5) << options.max_line_search_iterations << "\n";
-        std::cout << "  Backtracking Coeff: " << std::setw(5) << options.backtracking_coeff << "\n";
-        std::cout << "  Backtracking Min: " << std::setw(5) << options.backtracking_min << "\n";
-        std::cout << "  Backtracking Factor: " << std::setw(5) << options.backtracking_factor << "\n";
-
-        std::cout << "\nLog-Barrier:\n";
-        std::cout << "  Barrier Coeff: " << std::setw(5) << options.barrier_coeff << "\n";
-        std::cout << "  Barrier Factor: " << std::setw(5) << options.barrier_factor << "\n";
-        std::cout << "  Barrier Tolerance: " << std::setw(5) << options.barrier_tolerance << "\n";
-        std::cout << "  Relaxation Coeff: " << std::setw(5) << options.relaxation_coeff << "\n";
-
-        std::cout << "\nRegularization:\n";
-        std::cout << "  Regularization Type: " << options.regularization_type << "\n";
-        std::cout << "  Regularization State: " << std::setw(5) << options.regularization_state << "\n";
-        std::cout << "  Regularization State Step: " << std::setw(5) << options.regularization_state_step << "\n";
-        std::cout << "  Regularization State Max: " << std::setw(5) << options.regularization_state_max << "\n";
-        std::cout << "  Regularization State Min: " << std::setw(5) << options.regularization_state_min << "\n";
-        std::cout << "  Regularization State Factor: " << std::setw(5) << options.regularization_state_factor << "\n";
-
-        std::cout << "  Regularization Control: " << std::setw(5) << options.regularization_control << "\n";
-        std::cout << "  Regularization Control Step: " << std::setw(5) << options.regularization_control_step << "\n";
-        std::cout << "  Regularization Control Max: " << std::setw(5) << options.regularization_control_max << "\n";
-        std::cout << "  Regularization Control Min: " << std::setw(5) << options.regularization_control_min << "\n";
-        std::cout << "  Regularization Control Factor: " << std::setw(5) << options.regularization_control_factor << "\n";
-
-        std::cout << "\nOther:\n";
-        std::cout << "  Print Iterations: " << (options.verbose ? "Yes" : "No") << "\n";
-        std::cout << "  iLQR: " << (options.is_ilqr ? "Yes" : "No") << "\n";
-        std::cout << "  Use Parallel: " << (options.use_parallel ? "Yes" : "No") << "\n";
-        std::cout << "  Num Threads: " << options.num_threads << "\n";
-
-        std::cout << "========================================\n\n";
-    }
-
-    void printIteration(int iter, double cost, double lagrangian, double grad_norm, 
-                    double lambda_state, double lambda_control, double step_size)
-    {
-        // Print header for better readability every 10 iterations
-        if (iter % 10 == 0)
-        {
-            std::cout << std::setw(10) << "Iteration"
-                    << std::setw(15) << "Objective"
-                    << std::setw(15) << "Lagrangian"
-                    << std::setw(15) << "Grad Norm"
-                    << std::setw(15) << "Step Size"
-                    << std::setw(15) << "Reg (State)"
-                    << std::setw(15) << "Reg (Control)"
-                    << std::endl;
-            std::cout << std::string(95, '-') << std::endl;
-        }
-
-        // Print iteration details
-        std::cout << std::setw(10) << iter
-                << std::setw(15) << std::setprecision(6) << cost
-                << std::setw(15) << std::setprecision(6) << lagrangian
-                << std::setw(15) << std::setprecision(6) << grad_norm
-                << std::setw(15) << std::setprecision(6) << step_size
-                << std::setw(15) << std::setprecision(6) << lambda_state
-                << std::setw(15) << std::setprecision(6) << lambda_control
-                << std::endl;
-    }
-
-    void printSolution(const CDDPSolution &solution)
-    {
-        std::cout << "\n========================================\n";
-        std::cout << "           CDDP Solution\n";
-        std::cout << "========================================\n";
-
-        std::cout << "Converged: " << (solution.converged ? "Yes" : "No") << "\n";
-        std::cout << "Iterations: " << solution.iterations << "\n";
-        std::cout << "Solve Time: " << std::setprecision(4) << solution.solve_time << " micro sec\n";
-        std::cout << "Final Cost: " << std::setprecision(6) << solution.cost_sequence.back() << "\n"; // Assuming cost_sequence is not empty
-
-        std::cout << "========================================\n\n";
-    }
+    double optimality_gap_ = 1e+10;
 };
-}
+} // namespace cddp
 #endif // CDDP_CDDP_CORE_HPP

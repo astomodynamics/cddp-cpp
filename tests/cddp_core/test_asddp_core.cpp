@@ -25,7 +25,7 @@
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
 
-TEST(CDDPTest, SolveCLDDP) {
+TEST(CDDPTest, SolveASCDDP) {
     // Problem parameters
     int state_dim = 3;
     int control_dim = 2;
@@ -55,8 +55,20 @@ TEST(CDDPTest, SolveCLDDP) {
     Eigen::VectorXd initial_state(state_dim);
     initial_state << 0.0, 0.0, M_PI/4.0; 
 
+    // Create CDDP Options
+    cddp::CDDPOptions options;
+    options.max_iterations = 20;
+    options.max_cpu_time = 1e-1;
+
     // // Create CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
+    cddp::CDDP cddp_solver(
+      initial_state, 
+      goal_state, 
+      horizon, 
+      timestep, 
+      std::make_unique<cddp::DubinsCar>(timestep, integration_type), 
+      std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep), 
+      options);
     cddp_solver.setDynamicalSystem(std::move(system));
     cddp_solver.setObjective(std::move(objective));
 
@@ -70,9 +82,6 @@ TEST(CDDPTest, SolveCLDDP) {
     auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
 
     // Set options
-    cddp::CDDPOptions options;
-    options.max_iterations = 20;
-    options.max_cpu_time = 1e-1;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory
@@ -81,7 +90,7 @@ TEST(CDDPTest, SolveCLDDP) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
+    cddp::CDDPSolution solution = cddp_solver.solveASCDDP();
 
     ASSERT_TRUE(solution.converged);
 
