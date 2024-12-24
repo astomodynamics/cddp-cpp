@@ -30,6 +30,7 @@
 #include "cddp_core/dynamical_system.hpp" 
 #include "cddp_core/objective.hpp"
 #include "cddp_core/constraint.hpp"
+#include "cddp_core/boxqp.hpp"
 
 namespace cddp {
 
@@ -283,8 +284,6 @@ private:
     // Line search
     double alpha_; // Line search step size
     std::vector<double> alphas_;
-    
-    double optimality_gap_ = 1e+10;
 
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_;
@@ -306,6 +305,11 @@ private:
     double regularization_control_;
     double regularization_control_step_;   
 
+    // Boxqp solver
+    BoxQPOptions boxqp_options_;
+    BoxQPSolver boxqp_solver_;
+
+    double optimality_gap_ = 1e+10;
 };
 } // namespace cddp
 #endif // CDDP_CDDP_CORE_HPP

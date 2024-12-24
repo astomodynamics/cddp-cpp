@@ -147,6 +147,19 @@ void CDDP::initializeCDDP()
 
     // Initialize Log-barrier (std::unique_ptr<LogBarrier> log_barrier_;)
     log_barrier_ = std::make_unique<LogBarrier>(options_.barrier_coeff, options_.relaxation_coeff, options_.barrier_order);
+
+    // Initialize boxqp options
+    boxqp_options_.max_iterations = options_.boxqp_max_iterations;
+    boxqp_options_.min_grad = options_.boxqp_min_grad;
+    boxqp_options_.min_rel_improve = options_.boxqp_min_rel_improve;    
+    boxqp_options_.step_dec = options_.boxqp_step_dec;
+    boxqp_options_.min_step = options_.boxqp_min_step;
+    boxqp_options_.armijo = options_.boxqp_armijo;
+    boxqp_options_.verbose = options_.boxqp_verbose;
+
+    boxqp_solver_ = BoxQPSolver(boxqp_options_);
+    
+    initialized_ = true;
 }
 
 
