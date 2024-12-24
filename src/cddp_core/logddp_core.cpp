@@ -261,7 +261,7 @@ CDDPSolution CDDP::solveLogCDDP()
 
         // Print iteration information
         if (options_.verbose) {
-            printIteration(iter, J_, L_, optimality_gap_, expected_, regularization_control_, alpha_); 
+            printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_); 
         }
     }
     auto end_time = std::chrono::high_resolution_clock::now();

@@ -427,8 +427,6 @@ bool CDDP::solveCLDDPBackwardPass() {
         optimality_gap_ = Qu_error;
     }
 
-    expected_ = dV_(0);
-
     if (options_.debug) {
         std::cout << "Qu_error: " << Qu_error << std::endl;
         std::cout << "dV: " << dV_.transpose() << std::endl;
