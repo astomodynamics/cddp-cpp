@@ -442,6 +442,7 @@ bool CDDP::solveBackwardPass() {
         const Eigen::VectorXd& x = X_[t];
         const Eigen::VectorXd& u = U_[t];
 
+        // TODO: Precompute Jacobians and store them?
         // Get continuous dynamics Jacobians
         const auto [Fx, Fu] = system_->getJacobians(x, u);
 
