@@ -168,7 +168,7 @@ void CDDP::initializeCDDP()
     K_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, state_dim));
     dV_.resize(2);
 
-    // Initialize Q-function matrices
+    // Initialize Q-function matrices: USED ONLY FOR ASCDDP
     Q_UU_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, control_dim));
     Q_UX_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, state_dim));
     Q_U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));

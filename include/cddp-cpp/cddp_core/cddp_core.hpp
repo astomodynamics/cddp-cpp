@@ -231,7 +231,7 @@ public:
     // Solve the problem
     CDDPSolution solve();
     CDDPSolution solveLogCDDP();
-    CDDPSolution solveCDDP();
+    CDDPSolution solveASCDDP();
 private:
     // Solver methods
     ForwardPassResult solveForwardPass(double alpha);
@@ -239,6 +239,9 @@ private:
 
     ForwardPassResult solveLogCDDPForwardPass(double alpha);
     bool solveLogCDDPBackwardPass();
+
+    ForwardPassResult solveASCDDPForwardPass(double alpha);
+    bool solveASCDDPBackwardPass();
 
     // Helper methods
     bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
@@ -285,11 +288,6 @@ private:
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_;
     std::vector<Eigen::MatrixXd> K_;
-
-    // Intermediate value function
-    
-    std::vector<Eigen::VectorXd> V_X_;
-    std::vector<Eigen::MatrixXd> V_XX_;
 
     // Q-function matrices
     std::vector<Eigen::MatrixXd> Q_UU_;
