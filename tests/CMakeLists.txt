@@ -94,6 +94,17 @@ gtest_discover_tests(test_logcddp_core)
 add_executable(test_animation test_animation.cpp)
 target_link_libraries(test_animation gtest gmock gtest_main cddp)
 
+# Test for torch
+if (CDDP_CPP_TORCH)
+    add_executable(test_torch test_torch.cpp)
+    target_link_libraries(test_torch gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_torch)
+
+    add_executable(test_neural_pendulum dynamics_model/test_neural_pendulum.cpp)
+    target_link_libraries(test_neural_pendulum gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_neural_pendulum)
+endif()
+
 if (CDDP_CPP_SQP)
     add_executable(test_sqp sqp_core/test_sqp.cpp)
     target_link_libraries(test_sqp gtest gmock gtest_main cddp)
@@ -121,15 +132,4 @@ if (CDDP_CPP_GUROBI)
     add_executable(test_qp_solvers test_qp_solvers.cpp)
     target_link_libraries(test_qp_solvers gtest gmock gtest_main cddp)
     gtest_discover_tests(test_qp_solvers)
-endif()
-
-# Test for torch
-if (CDDP_CPP_TORCH)
-    add_executable(test_torch test_torch.cpp)
-    target_link_libraries(test_torch gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_torch)
-
-    add_executable(test_torch_pendulum dynamics_model/test_torch_pendulum.cpp)
-    target_link_libraries(test_torch_pendulum gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_torch_pendulum)
 endif()
