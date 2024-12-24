@@ -258,13 +258,13 @@ private:
 
 private:
     bool initialized_ = false; // Initialization flag
+
     // Problem Data
-    std::unique_ptr<DynamicalSystem> system_;         // Eigen-based dynamical system
-    // std::unique_ptr<torch::nn::Module> torch_system_; // Torch-based dynamical system (learned dynamics model)
-    std::unique_ptr<Objective> objective_; // Objective function
+    std::unique_ptr<DynamicalSystem> system_;        
+    std::unique_ptr<Objective> objective_;
     std::map<std::string, std::unique_ptr<Constraint>> constraint_set_; 
     std::unique_ptr<LogBarrier> log_barrier_;
-    Eigen::VectorXd initial_state_;      // Initial state of the system
+    Eigen::VectorXd initial_state_;      
     Eigen::VectorXd reference_state_;      // Desired reference state
     int horizon_;                      // Time horizon for the problem
     double timestep_;                  // Time step for the problem
