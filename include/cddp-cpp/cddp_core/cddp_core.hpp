@@ -77,6 +77,15 @@ struct CDDPOptions {
     bool is_ilqr = true;                            // Option for iLQR
     bool use_parallel = true;                      // Option for parallel computation
     int num_threads = max_line_search_iterations; // Number of threads to use
+
+    // Boxqp options
+    double boxqp_max_iterations = 100;              // Maximum number of iterations for boxqp
+    double boxqp_min_grad = 1e-8;                   // Minimum gradient norm for boxqp
+    double boxqp_min_rel_improve = 1e-8;            // Minimum relative improvement for boxqp
+    double boxqp_step_dec = 0.6;                    // Step decrease factor for boxqp
+    double boxqp_min_step = 1e-22;                  // Minimum step size for boxqp
+    double boxqp_armijo = 0.1;                      // Armijo parameter for boxqp
+    bool boxqp_verbose = false;                     // Print debug info for boxqp
 };
 
 struct CDDPSolution {
@@ -195,14 +204,6 @@ public:
         // and does not modify 'constraint_set_'
         auto it = constraint_set_.find(name);
         
-        // // Special case for ControlBoxConstraint - must exist
-        // if (std::is_same<T, ControlBoxConstraint>::value) {
-        //     // if (it == constraint_set_.end()) {
-        //     //     throw std::runtime_error("ControlBoxConstraint not found");
-        //     // }
-        //     return dynamic_cast<T*>(it->second.get());
-        // }
-        
         // For other constraints, return nullptr if not found
         if (it == constraint_set_.end()) {
             return nullptr;
@@ -290,8 +291,7 @@ private:
     void initializeCDDP(); // Initialize the CDDP solver
 
     // Solver methods
-    bool solveForwardPass();
-    ForwardPassResult solveForwardPassIteration(double alpha);
+    ForwardPassResult solveForwardPass(double alpha);
     bool solveBackwardPass();
 
     ForwardPassResult solveCLDDPForwardPass(double alpha);
