@@ -15,26 +15,45 @@
 # CMakeLists.txt for the CDDP examples
 
 add_executable(cddp_bicycle cddp_bicycle.cpp)
-target_link_libraries(cddp_bicycle cddp Eigen3::Eigen)
+target_link_libraries(cddp_bicycle cddp)
 
 add_executable(cddp_car cddp_car.cpp)
-target_link_libraries(cddp_car cddp Eigen3::Eigen)
+target_link_libraries(cddp_car cddp)
 
 add_executable(cddp_cartpole cddp_cartpole.cpp)
-target_link_libraries(cddp_cartpole cddp Eigen3::Eigen)
+target_link_libraries(cddp_cartpole cddp)
 
 add_executable(cddp_dubins_car cddp_dubins_car.cpp)
-target_link_libraries(cddp_dubins_car cddp Eigen3::Eigen)
+target_link_libraries(cddp_dubins_car cddp)
 
 add_executable(cddp_manipulator cddp_manipulator.cpp)
-target_link_libraries(cddp_manipulator cddp Eigen3::Eigen)
+target_link_libraries(cddp_manipulator cddp)
 
 add_executable(cddp_lti_system cddp_lti_system.cpp)
-target_link_libraries(cddp_lti_system cddp Eigen3::Eigen)
+target_link_libraries(cddp_lti_system cddp)
 
 add_executable(cddp_pendulum cddp_pendulum.cpp)
-target_link_libraries(cddp_pendulum cddp Eigen3::Eigen)
+target_link_libraries(cddp_pendulum cddp)
 
 add_executable(cddp_quadrotor cddp_quadrotor.cpp)
-target_link_libraries(cddp_quadrotor cddp Eigen3::Eigen)
+target_link_libraries(cddp_quadrotor cddp)
+
+# Neural dynamics example
+add_executable(prepare_pendulum neural_dynamics/prepare_pendulum.cpp)
+target_link_libraries(prepare_pendulum cddp)
+
+# add_executable(prepare_cartpole neural_dynamics/prepare_cartpole.cpp)
+# target_link_libraries(prepare_cartpole cddp)
+
+# add_executable(train_pendulum neural_dynamics/train_pendulum.cpp)
+# target_link_libraries(train_pendulum cddp)
+
+# add_executable(train_cartpole neural_dynamics/train_cartpole.cpp)
+# target_link_libraries(train_cartpole cddp)
+
+# add_executable(run_pendulum neural_dynamics/run_pendulum.cpp)
+# target_link_libraries(run_pendulum cddp)
+
+# add_executable(run_cartpole neural_dynamics/run_cartpole.cpp)
+# target_link_libraries(run_cartpole cddp)
 
