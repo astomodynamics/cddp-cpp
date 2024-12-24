@@ -33,11 +33,18 @@ namespace cddp
 CDDP::CDDP(const Eigen::VectorXd &initial_state,
             const Eigen::VectorXd &reference_state,
             int horizon,
-            double timestep)
+            double timestep,
+            std::unique_ptr<DynamicalSystem> system,
+            std::unique_ptr<Objective> objective,
+            const CDDPOptions &options)
     : initial_state_(initial_state),
         reference_state_(reference_state),
         horizon_(horizon),
-        timestep_(timestep)
+        timestep_(timestep),
+        system_(std::move(system)),
+        objective_(std::move(objective)),
+        options_(options),
+        initialized_(false)
 {
 
     printSolverInfo();

@@ -53,9 +53,6 @@ struct CDDPOptions {
     double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
     int barrier_order = 2;                          // Order for log-barrier method
 
-    // Active set method
-    double active_set_tolerance = 1e-6;             // Tolerance for active set method
-
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
     
@@ -115,7 +112,10 @@ public:
     CDDP(const Eigen::VectorXd& initial_state, 
          const Eigen::VectorXd& reference_state,
          int horizon,
-         double timestep); 
+         double timestep,
+         std::unique_ptr<DynamicalSystem> system = nullptr,
+        std::unique_ptr<Objective> objective = nullptr,
+        const CDDPOptions& options = CDDPOptions()); 
 
     // Accessor methods
 
@@ -224,12 +224,16 @@ public:
         return constraint_set_; 
     }
 
+    // Initialization methods
+    void initializeCDDP();
+
     // Solve the problem
     CDDPSolution solve();
     CDDPSolution solveCLDDP();
     CDDPSolution solveLogCDDP();
 
 private:
+    bool initialized_ = false; // Initialization flag
     // Problem Data
     std::unique_ptr<DynamicalSystem> system_;         // Eigen-based dynamical system
     // std::unique_ptr<torch::nn::Module> torch_system_; // Torch-based dynamical system (learned dynamics model)
@@ -286,9 +290,6 @@ private:
     double regularization_state_step_;
     double regularization_control_;
     double regularization_control_step_;   
-
-    // Initialization methods
-    void initializeCDDP(); // Initialize the CDDP solver
 
     // Solver methods
     ForwardPassResult solveForwardPass(double alpha);

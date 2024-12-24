@@ -55,8 +55,24 @@ TEST(CDDPTest, Solve) {
     Eigen::VectorXd initial_state(state_dim);
     initial_state << 0.0, 0.0, M_PI/4.0; 
 
+    // Create CDDP Options
+    cddp::CDDPOptions options;
+    options.max_iterations = 20;
+    options.cost_tolerance = 1e-2;
+    options.use_parallel = true;
+    options.num_threads = 10;
+    options.verbose = true;
+    options.debug = false;
+
     // Create CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
+    cddp::CDDP cddp_solver(
+      initial_state, 
+      goal_state, 
+      horizon, 
+      timestep, 
+      std::make_unique<cddp::DubinsCar>(timestep, integration_type), 
+      std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep), 
+      options);
     cddp_solver.setDynamicalSystem(std::move(system));
     cddp_solver.setObjective(std::move(objective));
 
@@ -71,13 +87,6 @@ TEST(CDDPTest, Solve) {
     auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
 
     // Set options
-    cddp::CDDPOptions options;
-    options.max_iterations = 20;
-    options.cost_tolerance = 1e-2;
-    options.use_parallel = true;
-    options.num_threads = 10;
-    options.verbose = true;
-    options.debug = false;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory
