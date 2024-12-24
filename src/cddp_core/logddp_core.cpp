@@ -309,7 +309,7 @@ bool CDDP::solveLogCDDPBackwardPass() {
     // Create BoxQP solver
     cddp::BoxQPOptions qp_options;
     qp_options.verbose = false;
-    qp_options.maxIter = 1000;
+    // qp_options.maxIter = 1000;
     // qp_options.eps_abs = 1e-3;
     // qp_options.eps_rel = 1e-2;
     cddp::BoxQPSolver qp_solver(qp_options);
