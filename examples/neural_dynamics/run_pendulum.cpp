@@ -1,5 +1,5 @@
 /*
- Copyright 2024 Tomo Sasaki
+ Copyright 2024 Tomo
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -14,263 +14,220 @@
  limitations under the License.
 */
 
-#include <iostream>
-#include <vector>
-#include <string>
+// Standard headers
+#include <torch/torch.h>
 #include <filesystem>
-#include <cmath>       // for std::fmod, std::isfinite
+#include <iostream>
+#include <fstream>
+#include <string>
+#include <vector>
 
+// Your cddp library (for the ground-truth Pendulum)
 #include "cddp.hpp"
-#include "cddp_core/neural_dynamical_system.hpp"
 
-namespace plt = matplotlibcpp;
-namespace fs  = std::filesystem;
-using namespace cddp;
+struct ODEFuncImpl : public torch::nn::Module {
+    ODEFuncImpl(int64_t hidden_dim=32) {
+        net = register_module("net", torch::nn::Sequential(
+            torch::nn::Linear(/*in_features=*/2, hidden_dim),
+            torch::nn::Tanh(),
+            torch::nn::Linear(hidden_dim, hidden_dim),
+            torch::nn::Tanh(),
+            torch::nn::Linear(hidden_dim, 2)
+        ));
+    }
 
-// ---------------------------------------------------------------------------
-// PendulumModel: same class definition as in your other test code or header
-// ---------------------------------------------------------------------------
-class PendulumModel : public DynamicsModelInterface {
-public:
-    PendulumModel(double length = 1.0, double mass = 1.0, double damping = 0.0);
+    // forward(t, y) -> dy/dt
+    torch::Tensor forward(const torch::Tensor &t, const torch::Tensor &y) {
+        return net->forward(y);
+    }
 
-    torch::Tensor forward(std::vector<torch::Tensor> inputs) override;
-
-private:
-    void initialize_weights();
-
-    double length_, mass_, damping_;
-    torch::nn::Linear linear1{nullptr}, linear2{nullptr}, linear3{nullptr};
-    torch::Device device_;
+    torch::nn::Sequential net;
 };
+TORCH_MODULE(ODEFunc);
 
-PendulumModel::PendulumModel(double length, double mass, double damping)
-    : length_(length), mass_(mass), damping_(damping),
-      device_(torch::cuda::is_available() ? torch::kCUDA : torch::kCPU)
-{
-    // Create linear layers
-    linear1 = register_module("linear1", torch::nn::Linear(3, 32));
-    linear2 = register_module("linear2", torch::nn::Linear(32, 32));
-    linear3 = register_module("linear3", torch::nn::Linear(32, 2));
-
-    // Move to device and set dtype
-    this->to(device_);
-    if (device_.is_cpu()) {
-        this->to(torch::kFloat64);
-    } else {
-        this->to(torch::kFloat32);
-    }
-    initialize_weights();
+torch::Tensor rk4_step(
+    ODEFunc &func,
+    const torch::Tensor &t,
+    const torch::Tensor &y,
+    double dt
+) {
+    auto half_dt = dt * 0.5;
+    auto k1 = func->forward(t, y);
+    auto k2 = func->forward(t + half_dt, y + half_dt * k1);
+    auto k3 = func->forward(t + half_dt, y + half_dt * k2);
+    auto k4 = func->forward(t + dt,      y + dt * k3);
+    return y + (dt / 6.0) * (k1 + 2.0*k2 + 2.0*k3 + k4);
 }
 
-void PendulumModel::initialize_weights()
-{
-    torch::NoGradGuard no_grad;
-
-    double angle_scale    = 0.1;
-    double velocity_scale = 0.1;
-
-    auto w = linear3->weight.data();
-    w[0][0] = angle_scale;     
-    w[1][1] = velocity_scale;  
-    linear3->weight.data() = w;
-
-    auto b = linear3->bias.data();
-    b[0] = 0.0;
-    b[1] = -9.81 / length_ * angle_scale;
-    linear3->bias.data() = b;
-}
-
-torch::Tensor PendulumModel::forward(std::vector<torch::Tensor> inputs)
-{
-    // Expect 2 inputs: [state, control]
-    auto state   = inputs[0].to(device_);
-    auto control = inputs[1].to(device_);
-
-    if (device_.is_cuda()) {
-        // If on GPU, we cast to float32 for the linear layers
-        state   = state.to(torch::kFloat32);
-        control = control.to(torch::kFloat32);
+struct NeuralODEImpl : public torch::nn::Module {
+    NeuralODEImpl(int64_t hidden_dim=32) {
+        func_ = register_module("func", ODEFunc(hidden_dim));
     }
 
-    // shape checks: state=[batch,2], control=[batch,1]
-    auto x = torch::cat({state, control}, /*dim=*/1);
-    x = torch::tanh(linear1(x));
-    x = torch::tanh(linear2(x));
-    x = linear3(x);
+    // forward(y0, t, dt) -> entire trajectory
+    torch::Tensor forward(const torch::Tensor &y0, const torch::Tensor &t, double dt)
+    {
+        int64_t batch_size = y0.size(0);  // usually 1 if single initial state
+        int64_t steps      = t.size(0);
 
-    // Convert back to double if needed
-    if (device_.is_cuda()) {
-        x = x.to(torch::kFloat64);
+        // shape: [B, steps, 2]
+        torch::Tensor trajectory = torch::zeros({batch_size, steps, 2},
+            torch::TensorOptions().device(y0.device()).dtype(y0.dtype()));
+
+        // first step is the initial state
+        trajectory.select(1, 0) = y0;
+
+        auto state = y0.clone();
+        for (int64_t i = 0; i < steps - 1; ++i) {
+            auto t_i = t[i];
+            state = rk4_step(func_, t_i, state, dt);
+            trajectory.select(1, i+1) = state;
+        }
+
+        return trajectory;
     }
-    return x;
-}
 
-// ---------------------------------------------------------------------------
-// Helper for printing Eigen vectors (debugging)
-// ---------------------------------------------------------------------------
-void printVectorInfo(const Eigen::VectorXd& vec, const std::string& name)
-{
-    std::cout << name << ":\n"
-              << " - size: " << vec.size() << "\n"
-              << " - values: " << vec.transpose() << "\n" << std::endl;
-}
+    ODEFunc func_;
+};
+TORCH_MODULE(NeuralODE);
 
-// ---------------------------------------------------------------------------
-// main()
-// We skip the built-in getDiscreteDynamics and just do "pure neural forward".
-// ---------------------------------------------------------------------------
+
 int main(int argc, char* argv[])
 {
-    // 1. Load trained model from file
-    std::string model_file = "../examples/neural_dynamics/neural_models/pendulum_model.pt";
-    if (!fs::exists(model_file)) {
-        std::cout << "Trained model file not found: " << model_file << std::endl;
-        return 0;
-    }
+    // 1) Parse command line arguments
+    std::string model_file = "../examples/neural_dynamics/neural_models/neural_pendulum.pth";
+    float init_theta = 0.5f;
+    float init_thetadot = 0.0f;
+    int64_t seq_length = 100;
 
-    auto model = std::make_shared<PendulumModel>(1.0, 1.0, 0.1);
-    try {
-        torch::load(model, model_file);
-        std::cout << "Loaded trained model from: " << model_file << std::endl;
-    } catch (const c10::Error& e) {
-        std::cout << "Could not load model from " << model_file
-                  << ": " << e.msg() << std::endl;
-        return 0;
-    }
+    if (argc > 1) model_file   = argv[1];
+    if (argc > 2) init_theta   = std::stof(argv[2]);
+    if (argc > 3) init_thetadot= std::stof(argv[3]);
+    if (argc > 4) seq_length   = std::stoll(argv[4]);
 
-    // 2. Analytical pendulum
-    double timestep = 0.01;
-    double length   = 1.0;
-    double mass     = 1.0;
-    double damping  = 0.0;      // note: if training used damping=0.1, mismatch here
-    std::string integrator = "euler";
+    std::cout << "Model file: " << model_file << std::endl;
+    std::cout << "Initial state: (theta=" << init_theta << ", theta_dot=" << init_thetadot << ")" << std::endl;
+    std::cout << "Sequence length: " << seq_length << std::endl;
 
-    cddp::Pendulum analytical_pendulum(timestep, length, mass, damping, integrator);
+    // 2) Setup device
+    torch::Device device = torch::kCPU;
 
-    // 3. Initial conditions
-    Eigen::VectorXd x0(2);
-    x0 << M_PI/2, 0.0;
-    Eigen::VectorXd u0(1);
-    u0 << 0.0;
+    // 3) Load the trained model
+    auto neural_ode = NeuralODE(/*hidden_dim=*/32); 
+    torch::load(neural_ode, model_file);
+    neural_ode->to(device);
+    neural_ode->eval(); 
 
-    // 4. Prepare data logging
-    int N = 300;
-    Eigen::VectorXd x_ana = x0;    // for analytical
-    Eigen::VectorXd x_nn  = x0;    // for neural
+    // 4) Prepare the initial state, time vector
+    auto y0 = torch::tensor({init_theta, init_thetadot}).view({1,2}).to(device);
 
-    std::vector<double> time_data(N+1), angle_ana(N+1), angle_nn(N+1);
-    std::vector<double> vel_ana(N+1), vel_nn(N+1);
+    float dt = 0.01f;
+    auto t_cpu = torch::arange(seq_length, torch::kInt64).to(torch::kFloat32) * dt;
+    auto t = t_cpu.to(device);
 
-    time_data[0]   = 0.0;
-    angle_ana[0]   = x_ana[0];
-    vel_ana[0]     = x_ana[1];
-    angle_nn[0]    = x_nn[0];
-    vel_nn[0]      = x_nn[1];
+    // ---------------------------------------------------------
+    // 5) Run the neural ODE to get the predicted trajectory
+    // ---------------------------------------------------------
+    auto pred_traj = neural_ode->forward(y0, t, dt); // shape: [1, seq_length, 2]
+    pred_traj = pred_traj.squeeze(0).cpu(); // shape [seq_length, 2]
 
-    // 5. Loop for N steps
-    for(int i=1; i<=N; ++i) {
-        double t = i * timestep;
-        time_data[i] = t;
+    // 6) Generate the "true" trajectory from cddp::Pendulum
+    cddp::Pendulum pendulum(
+        /*dt=*/0.01,  /*length=*/1.0,
+        /*mass=*/1.0, /*damping=*/0.1,
+        /*integration_type=*/"rk4"
+    );
+    // zero torque
+    Eigen::VectorXd control(1);
+    control.setZero();
 
-        // Analytical update: one step
-        x_ana = analytical_pendulum.getDiscreteDynamics(x_ana, u0);
+    // initial state
+    Eigen::VectorXd state(2);
+    state << init_theta, init_thetadot;
 
-        // Pure neural forward:
-        //  a) Convert x_nn, u0 to Tensors
-        //  b) Call model->forward()
-        //  c) That result is the predicted "next state".
-        {
-            // Build a [1,2] state tensor
-            auto state_tensor = torch::from_blob(x_nn.data(), {1, 2}, 
-                                 torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU)).clone();
+    std::vector<float> theta_vec_nn(seq_length);
+    std::vector<float> thetadot_vec_nn(seq_length);
+    std::vector<float> theta_vec_true(seq_length);
+    std::vector<float> thetadot_vec_true(seq_length);
 
-            // Build a [1,1] control tensor
-            auto ctrl_tensor  = torch::from_blob(u0.data(), {1, 1}, 
-                                 torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU)).clone();
-
-            // Pass them to the model
-            auto next_state_torch = model->forward({state_tensor, ctrl_tensor}); 
-            // next_state_torch shape: [1, 2]
-
-            // Move to CPU double if not already
-            next_state_torch = next_state_torch.to(torch::kCPU).to(torch::kFloat64);
-
-            // Extract numeric data
-            double angle_pred = next_state_torch[0][0].item<double>();
-            double vel_pred   = next_state_torch[0][1].item<double>();
-
-            if (!std::isfinite(angle_pred) || !std::isfinite(vel_pred)) {
-                std::cerr << "NaN at step " << i << std::endl;
-                break;
-            }
-
-            // Check for NaNs
-            if (!std::isfinite(angle_pred) || !std::isfinite(vel_pred)) {
-                std::cerr << "[WARNING] Found NaN or Inf at step " << i 
-                          << " for neural pendulum. Stopping.\n"
-                          << "  angle_pred=" << angle_pred 
-                          << ", vel_pred=" << vel_pred << "\n";
-                break;
-            }
-
-            // Update x_nn
-            x_nn[0] = angle_pred;
-            x_nn[1] = vel_pred;
+    // fill these vectors in your loop:
+    for (int64_t i = 0; i < seq_length; ++i) {
+        theta_vec_nn[i]      = pred_traj[i][0].item<float>();
+        thetadot_vec_nn[i]   = pred_traj[i][1].item<float>();
+        theta_vec_true[i]    = static_cast<float>(state(0));
+        thetadot_vec_true[i] = static_cast<float>(state(1));
+        if (i < seq_length - 1) {
+            state = pendulum.getDiscreteDynamics(state, control);
         }
-
-        // Log data
-        angle_ana[i] = x_ana[0];
-        vel_ana[i]   = x_ana[1];
-        angle_nn[i]  = x_nn[0];
-        vel_nn[i]    = x_nn[1];
-
-        // Optional: wrap angles to [0,2*pi] if desired
-        x_ana[0] = std::fmod(x_ana[0], 2.0 * M_PI);
-        if (x_ana[0] < 0.0) {
-            x_ana[0] += 2.0 * M_PI;
-        }
-        x_nn[0]  = std::fmod(x_nn[0], 2.0 * M_PI);
-        if (x_nn[0] < 0.0) {
-            x_nn[0] += 2.0 * M_PI;
-        }
-
-        // Print debugging info
-        std::cout << "t=" << t 
-                  << ", x_ana=" << x_ana.transpose() 
-                  << ", x_nn=" << x_nn.transpose() << std::endl;
     }
 
-    // 6. Evaluate final L2 difference in state
-    double err_norm = (x_ana - x_nn).norm();
-    std::cout << "Final L2 error: " << err_norm << std::endl;
-
-    // 7. Plot results
-    // Create a directory if it doesn't exist
-    std::string fig_dir = "../examples/neural_dynamics/data";
-    if (!fs::exists(fig_dir)) {
-        fs::create_directories(fig_dir);
+    // Create a 2D tensor of shape [seq_length, 2] for the true trajectory
+    auto true_tensor = torch::empty({seq_length, 2}, torch::kFloat32);
+    for (int64_t i = 0; i < seq_length; ++i) {
+        true_tensor[i][0] = theta_vec_true[i];
+        true_tensor[i][1] = thetadot_vec_true[i];
     }
-    std::string fig_path = fig_dir + "/pendulum_comparison.png";
+    true_tensor = true_tensor.to(device);
 
-    plt::figure();
-    plt::subplot(2,1,1);
-    plt::plot(time_data, angle_ana, {{"label", "Angle (Analytical)"}});
-    plt::plot(time_data, angle_nn,  {{"label", "Angle (Neural)"}});
+    // 7) Compare predicted vs. true
+    auto mse = torch::mse_loss(pred_traj, true_tensor);
+    float mse_val = mse.item<float>();
 
-    plt::ylabel("Angle (rad)");
+    std::cout << "Comparison result:\n";
+    std::cout << " - MSE: " << mse_val << std::endl;
+
+    // Print a few sample points
+    std::cout << "\nIndex | True (theta, theta_dot) | Pred (theta, theta_dot)\n";
+    std::cout << "---------------------------------------------------------\n";
+    for (int64_t i = 0; i < std::min<int64_t>(seq_length, 5); ++i) {
+        auto t_th   = true_tensor[i][0].item<float>();
+        auto t_td   = true_tensor[i][1].item<float>();
+        auto p_th    = pred_traj[i][0].item<float>();
+        auto p_td    = pred_traj[i][1].item<float>();
+        std::cout << i << "     | ("
+                  << t_th << ", " << t_td << ") | ("
+                  << p_th << ", " << p_td << ")\n";
+    }
+
+    std::string out_file = "pendulum_compare.csv";
+    {
+        std::ofstream ofs(out_file);
+        ofs << "index,true_theta,true_thetadot,pred_theta,pred_thetadot\n";
+        for (int64_t i = 0; i < seq_length; ++i) {
+            auto t_th   = true_tensor[i][0].item<float>();
+            auto t_td   = true_tensor[i][1].item<float>();
+            auto p_th    = pred_traj[i][0].item<float>();
+            auto p_td    = pred_traj[i][1].item<float>();
+            ofs << i << "," 
+                << t_th << "," << t_td << ","
+                << p_th << "," << p_td << "\n";
+        }
+        ofs.close();
+        std::cout << "Saved CSV: " << out_file << std::endl;
+    }
+
+    // 8) Plot the trajectories 
+    // plt args: (x, y, color, linestyle, linewidth, label)
+
+    plt::figure_size(800, 400);
+    plt::subplot(1, 2, 1);
+    plt::title("True vs Predicted (Theta)");
+    plt::plot(theta_vec_true, {{"color", "red"}, {"linestyle", "-"}, {"label", "True theta"}});
+    plt::plot(theta_vec_nn, {{"color", "blue"}, {"linestyle", "--"}, {"label", "Predicted theta"}});
     plt::legend();
+    plt::xlabel("Time step");
+    plt::ylabel("Theta");
 
-    plt::subplot(2,1,2);
-    plt::plot(time_data, vel_ana, {{"label", "Vel (Analytical)"}});
-    plt::plot(time_data, vel_nn,  {{"label", "Vel (Neural)"}});
-
-    plt::xlabel("Time (s)");
-    plt::ylabel("Angular Velocity (rad/s)");
+    plt::subplot(1, 2, 2);
+    plt::title("True vs Predicted (Theta_dot)");
+    plt::plot(thetadot_vec_true, {{"color", "red"}, {"linestyle", "-"}, {"label", "True theta_dot"}});
+    plt::plot(thetadot_vec_nn, {{"color", "blue"}, {"linestyle", "--"}, {"label", "Predicted theta_dot"}});
     plt::legend();
+    plt::xlabel("Time step");
+    plt::ylabel("Theta_dot");
 
-    plt::save(fig_path);
-    std::cout << "Saved plot: " << fig_path << std::endl;
+    plt::save("../examples/neural_dynamics/neural_models/pendulum_compare.png");
+    std::cout << "Saved plot: pendulum_compare.png" << std::endl;
 
     return 0;
 }
