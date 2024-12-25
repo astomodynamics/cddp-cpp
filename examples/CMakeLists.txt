@@ -45,14 +45,14 @@ target_link_libraries(prepare_pendulum cddp)
 # add_executable(prepare_cartpole neural_dynamics/prepare_cartpole.cpp)
 # target_link_libraries(prepare_cartpole cddp)
 
-# add_executable(train_pendulum neural_dynamics/train_pendulum.cpp)
-# target_link_libraries(train_pendulum cddp)
+add_executable(train_pendulum neural_dynamics/train_pendulum.cpp)
+target_link_libraries(train_pendulum cddp)
 
 # add_executable(train_cartpole neural_dynamics/train_cartpole.cpp)
 # target_link_libraries(train_cartpole cddp)
 
-# add_executable(run_pendulum neural_dynamics/run_pendulum.cpp)
-# target_link_libraries(run_pendulum cddp)
+add_executable(run_pendulum neural_dynamics/run_pendulum.cpp)
+target_link_libraries(run_pendulum cddp)
 
 # add_executable(run_cartpole neural_dynamics/run_cartpole.cpp)
 # target_link_libraries(run_cartpole cddp)
