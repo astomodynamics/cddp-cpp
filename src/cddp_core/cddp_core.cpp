@@ -397,6 +397,7 @@ CDDPSolution CDDP::solve() {
     // Finalize solution
     solution.state_sequence = X_;
     solution.control_sequence = U_;
+    solution.feedback_gain = K_;
     solution.alpha = alpha_;
     solution.solve_time = duration.count(); // Time in microseconds
     
