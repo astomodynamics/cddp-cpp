@@ -16,6 +16,8 @@
 
 // Build & run: 
 //   $ ./examples/prepare_pendulum [num_samples] [csv_filename]
+// i.e.
+//   $ ./examples/prepare_pendulum 1000 pendulum_dataset.csv
 
 #include <iostream>
 #include <filesystem>
@@ -50,7 +52,7 @@ void printProgressBar(int current, int total, int barWidth = 50) {
 
 int main(int argc, char* argv[]) {
     // Number of data samples to generate
-    int n_samples = 20; 
+    int n_samples = 10000; 
     if (argc > 1) {
         n_samples = std::stoi(argv[1]);
     }
