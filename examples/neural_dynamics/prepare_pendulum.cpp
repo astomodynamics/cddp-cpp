@@ -21,6 +21,8 @@
 #include <Eigen/Dense>
 #include "cddp.hpp"
 
+namespace plt = matplotlibcpp;
+
 // Helper function to print a progress bar
 void printProgressBar(int current, int total, int barWidth = 50) {
     float progress = static_cast<float>(current) / static_cast<float>(total);
@@ -80,21 +82,29 @@ int main(int argc, char* argv[]) {
     double timestep = 0.01;
     double length = 1.0;
     double mass = 1.0;
-    double damping = 0.1;
+    double damping = 0.0;
     std::string integration_type = "rk4";
     cddp::Pendulum pendulum(timestep, length, mass, damping, integration_type);
 
+    std::vector<double> theta, theta_dot, control_vec;
+    std::vector<double> theta_next, theta_dot_next;
     Eigen::VectorXd state(2), control(1), next_state(2);
 
-    state << angle_dist(rng), velocity_dist(rng);
-    control << control_dist(rng);
+    state << M_PI/3, 0.0;
 
     for (int i = 0; i < num_samples; ++i) {
         // Sample random control
-        control << control_dist(rng);
+        // control << control_dist(rng);
+        control << 0.0;
+
+        // Store
+        theta.push_back(state[0]);
+        theta_dot.push_back(state[1]);
+        control_vec.push_back(control[0]);
 
         // Mesurement
-        next_state = state + Eigen::VectorXd::Random(2) * 0.01;
+        // next_state = state + Eigen::VectorXd::Random(2) * 0.01;
+        next_state = pendulum.getContinuousDynamics(state, control) + Eigen::VectorXd::Random(2) * 0.001;
 
         // Write row to CSV
         // Format: theta, theta_dot, control, theta_next, theta_dot_next
@@ -108,13 +118,27 @@ int main(int argc, char* argv[]) {
             printProgressBar(i, num_samples);
         }
 
+        
         state = pendulum.getDiscreteDynamics(state, control);
+        // Normalize angle to [0, 2*pi]
+        state[0] = std::fmod(state[0], 2.0 * M_PI);
+        if (state[0] < 0.0) {
+            state[0] += 2.0 * M_PI;
+        }
     }
     // Final update to show 100% complete
     printProgressBar(num_samples, num_samples);
     std::cout << std::endl;
 
     csv_file.close();
+
+    // Plot the dataset
+    plt::figure();
+    plt::plot(theta, "-");
+    plt::title("Pendulum Dataset");
+    plt::ylabel("Theta");
+    plt::save("../examples/neural_dynamics/data/pendulum_dataset.png");
+    // plt::show();
 
     std::cout << "Dataset saved to " << csv_filename << std::endl;
     return 0;

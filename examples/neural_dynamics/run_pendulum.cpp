@@ -18,12 +18,13 @@
 #include <vector>
 #include <string>
 #include <filesystem>
+#include <cmath>       // for std::fmod, std::isfinite
 
 #include "cddp.hpp"
 #include "cddp_core/neural_dynamical_system.hpp"
 
 namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
+namespace fs  = std::filesystem;
 using namespace cddp;
 
 // ---------------------------------------------------------------------------
@@ -45,7 +46,7 @@ private:
 
 PendulumModel::PendulumModel(double length, double mass, double damping)
     : length_(length), mass_(mass), damping_(damping),
-      device_(torch::cuda::is_available() ? torch::kCUDA : torch::kCPU)
+      device_(torch::cuda::is_available() ? torch::kCPU : torch::kCPU)
 {
     // Create linear layers
     linear1 = register_module("linear1", torch::nn::Linear(3, 32));
@@ -66,12 +67,12 @@ void PendulumModel::initialize_weights()
 {
     torch::NoGradGuard no_grad;
 
-    double angle_scale   = 0.1;
+    double angle_scale    = 0.1;
     double velocity_scale = 0.1;
 
     auto w = linear3->weight.data();
-    w[0][0] = angle_scale;     // small tweak for angle
-    w[1][1] = velocity_scale;  // small tweak for velocity
+    w[0][0] = angle_scale;     
+    w[1][1] = velocity_scale;  
     linear3->weight.data() = w;
 
     auto b = linear3->bias.data();
@@ -87,6 +88,7 @@ torch::Tensor PendulumModel::forward(std::vector<torch::Tensor> inputs)
     auto control = inputs[1].to(device_);
 
     if (device_.is_cuda()) {
+        // If on GPU, we cast to float32 for the linear layers
         state   = state.to(torch::kFloat32);
         control = control.to(torch::kFloat32);
     }
@@ -97,16 +99,15 @@ torch::Tensor PendulumModel::forward(std::vector<torch::Tensor> inputs)
     x = torch::tanh(linear2(x));
     x = linear3(x);
 
-    // Return in double if you prefer
+    // Convert back to double if needed
     if (device_.is_cuda()) {
         x = x.to(torch::kFloat64);
     }
     return x;
 }
 
-
 // ---------------------------------------------------------------------------
-// Helper function for printing Eigen vectors (for debugging)
+// Helper for printing Eigen vectors (debugging)
 // ---------------------------------------------------------------------------
 void printVectorInfo(const Eigen::VectorXd& vec, const std::string& name)
 {
@@ -115,97 +116,143 @@ void printVectorInfo(const Eigen::VectorXd& vec, const std::string& name)
               << " - values: " << vec.transpose() << "\n" << std::endl;
 }
 
-
 // ---------------------------------------------------------------------------
-// Test comparing a loaded neural model's forward sim vs. the analytical model
+// main()
+// We skip the built-in getDiscreteDynamics and just do "pure neural forward".
 // ---------------------------------------------------------------------------
 int main(int argc, char* argv[])
 {
-    // 1. Load trained model from file (e.g. "pendulum_model.pt")
+    // 1. Load trained model from file
     std::string model_file = "../examples/neural_dynamics/neural_models/pendulum_model.pt";
     if (!fs::exists(model_file)) {
         std::cout << "Trained model file not found: " << model_file << std::endl;
+        return 0;
     }
 
-    // We instantiate a new PendulumModel and load weights
     auto model = std::make_shared<PendulumModel>(1.0, 1.0, 0.1);
     try {
         torch::load(model, model_file);
         std::cout << "Loaded trained model from: " << model_file << std::endl;
     } catch (const c10::Error& e) {
         std::cout << "Could not load model from " << model_file
-                     << ": " << e.msg() << std::endl;
+                  << ": " << e.msg() << std::endl;
+        return 0;
     }
 
-    // 2. Create cddp::NeuralDynamicalSystem with that model
-    double timestep        = 0.01;
-    double length          = 1.0;
-    double mass            = 1.0;
-    double damping         = 0.1;
-    std::string integrator = "rk4";
+    // 2. Analytical pendulum
+    double timestep = 0.01;
+    double length   = 1.0;
+    double mass     = 1.0;
+    double damping  = 0.0;      // note: if training used damping=0.1, mismatch here
+    std::string integrator = "euler";
 
-    torch::Device device(torch::cuda::is_available() ? torch::kCUDA : torch::kCPU);
-    NeuralDynamicalSystem neural_pendulum(/*state_dim=*/2,
-                                          /*control_dim=*/1,
-                                          timestep,
-                                          integrator,
-                                          model,
-                                          device);
-
-    // 3. Create an analytical pendulum with the same parameters
     cddp::Pendulum analytical_pendulum(timestep, length, mass, damping, integrator);
 
-    // 4. Choose initial conditions
+    // 3. Initial conditions
     Eigen::VectorXd x0(2);
-    x0 << M_PI/2, 0.0;  // start at 90 deg, zero velocity
+    x0 << M_PI/2, 0.0;
     Eigen::VectorXd u0(1);
-    u0 << 0.0;          // no control
+    u0 << 0.0;
 
-    // 5. Simulate both for N steps
-    int N = 300; // e.g. 3 seconds if dt=0.01
-    Eigen::VectorXd x_ana = x0;
-    Eigen::VectorXd x_nn  = x0;
+    // 4. Prepare data logging
+    int N = 300;
+    Eigen::VectorXd x_ana = x0;    // for analytical
+    Eigen::VectorXd x_nn  = x0;    // for neural
 
-    // We'll store angle and velocity for plotting
-    std::vector<double> time_data, angle_ana, angle_nn, vel_ana, vel_nn;
-    time_data.reserve(N+1);
-    angle_ana.reserve(N+1);
-    angle_nn.reserve(N+1);
-    vel_ana.reserve(N+1);
-    vel_nn.reserve(N+1);
+    std::vector<double> time_data(N+1), angle_ana(N+1), angle_nn(N+1);
+    std::vector<double> vel_ana(N+1), vel_nn(N+1);
 
-    // Log initial states
-    time_data.push_back(0.0);
-    angle_ana.push_back(x_ana[0]);
-    vel_ana.push_back(x_ana[1]);
-    angle_nn.push_back(x_nn[0]);
-    vel_nn.push_back(x_nn[1]);
+    time_data[0]   = 0.0;
+    angle_ana[0]   = x_ana[0];
+    vel_ana[0]     = x_ana[1];
+    angle_nn[0]    = x_nn[0];
+    vel_nn[0]      = x_nn[1];
 
+    // 5. Loop for N steps
     for(int i=1; i<=N; ++i) {
-        // Analytical update
-        x_ana = analytical_pendulum.getDiscreteDynamics(x_ana, u0);
-        // Neural update
-        x_nn  = neural_pendulum.getDiscreteDynamics(x_nn, u0);
-
         double t = i * timestep;
-        time_data.push_back(t);
+        time_data[i] = t;
 
-        angle_ana.push_back(x_ana[0]);
-        vel_ana.push_back(x_ana[1]);
+        // Analytical update: one step
+        x_ana = analytical_pendulum.getDiscreteDynamics(x_ana, u0);
 
-        angle_nn.push_back(x_nn[0]);
-        vel_nn.push_back(x_nn[1]);
+        // Pure neural forward:
+        //  a) Convert x_nn, u0 to Tensors
+        //  b) Call model->forward()
+        //  c) That result is the predicted "next state".
+        {
+            // Build a [1,2] state tensor
+            auto state_tensor = torch::from_blob(x_nn.data(), {1, 2}, 
+                                 torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU)).clone();
+
+            // Build a [1,1] control tensor
+            auto ctrl_tensor  = torch::from_blob(u0.data(), {1, 1}, 
+                                 torch::TensorOptions().dtype(torch::kFloat64).device(torch::kCPU)).clone();
+
+            // Pass them to the model
+            auto next_state_torch = model->forward({state_tensor, ctrl_tensor}); 
+            // next_state_torch shape: [1, 2]
+
+            // Move to CPU double if not already
+            next_state_torch = next_state_torch.to(torch::kCPU).to(torch::kFloat64);
+
+            // Extract numeric data
+            double angle_pred = next_state_torch[0][0].item<double>();
+            double vel_pred   = next_state_torch[0][1].item<double>();
+
+            if (!std::isfinite(angle_pred) || !std::isfinite(vel_pred)) {
+                std::cerr << "NaN at step " << i << std::endl;
+                break;
+            }
+
+            // Check for NaNs
+            if (!std::isfinite(angle_pred) || !std::isfinite(vel_pred)) {
+                std::cerr << "[WARNING] Found NaN or Inf at step " << i 
+                          << " for neural pendulum. Stopping.\n"
+                          << "  angle_pred=" << angle_pred 
+                          << ", vel_pred=" << vel_pred << "\n";
+                break;
+            }
+
+            // Update x_nn
+            x_nn[0] = angle_pred;
+            x_nn[1] = vel_pred;
+        }
+
+        // Log data
+        angle_ana[i] = x_ana[0];
+        vel_ana[i]   = x_ana[1];
+        angle_nn[i]  = x_nn[0];
+        vel_nn[i]    = x_nn[1];
+
+        // Optional: wrap angles to [0,2*pi] if desired
+        x_ana[0] = std::fmod(x_ana[0], 2.0 * M_PI);
+        if (x_ana[0] < 0.0) {
+            x_ana[0] += 2.0 * M_PI;
+        }
+        x_nn[0]  = std::fmod(x_nn[0], 2.0 * M_PI);
+        if (x_nn[0] < 0.0) {
+            x_nn[0] += 2.0 * M_PI;
+        }
+
+        // Print debugging info
+        std::cout << "t=" << t 
+                  << ", x_ana=" << x_ana.transpose() 
+                  << ", x_nn=" << x_nn.transpose() << std::endl;
     }
 
     // 6. Evaluate final L2 difference in state
-    //    (just as a rough check that they haven't diverged too far)
     double err_norm = (x_ana - x_nn).norm();
     std::cout << "Final L2 error: " << err_norm << std::endl;
-    // We can set a relatively loose tolerance, since it's multi-step integration
-    // EXPECT_LT(err_norm, 2.0);
 
-    // 7. Plot results with matplotlibcpp
-    //    We'll plot angle vs time, and velocity vs time
+    // 7. Plot results
+    // Create a directory if it doesn't exist
+    std::string fig_dir = "../examples/neural_dynamics/data";
+    if (!fs::exists(fig_dir)) {
+        fs::create_directories(fig_dir);
+    }
+    std::string fig_path = fig_dir + "/pendulum_comparison.png";
+
     plt::figure();
     plt::subplot(2,1,1);
     plt::plot(time_data, angle_ana, {{"label", "Angle (Analytical)"}});
@@ -222,14 +269,8 @@ int main(int argc, char* argv[])
     plt::ylabel("Angular Velocity (rad/s)");
     plt::legend();
 
-    // 8. Save figure to a file (instead of show, which might block in CI)
-    std::string fig_path = "pendulum_comparison.png";
     plt::save(fig_path);
     std::cout << "Saved plot: " << fig_path << std::endl;
 
-    // If you prefer to see the plot interactively (and your environment supports it), do:
-    // plt::show();
-
     return 0;
 }
-

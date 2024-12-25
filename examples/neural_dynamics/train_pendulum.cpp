@@ -130,6 +130,13 @@ int main(int argc, char* argv[])
         target_vals.push_back(vals[3]);
         target_vals.push_back(vals[4]);
 
+        if (num_samples < 5) {
+        std::cout << "Sample " << num_samples << ": "
+                  << "input=[" << vals[0] << ", " << vals[1] << ", " << vals[2] << "], "
+                  << "target=[" << vals[3] << ", " << vals[4] << "]" << std::endl;
+        }
+    
+
         num_samples++;
     }
     file.close();
@@ -145,7 +152,10 @@ int main(int argc, char* argv[])
         target_vals.data(), {static_cast<long>(num_samples), 2}, cpu_opts).clone();
 
     // 5. Build the model
-    auto model = PendulumModel(1.0, 1.0, 0.1);
+    const double length = 1.0;
+    const double mass   = 1.0;
+    const double damping = 0.0;
+    auto model = PendulumModel(length, mass, damping);
 
     // 6. Move model & data to GPU if available
     if (device == torch::kCUDA) {
@@ -196,6 +206,10 @@ int main(int argc, char* argv[])
 
             optimizer.zero_grad();
             auto preds = model->forward(batch_inputs);
+
+            // Print preds 
+            std::cout << "Preds: " << preds << std::endl;
+
             auto loss  = torch::mse_loss(preds, batch_targets);
 
             loss.backward();
