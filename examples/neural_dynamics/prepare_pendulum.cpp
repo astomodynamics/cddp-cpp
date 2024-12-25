@@ -14,6 +14,9 @@
  limitations under the License.
 */
 
+// Build & run: 
+//   $ ./examples/prepare_pendulum [num_samples] [csv_filename]
+
 #include <iostream>
 #include <filesystem>
 #include <fstream>
