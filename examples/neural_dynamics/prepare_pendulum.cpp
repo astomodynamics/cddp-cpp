@@ -50,7 +50,7 @@ void printProgressBar(int current, int total, int barWidth = 50) {
 
 int main(int argc, char* argv[]) {
     // Number of data samples to generate
-    int n_samples = 100; 
+    int n_samples = 20; 
     if (argc > 1) {
         n_samples = std::stoi(argv[1]);
     }
@@ -79,7 +79,7 @@ int main(int argc, char* argv[]) {
     double dt      = 0.01;
     double length  = 1.0;
     double mass    = 1.0;
-    double damping = 0.01; 
+    double damping = 0.1; 
     std::string integration_type = "rk4";
 
     cddp::Pendulum pendulum(dt, length, mass, damping, integration_type);
@@ -160,8 +160,7 @@ int main(int argc, char* argv[]) {
 
     // 3) Plot phase space
     plt::subplot(1, 3, 3);
-    plt::scatter(all_theta, all_theta_dot, /*size=*/2.0,
-        {{"alpha", "0.1"}} ); 
+    plt::scatter(all_theta, all_theta_dot, /*size=*/2.0);
     plt::title("Phase Space");
     plt::xlabel("Theta (rad)");
     plt::ylabel("Theta_dot (rad/s)");
