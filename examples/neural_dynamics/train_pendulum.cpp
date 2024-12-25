@@ -103,9 +103,9 @@ public:
     // Constructor
     explicit PendulumDataset(const std::string &csv_file, int64_t seq_length=200)
         : seq_length_(seq_length)
-        , pendulum_(
-              /*timestep=*/0.01,  /*length=*/1.0,
-              /*mass=*/1.0,      /*damping=*/0.1,
+        , pendulum_(/*FIXME: change and match constants*/
+              /*timestep=*/0.02,  /*length=*/0.5,
+              /*mass=*/1.0,      /*damping=*/0.01,
               /*integration_type=*/"rk4"
           )
     {
@@ -253,13 +253,13 @@ int main(int argc, char* argv[])
     }
 
     int64_t batch_size   = 32;
-    int64_t num_epochs   = 100;
+    int64_t num_epochs   = 1000; // FIXME: 
     if (argc > 1) csv_file   = csv_path + "/" + std::string(argv[1]);
     if (argc > 2) batch_size = std::stoll(argv[2]);
     if (argc > 3) num_epochs = std::stoll(argv[3]);
 
     // 3. Create dataset & dataloader
-    int64_t seq_length = 100;
+    int64_t seq_length = 100; // FIXME: horizon length
     PendulumDataset dataset(csv_file, seq_length);
 
     // 4. Load the dataset into a DataLoader
@@ -274,11 +274,11 @@ int main(int argc, char* argv[])
     std::cout << "Training on " << (device.is_cuda() ? "GPU" : "CPU") << std::endl;
 
     // 6. Create optimizer
-    double learning_rate = 1e-3;
+    double learning_rate = 1e-2;
     torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(learning_rate));
 
     // 7. Time vector (CPU, then push to device)
-    float dt = 0.01f;
+    float dt = 0.02f; // FIXME:
     auto t = dataset.get_time_vector().to(device);
 
     // 8. Training loop

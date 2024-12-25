@@ -98,7 +98,7 @@ int main(int argc, char* argv[])
     std::string model_file = "../examples/neural_dynamics/neural_models/neural_pendulum.pth";
     float init_theta = 0.5f;
     float init_thetadot = 0.0f;
-    int64_t seq_length = 100;
+    int64_t seq_length = 100; // FIXME:
 
     if (argc > 1) model_file   = argv[1];
     if (argc > 2) init_theta   = std::stof(argv[2]);
@@ -121,7 +121,7 @@ int main(int argc, char* argv[])
     // 4) Prepare the initial state, time vector
     auto y0 = torch::tensor({init_theta, init_thetadot}).view({1,2}).to(device);
 
-    float dt = 0.01f;
+    float dt = 0.02f; // FIXME:
     auto t_cpu = torch::arange(seq_length, torch::kInt64).to(torch::kFloat32) * dt;
     auto t = t_cpu.to(device);
 
@@ -132,9 +132,9 @@ int main(int argc, char* argv[])
     pred_traj = pred_traj.squeeze(0).cpu(); // shape [seq_length, 2]
 
     // 6) Generate the "true" trajectory from cddp::Pendulum
-    cddp::Pendulum pendulum(
-        /*dt=*/0.01,  /*length=*/1.0,
-        /*mass=*/1.0, /*damping=*/0.1,
+    cddp::Pendulum pendulum(// FIXME:
+        /*dt=*/0.02,  /*length=*/0.5,
+        /*mass=*/1.0, /*damping=*/0.01,
         /*integration_type=*/"rk4"
     );
     // zero torque

@@ -77,11 +77,11 @@ int main(int argc, char* argv[]) {
     std::uniform_real_distribution<double> velocity_dist(-10.0, 10.0);
     std::uniform_real_distribution<double> control_dist(-10.0, 10.0);
 
-    // Prepare pendulum system.
-    double dt      = 0.01;
-    double length  = 1.0;
+    // Prepare pendulum system FIXME: change and match constants 
+    double dt      = 0.02;
+    double length  = 0.5;
     double mass    = 1.0;
-    double damping = 0.1; 
+    double damping = 0.01; 
     std::string integration_type = "rk4";
 
     cddp::Pendulum pendulum(dt, length, mass, damping, integration_type);
