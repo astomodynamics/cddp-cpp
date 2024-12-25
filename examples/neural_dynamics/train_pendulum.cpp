@@ -274,7 +274,7 @@ int main(int argc, char* argv[])
     std::cout << "Training on " << (device.is_cuda() ? "GPU" : "CPU") << std::endl;
 
     // 6. Create optimizer
-    double learning_rate = 1e-2;
+    double learning_rate = 1e-3;
     torch::optim::Adam optimizer(model->parameters(), torch::optim::AdamOptions(learning_rate));
 
     // 7. Time vector (CPU, then push to device)
