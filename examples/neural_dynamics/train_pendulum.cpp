@@ -311,7 +311,7 @@ int main(int argc, char* argv[])
 
         if (epoch % 5 == 0) {
             double avg_loss = epoch_loss / static_cast<double>(batch_count);
-            torch::save(model, model_file + std::to_string(epoch) + ".pth")
+            torch::save(model, model_file + std::to_string(epoch) + ".pth");
             losses.push_back(avg_loss);
 
             std::cout << "Epoch " << epoch << " / " << num_epochs
