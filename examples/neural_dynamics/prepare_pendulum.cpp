@@ -13,6 +13,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+
 #include <iostream>
 #include <filesystem>
 #include <fstream>
@@ -23,7 +24,9 @@
 
 namespace plt = matplotlibcpp;
 
-// Helper function to print a progress bar
+/**
+ * @brief Print a simple progress bar in the console.
+ */
 void printProgressBar(int current, int total, int barWidth = 50) {
     float progress = static_cast<float>(current) / static_cast<float>(total);
     int pos = static_cast<int>(barWidth * progress);
@@ -43,11 +46,16 @@ void printProgressBar(int current, int total, int barWidth = 50) {
 }
 
 int main(int argc, char* argv[]) {
-    int num_samples = 10000;
+    // Number of random trajectories and steps per trajectory
+    int num_trajectories     = 10;    // e.g. 10 initial points
+    int steps_per_trajectory = 1000;  // e.g. each trajectory 1000 steps
     if (argc > 1) {
-        num_samples = std::stoi(argv[1]);
+        num_trajectories = std::stoi(argv[1]);
     }
-    
+    if (argc > 2) {
+        steps_per_trajectory = std::stoi(argv[2]);
+    }
+
     // Create dataset directory if it doesn't exist
     std::string dataset_dir = "../examples/neural_dynamics/data";
     if (!std::filesystem::exists(dataset_dir)) {
@@ -56,15 +64,18 @@ int main(int argc, char* argv[]) {
 
     // CSV filename
     std::string csv_filename = dataset_dir + "/pendulum_dataset.csv";
-    if (argc > 2) {
-        csv_filename = argv[2];
+    if (argc > 3) {
+        csv_filename = argv[3];
     }
 
-    // Random distributions
+    // Random number engine + distributions
     std::default_random_engine rng(1234);
     std::uniform_real_distribution<double> angle_dist(-M_PI, M_PI);
     std::uniform_real_distribution<double> velocity_dist(-5.0, 5.0);
     std::uniform_real_distribution<double> control_dist(-2.0, 2.0);
+
+    // (Optional) noise if you want measurement noise
+    std::normal_distribution<double> noise_dist(0.0, 0.01); // small noise
 
     // Open CSV file
     std::ofstream csv_file(csv_filename);
@@ -73,73 +84,83 @@ int main(int argc, char* argv[]) {
         return -1;
     }
 
-    // Write header line
-    csv_file << "theta,theta_dot,control,theta_next,theta_dot_next\n";
+    // CSV header: 
+    // We'll treat columns as:
+    //   theta, theta_dot, control,  measured_theta_dot, measured_theta_ddot
+    csv_file << "theta,theta_dot,control,theta_dot_meas,theta_ddot_meas\n";
 
-    std::cout << "Generating " << num_samples << " samples of (state, control, next_state) ..." << std::endl;
+    // For console output
+    int total_samples = num_trajectories * steps_per_trajectory;
+    std::cout << "Generating " << total_samples 
+              << " samples (across " << num_trajectories << " trajectories)..." 
+              << std::endl;
 
-    // Create a Pendulum instance
+    // Create a Pendulum instance (for continuous-time dynamics)
     double timestep = 0.01;
-    double length = 1.0;
-    double mass = 1.0;
-    double damping = 0.0;
+    double length   = 1.0;
+    double mass     = 1.0;
+    double damping  = 0.0;
     std::string integration_type = "rk4";
     cddp::Pendulum pendulum(timestep, length, mass, damping, integration_type);
 
-    std::vector<double> theta, theta_dot, control_vec;
-    std::vector<double> theta_next, theta_dot_next;
-    Eigen::VectorXd state(2), control(1), next_state(2);
+    Eigen::VectorXd state(2), control(1);
 
-    state << M_PI/3, 0.0;
+    // We'll track how many total samples we've processed
+    int sample_count = 0;
 
-    for (int i = 0; i < num_samples; ++i) {
-        // Sample random control
-        // control << control_dist(rng);
-        control << 0.0;
+    // For each random trajectory
+    for (int traj_i = 0; traj_i < num_trajectories; ++traj_i) {
+        // 1) Sample a random initial state
+        double init_theta = angle_dist(rng);
+        double init_thetadot = velocity_dist(rng);
+        state << init_theta, init_thetadot;
 
-        // Store
-        theta.push_back(state[0]);
-        theta_dot.push_back(state[1]);
-        control_vec.push_back(control[0]);
+        // 2) Optionally randomize or fix control each step
+        //    We'll do a new random control every step here.
+        for (int step_i = 0; step_i < steps_per_trajectory; ++step_i) {
+            control << control_dist(rng); // random control in [-2, 2]
 
-        // Mesurement
-        // next_state = state + Eigen::VectorXd::Random(2) * 0.01;
-        next_state = pendulum.getContinuousDynamics(state, control) + Eigen::VectorXd::Random(2) * 0.001;
+            // 3) Current state is (theta, theta_dot). We'll measure the
+            //    continuous-time dynamics: [theta_dot, theta_ddot]
+            Eigen::VectorXd cont_dyn = pendulum.getContinuousDynamics(state, control);
 
-        // Write row to CSV
-        // Format: theta, theta_dot, control, theta_next, theta_dot_next
-        csv_file
-            << state[0] << "," << state[1] << ","
-            << control[0] << ","
-            << next_state[0] << "," << next_state[1] << "\n";
+            // 4) Add some small noise if desired
+            cont_dyn[0] += noise_dist(rng); // noise in measured theta_dot
+            cont_dyn[1] += noise_dist(rng); // noise in measured theta_ddot
 
-        // Update progress bar every so often
-        if (i % 50 == 0) {
-            printProgressBar(i, num_samples);
-        }
+            // 5) Write the row to CSV
+            csv_file 
+                << state[0]      << ","  // theta
+                << state[1]      << ","  // theta_dot
+                << control[0]    << ","  // control
+                << cont_dyn[0]   << ","  // measured theta_dot
+                << cont_dyn[1]   << "\n";// measured theta_ddot
 
-        
-        state = pendulum.getDiscreteDynamics(state, control);
-        // Normalize angle to [0, 2*pi]
-        state[0] = std::fmod(state[0], 2.0 * M_PI);
-        if (state[0] < 0.0) {
-            state[0] += 2.0 * M_PI;
+            // 6) Step forward one time step with discrete integration
+            //    to update "state" for the next iteration
+            state = pendulum.getDiscreteDynamics(state, control);
+
+            // Optionally wrap angle to [-pi, pi] or [0, 2*pi] (your preference)
+            state[0] = std::fmod(state[0], 2.0 * M_PI);
+            if (state[0] < 0.0) {
+                state[0] += 2.0 * M_PI;
+            }
+
+            // 7) Progress bar
+            sample_count++;
+            if (sample_count % 50 == 0) {
+                printProgressBar(sample_count, total_samples);
+            }
         }
     }
-    // Final update to show 100% complete
-    printProgressBar(num_samples, num_samples);
+
+    // Final update for the progress bar
+    printProgressBar(total_samples, total_samples);
     std::cout << std::endl;
 
+    // Close file
     csv_file.close();
-
-    // Plot the dataset
-    plt::figure();
-    plt::plot(theta, "-");
-    plt::title("Pendulum Dataset");
-    plt::ylabel("Theta");
-    plt::save("../examples/neural_dynamics/data/pendulum_dataset.png");
-    // plt::show();
-
     std::cout << "Dataset saved to " << csv_filename << std::endl;
+
     return 0;
 }

@@ -46,7 +46,7 @@ private:
 
 PendulumModel::PendulumModel(double length, double mass, double damping)
     : length_(length), mass_(mass), damping_(damping),
-      device_(torch::cuda::is_available() ? torch::kCPU : torch::kCPU)
+      device_(torch::cuda::is_available() ? torch::kCUDA : torch::kCPU)
 {
     // Create linear layers
     linear1 = register_module("linear1", torch::nn::Linear(3, 32));
