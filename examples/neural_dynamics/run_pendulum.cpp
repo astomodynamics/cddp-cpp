@@ -67,7 +67,7 @@ struct NeuralODEImpl : public torch::nn::Module {
     // forward(y0, t, dt) -> entire trajectory
     torch::Tensor forward(const torch::Tensor &y0, const torch::Tensor &t, double dt)
     {
-        int64_t batch_size = y0.size(0);  // usually 1 if single initial state
+        int64_t batch_size = y0.size(0); 
         int64_t steps      = t.size(0);
 
         // shape: [B, steps, 2]
@@ -81,6 +81,11 @@ struct NeuralODEImpl : public torch::nn::Module {
         for (int64_t i = 0; i < steps - 1; ++i) {
             auto t_i = t[i];
             state = rk4_step(func_, t_i, state, dt);
+
+            // Wrap theta to [0.0, 2*pi]
+            state.select(1, 0) = torch::fmod(state.select(1, 0), 2.0 * M_PI);
+            state.select(1, 0) = (state.select(1, 0) < 0).to(torch::kFloat32) * (2.0 * M_PI) + state.select(1, 0);
+
             trajectory.select(1, i+1) = state;
         }
 
@@ -96,7 +101,7 @@ int main(int argc, char* argv[])
 {
     // 1) Parse command line arguments
     std::string model_file = "../examples/neural_dynamics/neural_models/neural_pendulum.pth";
-    float init_theta = 0.5f;
+    float init_theta = 1.56f;
     float init_thetadot = 0.0f;
     int64_t seq_length = 100; // FIXME:
 
@@ -125,15 +130,13 @@ int main(int argc, char* argv[])
     auto t_cpu = torch::arange(seq_length, torch::kInt64).to(torch::kFloat32) * dt;
     auto t = t_cpu.to(device);
 
-    // ---------------------------------------------------------
     // 5) Run the neural ODE to get the predicted trajectory
-    // ---------------------------------------------------------
     auto pred_traj = neural_ode->forward(y0, t, dt); // shape: [1, seq_length, 2]
     pred_traj = pred_traj.squeeze(0).cpu(); // shape [seq_length, 2]
 
     // 6) Generate the "true" trajectory from cddp::Pendulum
     cddp::Pendulum pendulum(// FIXME:
-        /*dt=*/0.02,  /*length=*/0.5,
+        /*dt=*/0.02,  /*length=*/1.0,
         /*mass=*/1.0, /*damping=*/0.01,
         /*integration_type=*/"rk4"
     );
@@ -158,6 +161,11 @@ int main(int argc, char* argv[])
         thetadot_vec_true[i] = static_cast<float>(state(1));
         if (i < seq_length - 1) {
             state = pendulum.getDiscreteDynamics(state, control);
+            // Wrap theta to [0.0, 2*pi]
+            state(0) = std::fmod(state(0), 2.0 * M_PI);
+            if (state(0) < 0) {
+                state(0) += 2.0 * M_PI;
+            }
         }
     }
 

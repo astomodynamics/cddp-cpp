@@ -57,3 +57,5 @@ target_link_libraries(run_pendulum cddp)
 # add_executable(run_cartpole neural_dynamics/run_cartpole.cpp)
 # target_link_libraries(run_cartpole cddp)
 
+# add_executable(cddp_pendulum_neural _cddp_pendulum_neural.cpp)
+# target_link_libraries(cddp_pendulum_neural cddp)

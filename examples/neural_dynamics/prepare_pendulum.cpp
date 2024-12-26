@@ -52,7 +52,7 @@ void printProgressBar(int current, int total, int barWidth = 50) {
 
 int main(int argc, char* argv[]) {
     // Number of data samples to generate
-    int n_samples = 10000; 
+    int n_samples = 100; 
     if (argc > 1) {
         n_samples = std::stoi(argv[1]);
     }
@@ -73,13 +73,13 @@ int main(int argc, char* argv[]) {
 
     // Random number engine + distributions
     std::default_random_engine rng(1234);
-    std::uniform_real_distribution<double> angle_dist(0.0, 2.0*M_PI);
-    std::uniform_real_distribution<double> velocity_dist(-10.0, 10.0);
-    std::uniform_real_distribution<double> control_dist(-10.0, 10.0);
+    std::uniform_real_distribution<double> angle_dist(M_PI, 3*M_PI/2.0);
+    std::uniform_real_distribution<double> velocity_dist(-2.0, 2.0);
+    std::uniform_real_distribution<double> control_dist(-2.0, 2.0);
 
     // Prepare pendulum system FIXME: change and match constants 
     double dt      = 0.02;
-    double length  = 0.5;
+    double length  = 1.0;
     double mass    = 1.0;
     double damping = 0.01; 
     std::string integration_type = "rk4";
@@ -115,7 +115,8 @@ int main(int argc, char* argv[]) {
         state << init_theta, init_thetadot;
 
         // 2) Sample a random control
-        control << control_dist(rng);
+        // control << control_dist(rng);
+        control << 0.0; // zero torque
 
         // 3) Integrate one step to get the next state (RK4 inside)
         Eigen::VectorXd next_state = pendulum.getDiscreteDynamics(state, control);
