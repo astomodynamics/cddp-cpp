@@ -44,6 +44,10 @@ CDDPSolution CDDP::solveLogCDDP()
         throw std::runtime_error("CDDP: Initialization failed");
     }
 
+    // Initialize log barrier parameters
+    mu_ = options_.barrier_coeff;  // Initial barrier coefficient
+    log_barrier_->setBarrierCoeff(mu_);
+
     // Prepare solution struct
     CDDPSolution solution;
     solution.converged = false;
@@ -206,6 +210,7 @@ CDDPSolution CDDP::solveLogCDDP()
             dL_ = L_ - best_result.lagrangian;
             L_ = best_result.lagrangian;
             alpha_ = best_result.alpha;
+
             solution.cost_sequence.push_back(J_);
             solution.lagrangian_sequence.push_back(L_);
 
@@ -239,6 +244,10 @@ CDDPSolution CDDP::solveLogCDDP()
         if (options_.verbose) {
             printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_); 
         }
+
+        // Update barrier parameter mu
+        mu_ *= options_.barrier_factor;
+        log_barrier_->setBarrierCoeff(mu_);
     }
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time); 
@@ -311,6 +320,19 @@ bool CDDP::solveLogCDDPBackwardPass() {
         Q_ux = l_ux + B.transpose() * V_xx * A;
         Q_uu = l_uu + B.transpose() * V_xx * B;
 
+        // Apply Log-barrier cost gradients and Hessians
+        for (const auto &constraint : constraint_set_)
+        {
+            auto [L_x, L_u] = log_barrier_->getGradients(*constraint.second, x, u, 0.0);
+            Q_x += L_x;
+            Q_u += L_u;
+
+            auto [L_xx, L_uu, L_ux] = log_barrier_->getHessians(*constraint.second, x, u, 0.0);
+            Q_xx += L_xx;
+            Q_uu += L_uu;
+            Q_ux += L_ux;
+        }
+
         // TODO: Apply Cholesky decomposition to Q_uu later?
         // // Symmetrize Q_uu for Cholesky decomposition
         // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
@@ -337,57 +359,10 @@ bool CDDP::solveLogCDDPBackwardPass() {
             return false;
         }
 
-        if (control_box_constraint == nullptr) {
-            const Eigen::MatrixXd &H = Q_uu_reg.inverse();
-            k = -H * Q_u;
-            K = -H * Q_ux_reg;
-        } else {
-            // Solve QP by boxQP
-            const Eigen::VectorXd& lb = control_box_constraint->getLowerBound() - u;
-            const Eigen::VectorXd& ub = control_box_constraint->getUpperBound() - u;
-            const Eigen::VectorXd& x0 = k_[t]; // Initial guess
-            
-            cddp::BoxQPResult qp_result = boxqp_solver_.solve(Q_uu_reg, Q_u, lb, ub, x0);
-            
-            // TODO: Better status check
-            if (qp_result.status == BoxQPStatus::HESSIAN_NOT_PD || 
-                qp_result.status == BoxQPStatus::NO_DESCENT) {
-                    if (options_.debug) {
-                        std::cerr << "CDDP: BoxQP failed at time step " << t << std::endl;
-                    }
-                return false;
-            }
-            
-            // Extract solution
-            k = qp_result.x;
-
-            // Compute feedback gain matrix
-            K = Eigen::MatrixXd::Zero(control_dim, state_dim);
-            if (qp_result.free.sum() > 0) {
-                // Get indices of free variables
-                std::vector<int> free_idx;
-                for (int i = 0; i < control_dim; i++) {
-                    if (qp_result.free(i)) {
-                        free_idx.push_back(i);
-                    }
-                }
-
-                // Extract relevant parts of Q_ux for free variables
-                Eigen::MatrixXd Q_ux_free(free_idx.size(), state_dim);
-                for (size_t i = 0; i < free_idx.size(); i++) {
-                    Q_ux_free.row(i) = Q_ux_reg.row(free_idx[i]);
-                }
-
-                // Compute gains for free variables using the LDLT factorization
-                Eigen::MatrixXd K_free = -qp_result.Hfree.solve(Q_ux_free);
-
-                // Put back into full K matrix
-                for (size_t i = 0; i < free_idx.size(); i++) {
-                    K.row(free_idx[i]) = K_free.row(i);
-                }
-            }
-        }
-
+        const Eigen::MatrixXd &H = Q_uu_reg.inverse();
+        k = -H * Q_u;
+        K = -H * Q_ux_reg;
+     
         // Store feedforward and feedback gain
         k_[t] = k;
         K_[t] = K;

@@ -51,7 +51,7 @@ struct CDDPOptions {
     // log-barrier method
     double barrier_coeff = 1e-2;                    // Coefficient for log-barrier method
     double barrier_factor = 0.90;                   // Factor for log-barrier method
-    double barrier_tolerance = 1e-6;                // Tolerance for log-barrier method
+    double barrier_tolerance = 1e-8;                // Tolerance for log-barrier method
     double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
     int barrier_order = 2;                          // Order for log-barrier method
 

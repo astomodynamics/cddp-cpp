@@ -85,25 +85,33 @@ public:
      * @brief Get the barrier coefficient.
      * @return The coefficient controlling the steepness of the log penalty.
      */
-    double getBarrierCoeff() const;
+    double getBarrierCoeff() const {
+        return barrier_coeff_;
+    }
 
     /**
      * @brief Set the barrier coefficient.
      * @param barrier_coeff New log-barrier penalty coefficient.
      */
-    void setBarrierCoeff(double barrier_coeff);
+    void setBarrierCoeff(double barrier_coeff) {
+        barrier_coeff_ = barrier_coeff;
+    }
 
     /**
      * @brief Get the current relaxation coefficient.
      * @return relaxation_coeff
      */
-    double getRelaxationCoeff() const;
+    double getRelaxationCoeff() const {
+        return relaxation_coeff_;
+    }
 
     /**
      * @brief Set the relaxation coefficient.
      * @param relaxation_coeff 
      */
-    void setRelaxationCoeff(double relaxation_coeff);
+    void setRelaxationCoeff(double relaxation_coeff) {
+        relaxation_coeff_ = relaxation_coeff;
+    }
 
 private:
     double barrier_coeff_;        ///< Coefficient controlling barrier steepness
