@@ -17,6 +17,7 @@
 #define CDDP_CDDP_CORE_HPP
 
 #include <iostream> // For std::cout, std::cerr
+#include <string>  // For std::string
 #include <memory> // For std::unique_ptr
 #include <map>    // For std::map`
 #include <iomanip> // For std::setw
@@ -108,6 +109,14 @@ struct ForwardPassResult {
     double lagrangian;
     double alpha;
     bool success;
+};
+
+struct FilterPoint {
+    double cost;
+    double violation;
+    bool dominates(const FilterPoint& other) const {
+        return cost <= other.cost && violation <= other.violation;
+    }
 };
 
 class CDDP {
@@ -228,21 +237,25 @@ public:
     void initializeCDDP();
 
     // Solve the problem
-    CDDPSolution solve();
-    CDDPSolution solveLogCDDP();
-    CDDPSolution solveASCDDP();
+    CDDPSolution solve(std::string solver_type = "CLCDDP");
+    
 private:
     // Solver methods
-    ForwardPassResult solveForwardPass(double alpha);
-    bool solveBackwardPass();
+    CDDPSolution solveCLCDDP();
+    ForwardPassResult solveCLCDDPForwardPass(double alpha);
+    bool solveCLCDDPBackwardPass();
 
+    CDDPSolution solveLogCDDP();
     ForwardPassResult solveLogCDDPForwardPass(double alpha);
     bool solveLogCDDPBackwardPass();
 
+    CDDPSolution solveASCDDP();
     ForwardPassResult solveASCDDPForwardPass(double alpha);
     bool solveASCDDPBackwardPass();
 
     // Helper methods
+    double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
+
     bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
 
     void printSolverInfo();
@@ -286,6 +299,7 @@ private:
 
     // Log-barrier
     double mu_; // Barrier coefficient
+    double constraint_violation_; // Current constraint violation measure
 
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_;

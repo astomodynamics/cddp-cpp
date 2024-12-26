@@ -81,10 +81,15 @@ TEST(CDDPTest, SolveLogCDDP) {
     control_lower_bound << -1.0, -M_PI;
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 1.0, M_PI;
+    Eigen::VectorXd state_lower_bound(state_dim);
+    state_lower_bound << -0.1, -0.1, -M_PI;
+    Eigen::VectorXd state_upper_bound(state_dim);
+    state_upper_bound << 10.0, 10.0, M_PI;
     
     // Add the constraint to the solver
     cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
     auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+
 
     // Set options
     cddp_solver.setOptions(options);
@@ -95,7 +100,7 @@ TEST(CDDPTest, SolveLogCDDP) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
+    cddp::CDDPSolution solution = cddp_solver.solve("LogCDDP");
     solution.converged = true;
     ASSERT_TRUE(solution.converged);
 
