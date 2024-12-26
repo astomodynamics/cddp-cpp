@@ -80,6 +80,7 @@ struct CDDPOptions {
     bool use_parallel = true;                      // Option for parallel computation
     int num_threads = max_line_search_iterations; // Number of threads to use
     bool is_relaxed_log_barrier = false;            // Use relaxed log-barrier method
+    bool early_termination = true;                 // Terminate early if cost does not change NOTE: This may be critical for some problems
 
     // Boxqp options
     double boxqp_max_iterations = 100;              // Maximum number of iterations for boxqp

@@ -230,7 +230,9 @@ CDDPSolution CDDP::solveCLCDDP() {
             }
             
             // Check regularization limit
-            if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
+            if (regularization_state_ >= options_.regularization_state_max ||
+                regularization_control_ >= options_.regularization_control_max ||
+                options_.early_termination) {
                 if ((dJ_ < options_.cost_tolerance * 1e1) ||
                     (optimality_gap_ < options_.grad_tolerance * 1e1)) 
                 {
