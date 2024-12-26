@@ -63,15 +63,15 @@ struct CDDPOptions {
     
     double regularization_state = 1e-6;             // Regularization for state
     double regularization_state_step = 1.0;         // Regularization step for state
-    double regularization_state_max = 1e10;          // Maximum regularization
+    double regularization_state_max = 1e4;          // Maximum regularization
     double regularization_state_min = 1e-8;         // Minimum regularization
-    double regularization_state_factor = 1.6;       // Factor for state regularization
+    double regularization_state_factor = 1e1;       // Factor for state regularization
 
     double regularization_control = 1e-6;           // Regularization for control
     double regularization_control_step = 1.0;       // Regularization step for control
-    double regularization_control_max = 1e10;        // Maximum regularization
+    double regularization_control_max = 1e4;        // Maximum regularization
     double regularization_control_min = 1e-8;       // Minimum regularization
-    double regularization_control_factor = 1.6;     // Factor for control regularization
+    double regularization_control_factor = 1e1;     // Factor for control regularization
 
     // Other options
     bool verbose = true;                            // Option for debug printing

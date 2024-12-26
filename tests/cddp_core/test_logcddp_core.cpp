@@ -57,10 +57,12 @@ TEST(CDDPTest, SolveLogCDDP) {
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 20;
-    options.cost_tolerance = 1e-2;
+    options.max_iterations = 30;
+    options.cost_tolerance = 1e-5;
     options.use_parallel = true;
     options.num_threads = 10;
+    options.barrier_coeff = 1e-4;
+    options.barrier_factor = 1e-1;
     options.verbose = true;
     options.debug = false;
 
@@ -82,9 +84,9 @@ TEST(CDDPTest, SolveLogCDDP) {
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 1.0, M_PI;
     Eigen::VectorXd state_lower_bound(state_dim);
-    state_lower_bound << -0.1, -0.1, -M_PI;
+    state_lower_bound << -0.1, -0.1, -10.0;
     Eigen::VectorXd state_upper_bound(state_dim);
-    state_upper_bound << 10.0, 10.0, M_PI;
+    state_upper_bound << 1.9, 1.9, 10.0;
     
     // Add the constraint to the solver
     cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
@@ -92,7 +94,6 @@ TEST(CDDPTest, SolveLogCDDP) {
 
     cddp_solver.addConstraint(std::string("StateBoxConstraint"), std::make_unique<cddp::StateBoxConstraint>(state_lower_bound, state_upper_bound));
     auto state_box_constraint = cddp_solver.getConstraint<cddp::StateBoxConstraint>("StateBoxConstraint");
-
 
     // Set options
     cddp_solver.setOptions(options);
@@ -112,42 +113,52 @@ TEST(CDDPTest, SolveLogCDDP) {
     auto U_sol = solution.control_sequence; // size: horizon
     auto t_sol = solution.time_sequence; // size: horizon + 1
 
-    // // Create directory for saving plot (if it doesn't exist)
-    // const std::string plotDirectory = "../results/tests";
-    // if (!fs::exists(plotDirectory)) {
-    //     fs::create_directory(plotDirectory);
-    // }
+    // Create directory for saving plot (if it doesn't exist)
+    const std::string plotDirectory = "../results/tests";
+    if (!fs::exists(plotDirectory)) {
+        fs::create_directory(plotDirectory);
+    }
 
-    // // Plot the solution (x-y plane)
-    // std::vector<double> x_arr, y_arr, theta_arr;
-    // for (const auto& x : X_sol) {
-    //     x_arr.push_back(x(0));
-    //     y_arr.push_back(x(1));
-    //     theta_arr.push_back(x(2));
-    // }
+    // Plot the solution (x-y plane)
+    std::vector<double> x_arr, y_arr, theta_arr;
+    for (const auto& x : X_sol) {
+        x_arr.push_back(x(0));
+        y_arr.push_back(x(1));
+        theta_arr.push_back(x(2));
+    }
 
-    // // Plot the solution (control inputs)
-    // std::vector<double> v_arr, omega_arr;
-    // for (const auto& u : U_sol) {
-    //     v_arr.push_back(u(0));
-    //     omega_arr.push_back(u(1));
-    // }
+    // Plot the solution (control inputs)
+    std::vector<double> v_arr, omega_arr;
+    for (const auto& u : U_sol) {
+        v_arr.push_back(u(0));
+        omega_arr.push_back(u(1));
+    }
 
-    // // Plot the solution by subplots
-    // plt::subplot(2, 1, 1);
-    // plt::plot(x_arr, y_arr);
-    // plt::title("State Trajectory");
-    // plt::xlabel("x");
-    // plt::ylabel("y");
+    // Plot the solution by subplots
+    plt::subplot(2, 1, 1);
+    plt::plot(x_arr, y_arr);
+    // Plot boundaries x: [0, 1.9], y: [0, 1.9]
 
-    // plt::subplot(2, 1, 2);
-    // plt::plot(v_arr);
-    // plt::plot(omega_arr);
-    // // Plot boundaries
-    // plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
-    // plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
-    // plt::title("Control Inputs");
-    // plt::save(plotDirectory + "/dubincs_car_logcddp_test.png");
+  std::vector<double> x_lim1 = {0.0, 1.9};
+  std::vector<double> x_lim2 = {1.9, 1.9};
+  std::vector<double> y_lim1 = {1.9, 1.9};
+  std::vector<double> y_lim2 = {0.0, 1.9};
+
+    plt::plot(x_lim1, y_lim1, "r--");
+    plt::plot(x_lim2, y_lim2, "r--");
+
+    plt::title("State Trajectory");
+    plt::xlabel("x");
+    plt::ylabel("y");
+
+    plt::subplot(2, 1, 2);
+    plt::plot(v_arr);
+    plt::plot(omega_arr);
+    // Plot boundaries
+    plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
+    plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
+    plt::title("Control Inputs");
+    plt::save(plotDirectory + "/dubincs_car_logcddp_test.png");
 
 //     // Create figure and axes
 //     plt::figure_size(800, 600);
