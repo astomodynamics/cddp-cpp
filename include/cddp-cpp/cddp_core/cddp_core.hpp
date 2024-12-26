@@ -30,6 +30,7 @@
 #include "cddp_core/dynamical_system.hpp" 
 #include "cddp_core/objective.hpp"
 #include "cddp_core/constraint.hpp"
+#include "cddp_core/barrier.hpp"
 #include "cddp_core/boxqp.hpp"
 
 namespace cddp {
@@ -75,6 +76,7 @@ struct CDDPOptions {
     bool is_ilqr = true;                            // Option for iLQR
     bool use_parallel = true;                      // Option for parallel computation
     int num_threads = max_line_search_iterations; // Number of threads to use
+    bool is_relaxed_log_barrier = false;            // Use relaxed log-barrier method
 
     // Boxqp options
     double boxqp_max_iterations = 100;              // Maximum number of iterations for boxqp
@@ -131,8 +133,6 @@ public:
     const CDDPOptions& getOptions() const { return options_; }
 
     // Setters
-    // void setDynamicalSystem(std::unique_ptr<torch::nn::Module> system) { torch_system_ = std::move(system); } 
-    
     /**
      * @brief Set the Dynamical System object
      * @param system Dynamical system object (unique_ptr)
@@ -202,8 +202,6 @@ public:
     // Get a specific constraint by name
     template <typename T>
     T* getConstraint(const std::string& name) const {
-        // 'find' is a const operation on standard associative containers 
-        // and does not modify 'constraint_set_'
         auto it = constraint_set_.find(name);
         
         // For other constraints, return nullptr if not found
@@ -285,6 +283,9 @@ private:
     // Line search
     double alpha_; // Line search step size
     std::vector<double> alphas_;
+
+    // Log-barrier
+    double mu_; // Barrier coefficient
 
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_;
