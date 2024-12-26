@@ -261,6 +261,9 @@ void CDDP::printOptions(const CDDPOptions &options)
     std::cout << "  Barrier Factor: " << std::setw(5) << options.barrier_factor << "\n";
     std::cout << "  Barrier Tolerance: " << std::setw(5) << options.barrier_tolerance << "\n";
     std::cout << "  Relaxation Coeff: " << std::setw(5) << options.relaxation_coeff << "\n";
+    std::cout << "  Barrier Order: " << std::setw(5) << options.barrier_order << "\n";
+    std::cout << "  Filter Acceptance: " << std::setw(5) << options.filter_acceptance << "\n";
+    std::cout << "  Constraint Tolerance: " << std::setw(5) << options.constraint_tolerance << "\n";
 
     std::cout << "\nRegularization:\n";
     std::cout << "  Regularization Type: " << options.regularization_type << "\n";
@@ -281,6 +284,17 @@ void CDDP::printOptions(const CDDPOptions &options)
     std::cout << "  iLQR: " << (options.is_ilqr ? "Yes" : "No") << "\n";
     std::cout << "  Use Parallel: " << (options.use_parallel ? "Yes" : "No") << "\n";
     std::cout << "  Num Threads: " << options.num_threads << "\n";
+    std::cout << "  Relaxed Log-Barrier: " << (options.is_relaxed_log_barrier ? "Yes" : "No") << "\n";
+    std::cout << "  Early Termination: " << (options.early_termination ? "Yes" : "No") << "\n";
+
+    std::cout << "\nBoxQP:\n";
+    std::cout << "  BoxQP Max Iterations: " << options.boxqp_max_iterations << "\n";
+    std::cout << "  BoxQP Min Grad: " << options.boxqp_min_grad << "\n";
+    std::cout << "  BoxQP Min Rel Improve: " << options.boxqp_min_rel_improve << "\n";
+    std::cout << "  BoxQP Step Dec: " << options.boxqp_step_dec << "\n";
+    std::cout << "  BoxQP Min Step: " << options.boxqp_min_step << "\n";
+    std::cout << "  BoxQP Armijo: " << options.boxqp_armijo << "\n";
+    std::cout << "  BoxQP Verbose: " << (options.boxqp_verbose ? "Yes" : "No") << "\n";
 
     std::cout << "========================================\n\n";
 }
