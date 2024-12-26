@@ -224,7 +224,7 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    // cddp::CDDPSolution solution = cddp_solver.solve();
+    cddp::CDDPSolution solution = cddp_solver.solve();
         // ========================================
         //    CDDP Solution
         // ========================================
@@ -233,7 +233,7 @@ int main() {
         // Solve Time: 5.507e+05 micro sec
         // Final Cost: 1.90517
         // ========================================
-    cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();  
+    // cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();  
         // ========================================
         //    CDDP Solution
         // ========================================

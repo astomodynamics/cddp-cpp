@@ -55,10 +55,14 @@ TEST(CDDPTest, SolveLogCDDP) {
     Eigen::VectorXd initial_state(state_dim);
     initial_state << 0.0, 0.0, M_PI/4.0; 
 
-    // Create CDDP options
+    // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 10;
-    options.cost_tolerance = 1e-1;
+    options.max_iterations = 20;
+    options.cost_tolerance = 1e-2;
+    options.use_parallel = true;
+    options.num_threads = 10;
+    options.verbose = true;
+    options.debug = false;
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(
