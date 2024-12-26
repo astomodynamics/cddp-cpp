@@ -92,6 +92,7 @@ struct CDDPSolution {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<double> cost_sequence;
     std::vector<double> lagrangian_sequence;
+    std::vector<Eigen::MatrixXd> feedback_gain;
     int iterations;
     double alpha;
     bool converged;
