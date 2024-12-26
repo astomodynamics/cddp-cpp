@@ -284,32 +284,35 @@ void CDDP::printOptions(const CDDPOptions &options)
     std::cout << "========================================\n\n";
 }
 
-void CDDP::printIteration(int iter, double cost, double lagrangian, double grad_norm, 
-                double lambda_state, double lambda_control, double step_size)
+void CDDP::printIteration(int iter, double cost, double lagrangian, double grad_norm,
+               double lambda_state, double lambda_control, double step_size, 
+               double mu, double constraint_violation)
 {
-    // Print header for better readability every 10 iterations
-    if (iter % 10 == 0)
-    {
-        std::cout << std::setw(10) << "Iteration"
-                << std::setw(15) << "Objective"
-                << std::setw(15) << "Lagrangian"
-                << std::setw(15) << "Grad Norm"
-                << std::setw(15) << "Step Size"
-                << std::setw(15) << "Reg (State)"
-                << std::setw(15) << "Reg (Control)"
-                << std::endl;
-        std::cout << std::string(95, '-') << std::endl;
-    }
+   if (iter % 10 == 0)
+   {
+       std::cout << std::setw(5) << "Iter"
+               << std::setw(12) << "Cost"
+               << std::setw(12) << "Lagr"
+               << std::setw(10) << "Grad"
+               << std::setw(10) << "Step"
+               << std::setw(10) << "RegS"
+               << std::setw(10) << "RegC" 
+               << std::setw(10) << "Mu"
+               << std::setw(10) << "Viol"
+               << std::endl;
+       std::cout << std::string(89, '-') << std::endl;
+   }
 
-    // Print iteration details
-    std::cout << std::setw(10) << iter
-            << std::setw(15) << std::setprecision(6) << cost
-            << std::setw(15) << std::setprecision(6) << lagrangian
-            << std::setw(15) << std::setprecision(6) << grad_norm
-            << std::setw(15) << std::setprecision(6) << step_size
-            << std::setw(15) << std::setprecision(6) << lambda_state
-            << std::setw(15) << std::setprecision(6) << lambda_control
-            << std::endl;
+   std::cout << std::setw(5) << iter
+           << std::setw(12) << std::scientific << std::setprecision(3) << cost
+           << std::setw(12) << std::scientific << std::setprecision(3) << lagrangian
+           << std::setw(10) << std::scientific << std::setprecision(2) << grad_norm
+           << std::setw(10) << std::fixed << std::setprecision(3) << step_size
+           << std::setw(10) << std::scientific << std::setprecision(2) << lambda_state
+           << std::setw(10) << std::scientific << std::setprecision(2) << lambda_control
+           << std::setw(10) << std::scientific << std::setprecision(2) << mu
+           << std::setw(10) << std::scientific << std::setprecision(2) << constraint_violation
+           << std::endl;
 }
 
 void CDDP::printSolution(const CDDPSolution &solution)

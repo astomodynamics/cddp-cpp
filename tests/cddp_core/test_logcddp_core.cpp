@@ -88,7 +88,10 @@ TEST(CDDPTest, SolveLogCDDP) {
     
     // Add the constraint to the solver
     cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-    auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    auto control_box_constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+
+    cddp_solver.addConstraint(std::string("StateBoxConstraint"), std::make_unique<cddp::StateBoxConstraint>(state_lower_bound, state_upper_bound));
+    auto state_box_constraint = cddp_solver.getConstraint<cddp::StateBoxConstraint>("StateBoxConstraint");
 
 
     // Set options

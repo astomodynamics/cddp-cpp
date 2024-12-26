@@ -84,7 +84,7 @@ CDDPSolution CDDP::solveASCDDP()
     solution.lagrangian_sequence.push_back(L_);
 
     if (options_.verbose) {
-        printIteration(0, J_, J_, optimality_gap_, regularization_state_, regularization_control_, alpha_); // Initial iteration information
+        printIteration(0, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_); // Initial iteration information
     }
 
     // Start timer
@@ -216,7 +216,7 @@ CDDPSolution CDDP::solveASCDDP()
 
         // Print iteration information
         if (options_.verbose) {
-            printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_); 
+            printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_); 
         }
     }
 

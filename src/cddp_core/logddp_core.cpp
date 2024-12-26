@@ -81,7 +81,7 @@ CDDPSolution CDDP::solveLogCDDP()
 
     if (options_.verbose)
     {
-        printIteration(0, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_); // Initial iteration information
+        printIteration(0, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_); // Initial iteration information
     }
 
     // Start timer
@@ -242,11 +242,17 @@ CDDPSolution CDDP::solveLogCDDP()
 
         // Print iteration information
         if (options_.verbose) {
-            printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_); 
+           printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_); 
         }
 
         // Update barrier parameter mu
-        mu_ *= options_.barrier_factor;
+        if (forward_pass_success && optimality_gap_ < options_.grad_tolerance && mu_ > options_.barrier_tolerance) {
+            // Dramatically decrease mu if optimization is going well
+            mu_ = std::max(mu_ * 0.1, options_.barrier_tolerance);
+        } else {
+            // Normal decrease rate
+            mu_ = std::max(mu_ * options_.barrier_factor, options_.barrier_tolerance);
+        }
         log_barrier_->setBarrierCoeff(mu_);
     }
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -406,8 +412,12 @@ ForwardPassResult CDDP::solveLogCDDPForwardPass(double alpha) {
     std::vector<Eigen::VectorXd> U_new = U_;
     X_new[0] = initial_state_;
     double J_new = 0.0, L_new = 0.0;
+    double total_violation = 0.0;
 
     auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+
+    // Current filter point
+    FilterPoint current{J_, computeConstraintViolation(X_, U_)};
 
     for (int t = 0; t < horizon_; ++t) {
         const Eigen::VectorXd& x = X_new[t];
@@ -422,6 +432,10 @@ ForwardPassResult CDDP::solveLogCDDPForwardPass(double alpha) {
 
         const double cost = objective_->running_cost(x, U_new[t], t);
         const double barrier_cost = log_barrier_->evaluate(*control_box_constraint, x, u);
+
+        for (const auto& constraint : constraint_set_) {
+            total_violation += constraint.second->computeViolation(x, U_new[t]);
+        }
 
         J_new += cost;
         L_new += (cost + barrier_cost);

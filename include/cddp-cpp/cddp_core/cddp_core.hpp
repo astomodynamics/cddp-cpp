@@ -37,7 +37,7 @@
 namespace cddp {
 
 struct CDDPOptions {
-    double cost_tolerance = 1e-7;                   // Tolerance for changes in cost function
+    double cost_tolerance = 1e-6;                   // Tolerance for changes in cost function
     double grad_tolerance = 1e-4;                   // Tolerance for cost gradient magnitude
     int max_iterations = 1;                         // Maximum number of iterations
     double max_cpu_time = 0.0;                      // Maximum CPU time for the solver in seconds
@@ -107,8 +107,9 @@ struct ForwardPassResult {
     std::vector<Eigen::VectorXd> control_sequence;
     double cost;
     double lagrangian;
-    double alpha;
-    bool success;
+    double alpha = 1.0;
+    bool success = false;
+    double constraint_violation = 0.0;
 };
 
 struct FilterPoint {
@@ -264,7 +265,7 @@ private:
 
     void printIteration(int iter, double cost, double lagrangian, 
                         double grad_norm, double lambda_state, 
-                        double lambda_control, double alpha);
+                        double lambda_control, double alpha, double mu, double constraint_violation);
     
     void printSolution(const CDDPSolution& solution);
 
