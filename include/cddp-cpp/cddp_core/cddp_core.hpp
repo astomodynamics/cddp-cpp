@@ -55,6 +55,8 @@ struct CDDPOptions {
     double barrier_tolerance = 1e-8;                // Tolerance for log-barrier method
     double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
     int barrier_order = 2;                          // Order for log-barrier method
+    double filter_acceptance = 1e-8;                            // Small value for filter acceptance
+    double constraint_tolerance = 1e-12;             // Tolerance for constraint violation
 
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
@@ -62,13 +64,13 @@ struct CDDPOptions {
     double regularization_state = 1e-6;             // Regularization for state
     double regularization_state_step = 1.0;         // Regularization step for state
     double regularization_state_max = 1e10;          // Maximum regularization
-    double regularization_state_min = 1e-6;         // Minimum regularization
+    double regularization_state_min = 1e-8;         // Minimum regularization
     double regularization_state_factor = 1.6;       // Factor for state regularization
 
     double regularization_control = 1e-6;           // Regularization for control
     double regularization_control_step = 1.0;       // Regularization step for control
     double regularization_control_max = 1e10;        // Maximum regularization
-    double regularization_control_min = 1e-6;       // Minimum regularization
+    double regularization_control_min = 1e-8;       // Minimum regularization
     double regularization_control_factor = 1.6;     // Factor for control regularization
 
     // Other options
@@ -301,6 +303,7 @@ private:
     // Log-barrier
     double mu_; // Barrier coefficient
     double constraint_violation_; // Current constraint violation measure
+    double gamma_; // Small value for filter acceptance
 
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_;

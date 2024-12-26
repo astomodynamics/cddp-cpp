@@ -193,6 +193,7 @@ void CDDP::initializeCDDP()
     log_barrier_ = std::make_unique<LogBarrier>(options_.barrier_coeff, options_.relaxation_coeff, options_.barrier_order, options_.is_relaxed_log_barrier);
     mu_ = options_.barrier_coeff;
     log_barrier_->setBarrierCoeff(mu_);
+    gamma_ = options_.filter_acceptance;
 
     // Initialize boxqp options
     boxqp_options_.max_iterations = options_.boxqp_max_iterations;

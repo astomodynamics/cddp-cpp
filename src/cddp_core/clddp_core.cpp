@@ -193,9 +193,15 @@ CDDPSolution CDDP::solveCLCDDP() {
 
             // Decrease regularization
             regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
-            regularization_state_ *= regularization_state_step_ * (regularization_state_ > options_.regularization_state_min ? 1.0 : 0.0);
+            regularization_state_ *= regularization_state_step_;
+            if (regularization_state_ < options_.regularization_state_min) {
+                regularization_state_ = options_.regularization_state_min;
+            }
             regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
-            regularization_control_ *= regularization_control_step_ * (regularization_control_ > options_.regularization_control_min ? 1.0 : 0.0);
+            regularization_control_ *= regularization_control_step_;
+            if (regularization_control_ < options_.regularization_control_min) {
+                regularization_control_ = options_.regularization_control_min;
+            }
 
             // Check termination
             if (dJ_ < options_.cost_tolerance) {

@@ -216,9 +216,15 @@ CDDPSolution CDDP::solveLogCDDP()
 
             // Decrease regularization
             regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
-            regularization_state_ *= regularization_state_step_ * (regularization_state_ > options_.regularization_state_min ? 1.0 : 0.0);
+            regularization_state_ *= regularization_state_step_;
+            if (regularization_state_ < options_.regularization_state_min) {
+                regularization_state_ = options_.regularization_state_min;
+            }
             regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
-            regularization_control_ *= regularization_control_step_ * (regularization_control_ > options_.regularization_control_min ? 1.0 : 0.0);
+            regularization_control_ *= regularization_control_step_;
+            if (regularization_control_ < options_.regularization_control_min) {
+                regularization_control_ = options_.regularization_control_min;
+            }
 
             // Check termination
             if (dJ_ < options_.cost_tolerance) {
@@ -433,28 +439,47 @@ ForwardPassResult CDDP::solveLogCDDPForwardPass(double alpha) {
         const double cost = objective_->running_cost(x, U_new[t], t);
         const double barrier_cost = log_barrier_->evaluate(*control_box_constraint, x, u);
 
-        for (const auto& constraint : constraint_set_) {
-            total_violation += constraint.second->computeViolation(x, U_new[t]);
-        }
+        
 
         J_new += cost;
         L_new += (cost + barrier_cost);
         X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t]);
+
+        for (const auto& constraint : constraint_set_) {
+            if (constraint.first == "ControlBoxConstraint") {
+                continue;
+            }
+            total_violation += constraint.second->computeViolation(X_new[t+1], U_new[t]);
+
+            // Early termination if constraint violation is too large
+            if (total_violation > options_.constraint_tolerance) {
+                return result;
+            }
+        }
     }
     J_new += objective_->terminal_cost(X_new.back());
     L_new += objective_->terminal_cost(X_new.back());
-    double dJ = J_ - J_new;
-    double dL = L_ - L_new;
-    double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
-    double reduction_ratio = expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
 
-    // Check if cost reduction is sufficient
-    result.success = reduction_ratio > options_.minimum_reduction_ratio;
-    result.state_sequence = X_new;
-    result.control_sequence = U_new;
-    result.cost = J_new;
-    result.lagrangian = L_new;
+    FilterPoint candidate{J_new, total_violation};
 
-    return result;
+    // Filter acceptance criteria  
+   bool sufficient_progress = (J_new < J_ - gamma_ * total_violation) || 
+                            (total_violation < (1 - gamma_) * current.violation);
+
+    bool acceptable = sufficient_progress && !current.dominates(candidate);
+
+   if (acceptable) {
+       double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
+       double reduction_ratio = expected > 0.0 ? (J_ - J_new) / expected : 
+                                               std::copysign(1.0, J_ - J_new);
+
+       result.success = acceptable;
+       result.state_sequence = X_new;
+       result.control_sequence = U_new;
+       result.cost = J_new;
+       result.lagrangian = L_new;
+   }
+
+   return result;
 }
 } // namespace cddp
