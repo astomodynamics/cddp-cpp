@@ -197,6 +197,7 @@ set(cddp_core_srcs
   src/cddp_core/boxqp.cpp
   src/cddp_core/qp_solver.cpp
   src/cddp_core/cddp_core.cpp
+  src/cddp_core/clddp_core.cpp
   src/cddp_core/asddp_core.cpp
   src/cddp_core/logddp_core.cpp
   src/cddp_core/neural_dynamical_system.cpp
