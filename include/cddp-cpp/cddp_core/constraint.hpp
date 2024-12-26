@@ -47,6 +47,9 @@ public:
     virtual std::tuple<Eigen::MatrixXd, Eigen::MatrixXd> getJacobians(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
         return {getStateJacobian(state, control), getControlJacobian(state, control)};
     }
+    
+    virtual double computeViolation(const Eigen::VectorXd& state, 
+                                  const Eigen::VectorXd& control) const = 0;
 private:
     std::string name_; // Name of the constraint
 };
@@ -81,6 +84,14 @@ public:
         return control.cwiseMax(lower_bound_).cwiseMin(upper_bound_);
     }
 
+    double computeViolation(const Eigen::VectorXd& state, 
+                            const Eigen::VectorXd& control) const override {
+   
+        Eigen::VectorXd g = evaluate(state, control);
+        return (g - upper_bound_).cwiseMax(0.0).sum() + 
+            (lower_bound_ - g).cwiseMax(0.0).sum();
+    }
+
 private:
     Eigen::VectorXd lower_bound_;
     Eigen::VectorXd upper_bound_;
@@ -109,6 +120,17 @@ public:
 
     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override {
         return Eigen::MatrixXd::Zero(state.size(), control.size()); 
+    }
+
+    Eigen::VectorXd clamp(const Eigen::VectorXd& state) const {
+        return state.cwiseMax(lower_bound_).cwiseMin(upper_bound_);
+    }
+
+    double computeViolation(const Eigen::VectorXd& state, 
+                            const Eigen::VectorXd& control) const override {
+        Eigen::VectorXd g = evaluate(state, control);
+        return (g - upper_bound_).cwiseMax(0.0).sum() + 
+            (lower_bound_ - g).cwiseMax(0.0).sum();
     }
 
 private:
@@ -142,6 +164,20 @@ public:
 
     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const override {
         return Eigen::MatrixXd::Zero(1, control.size()); 
+    }
+
+    double computeViolation(const Eigen::VectorXd& state,
+                          const Eigen::VectorXd& control) const override {
+        double value = evaluate(state, control)(0);
+        double violation = 0.0;
+        
+        if (value < getLowerBound()(0)) {
+            violation += getLowerBound()(0) - value;
+        }
+        if (value > getUpperBound()(0)) {
+            violation += value - getUpperBound()(0);
+        }
+        return violation;
     }
 
 private:
