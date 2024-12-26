@@ -40,6 +40,28 @@ TEST(ControlBoxConstraintTest, Evaluate) {
     ASSERT_TRUE(constraint_value.isApprox(control)); 
 }
 
+TEST(StateBoxConstraint, Evaluate) {
+    // Create a constraint with lower and upper bounds
+    Eigen::VectorXd lower_bound(2);
+    lower_bound << -1.0, -2.0;
+    Eigen::VectorXd upper_bound(2);
+    upper_bound << 1.0, 2.0;
+    cddp::StateBoxConstraint constraint(lower_bound, upper_bound);
+
+    // Test with a state within the bounds
+    Eigen::VectorXd state(2);
+    state << 0.5, 1.0;
+    Eigen::VectorXd control(2); // Control doesn't matter for this constraint
+    control << 0.0;
+    Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
+    ASSERT_TRUE(constraint_value.isApprox(state));
+
+    // Test with a state outside the bounds
+    state << 1.5, -2.5;
+    constraint_value = constraint.evaluate(state, control);
+    ASSERT_TRUE(constraint_value.isApprox(state));
+}
+
 TEST(CircleConstraintTest, Evaluate) {
     // Create a circle constraint with a radius of 2.0
     cddp::CircleConstraint constraint(2.0);
