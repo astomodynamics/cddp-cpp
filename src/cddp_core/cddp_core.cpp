@@ -194,6 +194,7 @@ void CDDP::initializeCDDP()
     mu_ = options_.barrier_coeff;
     log_barrier_->setBarrierCoeff(mu_);
     gamma_ = options_.filter_acceptance;
+    constraint_violation_ = 0.0;
 
     // Initialize boxqp options
     boxqp_options_.max_iterations = options_.boxqp_max_iterations;
