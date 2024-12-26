@@ -135,15 +135,15 @@ int main() {
     Animation::AnimationConfig config;
     config.width = 800;
     config.height = 800;
-    config.frame_skip = 5;  // Save every 5th frame
-    config.frame_delay = 10;  // 10/100 = 0.1 seconds between frames
+    config.frame_skip = 5;  
+    config.frame_delay = 10;  
     Animation animation(config);
 
    // Problem parameters
     int state_dim = 4;     // [x y theta v]
     int control_dim = 2;   // [wheel_angle acceleration]
-    int horizon = 500;     // Same as MATLAB example
-    double timestep = 0.03;  // h = 0.03 from MATLAB
+    int horizon = 500;  
+    double timestep = 0.03; 
     std::string integration_type = "euler";
 
     // Random number generator setup
@@ -152,13 +152,13 @@ int main() {
     std::normal_distribution<double> d(0.0, 0.1);
 
     // Create car instance
-    double wheelbase = 2.0;  // d = 2.0 from MATLAB example
+    double wheelbase = 2.0; 
     std::unique_ptr<cddp::DynamicalSystem> system = 
         std::make_unique<cddp::Car>(timestep, wheelbase, integration_type);
 
     // Initial and goal states
     Eigen::VectorXd initial_state(state_dim);
-    initial_state << 1.0, 1.0, 1.5*M_PI, 0.0;  // [1; 1; pi*3/2; 0] from MATLAB
+    initial_state << 1.0, 1.0, 1.5*M_PI, 0.0;
 
     Eigen::VectorXd goal_state(state_dim);
     goal_state << 0.0, 0.0, 0.0, 0.0;  // NOT USED IN THIS EXAMPLE
@@ -189,7 +189,7 @@ int main() {
     options.grad_tolerance = 1e-4;
     options.regularization_type = "control";
     // options.regularization_control = 1.0;
-    options.debug = true;
+    options.debug = false;
     options.use_parallel = true;
     options.num_threads = 10;
     cddp_solver.setOptions(options);
@@ -224,9 +224,24 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
-    // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
-    // cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
+    // cddp::CDDPSolution solution = cddp_solver.solve();
+        // ========================================
+        //    CDDP Solution
+        // ========================================
+        // Converged: Yes
+        // Iterations: 157
+        // Solve Time: 5.507e+05 micro sec
+        // Final Cost: 1.90517
+        // ========================================
+    cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();  
+        // ========================================
+        //    CDDP Solution
+        // ========================================
+        // Converged: Yes
+        // Iterations: 153
+        // Solve Time: 5.441e+05 micro sec
+        // Final Cost: 1.90517
+        // ========================================
 
     // Extract solution trajectories
     auto X_sol = solution.state_sequence;
