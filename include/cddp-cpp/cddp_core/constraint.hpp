@@ -50,6 +50,8 @@ public:
     
     virtual double computeViolation(const Eigen::VectorXd& state, 
                                   const Eigen::VectorXd& control) const = 0;
+
+    virtual double computeViolationFromValue(const Eigen::VectorXd& g) const = 0;
 private:
     std::string name_; // Name of the constraint
 };
@@ -88,8 +90,12 @@ public:
                             const Eigen::VectorXd& control) const override {
    
         Eigen::VectorXd g = evaluate(state, control);
+        return computeViolationFromValue(g);
+    }
+
+    double computeViolationFromValue(const Eigen::VectorXd& g) const override {
         return (g - upper_bound_).cwiseMax(0.0).sum() + 
-            (lower_bound_ - g).cwiseMax(0.0).sum();
+               (lower_bound_ - g).cwiseMax(0.0).sum();
     }
 
 private:
@@ -128,10 +134,16 @@ public:
 
     double computeViolation(const Eigen::VectorXd& state, 
                             const Eigen::VectorXd& control) const override {
+   
         Eigen::VectorXd g = evaluate(state, control);
-        return (g - upper_bound_).cwiseMax(0.0).sum() + 
-            (lower_bound_ - g).cwiseMax(0.0).sum();
+        return computeViolationFromValue(g);
     }
+
+    double computeViolationFromValue(const Eigen::VectorXd& g) const override {
+        return (g - upper_bound_).cwiseMax(0.0).sum() + 
+               (lower_bound_ - g).cwiseMax(0.0).sum();
+    }
+
 
 private:
     Eigen::VectorXd lower_bound_;
@@ -166,19 +178,16 @@ public:
         return Eigen::MatrixXd::Zero(1, control.size()); 
     }
 
-    double computeViolation(const Eigen::VectorXd& state,
-                          const Eigen::VectorXd& control) const override {
-        double value = evaluate(state, control)(0);
-        double violation = 0.0;
-        
-        if (value < getLowerBound()(0)) {
-            violation += getLowerBound()(0) - value;
-        }
-        if (value > getUpperBound()(0)) {
-            violation += value - getUpperBound()(0);
-        }
-        return violation;
+    double computeViolation(const Eigen::VectorXd& state, 
+                       const Eigen::VectorXd& control) const override {
+        Eigen::VectorXd g = evaluate(state, control);
+        return computeViolationFromValue(g);
     }
+
+    double computeViolationFromValue(const Eigen::VectorXd& g) const override {
+        return std::max(0.0, g(0) - radius_ * radius_);
+    }
+
 
 private:
     double radius_;
