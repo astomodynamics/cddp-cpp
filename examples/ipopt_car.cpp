@@ -215,10 +215,16 @@ int main() {
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     
     std::cout << "Solve time: " << duration.count() << " microseconds" << std::endl;
-    std::cout << "Solver status: " << res.at("return_status") << std::endl;
-    std::cout << "Objective: " << res.at("f") << std::endl;
-    std::cout << "Iterations: " << res.at("iter_count") << std::endl;
-    std::
+
+        // EXIT: Optimal Solution Found.
+        //     solver  :   t_proc      (avg)   t_wall      (avg)    n_eval
+        //     nlp_f  |  23.27ms (217.46us)  23.44ms (219.05us)       107
+        //     nlp_g  |  27.51ms (257.09us)  27.57ms (257.65us)       107
+        // nlp_grad_f  |  39.72ms (374.68us)  39.87ms (376.14us)       106
+        // nlp_hess_l  | 244.66ms (  2.35ms) 245.20ms (  2.36ms)       104
+        // nlp_jac_g  | 176.39ms (  1.66ms) 176.76ms (  1.67ms)       106
+        //     total  |   1.49 s (  1.49 s)   1.49 s (  1.49 s)         1
+        // Solve time: 1488881 microseconds
     
     // Extract solution
     std::vector<double> sol = std::vector<double>(res.at("x"));
