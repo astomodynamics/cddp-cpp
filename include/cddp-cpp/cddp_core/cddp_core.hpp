@@ -162,7 +162,17 @@ public:
      * @brief Set the Reference state
      * @param reference_state  Reference state
      */
-    void setReferenceState(const Eigen::VectorXd& reference_state) { reference_state_ = reference_state; }
+    void setReferenceState(const Eigen::VectorXd& reference_state) {        
+        reference_state_ = reference_state; 
+        // Update the objective reference state
+        objective_->setReferenceState(reference_state);   
+    }
+
+    void setReferenceStates(const std::vector<Eigen::VectorXd>& reference_states) {
+        reference_states_ = reference_states;
+        // Update the objective reference states
+        objective_->setReferenceStates(reference_states);
+    }
 
     /**
      * @brief Set the time horizon for the problem
@@ -282,6 +292,7 @@ private:
     std::unique_ptr<LogBarrier> log_barrier_;
     Eigen::VectorXd initial_state_;      
     Eigen::VectorXd reference_state_;      // Desired reference state
+    std::vector<Eigen::VectorXd> reference_states_;     // Desired reference states (trajectory)
     int horizon_;                      // Time horizon for the problem
     double timestep_;                  // Time step for the problem
     CDDPOptions options_;              // Options for the solver
