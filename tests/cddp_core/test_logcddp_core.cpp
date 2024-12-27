@@ -113,15 +113,15 @@ TEST(CDDPTest, SolveLogCDDP) {
     std::vector<double> y_arr0(horizon + 1, 0.0);
     X[0] = initial_state;
     double v = 0.01;
-    for (int i = 0; i < horizon + 1; ++i) {
-        double x = X[i](0);
-        double y = X[i](1);
-        double theta = X[i](2);
-
-        x_arr0[i] = X[i](0);
-        y_arr0[i] = X[i](1);
-        X[i+1] = Eigen::Vector3d(x + v * cos(theta), y + v * sin(theta), theta - 0.01);
-    }
+    for (int i = 0; i < horizon; ++i) {
+          double x = X[i](0);
+          double y = X[i](1);
+          double theta = X[i](2);
+  
+          x_arr0[i] = X[i](0);
+          y_arr0[i] = X[i](1);
+          X[i+1] = Eigen::Vector3d(x + v * cos(theta), y + v * sin(theta), theta - 0.01);
+      }
 
     cddp_solver.setInitialTrajectory(X, U);
 
