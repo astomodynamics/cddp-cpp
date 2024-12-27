@@ -30,7 +30,10 @@
 #include "cddp_core/helper.hpp"
 #include "cddp_core/boxqp.hpp"
 #include "cddp_core/qp_solver.hpp"
+
+#ifdef CDDP_CPP_TORCH_ENABLED
 #include "cddp_core/neural_dynamical_system.hpp"
+#endif
 
 // Models
 #include "dynamics_model/pendulum.hpp"
