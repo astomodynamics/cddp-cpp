@@ -40,8 +40,8 @@ option(GUROBI_ROOT "Path to Gurobi installation" "")
 set(GUROBI_ROOT $ENV{HOME}/.local/lib/gurobi1103/linux64)
 
 # LibTorch Configuration
-option(CDDP_CPP_TORCH "Whether to use LibTorch" OFF)
-option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" OFF)
+option(CDDP_CPP_TORCH "Whether to use LibTorch" ON)
+option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
 set(LIBTORCH_DIR $ENV{HOME}/.local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Python Configuration
@@ -177,8 +177,6 @@ if (CDDP_CPP_TORCH)
  
   # Export LibTorch variables for other parts of the build
   set(TORCH_INSTALL_PREFIX ${Torch_DIR}/../../../ CACHE PATH "LibTorch installation directory")
-
-  target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_TORCH_ENABLED=1)
 endif()
 
 
@@ -205,7 +203,7 @@ set(cddp_core_srcs
 )
 
 if (CDDP_CPP_TORCH)
-  list(APPEND cddp_core_srcs src/cddp_core/torch_helper.cpp)
+  list(APPEND cddp_core_srcs src/cddp_core/neural_dynamical_system.cpp)
 endif()
 
 set(dynamics_model_srcs
@@ -236,6 +234,7 @@ target_link_libraries(${PROJECT_NAME}
 ) 
 
 if (CDDP_CPP_TORCH)
+target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_TORCH_ENABLED=1)
   target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
 endif()
 
