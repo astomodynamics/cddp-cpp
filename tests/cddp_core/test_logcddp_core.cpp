@@ -135,61 +135,61 @@ TEST(CDDPTest, SolveLogCDDP) {
     auto U_sol = solution.control_sequence; // size: horizon
     auto t_sol = solution.time_sequence; // size: horizon + 1
 
-    // Create directory for saving plot (if it doesn't exist)
-    const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directory(plotDirectory);
-    }
+    // // Create directory for saving plot (if it doesn't exist)
+    // const std::string plotDirectory = "../results/tests";
+    // if (!fs::exists(plotDirectory)) {
+    //     fs::create_directory(plotDirectory);
+    // }
 
-    // Plot the solution (x-y plane)
-    std::vector<double> x_arr, y_arr, theta_arr;
-    for (const auto& x : X_sol) {
-        x_arr.push_back(x(0));
-        y_arr.push_back(x(1));
-        theta_arr.push_back(x(2));
-    }
+    // // Plot the solution (x-y plane)
+    // std::vector<double> x_arr, y_arr, theta_arr;
+    // for (const auto& x : X_sol) {
+    //     x_arr.push_back(x(0));
+    //     y_arr.push_back(x(1));
+    //     theta_arr.push_back(x(2));
+    // }
 
-    // Plot the solution (control inputs)
-    std::vector<double> v_arr, omega_arr;
-    for (const auto& u : U_sol) {
-        v_arr.push_back(u(0));
-        omega_arr.push_back(u(1));
-    }
+    // // Plot the solution (control inputs)
+    // std::vector<double> v_arr, omega_arr;
+    // for (const auto& u : U_sol) {
+    //     v_arr.push_back(u(0));
+    //     omega_arr.push_back(u(1));
+    // }
 
-    // Plot the solution by subplots
-    plt::subplot(2, 1, 1);
-    plt::plot(x_arr, y_arr);
-    plt::plot(x_arr0, y_arr0, "r--");
+    // // Plot the solution by subplots
+    // plt::subplot(2, 1, 1);
+    // plt::plot(x_arr, y_arr);
+    // plt::plot(x_arr0, y_arr0, "r--");
 
-    // // Plot circle constraint
-    std::vector<double> circle_x, circle_y;
-    for (double theta = 0.0; theta < 2 * M_PI; theta += 0.01) {
-        circle_x.push_back(center(0) + radius * cos(theta));
-        circle_y.push_back(center(1) + radius * sin(theta));
-    }
-    plt::plot(circle_x, circle_y, "g--");
+    // // // Plot circle constraint
+    // std::vector<double> circle_x, circle_y;
+    // for (double theta = 0.0; theta < 2 * M_PI; theta += 0.01) {
+    //     circle_x.push_back(center(0) + radius * cos(theta));
+    //     circle_y.push_back(center(1) + radius * sin(theta));
+    // }
+    // plt::plot(circle_x, circle_y, "g--");
 
-    // Plot boundaries
-    std::vector<double> x_lim1 = {0.0, 2.5};
-    std::vector<double> x_lim2 = {2.5, 2.5};
-    std::vector<double> y_lim1 = {2.5, 2.5};
-    std::vector<double> y_lim2 = {0.0, 2.5};
+    // // Plot boundaries
+    // std::vector<double> x_lim1 = {0.0, 2.5};
+    // std::vector<double> x_lim2 = {2.5, 2.5};
+    // std::vector<double> y_lim1 = {2.5, 2.5};
+    // std::vector<double> y_lim2 = {0.0, 2.5};
 
-    plt::plot(x_lim1, y_lim1, "r--");
-    plt::plot(x_lim2, y_lim2, "r--");
+    // plt::plot(x_lim1, y_lim1, "r--");
+    // plt::plot(x_lim2, y_lim2, "r--");
 
-    plt::title("State Trajectory");
-    plt::xlabel("x");
-    plt::ylabel("y");
+    // plt::title("State Trajectory");
+    // plt::xlabel("x");
+    // plt::ylabel("y");
 
-    plt::subplot(2, 1, 2);
-    plt::plot(v_arr);
-    plt::plot(omega_arr);
-    // Plot boundaries
-    plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
-    plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
-    plt::title("Control Inputs");
-    plt::save(plotDirectory + "/dubincs_car_logcddp_test.png");
+    // plt::subplot(2, 1, 2);
+    // plt::plot(v_arr);
+    // plt::plot(omega_arr);
+    // // Plot boundaries
+    // plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
+    // plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
+    // plt::title("Control Inputs");
+    // plt::save(plotDirectory + "/dubincs_car_logcddp_test.png");
 
 //     // Create figure and axes
 //     plt::figure_size(800, 600);
