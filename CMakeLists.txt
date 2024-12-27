@@ -40,8 +40,8 @@ option(GUROBI_ROOT "Path to Gurobi installation" "")
 set(GUROBI_ROOT $ENV{HOME}/.local/lib/gurobi1103/linux64)
 
 # LibTorch Configuration
-set(CDDP_CPP_TORCH "Whether to use LibTorch" ON)
-option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" ON)
+option(CDDP_CPP_TORCH "Whether to use LibTorch" OFF)
+option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" OFF)
 set(LIBTORCH_DIR $ENV{HOME}/.local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Python Configuration
@@ -177,6 +177,8 @@ if (CDDP_CPP_TORCH)
  
   # Export LibTorch variables for other parts of the build
   set(TORCH_INSTALL_PREFIX ${Torch_DIR}/../../../ CACHE PATH "LibTorch installation directory")
+
+  target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_TORCH_ENABLED=1)
 endif()
 
 
@@ -200,8 +202,11 @@ set(cddp_core_srcs
   src/cddp_core/clddp_core.cpp
   src/cddp_core/asddp_core.cpp
   src/cddp_core/logddp_core.cpp
-  src/cddp_core/neural_dynamical_system.cpp
 )
+
+if (CDDP_CPP_TORCH)
+  list(APPEND cddp_core_srcs src/cddp_core/torch_helper.cpp)
+endif()
 
 set(dynamics_model_srcs
   src/dynamics_model/pendulum.cpp
@@ -228,8 +233,11 @@ target_link_libraries(${PROJECT_NAME}
   Python3::Python
   Python3::Module
   Python3::NumPy
-  ${TORCH_LIBRARIES}
 ) 
+
+if (CDDP_CPP_TORCH)
+  target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
+endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/cddp-cpp>
@@ -238,7 +246,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 )
 
 # Ensure proper CUDA support if enabled
-if(CDDP_CPP_TORCH_GPU)
+if(TORCH_FOUND AND CDDP_CPP_TORCH_GPU)
   set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES native)
 endif()
 
