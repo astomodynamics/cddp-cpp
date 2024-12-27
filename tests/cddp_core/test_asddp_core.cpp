@@ -90,7 +90,7 @@ TEST(CDDPTest, SolveASCDDP) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solveASCDDP();
+    cddp::CDDPSolution solution = cddp_solver.solve("ASCDDP");
 
     ASSERT_TRUE(solution.converged);
 

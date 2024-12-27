@@ -17,6 +17,7 @@
 #define CDDP_CDDP_CORE_HPP
 
 #include <iostream> // For std::cout, std::cerr
+#include <string>  // For std::string
 #include <memory> // For std::unique_ptr
 #include <map>    // For std::map`
 #include <iomanip> // For std::setw
@@ -30,12 +31,13 @@
 #include "cddp_core/dynamical_system.hpp" 
 #include "cddp_core/objective.hpp"
 #include "cddp_core/constraint.hpp"
+#include "cddp_core/barrier.hpp"
 #include "cddp_core/boxqp.hpp"
 
 namespace cddp {
 
 struct CDDPOptions {
-    double cost_tolerance = 1e-7;                   // Tolerance for changes in cost function
+    double cost_tolerance = 1e-6;                   // Tolerance for changes in cost function
     double grad_tolerance = 1e-4;                   // Tolerance for cost gradient magnitude
     int max_iterations = 1;                         // Maximum number of iterations
     double max_cpu_time = 0.0;                      // Maximum CPU time for the solver in seconds
@@ -50,24 +52,26 @@ struct CDDPOptions {
     // log-barrier method
     double barrier_coeff = 1e-2;                    // Coefficient for log-barrier method
     double barrier_factor = 0.90;                   // Factor for log-barrier method
-    double barrier_tolerance = 1e-6;                // Tolerance for log-barrier method
+    double barrier_tolerance = 1e-8;                // Tolerance for log-barrier method
     double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
     int barrier_order = 2;                          // Order for log-barrier method
+    double filter_acceptance = 1e-8;                            // Small value for filter acceptance
+    double constraint_tolerance = 1e-12;             // Tolerance for constraint violation
 
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
     
     double regularization_state = 1e-6;             // Regularization for state
     double regularization_state_step = 1.0;         // Regularization step for state
-    double regularization_state_max = 1e10;          // Maximum regularization
-    double regularization_state_min = 1e-6;         // Minimum regularization
-    double regularization_state_factor = 1.6;       // Factor for state regularization
+    double regularization_state_max = 1e4;          // Maximum regularization
+    double regularization_state_min = 1e-8;         // Minimum regularization
+    double regularization_state_factor = 1e1;       // Factor for state regularization
 
     double regularization_control = 1e-6;           // Regularization for control
     double regularization_control_step = 1.0;       // Regularization step for control
-    double regularization_control_max = 1e10;        // Maximum regularization
-    double regularization_control_min = 1e-6;       // Minimum regularization
-    double regularization_control_factor = 1.6;     // Factor for control regularization
+    double regularization_control_max = 1e4;        // Maximum regularization
+    double regularization_control_min = 1e-8;       // Minimum regularization
+    double regularization_control_factor = 1e1;     // Factor for control regularization
 
     // Other options
     bool verbose = true;                            // Option for debug printing
@@ -75,6 +79,8 @@ struct CDDPOptions {
     bool is_ilqr = true;                            // Option for iLQR
     bool use_parallel = true;                      // Option for parallel computation
     int num_threads = max_line_search_iterations; // Number of threads to use
+    bool is_relaxed_log_barrier = false;            // Use relaxed log-barrier method
+    bool early_termination = true;                 // Terminate early if cost does not change NOTE: This may be critical for some problems
 
     // Boxqp options
     double boxqp_max_iterations = 100;              // Maximum number of iterations for boxqp
@@ -104,8 +110,17 @@ struct ForwardPassResult {
     std::vector<Eigen::VectorXd> control_sequence;
     double cost;
     double lagrangian;
-    double alpha;
-    bool success;
+    double alpha = 1.0;
+    bool success = false;
+    double constraint_violation = 0.0;
+};
+
+struct FilterPoint {
+    double cost;
+    double violation;
+    bool dominates(const FilterPoint& other) const {
+        return cost <= other.cost && violation <= other.violation;
+    }
 };
 
 class CDDP {
@@ -131,8 +146,6 @@ public:
     const CDDPOptions& getOptions() const { return options_; }
 
     // Setters
-    // void setDynamicalSystem(std::unique_ptr<torch::nn::Module> system) { torch_system_ = std::move(system); } 
-    
     /**
      * @brief Set the Dynamical System object
      * @param system Dynamical system object (unique_ptr)
@@ -202,8 +215,6 @@ public:
     // Get a specific constraint by name
     template <typename T>
     T* getConstraint(const std::string& name) const {
-        // 'find' is a const operation on standard associative containers 
-        // and does not modify 'constraint_set_'
         auto it = constraint_set_.find(name);
         
         // For other constraints, return nullptr if not found
@@ -230,21 +241,25 @@ public:
     void initializeCDDP();
 
     // Solve the problem
-    CDDPSolution solve();
-    CDDPSolution solveLogCDDP();
-    CDDPSolution solveASCDDP();
+    CDDPSolution solve(std::string solver_type = "CLCDDP");
+    
 private:
     // Solver methods
-    ForwardPassResult solveForwardPass(double alpha);
-    bool solveBackwardPass();
+    CDDPSolution solveCLCDDP();
+    ForwardPassResult solveCLCDDPForwardPass(double alpha);
+    bool solveCLCDDPBackwardPass();
 
+    CDDPSolution solveLogCDDP();
     ForwardPassResult solveLogCDDPForwardPass(double alpha);
     bool solveLogCDDPBackwardPass();
 
+    CDDPSolution solveASCDDP();
     ForwardPassResult solveASCDDPForwardPass(double alpha);
     bool solveASCDDPBackwardPass();
 
     // Helper methods
+    double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
+
     bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
 
     void printSolverInfo();
@@ -253,7 +268,7 @@ private:
 
     void printIteration(int iter, double cost, double lagrangian, 
                         double grad_norm, double lambda_state, 
-                        double lambda_control, double alpha);
+                        double lambda_control, double alpha, double mu, double constraint_violation);
     
     void printSolution(const CDDPSolution& solution);
 
@@ -285,6 +300,11 @@ private:
     // Line search
     double alpha_; // Line search step size
     std::vector<double> alphas_;
+
+    // Log-barrier
+    double mu_; // Barrier coefficient
+    double constraint_violation_; // Current constraint violation measure
+    double gamma_; // Small value for filter acceptance
 
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_;

@@ -192,10 +192,12 @@ set(cddp_core_srcs
   src/cddp_core/dynamical_system.cpp
   src/cddp_core/objective.cpp
   src/cddp_core/constraint.cpp
+  src/cddp_core/barrier.cpp
   src/cddp_core/helper.cpp
   src/cddp_core/boxqp.cpp
   src/cddp_core/qp_solver.cpp
   src/cddp_core/cddp_core.cpp
+  src/cddp_core/clddp_core.cpp
   src/cddp_core/asddp_core.cpp
   src/cddp_core/logddp_core.cpp
   src/cddp_core/neural_dynamical_system.cpp

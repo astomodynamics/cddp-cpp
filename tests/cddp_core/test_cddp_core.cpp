@@ -37,12 +37,12 @@ TEST(CDDPTest, Solve) {
     std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::DubinsCar>(timestep, integration_type); // Create unique_ptr
 
     // Create objective function
-    Eigen::MatrixXd Q = 5 * Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
     Eigen::MatrixXd R = 0.5 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf << 1200.0, 0.0, 0.0,
-          0.0, 1200.0, 0.0,
-          0.0, 0.0, 700.0;
+    Qf << 50.0, 0.0, 0.0,
+          0.0, 50.0, 0.0,
+          0.0, 0.0, 10.0;
     Qf = 0.5 * Qf;
     Eigen::VectorXd goal_state(state_dim);
     goal_state << 2.0, 2.0, M_PI/2.0;
@@ -78,9 +78,9 @@ TEST(CDDPTest, Solve) {
 
     // Define constraints
     Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -1.0, -3.1415;
+    control_lower_bound << -1.0, -M_PI;
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 1.0, 3.1415;
+    control_upper_bound << 1.0, M_PI;
     
     // Add the constraint to the solver
     cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));

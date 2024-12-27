@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 # CMakeLists.txt for the CDDP examples
-
 add_executable(cddp_bicycle cddp_bicycle.cpp)
 target_link_libraries(cddp_bicycle cddp)
 
@@ -38,7 +37,13 @@ target_link_libraries(cddp_pendulum cddp)
 add_executable(cddp_quadrotor cddp_quadrotor.cpp)
 target_link_libraries(cddp_quadrotor cddp)
 
-# Neural dynamics example
+# Ipopt examples
+if (CDDP_CPP_CASADI)
+    add_executable(ipopt_car ipopt_car.cpp)
+    target_link_libraries(ipopt_car cddp)
+endif()
+
+# Neural dynamics examples
 add_executable(prepare_pendulum neural_dynamics/prepare_pendulum.cpp)
 target_link_libraries(prepare_pendulum cddp)
 
