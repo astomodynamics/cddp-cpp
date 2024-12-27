@@ -37,7 +37,8 @@ TEST(CDDPTest, SolveLogCDDP) {
     std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::DubinsCar>(timestep, integration_type); // Create unique_ptr
 
     // Create objective function
-    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd Q = 0.1 * Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Q(2, 2) = 0.0;
     Eigen::MatrixXd R = 0.5 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
     Qf << 50.0, 0.0, 0.0,
@@ -55,10 +56,19 @@ TEST(CDDPTest, SolveLogCDDP) {
     Eigen::VectorXd initial_state(state_dim);
     initial_state << 0.0, 0.0, M_PI/4.0; 
 
-    // Create CDDP options
+    // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 10;
-    options.cost_tolerance = 1e-1;
+    options.max_iterations = 30;
+    options.cost_tolerance = 1e-5;
+    options.use_parallel = true;
+    options.num_threads = 10;
+    options.regularization_type = "both";
+    options.regularization_state = 1e-5;
+    options.regularization_control = 1e-3;
+    options.barrier_coeff = 1e-2;
+    options.barrier_factor = 1e-1;
+    options.verbose = true;
+    options.debug = false;
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(
@@ -72,15 +82,26 @@ TEST(CDDPTest, SolveLogCDDP) {
     cddp_solver.setDynamicalSystem(std::move(system));
     cddp_solver.setObjective(std::move(objective));
 
-    // Define constraints
+    // Define control box constraints
     Eigen::VectorXd control_lower_bound(control_dim);
     control_lower_bound << -1.0, -M_PI;
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 1.0, M_PI;
-    
-    // Add the constraint to the solver
     cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-    auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    auto control_box_constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+
+    // Define state box constraints
+    Eigen::VectorXd state_lower_bound(state_dim);
+    state_lower_bound << -0.1, -0.1, -10.0;
+    Eigen::VectorXd state_upper_bound(state_dim);
+    state_upper_bound << 2.5, 2.5, 10.0;
+    cddp_solver.addConstraint(std::string("StateBoxConstraint"), std::make_unique<cddp::StateBoxConstraint>(state_lower_bound, state_upper_bound));
+    auto state_box_constraint = cddp_solver.getConstraint<cddp::StateBoxConstraint>("StateBoxConstraint");
+
+    // Define ball constraint
+    double radius = 0.2;
+    Eigen::Vector2d center(1.0, 1.0);
+    // cddp_solver.addConstraint(std::string("BallConstraint"), std::make_unique<cddp::BallConstraint>(radius, center, 0.1));
 
     // Set options
     cddp_solver.setOptions(options);
@@ -88,10 +109,24 @@ TEST(CDDPTest, SolveLogCDDP) {
     // Set initial trajectory
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    std::vector<double> x_arr0(horizon + 1, 0.0);
+    std::vector<double> y_arr0(horizon + 1, 0.0);
+    X[0] = initial_state;
+    double v = 0.01;
+    for (int i = 0; i < horizon + 1; ++i) {
+        double x = X[i](0);
+        double y = X[i](1);
+        double theta = X[i](2);
+
+        x_arr0[i] = X[i](0);
+        y_arr0[i] = X[i](1);
+        X[i+1] = Eigen::Vector3d(x + v * cos(theta), y + v * sin(theta), theta - 0.01);
+    }
+
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
+    cddp::CDDPSolution solution = cddp_solver.solve("LogCDDP");
     solution.converged = true;
     ASSERT_TRUE(solution.converged);
 
@@ -124,6 +159,25 @@ TEST(CDDPTest, SolveLogCDDP) {
     // // Plot the solution by subplots
     // plt::subplot(2, 1, 1);
     // plt::plot(x_arr, y_arr);
+    // plt::plot(x_arr0, y_arr0, "r--");
+
+    // // // Plot circle constraint
+    // std::vector<double> circle_x, circle_y;
+    // for (double theta = 0.0; theta < 2 * M_PI; theta += 0.01) {
+    //     circle_x.push_back(center(0) + radius * cos(theta));
+    //     circle_y.push_back(center(1) + radius * sin(theta));
+    // }
+    // plt::plot(circle_x, circle_y, "g--");
+
+    // // Plot boundaries
+    // std::vector<double> x_lim1 = {0.0, 2.5};
+    // std::vector<double> x_lim2 = {2.5, 2.5};
+    // std::vector<double> y_lim1 = {2.5, 2.5};
+    // std::vector<double> y_lim2 = {0.0, 2.5};
+
+    // plt::plot(x_lim1, y_lim1, "r--");
+    // plt::plot(x_lim2, y_lim2, "r--");
+
     // plt::title("State Trajectory");
     // plt::xlabel("x");
     // plt::ylabel("y");

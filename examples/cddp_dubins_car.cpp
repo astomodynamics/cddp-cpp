@@ -70,6 +70,8 @@ int main() {
     // Set options
     cddp::CDDPOptions options;
     options.max_iterations = 10;
+    options.barrier_coeff = 1e-2;
+    options.barrier_factor = 0.1;
     cddp_solver.setOptions(options);
 
     // Set initial trajectory
@@ -78,7 +80,8 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    // cddp::CDDPSolution solution = cddp_solver.solve("CLCDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("LogCDDP");
 
     // Extract solution
     auto X_sol = solution.state_sequence; // size: horizon + 1

@@ -84,7 +84,7 @@ CDDPSolution CDDP::solveASCDDP()
     solution.lagrangian_sequence.push_back(L_);
 
     if (options_.verbose) {
-        printIteration(0, J_, J_, optimality_gap_, regularization_state_, regularization_control_, alpha_); // Initial iteration information
+        printIteration(0, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_); // Initial iteration information
     }
 
     // Start timer
@@ -120,32 +120,27 @@ CDDPSolution CDDP::solveASCDDP()
                 std::cerr << "CDDP: Backward pass failed" << std::endl;
 
                 // Increase regularization
-                regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
-                regularization_state_ = std::max(regularization_state_ * regularization_state_step_, options_.regularization_state_min);
-                regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
-                regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_min);
+                if (options_.regularization_type == "state") {
+                    regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
+                    regularization_state_ = std::max(regularization_state_ * regularization_state_step_, options_.regularization_state_min);
+                } else if (options_.regularization_type == "control") {
+                    regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
+                    regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_min);
+                } else if (options_.regularization_type == "both") {
+                    regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
+                    regularization_state_ = std::max(regularization_state_ * regularization_state_step_, options_.regularization_state_min);
+                    regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
+                    regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_min);
+                } 
 
-                if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max)
-                {
-                    std::cerr << "CDDP: Regularization limit reached" << std::endl;
+                if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
+                    if (options_.verbose) {
+                        std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
+                    }
                     break; // Exit if regularization limit reached
                 }
                 continue; // Continue if backward pass fails
             }
-        }
-
-        // Check termination due to small cost improvement
-        if (optimality_gap_ < options_.grad_tolerance) {
-            regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
-            regularization_state_ *= regularization_state_step_ * (regularization_state_ > options_.regularization_state_min ? 1.0 : 0.0);
-            regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
-            regularization_control_ *= regularization_control_step_ * (regularization_control_ > options_.regularization_control_min ? 1.0 : 0.0);
-            
-            if (regularization_state_ < 1e-5 && regularization_control_ < 1e-5) {
-                solution.converged = true;
-                break;
-            }
-            
         }
 
         // 2. Forward pass (either single-threaded or multi-threaded)
@@ -189,10 +184,30 @@ CDDPSolution CDDP::solveASCDDP()
             solution.lagrangian_sequence.push_back(L_);
 
             // Decrease regularization
-            regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
-            regularization_state_ *= regularization_state_step_ * (regularization_state_ > options_.regularization_state_min ? 1.0 : 0.0);
-            regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
-            regularization_control_ *= regularization_control_step_ * (regularization_control_ > options_.regularization_control_min ? 1.0 : 0.0);
+            if (options_.regularization_type == "state") {
+                regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
+                regularization_state_ *= regularization_state_step_;
+                if (regularization_state_ < options_.regularization_state_min) {
+                    regularization_state_ = options_.regularization_state_min;
+                }
+            } else if (options_.regularization_type == "control") {
+                regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
+                regularization_control_ *= regularization_control_step_;
+                if (regularization_control_ < options_.regularization_control_min) {
+                    regularization_control_ = options_.regularization_control_min;
+                }
+            } else if (options_.regularization_type == "both") {
+                regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
+                regularization_state_ *= regularization_state_step_;
+                if (regularization_state_ < options_.regularization_state_min) {
+                    regularization_state_ = options_.regularization_state_min;
+                }
+                regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
+                regularization_control_ *= regularization_control_step_;
+                if (regularization_control_ < options_.regularization_control_min) {
+                    regularization_control_ = options_.regularization_control_min;
+                }
+            }
 
             // Check termination
             if (dJ_ < options_.cost_tolerance) {
@@ -200,23 +215,68 @@ CDDPSolution CDDP::solveASCDDP()
                 break;
             }
         } else {
+            bool early_termination_flag = false; // TODO: Improve early termination
             // Increase regularization
-            regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
-            regularization_state_ = std::max(regularization_state_ * regularization_state_step_, options_.regularization_state_max);
-            regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
-            regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_max);
+            if (options_.regularization_type == "state") {
+                if (regularization_state_ < 1e-2) {
+                    early_termination_flag = true; // Early termination if regularization is fairly small
+                }
+                regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
+                regularization_state_ = std::min(regularization_state_ * regularization_state_step_, options_.regularization_state_max);
+                
+            } else if (options_.regularization_type == "control") {
+                if (regularization_control_ < 1e-2) {
+                    early_termination_flag = true; // Early termination if regularization is fairly small
+                }
+                regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
+                regularization_control_ = std::min(regularization_control_ * regularization_control_step_, options_.regularization_control_max);
+            } else if (options_.regularization_type == "both") {
+                if (regularization_state_ < 1e-2 ||  
+                    regularization_control_ < 1e-2) {
+                    early_termination_flag = true; // Early termination if regularization is fairly small
+                }
+                regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
+                regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
+            } else {
+                early_termination_flag = true;
+            }
 
+            // Check early termination
+            if (options_.early_termination && early_termination_flag) {
+                if (dJ_ < options_.cost_tolerance * 1e2 ||
+                    (optimality_gap_ < options_.grad_tolerance * 1e1)) 
+                {
+                    solution.converged = true;
+                    if (options_.verbose) {
+                        std::cerr << "CDDP: Early termination due to small cost reduction" << std::endl;
+                    }
+                    break;
+                }
+            }
+            
             // Check regularization limit
             if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
-                std::cerr << "CDDP: Regularization limit reached" << std::endl;
-                solution.converged = false;
+                if ((dJ_ < options_.cost_tolerance * 1e2) ||
+                    (optimality_gap_ < options_.grad_tolerance * 1e1)) 
+                {
+                    solution.converged = true;
+                }  else
+                {
+                    // We are forced to large regularization but still not near local min
+                    solution.converged = false;
+                }
+                if (options_.verbose) {
+                    std::cerr << "CDDP: Regularization limit reached. "
+                            << (solution.converged ? "Treating as converged." : "Not converged.") 
+                            << std::endl;
+                }
                 break;
             }
         }
 
         // Print iteration information
         if (options_.verbose) {
-            printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_); 
+            printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_); 
         }
     }
 
