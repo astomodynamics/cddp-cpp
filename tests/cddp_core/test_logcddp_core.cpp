@@ -46,7 +46,7 @@ TEST(CDDPTest, SolveLogCDDP) {
           0.0, 0.0, 10.0;
     Qf = 0.5 * Qf;
     Eigen::VectorXd goal_state(state_dim);
-    goal_state << 2.0, 2.0, M_PI/2.0;
+    goal_state << 3.0, 2.0, M_PI/2.0;
 
     // Create an empty vector of Eigen::VectorXd
     std::vector<Eigen::VectorXd> empty_reference_states; 
@@ -81,6 +81,10 @@ TEST(CDDPTest, SolveLogCDDP) {
       options);
     cddp_solver.setDynamicalSystem(std::move(system));
     cddp_solver.setObjective(std::move(objective));
+
+    // Update goal state (for test)
+    goal_state << 2.0, 2.0, M_PI/2.0;
+    cddp_solver.setReferenceState(goal_state);
 
     // Define control box constraints
     Eigen::VectorXd control_lower_bound(control_dim);
