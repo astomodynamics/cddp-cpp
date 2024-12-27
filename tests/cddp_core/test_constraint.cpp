@@ -64,7 +64,7 @@ TEST(StateBoxConstraint, Evaluate) {
 
 TEST(CircleConstraintTest, Evaluate) {
     // Create a circle constraint with a radius of 2.0
-    cddp::CircleConstraint constraint(2.0);
+    cddp::BallConstraint constraint(2.0, Eigen::Vector2d(0.0, 0.0));
 
     // Test with a state inside the circle
     Eigen::VectorXd state(2);
@@ -72,10 +72,54 @@ TEST(CircleConstraintTest, Evaluate) {
     Eigen::VectorXd control(1); // Control doesn't matter for this constraint
     control << 0.0; 
     Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
-    ASSERT_NEAR(constraint_value(0), 2.0, 1e-6); // 1.0^2 + 1.0^2 = 2.0
+    ASSERT_NEAR(constraint_value(0), 2.0, 1e-6); 
 
     // Test with a state outside the circle
     state << 2.5, 1.5;
     constraint_value = constraint.evaluate(state, control);
-    ASSERT_NEAR(constraint_value(0), 6.25 + 2.25, 1e-6); // 2.5^2 + 1.5^2 = 8.5
+    ASSERT_NEAR(constraint_value(0), 8.5, 1e-6);
+}
+
+TEST(CircleConstraintTest, Gradients) {
+    // Create a circle constraint with a radius of 2.0
+    cddp::BallConstraint constraint(2.0, Eigen::Vector2d(0.0, 0.0));
+
+    // Test with a state inside the circle
+    Eigen::VectorXd state(2);
+    state << 1.0, 1.0;
+    Eigen::VectorXd control(1); // Control doesn't matter for this constraint
+    control << 0.0; 
+    Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
+    auto gradients = constraint.getJacobians(state, control);
+    ASSERT_TRUE(std::get<0>(gradients).isApprox(Eigen::Vector2d(2.0, 2.0)));
+    ASSERT_TRUE(std::get<1>(gradients).isApprox(Eigen::Vector2d(0.0, 0.0)));
+
+    // Test with a state outside the circle
+    state << 2.5, 1.5;
+    constraint_value = constraint.evaluate(state, control);
+    gradients = constraint.getJacobians(state, control);
+    ASSERT_TRUE(std::get<0>(gradients).isApprox(Eigen::Vector2d(5.0, 3.0)));
+    ASSERT_TRUE(std::get<1>(gradients).isApprox(Eigen::Vector2d(0.0, 0.0)));
+}
+
+TEST(LinearConstraintTest, Evaluate) {
+    // Create a linear constraint with A = [1, 1], b = 1
+    Eigen::MatrixXd A(1, 2);
+    A << 1.0, 1.0;
+    Eigen::VectorXd b(1);
+    b << 1.0;
+    cddp::LinearConstraint constraint(A, b);
+
+    // Test with a state that satisfies the constraint
+    Eigen::VectorXd state(2);
+    state << 0.5, 0.5;
+    Eigen::VectorXd control(1); // Control doesn't matter for this constraint
+    control << 0.0;
+    Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
+    ASSERT_NEAR(constraint_value(0), 1.0, 1e-6);
+
+    // Test with a state that violates the constraint
+    state << 0.5, -0.5;
+    constraint_value = constraint.evaluate(state, control);
+    ASSERT_NEAR(constraint_value(0), 0.0, 1e-6);
 }

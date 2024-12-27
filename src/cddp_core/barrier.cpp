@@ -46,13 +46,14 @@ double LogBarrier::evaluate(const Constraint &constraint, const Eigen::VectorXd 
 
         barrier_cost = barrier_coeff_ * (upper_log.sum() + lower_log.sum());
         
+    } else if (constraint.getName() == "BallConstraint") {
+        const Eigen::VectorXd& constraint_value = constraint.evaluate(state, control); // ||y - c||^2
+        const Eigen::VectorXd& lower = constraint.getLowerBound(); // r^2
+        double z = -lower(0) + constraint_value(0); // -r^2 + ||y - c||^2 > 0
+        double log_z = log(std::max(z, eps));
+        barrier_cost = -barrier_coeff_ * log_z;
     } else {
-        Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
-
-        // Apply bounds to avoid log(0)
-        constraint_value = constraint_value.array().max(eps);
-
-        barrier_cost = barrier_coeff_ * std::log(constraint_value.norm());
+        std::cerr << "LogBarrier: Unsupported constraint type" << std::endl;
     }
     return barrier_cost;
 }
@@ -86,8 +87,16 @@ std::tuple<Eigen::VectorXd, Eigen::VectorXd> LogBarrier::getGradients(const Cons
         } else { // StateBoxConstraint
             state_grad = gradient;
         }
-    } else{
+    }  else if (constraint.getName() == "BallConstraint") {
+        const Eigen::VectorXd& constraint_value = constraint.evaluate(state, control); // ||y - c||^2
+        const Eigen::VectorXd& diff = state - constraint.getCenter(); // y - c
+        const Eigen::VectorXd& lower = constraint.getLowerBound(); // r^2
+        double z = -lower(0) + constraint_value(0); // -r^2 + ||y - c||^2 > 0
+        z = std::max(z, eps);
+        state_grad = -barrier_coeff_ * 2.0 * diff / z;
 
+    } else{ 
+        std::cerr << "LogBarrier: Unsupported constraint type" << std::endl;
     }
 
     return {state_grad, control_grad};
@@ -125,8 +134,16 @@ std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> LogBarrier::getHes
         } else { // StateBoxConstraint
             state_hess = hess_diag.asDiagonal();
         }
+    } else if (constraint.getName() == "BallConstraint") {
+        const Eigen::VectorXd& constraint_value = constraint.evaluate(state, control); // ||y - c||^2
+        const Eigen::VectorXd& diff = state - constraint.getCenter(); // y - c
+        const Eigen::VectorXd& lower = constraint.getLowerBound(); // r^2
+        double z = -lower(0) + constraint_value(0); // -r^2 + ||y - c||^2 > 0
+        z = std::max(z, eps);
+        Eigen::MatrixXd hess = 4 * barrier_coeff_ * diff * diff.transpose() / (z * z) - 2 * barrier_coeff_ * Eigen::MatrixXd::Identity(state.size(), state.size()) / z;
+        state_hess = hess;
     } else {
-
+        std::cerr << "LogBarrier: Unsupported constraint type" << std::endl;
     }
 
     return {state_hess, control_hess, cross_hess};

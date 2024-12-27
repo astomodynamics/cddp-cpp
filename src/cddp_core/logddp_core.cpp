@@ -262,7 +262,9 @@ CDDPSolution CDDP::solveLogCDDP()
                     early_termination_flag = true; // Early termination if regularization is fairly small
                 }
                 regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
+                regularization_state_ = std::min(regularization_state_ * regularization_state_step_, options_.regularization_state_max);
                 regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
+                regularization_control_ = std::min(regularization_control_ * regularization_control_step_, options_.regularization_control_max);
             } else {
                 early_termination_flag = true;
             }
@@ -505,9 +507,16 @@ ForwardPassResult CDDP::solveLogCDDPForwardPass(double alpha) {
             }
             total_violation += constraint.second->computeViolation(X_new[t+1], U_new[t]);
 
-            // Early termination if constraint violation is too large
-            if (total_violation > options_.constraint_tolerance) {
-                return result;
+            // Early termination if constraint is violated
+            if (total_violation > options_.constraint_tolerance && !options_.is_relaxed_log_barrier) {
+                if (options_.debug) {
+                    std::cerr << "CDDP: Constraint violation at time " << t << std::endl;
+                    std::cerr << "Constraint violation: " << total_violation << std::endl;
+                    std::cout << "state: " << X_new[t+1].transpose() << std::endl;
+                    std::cout << "control: " << U_new[t].transpose() << std::endl;
+                    std::cout << "alpha: " << alpha << std::endl;
+                }
+                return result; // Return with failure
             }
         }
     }
