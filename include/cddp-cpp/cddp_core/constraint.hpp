@@ -33,6 +33,8 @@ public:
     // Get the name of the constraint
     const std::string& getName() const { return name_; }
 
+    virtual int getDualDim() const { return 0; }
+
     // Evaluate the constraint function: g(x, u)
     virtual Eigen::VectorXd evaluate(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const = 0;
@@ -85,6 +87,10 @@ public:
         : Constraint("ControlBoxConstraint"), 
           lower_bound_(lower_bound), 
           upper_bound_(upper_bound) {}
+
+    int getDualDim() const override {
+        return lower_bound_.size() + upper_bound_.size();
+    }
 
     Eigen::VectorXd evaluate(const Eigen::VectorXd& state, 
                              const Eigen::VectorXd& control) const override 
@@ -141,6 +147,10 @@ public:
         : Constraint("StateBoxConstraint"), 
           lower_bound_(lower_bound), 
           upper_bound_(upper_bound) {}
+    
+    int getDualDim() const override {
+        return lower_bound_.size() + upper_bound_.size();
+    }
 
     Eigen::VectorXd evaluate(const Eigen::VectorXd& state, 
                              const Eigen::VectorXd& control) const override 
@@ -199,6 +209,10 @@ public:
           A_(A), 
           b_(b),
           scale_factor_(scale_factor) {}
+    
+    int getDualDim() const override {
+        return b_.size();
+    }
 
     Eigen::VectorXd evaluate(const Eigen::VectorXd& state, 
                              const Eigen::VectorXd& control) const override 
@@ -254,6 +268,10 @@ public:
         center_(center), 
         scale_factor_(scale_factor)
     {
+    }
+
+    int getDualDim() const override {
+        return 1;
     }
 
    
