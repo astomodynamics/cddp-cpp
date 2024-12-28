@@ -287,7 +287,7 @@ CDDPSolution CDDP::solveCLCDDP() {
     // Finalize solution
     solution.state_sequence = X_;
     solution.control_sequence = U_;
-    solution.control_gain = K_;
+    solution.control_gain = K_u_;
     solution.alpha = alpha_;
     solution.solve_time = duration.count(); // Time in microseconds
     
@@ -388,7 +388,7 @@ bool CDDP::solveCLCDDPBackwardPass() {
             // Solve QP by boxQP
             const Eigen::VectorXd& lb = control_box_constraint->getLowerBound() - u;
             const Eigen::VectorXd& ub = control_box_constraint->getUpperBound() - u;
-            const Eigen::VectorXd& x0 = k_[t]; // Initial guess
+            const Eigen::VectorXd& x0 = k_u_[t]; // Initial guess
             
             cddp::BoxQPResult qp_result = boxqp_solver_.solve(Q_uu_reg, Q_u, lb, ub, x0);
             
@@ -432,8 +432,8 @@ bool CDDP::solveCLCDDPBackwardPass() {
         }
 
         // Store feedforward and feedback gain
-        k_[t] = k;
-        K_[t] = K;
+        k_u_[t] = k;
+        K_u_[t] = K;
 
         // Compute value function approximation
         Eigen::Vector2d dV_step;
@@ -482,7 +482,7 @@ ForwardPassResult CDDP::solveCLCDDPForwardPass(double alpha) {
         const Eigen::VectorXd& u = U_new[t];
         const Eigen::VectorXd& delta_x = x - X_[t];
 
-        U_new[t] = u + alpha * k_[t] + K_[t] * delta_x;
+        U_new[t] = u + alpha * k_u_[t] + K_u_[t] * delta_x;
 
         if (control_box_constraint != nullptr) {
             U_new[t] = control_box_constraint->clamp(U_new[t]);

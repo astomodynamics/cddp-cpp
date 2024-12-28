@@ -432,8 +432,8 @@ bool CDDP::solveLogCDDPBackwardPass() {
         K = -H * Q_ux_reg;
      
         // Store feedforward and feedback gain
-        k_[t] = k;
-        K_[t] = K;
+        K_u_[t] = k;
+        k_[t] = K;
 
         // Compute value function approximation
         Eigen::Vector2d dV_step;
@@ -486,7 +486,7 @@ ForwardPassResult CDDP::solveLogCDDPForwardPass(double alpha) {
         const Eigen::VectorXd& u = U_new[t];
         const Eigen::VectorXd& delta_x = x - X_[t];
 
-        U_new[t] = u + alpha * k_[t] + K_[t] * delta_x;
+        U_new[t] = u + alpha * k_u_[t] + K_u_[t] * delta_x;
 
         if (control_box_constraint != nullptr) {
             U_new[t] = control_box_constraint->clamp(U_new[t]);

@@ -333,8 +333,8 @@ private:
     // Intermediate trajectories
     std::vector<Eigen::VectorXd> X_;                            // State trajectory
     std::vector<Eigen::VectorXd> U_;                            // Control trajectory
-    std::map<std::string, std::vector<Eigen::VectorXd>> Dual_;  // Dual trajectory
-    std::map<std::string, std::vector<Eigen::VectorXd>> Slack_; // Slack trajectory 
+    std::map<std::string, std::vector<Eigen::VectorXd>> Y_;  // Dual trajectory
+    std::map<std::string, std::vector<Eigen::VectorXd>> S_; // Slack trajectory 
 
     // Cost and Lagrangian
     double J_; // Cost 
@@ -353,12 +353,16 @@ private:
     double gamma_; // Small value for filter acceptance
 
     // Feedforward and feedback gains
-    std::vector<Eigen::VectorXd> k_;
-    std::vector<Eigen::MatrixXd> K_;
-    std::map<std::string, std::vector<Eigen::VectorXd>> k_dual_;
-    std::map<std::string, std::vector<Eigen::MatrixXd>> K_dual_;
-    std::map<std::string, std::vector<Eigen::VectorXd>> k_slack_;
-    std::map<std::string, std::vector<Eigen::MatrixXd>> K_slack_;
+    std::vector<Eigen::VectorXd> k_u_;
+    std::vector<Eigen::MatrixXd> K_u_;
+    std::map<std::string, std::vector<Eigen::VectorXd>> k_y_;
+    std::map<std::string, std::vector<Eigen::MatrixXd>> K_y_;
+    std::map<std::string, std::vector<Eigen::VectorXd>> k_s_;
+    std::map<std::string, std::vector<Eigen::MatrixXd>> K_s_;
+
+    // Pre-allocated big KKT matrices for a single time step:
+    Eigen::MatrixXd kkt_matrix_;  // (control_dim + 2*total_dual_dim_)^2
+    Eigen::VectorXd kkt_rhs_;     // (control_dim + 2*total_dual_dim_)
 
     // Q-function matrices
     std::vector<Eigen::MatrixXd> Q_UU_;
