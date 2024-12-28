@@ -49,6 +49,12 @@ struct CDDPOptions {
     double backtracking_factor = std::pow(10, (-3.0/10.0));   // Factor for line search backtracking
     double minimum_reduction_ratio = 1e-6;          // Minimum reduction for line search
 
+    // interior-point method
+    double mu_initial = 1e-2;                       // Initial barrier coefficient
+    double mu_min = 1e-8;                           // Minimum barrier coefficient
+    double mu_max = 1e1;                            // Maximum barrier coefficient
+    double mu_reduction_ratio = 0.1;                         // Factor for barrier coefficient
+
     // log-barrier method
     double barrier_coeff = 1e-2;                    // Coefficient for log-barrier method
     double barrier_factor = 0.90;                   // Factor for log-barrier method
@@ -96,9 +102,13 @@ struct CDDPSolution {
     std::vector<double> time_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
     std::vector<Eigen::VectorXd> state_sequence;
+    std::vector<Eigen::VectorXd> dual_sequence;
+    std::vector<Eigen::VectorXd> slack_sequence;
     std::vector<double> cost_sequence;
     std::vector<double> lagrangian_sequence;
-    std::vector<Eigen::MatrixXd> feedback_gain;
+    std::vector<Eigen::MatrixXd> control_gain;
+    std::vector<Eigen::MatrixXd> dual_gain;
+    std::vector<Eigen::MatrixXd> slack_gain;
     int iterations;
     double alpha;
     bool converged;
@@ -108,6 +118,8 @@ struct CDDPSolution {
 struct ForwardPassResult {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
+    std::vector<Eigen::VectorXd> dual_sequence;
+    std::vector<Eigen::VectorXd> slack_sequence;
     double cost;
     double lagrangian;
     double alpha = 1.0;
@@ -143,6 +155,8 @@ public:
     const Eigen::VectorXd& getReferenceState() const { return reference_state_; }
     int getHorizon() const { return horizon_; }
     double getTimestep() const { return timestep_; }
+    int getStateDim() const { return system_->getStateDim(); }
+    int getControlDim() const { return system_->getControlDim(); }
     const CDDPOptions& getOptions() const { return options_; }
 
     // Setters
@@ -213,6 +227,7 @@ public:
      */
     void addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
         constraint_set_[constraint_name] = std::move(constraint);
+        initialized_ = false; // Reset the initialization flag
     }
 
     /**
@@ -255,17 +270,26 @@ public:
     
 private:
     // Solver methods
+    // CLCDDP methods
     CDDPSolution solveCLCDDP();
     ForwardPassResult solveCLCDDPForwardPass(double alpha);
     bool solveCLCDDPBackwardPass();
 
+    // LogCDDP methods
     CDDPSolution solveLogCDDP();
     ForwardPassResult solveLogCDDPForwardPass(double alpha);
     bool solveLogCDDPBackwardPass();
 
+    // ASCDDP methods
     CDDPSolution solveASCDDP();
     ForwardPassResult solveASCDDPForwardPass(double alpha);
     bool solveASCDDPBackwardPass();
+    
+    // IPDDP methods
+    void initializeIPDDP();
+    CDDPSolution solveIPDDP();
+    ForwardPassResult solveIPDDPForwardPass(double alpha);
+    bool solveIPDDPBackwardPass();
 
     // Helper methods
     double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
@@ -298,8 +322,10 @@ private:
     CDDPOptions options_;              // Options for the solver
 
     // Intermediate trajectories
-    std::vector<Eigen::VectorXd> X_;                  // State trajectory
-    std::vector<Eigen::VectorXd> U_;                  // Control trajectory
+    std::vector<Eigen::VectorXd> X_;                            // State trajectory
+    std::vector<Eigen::VectorXd> U_;                            // Control trajectory
+    std::map<std::string, std::vector<Eigen::VectorXd>> Dual_;  // Dual trajectory
+    std::map<std::string, std::vector<Eigen::VectorXd>> Slack_; // Slack trajectory 
 
     // Cost and Lagrangian
     double J_; // Cost 
@@ -320,6 +346,10 @@ private:
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_;
     std::vector<Eigen::MatrixXd> K_;
+    std::map<std::string, std::vector<Eigen::VectorXd>> k_dual_;
+    std::map<std::string, std::vector<Eigen::MatrixXd>> K_dual_;
+    std::map<std::string, std::vector<Eigen::VectorXd>> k_slack_;
+    std::map<std::string, std::vector<Eigen::MatrixXd>> K_slack_;
 
     // Q-function matrices
     std::vector<Eigen::MatrixXd> Q_UU_;
