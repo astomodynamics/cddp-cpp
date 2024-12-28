@@ -157,6 +157,7 @@ public:
     double getTimestep() const { return timestep_; }
     int getStateDim() const { return system_->getStateDim(); }
     int getControlDim() const { return system_->getControlDim(); }
+    int getTotalDualDim() const { return total_dual_dim_; }
     const CDDPOptions& getOptions() const { return options_; }
 
     // Setters
@@ -226,7 +227,13 @@ public:
      * @param constraint constraint object
      */
     void addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
+        // Insert into the map
         constraint_set_[constraint_name] = std::move(constraint);
+
+        // Increment total_dual_dim_
+        int dim = constraint_set_[constraint_name]->getDualDim();
+        total_dual_dim_ += dim;
+
         initialized_ = false; // Reset the initialization flag
     }
 
@@ -320,6 +327,8 @@ private:
     int horizon_;                      // Time horizon for the problem
     double timestep_;                  // Time step for the problem
     CDDPOptions options_;              // Options for the solver
+
+    int total_dual_dim_ = 0; // Number of total dual variables across constraints
 
     // Intermediate trajectories
     std::vector<Eigen::VectorXd> X_;                            // State trajectory
