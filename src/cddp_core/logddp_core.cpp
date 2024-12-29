@@ -433,7 +433,7 @@ bool CDDP::solveLogCDDPBackwardPass() {
      
         // Store feedforward and feedback gain
         K_u_[t] = k;
-        k_[t] = K;
+        k_u_[t] = K;
 
         // Compute value function approximation
         Eigen::Vector2d dV_step;
