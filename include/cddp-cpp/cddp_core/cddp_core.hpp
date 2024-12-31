@@ -118,8 +118,8 @@ struct CDDPSolution {
 struct ForwardPassResult {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
-    std::vector<Eigen::VectorXd> dual_sequence;
-    std::vector<Eigen::VectorXd> slack_sequence;
+    std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
+    std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
     double cost;
     double lagrangian;
     double alpha = 1.0;
@@ -351,7 +351,7 @@ private:
     double mu_; // Barrier coefficient
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
-
+    
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_u_;
     std::vector<Eigen::MatrixXd> K_u_;
@@ -359,10 +359,6 @@ private:
     std::map<std::string, std::vector<Eigen::MatrixXd>> K_y_;
     std::map<std::string, std::vector<Eigen::VectorXd>> k_s_;
     std::map<std::string, std::vector<Eigen::MatrixXd>> K_s_;
-
-    // Pre-allocated big KKT matrices for a single time step:
-    Eigen::MatrixXd kkt_matrix_;  // (control_dim + 2*total_dual_dim_)^2
-    Eigen::VectorXd kkt_rhs_;     // (control_dim + 2*total_dual_dim_)
 
     // Q-function matrices
     std::vector<Eigen::MatrixXd> Q_UU_;
