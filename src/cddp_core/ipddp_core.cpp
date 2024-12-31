@@ -280,9 +280,6 @@ CDDPSolution CDDP::solveIPDDP()
                     
                     // Check for early termination
                     if (result.success) {
-                        if (options_.debug) {
-                            std::cout << "CDDP: Early termination due to successful forward pass" << std::endl;
-                        }
                         break;
                     }
                 }
@@ -362,7 +359,7 @@ CDDPSolution CDDP::solveIPDDP()
             }
 
             // Check termination
-            if (dJ_ < options_.cost_tolerance) {
+            if (dJ_ < options_.cost_tolerance || (std::max(optimality_gap_, mu_) < options_.grad_tolerance)) {
                 solution.converged = true;
                 break;
             }
@@ -434,12 +431,8 @@ CDDPSolution CDDP::solveIPDDP()
         }
 
         // Update barrier parameter mu
-        if (forward_pass_success && optimality_gap_ < options_.grad_tolerance && mu_ > options_.barrier_tolerance) {
-            // Dramatically decrease mu if optimization is going well
-            mu_ = std::max(mu_ * 0.1, options_.barrier_tolerance);
-        } else {
-            // Normal decrease rate
-            mu_ = std::max(mu_ * options_.barrier_factor, options_.barrier_tolerance);
+        if (forward_pass_success && (optimality_gap_ < 0.2 * mu_)) {
+            mu_ = std::max(mu_ * options_.barrier_factor, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
         }
         log_barrier_->setBarrierCoeff(mu_);
     }
@@ -664,12 +657,12 @@ bool CDDP::solveIPDDPBackwardPass() {
     // Compute optimality gap and print
     optimality_gap_ = std::max(Qu_max_norm, residual_max);
 
-    // if (options_.debug) {
-    //     std::cout << "[IPDDP Backward Pass]\n"
-    //               << "    Qu_max_norm:  " << Qu_max_norm << "\n"
-    //               << "    residual_max:  " << residual_max << "\n"
-    //               << "    dV:           " << dV_.transpose() << std::endl;
-    // }
+    if (options_.debug) {
+        std::cout << "[IPDDP Backward Pass]\n"
+                  << "    Qu_max_norm:  " << Qu_max_norm << "\n"
+                  << "    residual_max:  " << residual_max << "\n"
+                  << "    dV:           " << dV_.transpose() << std::endl;
+    }
     return true;
 } // end solveIPDDPBackwardPass
 
@@ -802,9 +795,6 @@ ForwardPassResult CDDP::solveIPDDPForwardPass(double alpha) {
 
     cost_new += objective_->terminal_cost(X_new.back());
     log_cost_new = cost_new - mu_ * sum_log_y;
-
-    std::cout << "cost_new: " << cost_new << std::endl;
-    std::cout << "log_cost_new: " << log_cost_new << std::endl;
 
     FilterPoint candidate{cost_new, log_cost_new};
 

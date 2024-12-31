@@ -82,6 +82,9 @@ gtest_discover_tests(test_constraint)
 add_executable(test_cddp_pendulum test_cddp_pendulum.cpp)
 target_link_libraries(test_cddp_pendulum gtest gmock gtest_main cddp)
 
+add_executable(test_ipddp_car test_ipddp_car.cpp)
+target_link_libraries(test_ipddp_car cddp)
+
 add_executable(test_cddp_core cddp_core/test_cddp_core.cpp)
 target_link_libraries(test_cddp_core gtest gmock gtest_main cddp)
 gtest_discover_tests(test_cddp_core)

@@ -95,6 +95,7 @@ TEST(CDDPTest, Solve) {
     options.verbose = true;
     options.debug = true;
     options.regularization_type = "none";
+    options.regularization_control = 1e-2;
     // options.mu_initial= 1e-8;
     
     // Set options
