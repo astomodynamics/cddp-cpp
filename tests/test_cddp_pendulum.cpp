@@ -27,12 +27,12 @@ namespace fs = std::filesystem;
 TEST(CDDPTest, Solve) {
     int state_dim = 2;
     int control_dim = 1;
-    int horizon = 100;
-    double timestep = 0.02;
+    int horizon = 500;
+    double timestep = 0.05;
     // Create a pendulum instance 
     double mass = 1.0; 
-    double length = 0.5; 
-    double damping = 0.01;
+    double length = 1.0; 
+    double damping = 0.00;
     std::string integration_type = "euler";
 
     std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::Pendulum>(timestep, length, mass, damping, integration_type);
@@ -78,9 +78,9 @@ TEST(CDDPTest, Solve) {
 
     // Control constraints
     Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -100.0;  // Maximum negative torque
+    control_lower_bound << -10.0;  // Maximum negative torque
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 100.0;   // Maximum positive torque
+    control_upper_bound << 10.0;   // Maximum positive torque
     
     cddp_solver.addConstraint("ControlBoxConstraint", 
         std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
