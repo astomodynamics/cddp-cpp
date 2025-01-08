@@ -445,7 +445,7 @@ CDDPSolution CDDP::solveIPDDP()
     solution.alpha = alpha_;
     solution.solve_time = duration.count(); // Time in microseconds
     
-    if (options_.verbose) {
+    if (options_.header_and_footer) {
         printSolution(solution); 
     }
 

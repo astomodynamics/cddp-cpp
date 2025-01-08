@@ -44,7 +44,7 @@ CDDP::CDDP(const Eigen::VectorXd &initial_state,
         initialized_(false)
 {
     initializeCDDP();
-    if (options_.verbose) {
+    if (options_.header_and_footer) {
         printSolverInfo();
         printOptions(options_);
     }

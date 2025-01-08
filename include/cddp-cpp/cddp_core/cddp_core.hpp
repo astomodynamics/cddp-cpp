@@ -82,6 +82,7 @@ struct CDDPOptions {
     // Other options
     bool verbose = true;                            // Option for debug printing
     bool debug = false;                             // Option for debug mode
+    bool header_and_footer = true;                  // Option for header and footer
     bool is_ilqr = true;                            // Option for iLQR
     bool use_parallel = true;                      // Option for parallel computation
     int num_threads = max_line_search_iterations; // Number of threads to use
