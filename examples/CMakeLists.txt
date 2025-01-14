@@ -37,6 +37,12 @@ target_link_libraries(cddp_pendulum cddp)
 add_executable(cddp_quadrotor cddp_quadrotor.cpp)
 target_link_libraries(cddp_quadrotor cddp)
 
+add_executable(cddp_hcw cddp_hcw.cpp)
+target_link_libraries(cddp_hcw cddp)
+
+add_executable(mpc_hcw mpc_hcw.cpp)
+target_link_libraries(mpc_hcw cddp)
+
 # Ipopt examples
 if (CDDP_CPP_CASADI)
     add_executable(ipopt_car ipopt_car.cpp)
