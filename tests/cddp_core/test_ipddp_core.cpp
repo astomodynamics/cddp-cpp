@@ -57,12 +57,13 @@ TEST(CDDPTest, Solve) {
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 1;
+    options.max_iterations = 40;
     options.cost_tolerance = 1e-2;
     options.use_parallel = true;
     options.num_threads = 10;
     options.verbose = true;
-    options.debug = true;
+    options.debug = false;
+    options.barrier_coeff = 1e-6;
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(
@@ -95,7 +96,7 @@ TEST(CDDPTest, Solve) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("FeasibleIPDDP");
 
     ASSERT_TRUE(solution.converged);
 
@@ -104,49 +105,49 @@ TEST(CDDPTest, Solve) {
     auto U_sol = solution.control_sequence; // size: horizon
     auto t_sol = solution.time_sequence; // size: horizon + 1
 
-    // // Create directory for saving plot (if it doesn't exist)
-    // const std::string plotDirectory = "../results/tests";
-    // if (!fs::exists(plotDirectory)) {
-    //     fs::create_directory(plotDirectory);
-    // }
+    // Create directory for saving plot (if it doesn't exist)
+    const std::string plotDirectory = "../results/tests";
+    if (!fs::exists(plotDirectory)) {
+        fs::create_directory(plotDirectory);
+    }
 
-    // // Plot the solution (x-y plane)
-    // std::vector<double> x_arr, y_arr, theta_arr;
-    // for (const auto& x : X_sol) {
-    //     x_arr.push_back(x(0));
-    //     y_arr.push_back(x(1));
-    //     theta_arr.push_back(x(2));
-    // }
+    // Plot the solution (x-y plane)
+    std::vector<double> x_arr, y_arr, theta_arr;
+    for (const auto& x : X_sol) {
+        x_arr.push_back(x(0));
+        y_arr.push_back(x(1));
+        theta_arr.push_back(x(2));
+    }
 
-    // // Plot the solution (control inputs)
-    // std::vector<double> v_arr, omega_arr;
-    // for (const auto& u : U_sol) {
-    //     v_arr.push_back(u(0));
-    //     omega_arr.push_back(u(1));
-    // }
+    // Plot the solution (control inputs)
+    std::vector<double> v_arr, omega_arr;
+    for (const auto& u : U_sol) {
+        v_arr.push_back(u(0));
+        omega_arr.push_back(u(1));
+    }
 
-    // // Plot the solution by subplots
-    // plt::subplot(2, 1, 1);
-    // plt::plot(x_arr, y_arr);
-    // plt::title("State Trajectory");
-    // plt::xlabel("x");
-    // plt::ylabel("y");
+    // Plot the solution by subplots
+    plt::subplot(2, 1, 1);
+    plt::plot(x_arr, y_arr);
+    plt::title("State Trajectory");
+    plt::xlabel("x");
+    plt::ylabel("y");
 
-    // plt::subplot(2, 1, 2);
-    // plt::plot(v_arr);
-    // plt::plot(omega_arr);
-    // plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
-    // plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
-    // plt::title("Control Inputs");
-    // plt::save(plotDirectory + "/dubincs_car_cddp_test.png");
+    plt::subplot(2, 1, 2);
+    plt::plot(v_arr);
+    plt::plot(omega_arr);
+    plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
+    plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
+    plt::title("Control Inputs");
+    plt::save(plotDirectory + "/dubincs_car_ipddp_test.png");
 
-    // // Create figure and axes
-    // plt::figure_size(800, 600);
-    // plt::title("Dubins Car Trajectory");
-    // plt::xlabel("x");
-    // plt::ylabel("y");
-    // plt::xlim(-1, 3); // Adjust limits as needed
-    // plt::ylim(-1, 3); // Adjust limits as needed
+    // Create figure and axes
+    plt::figure_size(800, 600);
+    plt::title("Dubins Car Trajectory");
+    plt::xlabel("x");
+    plt::ylabel("y");
+    plt::xlim(-1, 3); // Adjust limits as needed
+    plt::ylim(-1, 3); // Adjust limits as needed
 
     // // Car dimensions
     // double car_length = 0.2;
@@ -215,18 +216,13 @@ TEST(CDDPTest, Solve) {
     // };
 }
 
-// Create gif from images using ImageMagick
-// Installation:
-// $ sudo apt-get install imagemagick
-
-// convert -delay 100 ../results/tests/dubins_car_*.png ../results/tests/dubins_car.gif 
-
 
 /*
 [==========] Running 1 test from 1 test suite.
 [----------] Global test environment set-up.
 [----------] 1 test from CDDPTest
 [ RUN      ] CDDPTest.Solve
+QuadraticObjective: Using single reference state
 QuadraticObjective: Using single reference state
 
 +---------------------------------------------------------+
@@ -241,14 +237,13 @@ Constrained Differential Dynamic Programming
 Author: Tomo Sasaki (@astomodynamics)
 ----------------------------------------------------------
 
-ControlBoxConstraint is set
 
 ========================================
            CDDP Options
 ========================================
 Cost Tolerance:       0.01
 Grad Tolerance:     0.0001
-Max Iterations:         10
+Max Iterations:         40
 Max CPU Time:          0
 
 Line Search:
@@ -258,54 +253,91 @@ Line Search:
   Backtracking Factor: 0.501187
 
 Log-Barrier:
-  Barrier Coeff:  0.01
-  Barrier Factor:   0.9
-  Barrier Tolerance: 1e-06
+  Barrier Coeff: 1e-06
+  Barrier Factor:   0.1
+  Barrier Tolerance: 1e-08
   Relaxation Coeff:     1
+  Barrier Order:     2
+  Filter Acceptance: 1e-08
+  Constraint Tolerance: 1e-12
 
 Regularization:
   Regularization Type: control
   Regularization State: 1e-06
   Regularization State Step:     1
-  Regularization State Max: 1e+10
-  Regularization State Min: 1e-06
-  Regularization State Factor:   1.6
+  Regularization State Max: 10000
+  Regularization State Min: 1e-08
+  Regularization State Factor:    10
   Regularization Control: 1e-06
   Regularization Control Step:     1
-  Regularization Control Max: 1e+10
-  Regularization Control Min: 1e-06
-  Regularization Control Factor:   1.6
+  Regularization Control Max: 10000
+  Regularization Control Min: 1e-08
+  Regularization Control Factor:    10
 
 Other:
   Print Iterations: Yes
   iLQR: Yes
-  Use Parallel: No
-  Num Threads: 1
+  Use Parallel: Yes
+  Num Threads: 10
+  Relaxed Log-Barrier: No
+  Early Termination: Yes
+
+BoxQP:
+  BoxQP Max Iterations: 100
+  BoxQP Min Grad: 1e-08
+  BoxQP Min Rel Improve: 1e-08
+  BoxQP Step Dec: 0.6
+  BoxQP Min Step: 1e-22
+  BoxQP Armijo: 0.1
+  BoxQP Verbose: No
 ========================================
 
- Iteration      Objective     Lagrangian      Grad Norm      Step Size    Reg (State)  Reg (Control)
------------------------------------------------------------------------------------------------
-         0        212.337              0          1e+10              1              0          1e-06
-         1        28.0008              0              3              1              0              0
-         2        4.29703              0        1.46969              1              0              0
-         3        1.90259              0       0.144653              1              0              0
-         4        1.76336              0      0.0974113              1              0              0
-         5        1.74059              0      0.0191161              1              0              0
-         6        1.72368              0      0.0146293              1              0              0
+ControlBoxConstraint is set
+ Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
+-----------------------------------------------------------------------------------------
+    0   2.123e+02   2.123e+02  1.00e+10     1.000  0.00e+00  1.00e-06  1.00e-06  0.00e+00
+    1   1.064e+02   1.064e+02  3.14e+00     0.501  0.00e+00  1.00e-07  1.00e-06  0.00e+00
+    2   7.413e+01   7.413e+01  3.14e+00     0.251  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    3   5.256e+01   5.256e+01  3.19e+00     0.251  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    4   2.596e+01   2.596e+01  3.25e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    5   1.438e+01   1.438e+01  3.36e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    6   8.929e+00   8.929e+00  3.46e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    7   6.145e+00   6.145e+00  3.56e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    8   4.610e+00   4.610e+00  3.64e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    9   3.703e+00   3.703e+00  3.71e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+ Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
+-----------------------------------------------------------------------------------------
+   10   3.136e+00   3.136e+00  3.77e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   11   2.764e+00   2.764e+00  3.83e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   12   2.510e+00   2.510e+00  3.88e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   13   2.330e+00   2.330e+00  3.92e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   14   2.200e+00   2.200e+00  3.97e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   15   2.104e+00   2.104e+00  4.00e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   16   2.031e+00   2.031e+00  4.03e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   17   1.976e+00   1.976e+00  4.06e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   18   1.932e+00   1.932e+00  4.09e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   19   1.898e+00   1.898e+00  4.11e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+ Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
+-----------------------------------------------------------------------------------------
+   20   1.871e+00   1.871e+00  4.13e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   21   1.850e+00   1.850e+00  4.15e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   22   1.833e+00   1.833e+00  4.16e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   23   1.819e+00   1.819e+00  4.18e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   24   1.807e+00   1.807e+00  4.19e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
 
 ========================================
            CDDP Solution
 ========================================
 Converged: Yes
-Iterations: 7
-Solve Time: 2285 micro sec
-Final Cost: 1.72283
+Iterations: 25
+Solve Time: 2.5739e+04 micro sec
+Final Cost: 1.797722e+00
 ========================================
 
-[       OK ] CDDPTest.Solve (2 ms)
-[----------] 1 test from CDDPTest (2 ms total)
+[       OK ] CDDPTest.Solve (612 ms)
+[----------] 1 test from CDDPTest (612 ms total)
 
 [----------] Global test environment tear-down
-[==========] 1 test from 1 test suite ran. (2 ms total)
+[==========] 1 test from 1 test suite ran. (612 ms total)
 [  PASSED  ] 1 test.
 */

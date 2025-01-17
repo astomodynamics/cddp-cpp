@@ -299,6 +299,12 @@ private:
     ForwardPassResult solveIPDDPForwardPass(double alpha);
     bool solveIPDDPBackwardPass();
 
+    // Feasible IPDDP methods
+    void initializeFeasibleIPDDP();
+    CDDPSolution solveFeasibleIPDDP();
+    ForwardPassResult solveFeasibleIPDDPForwardPass(double alpha);
+    bool solveFeasibleIPDDPBackwardPass();
+
     // Helper methods
     double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
 

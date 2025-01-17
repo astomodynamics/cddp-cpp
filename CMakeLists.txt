@@ -201,6 +201,7 @@ set(cddp_core_srcs
   src/cddp_core/asddp_core.cpp
   src/cddp_core/logddp_core.cpp
   src/cddp_core/ipddp_core.cpp
+  src/cddp_core/ipddp_feasible_core.cpp
 )
 
 if (CDDP_CPP_TORCH)

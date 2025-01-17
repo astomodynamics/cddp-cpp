@@ -229,6 +229,7 @@ TEST(CDDPTest, Solve) {
 [----------] 1 test from CDDPTest
 [ RUN      ] CDDPTest.Solve
 QuadraticObjective: Using single reference state
+QuadraticObjective: Using single reference state
 
 +---------------------------------------------------------+
 |    ____ ____  ____  ____    _          ____             |
@@ -242,14 +243,13 @@ Constrained Differential Dynamic Programming
 Author: Tomo Sasaki (@astomodynamics)
 ----------------------------------------------------------
 
-ControlBoxConstraint is set
 
 ========================================
            CDDP Options
 ========================================
 Cost Tolerance:       0.01
 Grad Tolerance:     0.0001
-Max Iterations:         10
+Max Iterations:         20
 Max CPU Time:          0
 
 Line Search:
@@ -260,47 +260,143 @@ Line Search:
 
 Log-Barrier:
   Barrier Coeff:  0.01
-  Barrier Factor:   0.9
-  Barrier Tolerance: 1e-06
+  Barrier Factor:   0.1
+  Barrier Tolerance: 1e-08
   Relaxation Coeff:     1
+  Barrier Order:     2
+  Filter Acceptance: 1e-08
+  Constraint Tolerance: 1e-12
 
 Regularization:
   Regularization Type: control
   Regularization State: 1e-06
   Regularization State Step:     1
-  Regularization State Max: 1e+10
-  Regularization State Min: 1e-06
-  Regularization State Factor:   1.6
+  Regularization State Max: 10000
+  Regularization State Min: 1e-08
+  Regularization State Factor:    10
   Regularization Control: 1e-06
   Regularization Control Step:     1
-  Regularization Control Max: 1e+10
-  Regularization Control Min: 1e-06
-  Regularization Control Factor:   1.6
+  Regularization Control Max: 10000
+  Regularization Control Min: 1e-08
+  Regularization Control Factor:    10
 
 Other:
   Print Iterations: Yes
   iLQR: Yes
-  Use Parallel: No
-  Num Threads: 1
+  Use Parallel: Yes
+  Num Threads: 10
+  Relaxed Log-Barrier: No
+  Early Termination: Yes
+
+BoxQP:
+  BoxQP Max Iterations: 100
+  BoxQP Min Grad: 1e-08
+  BoxQP Min Rel Improve: 1e-08
+  BoxQP Step Dec: 0.6
+  BoxQP Min Step: 1e-22
+  BoxQP Armijo: 0.1
+  BoxQP Verbose: No
 ========================================
 
- Iteration      Objective     Lagrangian      Grad Norm      Step Size    Reg (State)  Reg (Control)
------------------------------------------------------------------------------------------------
-         0        212.337              0          1e+10              1              0          1e-06
-         1        28.0008              0              3              1              0              0
-         2        4.29703              0        1.46969              1              0              0
-         3        1.90259              0       0.144653              1              0              0
-         4        1.76336              0      0.0974113              1              0              0
-         5        1.74059              0      0.0191161              1              0              0
-         6        1.72368              0      0.0146293              1              0              0
+ControlBoxConstraint is set
+ Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
+-----------------------------------------------------------------------------------------
+    0   2.123e+02  7.905e-323  1.00e+10     1.000  0.00e+00  1.00e-06  1.00e-02  0.00e+00
+    1   2.800e+01   2.800e+01  3.00e+00     1.000  0.00e+00  1.00e-07  1.00e-02  0.00e+00
+    2   4.297e+00   4.297e+00  1.47e+00     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
+    3   1.903e+00   1.903e+00  1.45e-01     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
+    4   1.763e+00   1.763e+00  9.74e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
+    5   1.741e+00   1.741e+00  1.91e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
+    6   1.724e+00   1.724e+00  1.46e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
 
 ========================================
            CDDP Solution
 ========================================
 Converged: Yes
 Iterations: 7
-Solve Time: 2285 micro sec
-Final Cost: 1.72283
+Solve Time: 6.7100e+03 micro sec
+Final Cost: 1.722832e+00
+========================================
+
+[       OK ] CDDPTest.Solve (6 ms)
+[----------] 1 test from CDDPTest (6 ms total)
+
+[----------] Global test environment tear-down
+[==========] 1 test from 1 test suite ran. (6 ms total)
+[  PASSED  ] 1 test.
+*/
+
+
+
+/* Unconstrained
+========================================
+           CDDP Options
+========================================
+Cost Tolerance:       0.01
+Grad Tolerance:     0.0001
+Max Iterations:         20
+Max CPU Time:          0
+
+Line Search:
+  Max Iterations:    11
+  Backtracking Coeff:     1
+  Backtracking Min:   0.5
+  Backtracking Factor: 0.501187
+
+Log-Barrier:
+  Barrier Coeff:  0.01
+  Barrier Factor:   0.1
+  Barrier Tolerance: 1e-08
+  Relaxation Coeff:     1
+  Barrier Order:     2
+  Filter Acceptance: 1e-08
+  Constraint Tolerance: 1e-12
+
+Regularization:
+  Regularization Type: control
+  Regularization State: 1e-06
+  Regularization State Step:     1
+  Regularization State Max: 10000
+  Regularization State Min: 1e-08
+  Regularization State Factor:    10
+  Regularization Control: 1e-06
+  Regularization Control Step:     1
+  Regularization Control Max: 10000
+  Regularization Control Min: 1e-08
+  Regularization Control Factor:    10
+
+Other:
+  Print Iterations: Yes
+  iLQR: Yes
+  Use Parallel: Yes
+  Num Threads: 10
+  Relaxed Log-Barrier: No
+  Early Termination: Yes
+
+BoxQP:
+  BoxQP Max Iterations: 100
+  BoxQP Min Grad: 1e-08
+  BoxQP Min Rel Improve: 1e-08
+  BoxQP Step Dec: 0.6
+  BoxQP Min Step: 1e-22
+  BoxQP Armijo: 0.1
+  BoxQP Verbose: No
+========================================
+
+ Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
+-----------------------------------------------------------------------------------------
+    0   2.123e+02   0.000e+00  1.00e+10     1.000  0.00e+00  1.00e-06  1.00e-02  0.00e+00
+    1   5.653e+01   5.653e+01  3.00e+00     0.501  0.00e+00  1.00e-07  1.00e-02  0.00e+00
+    2   1.965e+00   1.965e+00  2.15e+00     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
+    3   1.728e+00   1.728e+00  7.53e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
+
+========================================
+           CDDP Solution
+========================================
+Converged: Yes
+Iterations: 4
+Solve Time: 2.3630e+03 micro sec
+Final Cost: 1.720145e+00
 ========================================
 
 [       OK ] CDDPTest.Solve (2 ms)
@@ -309,4 +405,5 @@ Final Cost: 1.72283
 [----------] Global test environment tear-down
 [==========] 1 test from 1 test suite ran. (2 ms total)
 [  PASSED  ] 1 test.
+
 */

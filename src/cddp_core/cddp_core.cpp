@@ -59,6 +59,8 @@ cddp::CDDPSolution CDDP::solve(std::string solver_type) {
         return solveASCDDP();
     } else if (solver_type == "IPDDP") {
         return solveIPDDP();
+    } else if (solver_type == "FeasibleIPDDP") {
+        return solveFeasibleIPDDP();
     } else
     {
         std::cerr << "CDDP::solve: Unknown solver type" << std::endl;
