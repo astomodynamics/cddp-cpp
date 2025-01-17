@@ -310,14 +310,17 @@ private:
 
     bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
 
+    // Regularization methods
+    void increaseRegularization();
+    void decreaseRegularization();
+    bool isRegularizationLimitReached() const;
+
+    // Print methods
     void printSolverInfo();
-
     void printOptions(const CDDPOptions& options);
-
     void printIteration(int iter, double cost, double lagrangian, 
                         double grad_norm, double lambda_state, 
                         double lambda_control, double alpha, double mu, double constraint_violation);
-    
     void printSolution(const CDDPSolution& solution);
 
 private:

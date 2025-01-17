@@ -226,6 +226,93 @@ double CDDP::computeConstraintViolation(const std::vector<Eigen::VectorXd>& X,
     return total_violation;
 }
 
+
+void CDDP::increaseRegularization()
+{
+    // For “state” or “both”
+    if (options_.regularization_type == "state" ||
+        options_.regularization_type == "both")
+    {
+        // Increase step
+        regularization_state_step_ = std::max(
+            regularization_state_step_ * options_.regularization_state_factor,
+            options_.regularization_state_factor);
+
+        // Increase actual regularization
+        regularization_state_ = std::max(
+            regularization_state_ * regularization_state_step_,
+            options_.regularization_state_min);
+    }
+
+    // For “control” or “both”
+    if (options_.regularization_type == "control" ||
+        options_.regularization_type == "both")
+    {
+        // Increase step
+        regularization_control_step_ = std::max(
+            regularization_control_step_ * options_.regularization_control_factor,
+            options_.regularization_control_factor);
+
+        // Increase actual regularization
+        regularization_control_ = std::max(
+            regularization_control_ * regularization_control_step_,
+            options_.regularization_control_min);
+    }
+}
+
+
+void CDDP::decreaseRegularization()
+{
+    // For “state” or “both”
+    if (options_.regularization_type == "state" ||
+        options_.regularization_type == "both")
+    {
+        // Decrease step
+        regularization_state_step_ = std::min(
+            regularization_state_step_ / options_.regularization_state_factor,
+            1.0 / options_.regularization_state_factor);
+
+        // Decrease actual regularization
+        regularization_state_ *= regularization_state_step_;
+        if (regularization_state_ < options_.regularization_state_min) {
+            regularization_state_ = options_.regularization_state_min;
+        }
+    }
+
+    // For “control” or “both”
+    if (options_.regularization_type == "control" ||
+        options_.regularization_type == "both")
+    {
+        // Decrease step
+        regularization_control_step_ = std::min(
+            regularization_control_step_ / options_.regularization_control_factor,
+            1.0 / options_.regularization_control_factor);
+
+        // Decrease actual regularization
+        regularization_control_ *= regularization_control_step_;
+        if (regularization_control_ < options_.regularization_control_min) {
+            regularization_control_ = options_.regularization_control_min;
+        }
+    }
+}
+
+
+bool CDDP::isRegularizationLimitReached() const
+{
+    bool state_limit   = (regularization_state_   >= options_.regularization_state_max);
+    bool control_limit = (regularization_control_ >= options_.regularization_control_max);
+
+    if (options_.regularization_type == "state")
+        return state_limit;
+    else if (options_.regularization_type == "control")
+        return control_limit;
+    else if (options_.regularization_type == "both")
+        return (state_limit || control_limit);
+
+    // For “none” or unknown, no limit in practice
+    return false;
+}
+
 void CDDP::printSolverInfo()
 {
     std::cout << "\n";
