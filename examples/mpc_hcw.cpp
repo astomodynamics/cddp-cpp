@@ -53,14 +53,14 @@ int main() {
     x_ref << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0;
 
     // Input constraints
-    double u_max = 0.8;  // for each dimension
-    double u_min = -0.8; // for each dimension
+    double u_max = 1.0;  // for each dimension
+    double u_min = -1.0; // for each dimension
 
     // Cost weighting
     Eigen::MatrixXd Q  = Eigen::MatrixXd::Zero(6,6);
     {
-        Q(0,0) = 1e+0;  Q(1,1) = 1e+0;  Q(2,2) = 1e+0;
-        Q(3,3) = 1e-1;  Q(4,4) = 1e-1;  Q(5,5) = 1e-1;
+        Q(0,0) = 1e+1;  Q(1,1) = 1e+1;  Q(2,2) = 1e+1;
+        Q(3,3) = 1e-0;  Q(4,4) = 1e-0;  Q(5,5) = 1e-0;
     }
 
     Eigen::MatrixXd R  = Eigen::MatrixXd::Zero(3,3);
@@ -106,6 +106,33 @@ int main() {
         {100.0,75.0/sqrt3,  0, 0, 0, 0},
         {100.0,-75.0/sqrt3, 0, 0, 0, 0}
     };
+
+    // std::vector<std::vector<double>> ics_data = {
+    //     {25.0/sqrt3,  25.0,  0, 0, 0, 0},
+    //     {0,           25.0,  0, 0, 0, 0},
+    //     {-25.0/sqrt3, 25.0,  0, 0, 0, 0},
+    //     {50.0/sqrt3,  50.0,  0, 0, 0, 0},
+    //     {0,           50.0,  0, 0, 0, 0},
+    //     {-50.0/sqrt3, 50.0,  0, 0, 0, 0},
+    //     {75.0/sqrt3,  75.0,  0, 0, 0, 0},
+    //     {0,           75.0,  0, 0, 0, 0},
+    //     {-75.0/sqrt3, 75.0,  0, 0, 0, 0},
+    //     {100.0/sqrt3, 100.0, 0, 0, 0, 0},
+    //     {0,           100.0, 0, 0, 0, 0},
+    //     {-100.0/sqrt3,100.0, 0, 0, 0, 0},
+    //     {25.0/sqrt3,  75.0,  0, 0, 0, 0},
+    //     {-25.0/sqrt3, 75.0,  0, 0, 0, 0},
+    //     {25.0/sqrt3,  100.0, 0, 0, 0, 0},
+    //     {-25.0/sqrt3, 100.0, 0, 0, 0, 0},
+    //     {50.0/sqrt3,  75.0,  0, 0, 0, 0},
+    //     {-50.0/sqrt3, 75.0,  0, 0, 0, 0},
+    //     {50.0/sqrt3,  100.0, 0, 0, 0, 0},
+    //     {-50.0/sqrt3, 100.0, 0, 0, 0, 0},
+    //     {75.0/sqrt3,  75.0,  0, 0, 0, 0},
+    //     {-75.0/sqrt3, 75.0,  0, 0, 0, 0},
+    //     {75.0/sqrt3,  100.0, 0, 0, 0, 0},
+    //     {-75.0/sqrt3, 100.0, 0, 0, 0, 0}
+    // };
 
     for (auto &data : ics_data) {
         Eigen::VectorXd x0(6);
@@ -286,6 +313,9 @@ int main() {
         // axis limit
         plt::xlim(-10, 110);
         plt::ylim(-100, 100);
+
+        // plt::xlim(-100, 100);
+        // plt::ylim(-10, 110);
         plt::grid(true);
 
         // Create results directory
@@ -293,7 +323,7 @@ int main() {
         if (!fs::exists(plotDirectory)) {
             fs::create_directories(plotDirectory);
         }
-        std::string figPath = plotDirectory + "/hcw_mpc_cddp_trajectories.png";
+        std::string figPath = plotDirectory + "/hcw_mpc_cddp_xaxis_trajectories.png";
         plt::save(figPath);
         // plt::show();
     }
