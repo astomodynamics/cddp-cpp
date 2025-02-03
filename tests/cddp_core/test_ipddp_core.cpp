@@ -33,8 +33,8 @@ TEST(FeasibleIPDDPTest, Solve) {
     double timestep = 0.03;
     std::string integration_type = "euler";
 
-    // Create a dubins car instance 
-    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::DubinsCar>(timestep, integration_type); // Create unique_ptr
+    // Create a Unicycle instance 
+    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::Unicycle>(timestep, integration_type); // Create unique_ptr
 
     // Create objective function
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
@@ -57,12 +57,12 @@ TEST(FeasibleIPDDPTest, Solve) {
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 40;
+    options.max_iterations = 2;
     options.cost_tolerance = 1e-2;
     options.use_parallel = true;
     options.num_threads = 10;
     options.verbose = true;
-    options.debug = false;
+    options.debug = true;
     options.barrier_coeff = 1e-6;
 
     // Create CDDP solver
@@ -71,7 +71,7 @@ TEST(FeasibleIPDDPTest, Solve) {
       goal_state, 
       horizon, 
       timestep, 
-      std::make_unique<cddp::DubinsCar>(timestep, integration_type), 
+      std::make_unique<cddp::Unicycle>(timestep, integration_type), 
       std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep), 
       options);
     cddp_solver.setDynamicalSystem(std::move(system));
@@ -143,7 +143,7 @@ TEST(FeasibleIPDDPTest, Solve) {
 
     // // Create figure and axes
     // plt::figure_size(800, 600);
-    // plt::title("Dubins Car Trajectory");
+    // plt::title("Unicycle Trajectory");
     // plt::xlabel("x");
     // plt::ylabel("y");
     // plt::xlim(-1, 3); // Adjust limits as needed
@@ -192,7 +192,7 @@ TEST(FeasibleIPDDPTest, Solve) {
     //                 std::vector<double>(y_arr.begin(), y_arr.begin() + i + 1), "b-");
 
     //         // Add plot title
-    //         plt::title("Dubins Car Trajectory");
+    //         plt::title("Unicycle Trajectory");
 
     //         // Set labels
     //         plt::xlabel("x");

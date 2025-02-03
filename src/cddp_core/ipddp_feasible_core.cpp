@@ -412,7 +412,6 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
     double residual_max = 0.0; // complementary residual measure: r = s ◦ y - mu_
     double dual_norm = 0.0; // Not used
 
-  
     // Backward Recursion
     for (int t = horizon_ - 1; t >= 0; --t) {
         // Expand cost around (x[t], u[t])
@@ -467,7 +466,7 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
                     =  Eigen::MatrixXd::Identity(dual_dim/2, control_dim);
                 // bottom half
                 g_u.block(control_dim, 0,  dual_dim/2, control_dim) 
-                    = -Eigen::MatrixXd::Identity( dual_dim/2, control_dim);
+                    = -Eigen::MatrixXd::Identity(dual_dim/2, control_dim);
             }
 
             // Insert into big arrays
@@ -486,7 +485,8 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
 
         // Q expansions from cost
         Eigen::VectorXd Q_x  = l_x + Q_yx.transpose() * y + A.transpose() * V_x;
-        Eigen::VectorXd Q_u  = l_u + Q_yx.transpose() * y + B.transpose() * V_x;
+        // --- Change: use Q_yu for control derivative ---
+        Eigen::VectorXd Q_u  = l_u + Q_yu.transpose() * y + B.transpose() * V_x;
         Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
         Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
         Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
@@ -519,16 +519,15 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
         Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
         bigRHS.col(0) = Q_u - Q_yu.transpose() * G_inv * r;
         Eigen::MatrixXd M = //(control_dim, state_dim)
-            Q_ux- Q_yu.transpose() * YGinv * Q_yx;
+            Q_ux - Q_yu.transpose() * YGinv * Q_yx;
         for (int col = 0; col < state_dim; col++) {
             bigRHS.col(col+1) = M.col(col);
         }
 
+        // --- Change: Use a two–step triangular solve ---
         Eigen::MatrixXd R = llt.matrixU();
-        // forward/back solve
-        Eigen::MatrixXd kK = -R.transpose().triangularView<Eigen::Upper>().solve(
-                                R.triangularView<Eigen::Upper>().solve(bigRHS)
-                             );
+        Eigen::MatrixXd z = R.triangularView<Eigen::Upper>().solve(bigRHS);
+        Eigen::MatrixXd kK = -R.transpose().triangularView<Eigen::Lower>().solve(z);
 
         // parse out feedforward (ku) and feedback (Ku)
         Eigen::VectorXd k_u = kK.col(0); // dimension [control_dim]
