@@ -99,7 +99,7 @@ void CDDP::initializeFeasibleIPDDP()
         // Initialize dual and slack trajectories TODO: Find a better way to initialize
         int dual_dim = constraint.second->getDualDim();
         Y_[constraint_name].resize(horizon_, 1.0 * Eigen::VectorXd::Ones(dual_dim));
-        S_[constraint_name].resize(horizon_, 0.1 * Eigen::VectorXd::Ones(dual_dim));
+        S_[constraint_name].resize(horizon_, 0.01 * Eigen::VectorXd::Ones(dual_dim));
 
         // Initialize gains
         k_y_[constraint_name].resize(horizon_, Eigen::VectorXd::Zero(dual_dim));
@@ -111,6 +111,8 @@ void CDDP::initializeFeasibleIPDDP()
     // Initialize cost
     J_ = objective_->evaluate(X_, U_);
 
+    // *** Fix: Clear alphas_ so that it does not accumulate across calls ***
+    alphas_.clear();
     alpha_ = options_.backtracking_coeff;
     for (int i = 0; i < options_.max_line_search_iterations; ++i)
     {
@@ -274,7 +276,6 @@ CDDPSolution CDDP::solveFeasibleIPDDP()
                 }
             }
         } else { 
-            // TODO: Improve multi-threaded execution
             // Multi-threaded execution 
             std::vector<std::future<ForwardPassResult>> futures;
             futures.reserve(alphas_.size());
@@ -290,6 +291,9 @@ CDDPSolution CDDP::solveFeasibleIPDDP()
                 try {
                     if (future.valid()) {
                         ForwardPassResult result = future.get();
+                        if (options_.debug) {
+                            std::cout << "Alpha: " << result.alpha << " Cost: " << result.cost << std::endl;
+                        }
                         if (result.success && result.cost < best_result.cost) {
                             best_result = result;
                             forward_pass_success = true;
@@ -541,7 +545,7 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
         K_u_[t] = K_u;
 
         // For duals
-        Eigen::VectorXd k_y = - G_inv * (r + y.asDiagonal() * Q_yx * k_u);
+        Eigen::VectorXd k_y = - G_inv * (r + y.asDiagonal() * Q_yu * k_u);
         Eigen::MatrixXd K_y = - YGinv * (Q_yx + Q_yu * K_u);
 
         offset = 0;
