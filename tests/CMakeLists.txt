@@ -26,13 +26,17 @@ add_executable(test_cartpole dynamics_model/test_cartpole.cpp)
 target_link_libraries(test_cartpole gtest gmock gtest_main cddp)
 gtest_discover_tests(test_cartpole)
 
+add_executable(test_dubins_car dynamics_model/test_dubins_car.cpp)
+target_link_libraries(test_dubins_car gtest gmock gtest_main cddp)
+gtest_discover_tests(test_dubins_car)
+
 add_executable(test_dreyfus_rocket dynamics_model/test_dreyfus_rocket.cpp)
 target_link_libraries(test_dreyfus_rocket gtest gmock gtest_main cddp)
 gtest_discover_tests(test_dreyfus_rocket)
 
-add_executable(test_dubins_car dynamics_model/test_dubins_car.cpp)
-target_link_libraries(test_dubins_car gtest gmock gtest_main cddp)
-gtest_discover_tests(test_dubins_car)
+add_executable(test_unicycle dynamics_model/test_unicycle.cpp)
+target_link_libraries(test_unicycle gtest gmock gtest_main cddp)
+gtest_discover_tests(test_unicycle)
 
 add_executable(test_lti_system dynamics_model/test_lti_system.cpp)
 target_link_libraries(test_lti_system gtest gmock gtest_main cddp)

@@ -34,7 +34,7 @@ TEST(CDDPTest, SolveLogCDDP) {
     std::string integration_type = "euler";
 
     // Create a dubins car instance 
-    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::DubinsCar>(timestep, integration_type); // Create unique_ptr
+    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::Unicycle>(timestep, integration_type); // Create unique_ptr
 
     // Create objective function
     Eigen::MatrixXd Q = 0.1 * Eigen::MatrixXd::Identity(state_dim, state_dim);
@@ -76,7 +76,7 @@ TEST(CDDPTest, SolveLogCDDP) {
       goal_state, 
       horizon, 
       timestep, 
-      std::make_unique<cddp::DubinsCar>(timestep, integration_type), 
+      std::make_unique<cddp::Unicycle>(timestep, integration_type), 
       std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep), 
       options);
     cddp_solver.setDynamicalSystem(std::move(system));
