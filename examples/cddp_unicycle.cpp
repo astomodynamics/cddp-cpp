@@ -30,8 +30,8 @@ int main() {
     double timestep = 0.03;
     std::string integration_type = "euler";
 
-    // Create a dubins car instance 
-    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::DubinsCar>(timestep, integration_type); // Create unique_ptr
+    // Create a unicycle instance 
+    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::Unicycle>(timestep, integration_type); // Create unique_ptr
 
     // Create objective function
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
@@ -120,11 +120,11 @@ int main() {
     plt::plot(v_arr);
     plt::plot(omega_arr);
     plt::title("Control Inputs");
-    plt::save(plotDirectory + "/dubincs_car_cddp_test.png");
+    plt::save(plotDirectory + "/unicycle_cddp_test.png");
 
     // Create figure and axes
     plt::figure_size(800, 600);
-    plt::title("Dubins Car Trajectory");
+    plt::title("unicycle Trajectory");
     plt::xlabel("x");
     plt::ylabel("y");
     plt::xlim(-1, 3); // Adjust limits as needed
@@ -173,7 +173,7 @@ int main() {
                     std::vector<double>(y_arr.begin(), y_arr.begin() + i + 1), "b-");
 
             // Add plot title
-            plt::title("Dubins Car Trajectory");
+            plt::title("unicycle Trajectory");
 
             // Set labels
             plt::xlabel("x");
@@ -187,7 +187,7 @@ int main() {
             plt::legend();
 
             // Save current frame as an image
-            std::string filename = plotDirectory + "/dubins_car_frame_" + std::to_string(i) + ".png";
+            std::string filename = plotDirectory + "/unicycle_frame_" + std::to_string(i) + ".png";
             plt::save(filename);
             
             // Display plot continuously
@@ -201,4 +201,4 @@ int main() {
 // Installation:
 // $ sudo apt-get install imagemagick
 
-// convert -delay 100 ../results/tests/dubins_car_frame_*.png ../results/tests/dubins_car.gif 
+// convert -delay 100 ../results/tests/unicycle_frame_*.png ../results/tests/unicycle.gif 

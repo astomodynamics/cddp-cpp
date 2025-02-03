@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-// Description: Test the Dubins car dynamics model.
+// Description: Test the unicycle dynamics model.
 #include <iostream>
 #include <vector>
 #include <filesystem>
@@ -22,19 +22,17 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-// #include "cddp-cpp/dynamics_model/dubins_car.hpp"
-// #include "cddp-cpp/matplotlibcpp.hpp"
 #include "cddp.hpp"
 
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
 using namespace cddp;
 
-TEST(DubinsCarTest, DiscreteDynamics) {
-    // Create a Dubins car instance
+TEST(UnicycleTest, DiscreteDynamics) {
+    // Create a unicycle instance
     double timestep = 0.1;
     std::string integration_type = "euler";
-    cddp::DubinsCar dubins_car(timestep, integration_type);
+    cddp::Unicycle unicycle(timestep, integration_type);
 
     // Store states for plotting
     std::vector<double> time_data, x_data, y_data, theta_data;
@@ -55,7 +53,7 @@ TEST(DubinsCarTest, DiscreteDynamics) {
         theta_data.push_back(state[2]);
 
         // Compute the next state
-        state = dubins_car.getDiscreteDynamics(state, control); 
+        state = unicycle.getDiscreteDynamics(state, control); 
     }
 
     // // Create directory for saving plot (if it doesn't exist)
@@ -69,20 +67,20 @@ TEST(DubinsCarTest, DiscreteDynamics) {
     // plt::plot(x_data, y_data, {{"label", "Trajectory"}});
     // plt::xlabel("X");
     // plt::ylabel("Y");
-    // plt::title("Dubins Car Trajectory");
+    // plt::title("unicycle Trajectory");
     // plt::legend();
-    // plt::save(plotDirectory + "/dubins_car_trajectory.png");
+    // plt::save(plotDirectory + "/unicycle_trajectory.png");
     // // plt::show();
 
-    // Assert true if the dubins_car has the correct state dimension
-    ASSERT_EQ(dubins_car.getStateDim(), 3);
+    // Assert true if the unicycle has the correct state dimension
+    ASSERT_EQ(unicycle.getStateDim(), 3);
 
-    // Assert true if the dubins_car has the correct control dimension
-    ASSERT_EQ(dubins_car.getControlDim(), 2);
+    // Assert true if the unicycle has the correct control dimension
+    ASSERT_EQ(unicycle.getControlDim(), 2);
 
-    // Assert true if the dubins_car has the correct timestep
-    ASSERT_DOUBLE_EQ(dubins_car.getTimestep(), 0.1);
+    // Assert true if the unicycle has the correct timestep
+    ASSERT_DOUBLE_EQ(unicycle.getTimestep(), 0.1);
 
-    // Assert true if the dubins_car has the correct integration type
-    ASSERT_EQ(dubins_car.getIntegrationType(), "euler"); 
+    // Assert true if the unicycle has the correct integration type
+    ASSERT_EQ(unicycle.getIntegrationType(), "euler"); 
 }

@@ -14,16 +14,16 @@
  limitations under the License.
 */
 
-#include "dynamics_model/dubins_car.hpp"
+#include "dynamics_model/unicycle.hpp"
 #include <cmath>
 
 namespace cddp {
 
-DubinsCar::DubinsCar(double timestep, std::string integration_type)
+Unicycle::Unicycle(double timestep, std::string integration_type)
     : DynamicalSystem(STATE_DIM, CONTROL_DIM, timestep, integration_type) {
 }
 
-Eigen::VectorXd DubinsCar::getContinuousDynamics(
+Eigen::VectorXd Unicycle::getContinuousDynamics(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
@@ -35,7 +35,7 @@ Eigen::VectorXd DubinsCar::getContinuousDynamics(
     const double v = control(CONTROL_V);      // velocity
     const double omega = control(CONTROL_OMEGA);  // angular velocity
     
-    // Dubins car dynamics equations
+    // Unicycle dynamics equations
     state_dot(STATE_X) = v * std::cos(theta);     // dx/dt
     state_dot(STATE_Y) = v * std::sin(theta);     // dy/dt
     state_dot(STATE_THETA) = omega;               // dtheta/dt
@@ -43,7 +43,7 @@ Eigen::VectorXd DubinsCar::getContinuousDynamics(
     return state_dot;
 }
 
-Eigen::MatrixXd DubinsCar::getStateJacobian(
+Eigen::MatrixXd Unicycle::getStateJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
@@ -64,7 +64,7 @@ Eigen::MatrixXd DubinsCar::getStateJacobian(
     return A;
 }
 
-Eigen::MatrixXd DubinsCar::getControlJacobian(
+Eigen::MatrixXd Unicycle::getControlJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);  // Note: Using 2 for control dim as per original
@@ -85,13 +85,13 @@ Eigen::MatrixXd DubinsCar::getControlJacobian(
     return B;
 }
 
-Eigen::MatrixXd DubinsCar::getStateHessian(
+Eigen::MatrixXd Unicycle::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, 2);
 }
 
-Eigen::MatrixXd DubinsCar::getControlHessian(
+Eigen::MatrixXd Unicycle::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     // TODO: Compute and return the Hessian tensor d^2f/du^2 (represented as a matrix)
     return Eigen::MatrixXd::Zero(STATE_DIM * 2, 2);

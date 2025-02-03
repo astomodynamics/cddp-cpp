@@ -14,33 +14,33 @@
  limitations under the License.
 */
 
-#ifndef CDDP_DUBINS_CAR_HPP
-#define CDDP_DUBINS_CAR_HPP
+#ifndef CDDP_UNICYCLE_HPP
+#define CDDP_UNICYCLE_HPP
 
 #include "cddp_core/dynamical_system.hpp"
 
 namespace cddp {
 
 /**
- * @brief Dubins Car model implementation
+ * @brief Unicycle model implementation
  * 
- * This class implements the Dubins car model, which is a simple car-like robot
+ * This class implements the Unicycle model, which is a simple car-like robot
  * that can only move forward at a constant speed and can change its heading angle.
  * The state vector consists of [x, y, theta], where (x,y) is the position and
  * theta is the heading angle. The control input is the steering angle rate.
  */
-class DubinsCar : public DynamicalSystem {
+class Unicycle : public DynamicalSystem {
 public:
     /**
-     * @brief Constructor for the Dubins car model
+     * @brief Constructor for the Unicycle model
      * @param timestep Time step for discretization
      * @param integration_type Integration method ("euler" by default)
      */
-    DubinsCar(double timestep, 
+    Unicycle(double timestep, 
               std::string integration_type = "euler");
 
     /**
-     * @brief Computes the continuous-time dynamics of the Dubins car
+     * @brief Computes the continuous-time dynamics of the Unicycle
      * State vector: [x, y, theta]
      * Control vector: [omega] (steering angle rate)
      * @param state Current state vector
@@ -112,4 +112,4 @@ private:
 
 } // namespace cddp
 
-#endif // CDDP_DUBINS_CAR_HPP
+#endif // CDDP_UNICYCLE_HPP

@@ -37,7 +37,7 @@
 
 // Models
 #include "dynamics_model/pendulum.hpp"
-#include "dynamics_model/dubins_car.hpp"
+#include "dynamics_model/unicycle.hpp"
 #include "dynamics_model/bicycle.hpp"
 #include "dynamics_model/car.hpp"
 #include "dynamics_model/cartpole.hpp"
