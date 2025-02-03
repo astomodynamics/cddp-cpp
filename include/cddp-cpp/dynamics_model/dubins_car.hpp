@@ -22,92 +22,93 @@
 namespace cddp {
 
 /**
- * @brief Dubins Car model implementation
- * 
- * This class implements the Dubins car model, which is a simple car-like robot
- * that can only move forward at a constant speed and can change its heading angle.
- * The state vector consists of [x, y, theta], where (x,y) is the position and
- * theta is the heading angle. The control input is the steering angle rate.
+ * @brief Dubins car model with a constant forward speed and steering rate control
+ *
+ * The state vector is [x, y, theta], where (x,y) is position and theta is heading.
+ * The control input has dimension 1: [omega], the steering (turn) rate.
  */
 class DubinsCar : public DynamicalSystem {
 public:
     /**
-     * @brief Constructor for the Dubins car model
+     * @brief Constructor for the DubinsCar
+     * @param speed Constant forward speed
      * @param timestep Time step for discretization
      * @param integration_type Integration method ("euler" by default)
      */
-    DubinsCar(double timestep, 
+    DubinsCar(double speed,
+              double timestep,
               std::string integration_type = "euler");
 
     /**
      * @brief Computes the continuous-time dynamics of the Dubins car
-     * State vector: [x, y, theta]
-     * Control vector: [omega] (steering angle rate)
+     *
+     * State: [x, y, theta]
+     * Control: [omega]
+     *
      * @param state Current state vector
-     * @param control Current control input
-     * @return State derivative vector
+     * @param control Current control input (turn rate)
+     * @return State derivative [dx/dt, dy/dt, dtheta/dt]
      */
-    Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
-                                         const Eigen::VectorXd& control) const override;
+    Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state,
+                                          const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Computes the discrete-time dynamics using the specified integration method
-     * @param state Current state vector
-     * @param control Current control input
-     * @return Next state vector
+     * @brief Discrete dynamics via the base class method (e.g., Euler or RK)
      */
     Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state, 
-                                       const Eigen::VectorXd& control) const override {
+                                        const Eigen::VectorXd& control) const override {
+        // Uses the base class integrator approach
         return DynamicalSystem::getDiscreteDynamics(state, control);
     }
 
     /**
-     * @brief Computes the Jacobian of the dynamics with respect to the state
-     * @param state Current state vector
-     * @param control Current control input
-     * @return State Jacobian matrix (A matrix)
+     * @brief Jacobian of the dynamics wrt. the state
+     *
+     * @param state Current state
+     * @param control Current control
+     * @return A matrix (3x3)
      */
-    Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, 
+    Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state,
+                                     const Eigen::VectorXd& control) const override;
+
+    /**
+     * @brief Jacobian of the dynamics wrt. the control
+     *
+     * @param state Current state
+     * @param control Current control
+     * @return B matrix (3x1)
+     */
+    Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state,
+                                       const Eigen::VectorXd& control) const override;
+
+    /**
+     * @brief Hessian of the dynamics wrt. the state
+     *
+     * For many simpler models, often zero or handled by separate higher-order libraries.
+     */
+    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state,
                                     const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Computes the Jacobian of the dynamics with respect to the control input
-     * @param state Current state vector
-     * @param control Current control input
-     * @return Control Jacobian matrix (B matrix)
+     * @brief Hessian of the dynamics wrt. the control
+     *
+     * Typically zero or not used for simpler models.
      */
-    Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, 
+    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state,
                                       const Eigen::VectorXd& control) const override;
-
-    /**
-     * @brief Computes the Hessian of the dynamics with respect to the state
-     * @param state Current state vector
-     * @param control Current control input
-     * @return State Hessian matrix
-     */
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state, 
-                                   const Eigen::VectorXd& control) const override;
-
-    /**
-     * @brief Computes the Hessian of the dynamics with respect to the control
-     * @param state Current state vector
-     * @param control Current control input
-     * @return Control Hessian matrix
-     */
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, 
-                                     const Eigen::VectorXd& control) const override;
 
 private:
     // State indices
     static constexpr int STATE_X = 0;      // x position
     static constexpr int STATE_Y = 1;      // y position
     static constexpr int STATE_THETA = 2;  // heading angle
-    static constexpr int STATE_DIM = 3;    // state dimension
+    static constexpr int STATE_DIM = 3;    // dimension
 
-    // Control indices
-    static constexpr int CONTROL_V = 0;      // velocity
-    static constexpr int CONTROL_OMEGA = 1;  // steering angle rate
-    static constexpr int CONTROL_DIM = 2;    // control dimension
+    // Control index
+    static constexpr int CONTROL_OMEGA = 0;  // steering rate
+    static constexpr int CONTROL_DIM = 1;    // dimension
+
+    double speed_; // Constant forward speed
 };
 
 } // namespace cddp

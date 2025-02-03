@@ -14,7 +14,7 @@
  limitations under the License.
 */
 
-// Description: Test the DubinsCar dynamics model.
+// Description: Test the unicycle dynamics model.
 #include <iostream>
 #include <vector>
 #include <filesystem>
@@ -22,30 +22,26 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "cddp.hpp" // Adjust if you have a different header for including DubinsCar
+#include "cddp.hpp"
 
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
 using namespace cddp;
 
-TEST(DubinsCarTest, DiscreteDynamics) {
-    // Create a DubinsCar instance
-    double speed = 1.0;           // Constant forward speed
-    double timestep = 0.1;        // Integration timestep
+TEST(UnicycleTest, DiscreteDynamics) {
+    // Create a unicycle instance
+    double timestep = 0.1;
     std::string integration_type = "euler";
-    DubinsCar dubins_car(speed, timestep, integration_type);
+    cddp::Unicycle unicycle(timestep, integration_type);
 
     // Store states for plotting
     std::vector<double> time_data, x_data, y_data, theta_data;
 
     // Initial state and control (use Eigen vectors)
-    // State = [x, y, theta]
     Eigen::VectorXd state(3);
-    state << 0.0, 0.0, 0.0;   // Initial position/orientation
-
-    // Control = [omega]
-    Eigen::VectorXd control(1);
-    control << 0.5;           // Turn rate
+    state << 0.0, 0.0, 0.0;  // Initial position and orientation
+    Eigen::VectorXd control(2);
+    control << 1.0, 0.5; // Linear and angular velocity
 
     // Simulate for a few steps
     int num_steps = 50;
@@ -57,33 +53,34 @@ TEST(DubinsCarTest, DiscreteDynamics) {
         theta_data.push_back(state[2]);
 
         // Compute the next state
-        state = dubins_car.getDiscreteDynamics(state, control); 
+        state = unicycle.getDiscreteDynamics(state, control); 
     }
 
-    const std::string plotDirectory = "../plots/test";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    // // Create directory for saving plot (if it doesn't exist)
+    // const std::string plotDirectory = "../plots/test";
+    // if (!fs::exists(plotDirectory)) {
+    //     fs::create_directory(plotDirectory);
+    // }
 
-    // Optional: Plot results with matplotlibcpp (commented out by default)
+    // // Plot the results
     // plt::figure();
     // plt::plot(x_data, y_data, {{"label", "Trajectory"}});
     // plt::xlabel("X");
     // plt::ylabel("Y");
-    // plt::title("DubinsCar Trajectory");
+    // plt::title("unicycle Trajectory");
     // plt::legend();
-    // plt::save(plotDirectory + "/dubins_car_trajectory.png");
-    // plt::show();
+    // plt::save(plotDirectory + "/unicycle_trajectory.png");
+    // // plt::show();
 
-    // Check state dimension
-    ASSERT_EQ(dubins_car.getStateDim(), 3);
+    // Assert true if the unicycle has the correct state dimension
+    ASSERT_EQ(unicycle.getStateDim(), 3);
 
-    // Check control dimension (should be 1 for DubinsCar with a single steering input)
-    ASSERT_EQ(dubins_car.getControlDim(), 1);
+    // Assert true if the unicycle has the correct control dimension
+    ASSERT_EQ(unicycle.getControlDim(), 2);
 
-    // Check timestep
-    ASSERT_DOUBLE_EQ(dubins_car.getTimestep(), 0.1);
+    // Assert true if the unicycle has the correct timestep
+    ASSERT_DOUBLE_EQ(unicycle.getTimestep(), 0.1);
 
-    // Check integration type
-    ASSERT_EQ(dubins_car.getIntegrationType(), "euler");
+    // Assert true if the unicycle has the correct integration type
+    ASSERT_EQ(unicycle.getIntegrationType(), "euler"); 
 }
