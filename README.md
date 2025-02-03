@@ -37,15 +37,15 @@ $$
 $$
 
 ## Examples
-### Dubins Car
+### Unicycle
 
 Simple car-like robot with velocity and steering control:
 
 ```bash
-./examples/cddp_dubins_car // after building
+./examples/cddp_unicycle // after building
 ```
 
-<img src="results/tests/dubins_car.gif" width="300" alt="Dubins Car CDDP">
+<img src="results/tests/unicycle.gif" width="300" alt="Unicycle Model CDDP">
 
 ### Bicycle Model
 
