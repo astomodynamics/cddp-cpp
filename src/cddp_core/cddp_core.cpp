@@ -52,14 +52,39 @@ CDDP::CDDP(const Eigen::VectorXd &initial_state,
 
 cddp::CDDPSolution CDDP::solve(std::string solver_type) {
     if (solver_type == "CLCDDP" || solver_type == "CLDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with CLCDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
         return solveCLCDDP();
     } else if (solver_type == "LogCDDP" || solver_type == "LogDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with LogCDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
         return solveLogCDDP();
     } else if (solver_type == "ASCDDP" || solver_type == "ASDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with ASCDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
         return solveASCDDP();
     } else if (solver_type == "IPDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with IPDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
         return solveIPDDP();
     } else if (solver_type == "FeasibleIPDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with FeasibleIPDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
         return solveFeasibleIPDDP();
     } else
     {

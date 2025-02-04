@@ -93,25 +93,93 @@ void CDDP::initializeFeasibleIPDDP()
     k_s_.clear();
     K_s_.clear();
 
+    // ------------------------------------------------------------------------
+    // To accelerate convergence, especially for box-like constraints, we can
+    // tune the initial multipliers (Y_) based on how close the initial guess
+    // (U_) is to the bounds. This helps avoid the solver spending extra
+    // iterations to scale them up or down.
+    // ------------------------------------------------------------------------
+
+    // First, we gather some approximate measure of how close the initial
+    // control trajectory is to its constraint boundaries (if any).
+    double avg_box_margin = 0.0;
+    int box_count = 0;
+    if (constraint_set_.find("ControlBoxConstraint") != constraint_set_.end())
+    {
+        auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+        if (control_box_constraint)
+        {
+            Eigen::VectorXd lower_bound = control_box_constraint->getLowerBound();
+            Eigen::VectorXd upper_bound = control_box_constraint->getUpperBound();
+
+            // Compute the smallest distance to any boundary across the entire initial control trajectory
+            for (int t = 0; t < horizon_; ++t)
+            {
+                Eigen::VectorXd dist_to_ub = (upper_bound - U_[t]);
+                Eigen::VectorXd dist_to_lb = (U_[t] - lower_bound);
+                double local_margin = std::min(dist_to_ub.minCoeff(), dist_to_lb.minCoeff());
+                avg_box_margin += local_margin;
+                box_count++;
+            }
+            if (box_count > 0)
+            {
+                avg_box_margin /= box_count;
+            }
+        }
+    }
+
+    // We won't let this margin go to zero (to avoid blowing up multipliers).
+    if (avg_box_margin < 1e-3)
+    {
+        avg_box_margin = 1e-3; // Just a fallback
+    }
+    double control_box_multiplier_init = 1.0 / avg_box_margin; // A simple scaling
+
+    // ------------------------------------------------------------------------
+    // Now proceed to initialize the dual and slack variables for each constraint.
+    // ------------------------------------------------------------------------
     for (const auto &constraint : constraint_set_)
     {
         std::string constraint_name = constraint.first;
-        // Initialize dual and slack trajectories TODO: Find a better way to initialize
         int dual_dim = constraint.second->getDualDim();
-        Y_[constraint_name].resize(horizon_, 1.0 * Eigen::VectorXd::Ones(dual_dim));
-        S_[constraint_name].resize(horizon_, 0.01 * Eigen::VectorXd::Ones(dual_dim));
 
-        // Initialize gains
-        k_y_[constraint_name].resize(horizon_, Eigen::VectorXd::Zero(dual_dim));
-        K_y_[constraint_name].resize(horizon_, Eigen::MatrixXd::Zero(dual_dim, state_dim));
-        k_s_[constraint_name].resize(horizon_, Eigen::VectorXd::Zero(dual_dim));
-        K_s_[constraint_name].resize(horizon_, Eigen::MatrixXd::Zero(dual_dim, state_dim));
+        Y_[constraint_name].resize(horizon_);
+        S_[constraint_name].resize(horizon_);
+        k_y_[constraint_name].resize(horizon_);
+        K_y_[constraint_name].resize(horizon_);
+        k_s_[constraint_name].resize(horizon_);
+        K_s_[constraint_name].resize(horizon_);
+
+        // Decide initial Y_ based on the constraint type
+        for (int t = 0; t < horizon_; ++t)
+        {
+            // If we recognize the constraint as a "ControlBoxConstraint," we use
+            // the tuned multiplier. Otherwise, we use a default.
+            if (constraint_name == "ControlBoxConstraint")
+            {
+                Y_[constraint_name][t] = control_box_multiplier_init * Eigen::VectorXd::Ones(dual_dim);
+            }
+            else
+            {
+                // Default initialization
+                Y_[constraint_name][t] = 1.0 * Eigen::VectorXd::Ones(dual_dim);
+            }
+
+            // Slack initialization remains a small positive constant.
+            S_[constraint_name][t] = 0.01 * Eigen::VectorXd::Ones(dual_dim);
+
+            // Gains set to zero.
+            k_y_[constraint_name][t].setZero(dual_dim);
+            K_y_[constraint_name][t].setZero(dual_dim, state_dim);
+            k_s_[constraint_name][t].setZero(dual_dim);
+            K_s_[constraint_name][t].setZero(dual_dim, state_dim);
+        }
     }
 
     // Initialize cost
     J_ = objective_->evaluate(X_, U_);
 
-    // *** Fix: Clear alphas_ so that it does not accumulate across calls ***
+    // Initialize line search parameters
     alphas_.clear();
     alpha_ = options_.backtracking_coeff;
     for (int i = 0; i < options_.max_line_search_iterations; ++i)
@@ -122,6 +190,7 @@ void CDDP::initializeFeasibleIPDDP()
     alpha_ = options_.backtracking_coeff;
     dV_.resize(2); // Cost improvement 
 
+    // Initialize regularization parameters
     if (options_.regularization_type == "state" || options_.regularization_type == "both")
     {
         regularization_state_ = options_.regularization_state;
@@ -147,13 +216,7 @@ void CDDP::initializeFeasibleIPDDP()
                                                 options_.is_relaxed_log_barrier);
     mu_ = options_.barrier_coeff;
     log_barrier_->setBarrierCoeff(mu_);
-
-    // Check if ControlBoxConstraint is set
-    if (constraint_set_.find("ControlBoxConstraint") != constraint_set_.end())
-    {
-        std::cout << "ControlBoxConstraint is set" << std::endl;
-    }
-
+    
     // Initialize filter acceptance parameter
     gamma_ = options_.filter_acceptance;
     constraint_violation_ = 0.0;
@@ -197,7 +260,6 @@ CDDPSolution CDDP::solveFeasibleIPDDP()
 
     // Evaluate Lagrangian
     L_ = J_;
-    // # TODO: Multi-threading?
     for (int t = 0; t < horizon_; ++t)
     {
         for (const auto &constraint : constraint_set_)
@@ -291,9 +353,6 @@ CDDPSolution CDDP::solveFeasibleIPDDP()
                 try {
                     if (future.valid()) {
                         ForwardPassResult result = future.get();
-                        if (options_.debug) {
-                            std::cout << "Alpha: " << result.alpha << " Cost: " << result.cost << std::endl;
-                        }
                         if (result.success && result.cost < best_result.cost) {
                             best_result = result;
                             forward_pass_success = true;
@@ -414,7 +473,7 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
     dV_ = Eigen::Vector2d::Zero();
     double Qu_max_norm = 0.0;
     double residual_max = 0.0; // complementary residual measure: r = s ◦ y - mu_
-    double dual_norm = 0.0; // Not used
+    double dual_norm = 0.0; // Not used for feasible IPDDP
 
     // Backward Recursion
     for (int t = horizon_ - 1; t >= 0; --t) {
@@ -430,7 +489,6 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
         Eigen::MatrixXd B = timestep_ * Fu;
 
         // Extract dual variable and constraint values
-        // Gather dual and slack variables, and constraint values
         Eigen::VectorXd y = Eigen::VectorXd::Zero(total_dual_dim);
         Eigen::VectorXd g = Eigen::VectorXd::Zero(total_dual_dim);
 
@@ -456,12 +514,10 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
             }
 
             // partial wrt. x => g_x
-            // Eigen::MatrixXd g_x = constraint->getStateJacobian(x, u);
             // Hardcode for now (ControlBoxConstraint) TODO: Generalize
             Eigen::MatrixXd g_x = Eigen::MatrixXd::Zero(dual_dim, state_dim);
 
             // partial wrt. u => g_u
-            // Eigen::MatrixXd g_u = constraint->getControlJacobian(x, u);
             // Hardcode for now (ControlBoxConstraint) TODO: Generalize
             Eigen::MatrixXd g_u = Eigen::MatrixXd::Zero(dual_dim, control_dim);
             if (cname == "ControlBoxConstraint") {
@@ -489,7 +545,6 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
 
         // Q expansions from cost
         Eigen::VectorXd Q_x  = l_x + Q_yx.transpose() * y + A.transpose() * V_x;
-        // --- Change: use Q_yu for control derivative ---
         Eigen::VectorXd Q_u  = l_u + Q_yu.transpose() * y + B.transpose() * V_x;
         Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
         Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
@@ -499,7 +554,6 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
         Eigen::MatrixXd Q_ux_reg = Q_ux;
         Eigen::MatrixXd Q_uu_reg = Q_uu;
 
-        // TODO: Add State regularization here
         if (options_.regularization_type == "control" || 
             options_.regularization_type == "both") {
             Q_uu_reg.diagonal().array() += regularization_control_;
@@ -522,19 +576,18 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
         
         Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
         bigRHS.col(0) = Q_u - Q_yu.transpose() * G_inv * r;
-        Eigen::MatrixXd M = //(control_dim, state_dim)
+        Eigen::MatrixXd M =
             Q_ux - Q_yu.transpose() * YGinv * Q_yx;
         for (int col = 0; col < state_dim; col++) {
             bigRHS.col(col+1) = M.col(col);
         }
 
-        // --- Change: Use a two–step triangular solve ---
         Eigen::MatrixXd R = llt.matrixU();
         Eigen::MatrixXd z = R.triangularView<Eigen::Upper>().solve(bigRHS);
         Eigen::MatrixXd kK = -R.transpose().triangularView<Eigen::Lower>().solve(z);
 
         // parse out feedforward (ku) and feedback (Ku)
-        Eigen::VectorXd k_u = kK.col(0); // dimension [control_dim]
+        Eigen::VectorXd k_u = kK.col(0); 
         Eigen::MatrixXd K_u(control_dim, state_dim);
         for (int col = 0; col < state_dim; col++) {
             K_u.col(col) = kK.col(col+1);
@@ -554,7 +607,6 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
             auto &constraint = ckv.second;
             int dual_dim = constraint->getDualDim();
 
-            // Now store gains
             k_y_[cname][t] = k_y.segment(offset, dual_dim);
             K_y_[cname][t] = K_y.block(offset, 0, dual_dim, state_dim);
 
@@ -564,27 +616,23 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
             offset += dual_dim;
         }
 
-        // Update Q expansions
         Q_x  -= Q_yx.transpose() * (G_inv * r);
         Q_u  -= Q_yu.transpose() * (G_inv * r);
         Q_xx -= Q_yx.transpose() * YGinv * Q_yx;
         Q_ux -= Q_yu.transpose() * YGinv * Q_yx;
         Q_uu -= Q_yu.transpose() * YGinv * Q_yu;
 
-        // Update cost improvement
         dV_[0] += k_u.dot(Q_u);
         dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
 
-        // Update value function
         V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
         V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
 
-        // Debug norms
         double Qu_norm = Q_u.lpNorm<Eigen::Infinity>();
         if (Qu_norm > Qu_max_norm) Qu_max_norm = Qu_norm;
         double r_norm = r.lpNorm<Eigen::Infinity>();
         if (r_norm > residual_max) residual_max = r_norm; 
-    } // end for t
+    } 
 
     // Compute optimality gap and print
     optimality_gap_ = std::max(Qu_max_norm, residual_max);
@@ -596,10 +644,9 @@ bool CDDP::solveFeasibleIPDDPBackwardPass() {
                   << "    dV:           " << dV_.transpose() << std::endl;
     }
     return true;
-} // end solveIPDDPFeasibleBackwardPass
+}
 
 ForwardPassResult CDDP::solveFeasibleIPDDPForwardPass(double alpha) {
-    // Prepare result struct
     ForwardPassResult result;
     result.success = false;
     result.cost = std::numeric_limits<double>::infinity();
@@ -612,9 +659,9 @@ ForwardPassResult CDDP::solveFeasibleIPDDPForwardPass(double alpha) {
     double tau = std::max(0.99, 1.0 - mu_);  
 
     // Copy old trajectories (from the “previous” solution)
-    std::vector<Eigen::VectorXd> X_new = X_;  // old states
-    std::vector<Eigen::VectorXd> U_new = U_;  // old controls
-    std::map<std::string, std::vector<Eigen::VectorXd>> Y_new = Y_;  // old dual
+    std::vector<Eigen::VectorXd> X_new = X_;  
+    std::vector<Eigen::VectorXd> U_new = U_;  
+    std::map<std::string, std::vector<Eigen::VectorXd>> Y_new = Y_;  
 
     X_new[0] = initial_state_;
     double cost_new = 0.0;
@@ -633,21 +680,17 @@ ForwardPassResult CDDP::solveFeasibleIPDDPForwardPass(double alpha) {
             auto &constraint = ckv.second;
             int dual_dim = ckv.second->getDualDim();
 
-            // old y
             const Eigen::VectorXd &y_old = Y_[cname][t];
-
-            // new y
             Eigen::VectorXd y_new = y_old + 
                                     alpha * k_y_[cname][t] + 
                                     K_y_[cname][t] * (X_new[t] - X_[t]); 
 
-            // Minimal feasibility vs. old solution
             for (int i = 0; i < dual_dim; i++)
             {
                 double y_min = (1.0 - tau) * y_old[i];
                 if (y_new[i] < y_min)
                 {
-                    // Fail: y_new too small
+                    // Too small => fail
                     return result;
                 }
                 if (y_new[i] < 0.0) {
@@ -662,12 +705,12 @@ ForwardPassResult CDDP::solveFeasibleIPDDPForwardPass(double alpha) {
         const Eigen::VectorXd &u_old = U_[t];
         U_new[t] = u_old + alpha * k_u_[t] + K_u_[t] * (X_new[t] - X_[t]);
 
-        // // Clamp control
+        // If desired, clamp control to box if we want explicit feasibility:
         // if (control_box_constraint != nullptr) {
         //     U_new[t] = control_box_constraint->clamp(U_new[t]);
         // }
 
-         // 3) Evaluate cost
+        // 3) Evaluate cost
         double stage_cost = objective_->running_cost(X_new[t], U_new[t], t);
         cost_new += stage_cost;
 
@@ -685,12 +728,9 @@ ForwardPassResult CDDP::solveFeasibleIPDDPForwardPass(double alpha) {
                 g_val.head(control_dim) = U_new[t] - ub;
                 g_val.tail(control_dim) = lb - U_new[t];
             }
-            // primal feasibility measure: |g + y|
             Eigen::VectorXd y_val = Y_new[cname][t];
             double local_res = (g_val + y_val).lpNorm<1>();
             primal_residual = std::max(primal_residual, local_res);
-
-            // If any y_val or g_val leads to invalid log => fail early in a real code
         }
 
         // 5) Step the system
@@ -700,16 +740,12 @@ ForwardPassResult CDDP::solveFeasibleIPDDPForwardPass(double alpha) {
     // Terminal cost
     cost_new += objective_->terminal_cost(X_new.back());
 
-    // For now, just store cost
-    log_cost_new = cost_new;  // or cost_new - mu_ * sum_log_something
+    log_cost_new = cost_new;  // For demonstration, ignoring additional barrier terms etc.
 
     // Build filter point candidate
     FilterPoint candidate{cost_new, log_cost_new};
     bool sufficient_progress = (cost_new < current.cost);
     bool acceptable = sufficient_progress && !current.dominates(candidate);
-
-    // std::cout << "cost_new: " << cost_new << std::endl;
-    // std::cout << "log_cost_new: " << log_cost_new << std::endl;
 
     if (acceptable)
     {
@@ -729,6 +765,6 @@ ForwardPassResult CDDP::solveFeasibleIPDDPForwardPass(double alpha) {
     }
 
     return result;
-} // end solveIPDDPForwardPass
+}
 
 } // namespace cddp
