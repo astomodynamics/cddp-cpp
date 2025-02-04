@@ -50,6 +50,12 @@ target_link_libraries(mpc_hcw cddp)
 if (CDDP_CPP_CASADI)
     add_executable(ipopt_car ipopt_car.cpp)
     target_link_libraries(ipopt_car cddp)
+
+    add_executable(ipopt_unicycle ipopt_unicycle.cpp)
+    target_link_libraries(ipopt_unicycle cddp)
+
+    add_executable(ipopt_cartpole ipopt_cartpole.cpp)
+    target_link_libraries(ipopt_cartpole cddp)
 endif()
 
 # Neural dynamics examples
