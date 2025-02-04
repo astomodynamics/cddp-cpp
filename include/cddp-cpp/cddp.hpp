@@ -23,6 +23,7 @@
 
 // #include "cddp-cpp/sdqp.hpp"
 #include "cddp_core/dynamical_system.hpp"
+#include "cddp_core/gp_dynamical_system.hpp"
 #include "cddp_core/objective.hpp"
 #include "cddp_core/constraint.hpp"
 #include "cddp_core/barrier.hpp"

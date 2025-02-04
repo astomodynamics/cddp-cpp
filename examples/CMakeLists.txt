@@ -46,6 +46,15 @@ target_link_libraries(cddp_hcw cddp)
 add_executable(mpc_hcw mpc_hcw.cpp)
 target_link_libraries(mpc_hcw cddp)
 
+add_executable(generate_pendulum_gp_dataset gp_dynamics/generate_pendulum_gp_dataset.cpp)
+target_link_libraries(generate_pendulum_gp_dataset cddp)
+
+add_executable(generate_cartpole_gp_dataset gp_dynamics/generate_cartpole_gp_dataset.cpp)
+target_link_libraries(generate_cartpole_gp_dataset cddp)
+
+add_executable(train_gp_dynamical_system gp_dynamics/train_gp_dynamical_system.cpp)
+target_link_libraries(train_gp_dynamical_system cddp)
+
 # Ipopt examples
 if (CDDP_CPP_CASADI)
     add_executable(ipopt_car ipopt_car.cpp)

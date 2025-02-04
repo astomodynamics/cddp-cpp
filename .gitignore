@@ -3,4 +3,5 @@ build/
 plots/
 results/frames
 models/
+ipddp/
 neural_models/
