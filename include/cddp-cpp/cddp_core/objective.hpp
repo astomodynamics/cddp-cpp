@@ -140,6 +140,10 @@ public:
     void setReferenceState(const Eigen::VectorXd& reference_state) { reference_state_ = reference_state; }
     void setReferenceStates(const std::vector<Eigen::VectorXd>& reference_states) { reference_states_ = reference_states; }
 
+    virtual Eigen::VectorXd getReferenceState() const override {
+        return reference_state_;
+    }
+
 private:
     Eigen::MatrixXd Q_, R_, Qf_;      // Weight matrices for state, control, and final state
     Eigen::VectorXd reference_state_; // Reference/target state
