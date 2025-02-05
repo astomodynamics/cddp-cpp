@@ -23,7 +23,12 @@ namespace cddp {
 class Objective {
 public:
     // Constructor 
-    Objective() {} 
+    Objective() {
+        reference_state_ = Eigen::VectorXd::Zero(0); // Default to empty vector
+    } 
+
+    // Destructor
+    virtual ~Objective() = default;
 
     // Core objective function (total cost)
     virtual double evaluate(const std::vector<Eigen::VectorXd> &states, const std::vector<Eigen::VectorXd> &controls) const = 0;
@@ -66,12 +71,25 @@ public:
     virtual Eigen::MatrixXd getFinalCostHessian(const Eigen::VectorXd& final_state) const = 0;
 
     // Accessors
-    virtual const Eigen::VectorXd& getReferenceState() const { return Eigen::VectorXd::Zero(0); }
-    virtual const std::vector<Eigen::VectorXd>& getReferenceStates() const { return std::vector<Eigen::VectorXd>(); }
+    virtual Eigen::VectorXd getReferenceState() const {
+        return reference_state_; 
+    }
+
+    virtual std::vector<Eigen::VectorXd> getReferenceStates() const {
+        return reference_states_; 
+    }
 
     // Setters
-    virtual void setReferenceState(const Eigen::VectorXd& reference_state) {}
-    virtual void setReferenceStates(const std::vector<Eigen::VectorXd>& reference_states) {}
+    virtual void setReferenceState(const Eigen::VectorXd& reference_state) {
+        reference_state_ = reference_state; 
+    }
+    virtual void setReferenceStates(const std::vector<Eigen::VectorXd>& reference_states) {
+        reference_states_ = reference_states; 
+    }
+
+protected:
+    Eigen::VectorXd reference_state_;
+    std::vector<Eigen::VectorXd> reference_states_;
 };
 
 class QuadraticObjective : public Objective {
@@ -114,8 +132,6 @@ public:
     const Eigen::MatrixXd& getQ() const { return Q_; }
     const Eigen::MatrixXd& getR() const { return R_; }
     const Eigen::MatrixXd& getQf() const { return Qf_; }
-    const Eigen::VectorXd& getReferenceState() const override{ return reference_state_; }
-    const std::vector<Eigen::VectorXd>& getReferenceStates() const override { return reference_states_; }
 
     // Setters
     void setQ(const Eigen::MatrixXd& Q) { Q_ = Q * timestep_; }
