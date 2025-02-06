@@ -58,6 +58,18 @@ if (CDDP_CPP_CASADI)
     target_link_libraries(ipopt_cartpole cddp)
 endif()
 
+# Acado examples
+if (CDDP_CPP_ACADO)
+    add_executable(acado_car acado_car.cpp)
+    target_link_libraries(acado_car cddp)
+
+    # add_executable(acado_unicycle acado_unicycle.cpp)
+    # target_link_libraries(acado_unicycle cddp)
+
+    # add_executable(acado_cartpole acado_cartpole.cpp)
+    # target_link_libraries(acado_cartpole cddp)
+endif()
+
 # Neural dynamics examples
 if (CDDP_CPP_TORCH)
     add_executable(prepare_pendulum neural_dynamics/prepare_pendulum.cpp)
