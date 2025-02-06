@@ -94,6 +94,9 @@ int main() {
     // Initial trajectory
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    for (int i = 0; i < horizon + 1; ++i) {
+        X[i] = initial_state;
+    }
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve
