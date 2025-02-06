@@ -20,6 +20,8 @@
 #include <Eigen/Sparse>
 #include <memory>
 #include <vector>
+#include <map>
+#include <string>
 #include "osqp++.h"
 #include "cddp_core/dynamical_system.hpp"
 #include "cddp_core/objective.hpp"
@@ -33,24 +35,23 @@ namespace cddp {
 struct SQPOptions {
     int max_iterations = 100;           // Maximum number of iterations
     int min_iterations = 1;             // Minimum number of iterations
-    double ftol = 1e-6;                // Function value tolerance
-    double xtol = 1e-6;                // Step size tolerance
-    double gtol = 1e-6;                // Gradient tolerance
-    double eta = 0.1;                  // Merit function parameter
-    double tau = 0.5;                  // Line search parameter
-    bool verbose = false;              // Print debug info
+    double ftol = 1e-6;                 // Function value tolerance
+    double xtol = 1e-6;                 // Step size tolerance
+    double gtol = 1e-6;                 // Gradient tolerance
+    double eta = 1.0;                   // Merit function penalty weight
+    double tau = 0.5;                   // Line search backtracking factor (0<tau<1)
+    bool verbose = false;               // Print debug info
 
-    int line_search_max_iterations = 20; // Maximum line search backtracking iterations
+    int line_search_max_iterations = 20; // Maximum line search iterations
 
     // Trust region parameters
-    double trust_region_radius = 100.0;      // Initial trust region radius
-    double trust_region_radius_max = 1e6;         // Maximum trust region radius
-    double trust_region_eta1 = 0.25;     // Trust region parameter for contraction
-    double trust_region_eta2 = 0.75;     // Trust region parameter for expansion
-    double trust_region_gamma1 = 0.5;    // Trust region contraction factor
-    double trust_region_gamma2 = 2.0;    // Trust region expansion factor
-    double merit_penalty = 100.0;          // Penalty for merit function
-    
+    double trust_region_radius = 100.0;       // Initial trust region radius
+    double trust_region_radius_max = 1e6;       // Maximum trust region radius
+    double trust_region_increase_factor = 2.0;  // Increase factor when step is good
+    double trust_region_decrease_factor = 0.5;  // Decrease factor when step is rejected
+
+    double merit_penalty = 100.0;         // Penalty for constraint violation in merit function
+
     // OSQP specific options
     double osqp_eps_abs = 1e-5;        // Absolute tolerance
     double osqp_eps_rel = 1e-3;        // Relative tolerance
@@ -75,141 +76,78 @@ struct SQPResult {
 };
 
 /**
- * @brief Sequential Quadratic Programming solver using OSQP
+ * @brief Sequential Quadratic Programming solver using OSQP.
  */
 class SQPSolver {
 public:
     /**
-     * @brief Constructor
-     * @param options Solver configuration options
+     * @brief Constructor.
+     * @param initial_state Initial state of the system.
+     * @param reference_state Desired (goal) state.
+     * @param horizon Time horizon for the problem.
+     * @param timestep Time step.
      */
     SQPSolver(const Eigen::VectorXd& initial_state, 
-         const Eigen::VectorXd& reference_state,
-         int horizon,
-         double timestep);
+              const Eigen::VectorXd& reference_state,
+              int horizon,
+              double timestep);
 
-    /**
-     * @brief Set the Dynamical System object
-     * @param system Dynamical system object (unique_ptr)
-     */
+    // Setter methods
     void setDynamicalSystem(std::unique_ptr<DynamicalSystem> system) { system_ = std::move(system); }
-
-    /**
-     * @brief Set the Initial state
-     * @param initial_state Initial state
-     */
     void setInitialState(const Eigen::VectorXd& initial_state) { initial_state_ = initial_state; }
-
-    /**
-     * @brief Set the Reference state
-     * @param reference_state  Reference state
-     */
     void setReferenceState(const Eigen::VectorXd& reference_state) { reference_state_ = reference_state; }
-
-    /**
-     * @brief Set the time horizon for the problem
-     * @param horizon Time horizon
-     */
     void setHorizon(int horizon) { horizon_ = horizon; }
-
-    /**
-     * @brief Set the time step for the problem
-     * @param timestep Time step
-     */
     void setTimestep(double timestep) { timestep_ = timestep; }
-
-    /**
-     * @brief Set the options for the solver
-     * @param options Solver options
-     */
-    void setOptions(const SQPOptions& options) { 
-        options_ = options;
-
-        // Initialize OSQP settings
-        osqp_settings_.eps_abs = options_.osqp_eps_abs;
-        osqp_settings_.eps_rel = options_.osqp_eps_rel;
-        osqp_settings_.max_iter = options_.osqp_max_iter;
-        osqp_settings_.verbose = options_.osqp_verbose;
-        osqp_settings_.warm_start = options_.warm_start;
-        osqp_settings_.adaptive_rho = true;
-    }
-
-    /**
-     * @brief Set the Objective function
-     * @param objective Objective function object (unique_ptr)
-     */
+    void setOptions(const SQPOptions& options);
     void setObjective(std::unique_ptr<Objective> objective) { objective_ = std::move(objective); }
-
-    /**
-     * @brief Set the Initial Trajectory 
-     * @param X state trajectory
-     * @param U control trajectory
-     */
     void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, 
-                             const std::vector<Eigen::VectorXd>& U);
+                              const std::vector<Eigen::VectorXd>& U);
 
     /**
-     * @brief Solve the optimization problem
-     * @return Solution results
+     * @brief Solve the optimization problem.
+     * @return SQPResult with the solution details.
      */
     SQPResult solve();
 
-
     /**
-     * @brief Add a constraint to the problem
-     * 
-     * @param constraint_name constraint name given by the user
-     * @param constraint constraint object
+     * @brief Add a constraint to the problem.
+     * @param constraint_name Constraint name.
+     * @param constraint Constraint object.
      */
     void addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
         constraint_set_[constraint_name] = std::move(constraint);
     }
 
     /**
-     * @brief Get a specific constraint by name
-     * 
-     * @tparam T Type of constraint
-     * @param name Name of the constraint
-     * @return T* Pointer to the constraint
+     * @brief Get a specific constraint by name.
+     * @tparam T Type of constraint.
+     * @param name Constraint name.
+     * @return Pointer to the constraint (or nullptr if not found).
      */
-    // Get a specific constraint by name
     template <typename T>
     T* getConstraint(const std::string& name) const {
-        // 'find' is a const operation on standard associative containers 
-        // and does not modify 'constraint_set_'
         auto it = constraint_set_.find(name);
-        
-        // Special case for ControlBoxConstraint - must exist
         if (std::is_same<T, ControlBoxConstraint>::value) {
             if (it == constraint_set_.end()) {
                 throw std::runtime_error("ControlBoxConstraint not found");
             }
             return dynamic_cast<T*>(it->second.get());
         }
-        
-        // For other constraints, return nullptr if not found
         if (it == constraint_set_.end()) {
             return nullptr;
         }
-
-        // Try to cast to the requested type
         T* cast_constraint = dynamic_cast<T*>(it->second.get());
-        if (!cast_constraint) {
-            return nullptr;
-        }
-
         return cast_constraint;
     }
-
 
 private:
     // Member variables
     SQPOptions options_;
     osqp::OsqpSettings osqp_settings_;
 
-    Eigen::VectorXd initial_state_;      // Initial state of the system
-    Eigen::VectorXd reference_state_;      // Desired reference state
-    int horizon_;                      // Time horizon for the problem
+    Eigen::VectorXd initial_state_;
+    Eigen::VectorXd reference_state_;
+    int horizon_;
     double timestep_;   
     
     std::unique_ptr<DynamicalSystem> system_;
@@ -218,76 +156,70 @@ private:
 
     std::vector<Eigen::VectorXd> X_; // State trajectory
     std::vector<Eigen::VectorXd> U_; // Control trajectory
-    double J_;
 
+    // (Optional) cached linearization data
     std::vector<Eigen::MatrixXd> A_; // State Jacobians
     std::vector<Eigen::MatrixXd> B_; // Control Jacobians
 
-    /**
-     * @brief Dynamics propagatition
-     */
-    void propagateDynamics(const Eigen::VectorXd& x, std::vector<Eigen::VectorXd>& U);
+    // Helper routines
+    void initializeSQP();
+    void propagateDynamics(const Eigen::VectorXd& x0, std::vector<Eigen::VectorXd>& U);
+    void computeLinearizedDynamics(const std::vector<Eigen::VectorXd>& X,
+                                   const std::vector<Eigen::VectorXd>& U,
+                                   std::vector<Eigen::MatrixXd>& A,
+                                   std::vector<Eigen::MatrixXd>& B);
+    void checkDimensions() const;
 
     /**
-     * @brief Formulate QP subproblem
-     * 
-     * @param X State trajectory
-     * @param U Control trajectory
-     * @param H Hessian matrix (in-place)
-     * @param g Gradient vector (in-place)
-     * @param A Constraint matrix (in-place)
-     * @param l Lower bound (in-place)
-     * @param u Upper bound (in-place)
+     * @brief Formulate the QP subproblem.
+     *
+     * The QP includes:
+     *   - A quadratic cost (from running and terminal costs)
+     *   - Dynamics equality constraints,
+     *   - Box constraints on states (trust region) and controls,
+     *   - And a hard terminal constraint: x_N = reference_state_.
      */
     void formQPSubproblem(const std::vector<Eigen::VectorXd>& X,
-                         const std::vector<Eigen::VectorXd>& U,
-                         double trust_region_radius,
-                         Eigen::SparseMatrix<double>& H,
-                         Eigen::VectorXd& g,
-                         Eigen::SparseMatrix<double>& A,
-                         Eigen::VectorXd& l,
-                         Eigen::VectorXd& u);
+                          const std::vector<Eigen::VectorXd>& U,
+                          double trust_region_radius,
+                          Eigen::SparseMatrix<double>& H,
+                          Eigen::VectorXd& g,
+                          Eigen::SparseMatrix<double>& A,
+                          Eigen::VectorXd& l,
+                          Eigen::VectorXd& u);
 
     double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X,
                                       const std::vector<Eigen::VectorXd>& U) const;
-
-    // Merit function for line search
     double computeMeritFunction(const std::vector<Eigen::VectorXd>& X,
-                              const std::vector<Eigen::VectorXd>& U,
-                              double eta) const;
+                                const std::vector<Eigen::VectorXd>& U,
+                                double penalty) const;
 
-    // Line search
+    /**
+     * @brief Line search using a simple Armijo rule.
+     * @return Step–size alpha.
+     */
     double lineSearch(const std::vector<Eigen::VectorXd>& X,
-                     const std::vector<Eigen::VectorXd>& U,
-                     const std::vector<Eigen::VectorXd>& dX,
-                     const std::vector<Eigen::VectorXd>& dU);
+                      const std::vector<Eigen::VectorXd>& U,
+                      const std::vector<Eigen::VectorXd>& dX,
+                      const std::vector<Eigen::VectorXd>& dU);
 
-    // Extract trajectory updates from QP solution
+    /**
+     * @brief Extract trajectory updates from the QP solution.
+     */
     void extractUpdates(const Eigen::VectorXd& qp_solution,
-                       std::vector<Eigen::VectorXd>& dX,
-                       std::vector<Eigen::VectorXd>& dU);
+                        std::vector<Eigen::VectorXd>& dX,
+                        std::vector<Eigen::VectorXd>& dU);
 
-    void trustRegionUpdate(const std::vector<Eigen::VectorXd>& X,
+    /**
+     * @brief Update trajectories using a given step–size alpha.
+     */
+    void updateTrajectories(const std::vector<Eigen::VectorXd>& X,
                             const std::vector<Eigen::VectorXd>& U,
                             const std::vector<Eigen::VectorXd>& dX,
                             const std::vector<Eigen::VectorXd>& dU,
-                            double& trust_region_radius);
-
-    // Update trajectories with step
-    void updateTrajectories(const std::vector<Eigen::VectorXd>& X,
-                          const std::vector<Eigen::VectorXd>& U,
-                          const std::vector<Eigen::VectorXd>& dX,
-                          const std::vector<Eigen::VectorXd>& dU,
-                          std::vector<Eigen::VectorXd>& X_new,
-                          std::vector<Eigen::VectorXd>& U_new);
-
-    void computeLinearizedDynamics(const std::vector<Eigen::VectorXd>& X,
-                                 const std::vector<Eigen::VectorXd>& U,
-                                 std::vector<Eigen::MatrixXd>& A,
-                                 std::vector<Eigen::MatrixXd>& B);
-
-    void checkDimensions() const;
-    void initializeSQP();
+                            std::vector<Eigen::VectorXd>& X_new,
+                            std::vector<Eigen::VectorXd>& U_new,
+                            double alpha);
 };
 
 } // namespace cddp
