@@ -110,13 +110,9 @@ if (CDDP_CPP_TORCH)
 endif()
 
 if (CDDP_CPP_SQP)
-    add_executable(test_sqp sqp_core/test_sqp.cpp)
-    target_link_libraries(test_sqp gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_sqp)
-
-    add_executable(test_scp_ipopt sqp_core/test_scp_ipopt.cpp)
-    target_link_libraries(test_scp_ipopt gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_scp_ipopt)
+    add_executable(test_sqp_core sqp_core/test_sqp_core.cpp)
+    target_link_libraries(test_sqp_core gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_sqp_core)
 endif()
 
 if (CDDP_CPP_CASADI)

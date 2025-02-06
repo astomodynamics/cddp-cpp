@@ -22,7 +22,7 @@
 #include "gtest/gtest.h"
 
 #include "cddp.hpp"                 // Your main project header
-#include "sqp_core/scp_ipopt.hpp"    // IPOPT version of the SCP solver
+#include "sqp_core/scp_core.hpp"    // IPOPT version of the SCP solver
 
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;

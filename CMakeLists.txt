@@ -35,7 +35,7 @@ option(CDDP_CPP_SQP "Whether to use SQP solver" ON)
 option(CDDP_CPP_CASADI "Whether to use CasADi" ON)
 
 # Acado Configuration
-option(CDDP_CPP_ACADO "Whether to use Acado" ON)
+option(CDDP_CPP_ACADO "Whether to use Acado" OFF)
 
 # Gurobi Configuration
 option(CDDP_CPP_GUROBI "Whether to use Gurobi solver." OFF)
@@ -71,15 +71,16 @@ if (CDDP_CPP_CASADI)
   # make
   # sudo make install
   # echo "export LD_LIBRARY_PATH=/home/<path_to_casadi>/casadi/build/lib:$LD_LIBRARY_PATH" >> ~/.bashrc && source ~/.bashrc
+
   find_package(casadi REQUIRED)
-  set(CASADI_INCLUDE_DIR /usr/local/include/casadi)
+  set(CASADI_INCLUDE_DIR /$ENV{HOME}/local/include/casadi)
   find_library(CASADI_LIBRARY NAMES casadi HINTS ${CASADI_INCLUDE_DIR}/../lib $ENV{CASADI_PREFIX}/lib)
   set(CASADI_LIBRARIES ${CASADI_LIBRARIES} ${CASADI_LIBRARY})
 endif()
 
 if (CDDP_CPP_ACADO)
   # Assuming that Acado is installed by: https://acado.github.io/install_linux.html
-  set(ACADO_DIR "/home/tom/github/ACADOtoolkit")
+  set(ACADO_DIR $ENV{HOME}/github/ACADOtoolkit)
   # Include ACADO header files
   include_directories(${ACADO_DIR})
   include_directories(${ACADO_DIR}/acado)
@@ -262,17 +263,8 @@ if(TORCH_FOUND AND CDDP_CPP_TORCH_GPU)
 endif()
 
 if (CDDP_CPP_SQP)
-  # OSQP-CPP
-  FetchContent_Declare(
-    osqp-cpp
-    GIT_REPOSITORY https://github.com/astomodynamics/osqp-cpp.git
-    GIT_TAG master
-  )
-  FetchContent_MakeAvailable(osqp-cpp)
-  FetchContent_GetProperties(osqp-cpp)
-  target_link_libraries(${PROJECT_NAME} osqp-cpp)
   # add sqp solver to cddp
-  target_sources(${PROJECT_NAME} PRIVATE src/sqp_core/sqp.cpp src/sqp_core/scp_ipopt.cpp)
+  target_sources(${PROJECT_NAME} PRIVATE src/sqp_core/sqp_core.cpp)
 endif()
 
 if (CDDP_CPP_CASADI)
