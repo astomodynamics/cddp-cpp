@@ -64,23 +64,6 @@ CDDPSolution CDDP::solveASCDDP()
 
     // Evaluate Lagrangian
     L_ = J_;
-    // // Loop over horizon
-    // for (int t = 0; t < 1; ++t) {
-    //     // Evaluate state constraint violation
-    //     for (const auto& constraint : constraint_set_) {
-    //         if (constraint.first == "ControlBoxConstraint") {
-    //             L_ += getLogBarrierCost(*constraint.second, X_[t], U_[t], barrier_coeff_, options_.relaxation_coeff);
-    //             // Eigen::VectorXd constraint_violation = constraint.second->evaluate(X_[t], U_[t]);
-    //             // if (constraint_violation.minCoeff() < 0) {
-    //             //     std::cerr << "CDDP: Constraint violation at time " << t << std::endl;
-    //             //     std::cerr << "Constraint violation: " << constraint_violation.transpose() << std::endl;
-    //             //     throw std::runtime_error("Constraint violation");
-    //             // }
-    //         }
-
-    //     }
-    // }
-
     solution.lagrangian_sequence.push_back(L_);
 
     if (options_.verbose) {
