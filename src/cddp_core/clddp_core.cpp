@@ -91,20 +91,9 @@ CDDPSolution CDDP::solveCLCDDP() {
                 std::cerr << "CDDP: Backward pass failed" << std::endl;
 
                 // Increase regularization
-                if (options_.regularization_type == "state") {
-                    regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
-                    regularization_state_ = std::max(regularization_state_ * regularization_state_step_, options_.regularization_state_min);
-                } else if (options_.regularization_type == "control") {
-                    regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
-                    regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_min);
-                } else if (options_.regularization_type == "both") {
-                    regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
-                    regularization_state_ = std::max(regularization_state_ * regularization_state_step_, options_.regularization_state_min);
-                    regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
-                    regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_min);
-                } 
+                increaseRegularization();
 
-                if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
+                if (isRegularizationLimitReached()) {
                     if (options_.verbose) {
                         std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
                     }
@@ -186,30 +175,7 @@ CDDPSolution CDDP::solveCLCDDP() {
             solution.lagrangian_sequence.push_back(L_);
 
             // Decrease regularization
-            if (options_.regularization_type == "state") {
-                regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
-                regularization_state_ *= regularization_state_step_;
-                if (regularization_state_ < options_.regularization_state_min) {
-                    regularization_state_ = options_.regularization_state_min;
-                }
-            } else if (options_.regularization_type == "control") {
-                regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
-                regularization_control_ *= regularization_control_step_;
-                if (regularization_control_ < options_.regularization_control_min) {
-                    regularization_control_ = options_.regularization_control_min;
-                }
-            } else if (options_.regularization_type == "both") {
-                regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
-                regularization_state_ *= regularization_state_step_;
-                if (regularization_state_ < options_.regularization_state_min) {
-                    regularization_state_ = options_.regularization_state_min;
-                }
-                regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
-                regularization_control_ *= regularization_control_step_;
-                if (regularization_control_ < options_.regularization_control_min) {
-                    regularization_control_ = options_.regularization_control_min;
-                }
-            }
+            decreaseRegularization();
 
             // Check termination
             if (dJ_ < options_.cost_tolerance) {
@@ -219,30 +185,9 @@ CDDPSolution CDDP::solveCLCDDP() {
         } else {
             bool early_termination_flag = false; // TODO: Improve early termination
             // Increase regularization
-            if (options_.regularization_type == "state") {
-                if (regularization_state_ < 1e-2) {
-                    early_termination_flag = true; // Early termination if regularization is fairly small
-                }
-                regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
-                regularization_state_ = std::min(regularization_state_ * regularization_state_step_, options_.regularization_state_max);
-                
-            } else if (options_.regularization_type == "control") {
-                if (regularization_control_ < 1e-2) {
-                    early_termination_flag = true; // Early termination if regularization is fairly small
-                }
-                regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
-                regularization_control_ = std::min(regularization_control_ * regularization_control_step_, options_.regularization_control_max);
-            } else if (options_.regularization_type == "both") {
-                if (regularization_state_ < 1e-2 ||  
-                    regularization_control_ < 1e-2) {
-                    early_termination_flag = true; // Early termination if regularization is fairly small
-                }
-                regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
-                regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
-            } else {
-                early_termination_flag = true;
-            }
+            increaseRegularization();
 
+            // TODO: Improve early termination
             // Check early termination
             if (options_.early_termination && early_termination_flag) {
                 if (dJ_ < options_.cost_tolerance * 1e2 ||
@@ -256,8 +201,8 @@ CDDPSolution CDDP::solveCLCDDP() {
                 }
             }
             
-            // Check regularization limit
-            if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
+            // If limit is reached treat as converged
+            if (isRegularizationLimitReached()) {
                 if ((dJ_ < options_.cost_tolerance * 1e2) ||
                     (optimality_gap_ < options_.grad_tolerance * 1e1)) 
                 {
@@ -287,7 +232,7 @@ CDDPSolution CDDP::solveCLCDDP() {
     // Finalize solution
     solution.state_sequence = X_;
     solution.control_sequence = U_;
-    solution.feedback_gain = K_;
+    solution.control_gain = K_u_;
     solution.alpha = alpha_;
     solution.solve_time = duration.count(); // Time in microseconds
     
@@ -388,7 +333,7 @@ bool CDDP::solveCLCDDPBackwardPass() {
             // Solve QP by boxQP
             const Eigen::VectorXd& lb = control_box_constraint->getLowerBound() - u;
             const Eigen::VectorXd& ub = control_box_constraint->getUpperBound() - u;
-            const Eigen::VectorXd& x0 = k_[t]; // Initial guess
+            const Eigen::VectorXd& x0 = k_u_[t]; // Initial guess
             
             cddp::BoxQPResult qp_result = boxqp_solver_.solve(Q_uu_reg, Q_u, lb, ub, x0);
             
@@ -432,8 +377,8 @@ bool CDDP::solveCLCDDPBackwardPass() {
         }
 
         // Store feedforward and feedback gain
-        k_[t] = k;
-        K_[t] = K;
+        k_u_[t] = k;
+        K_u_[t] = K;
 
         // Compute value function approximation
         Eigen::Vector2d dV_step;
@@ -482,7 +427,7 @@ ForwardPassResult CDDP::solveCLCDDPForwardPass(double alpha) {
         const Eigen::VectorXd& u = U_new[t];
         const Eigen::VectorXd& delta_x = x - X_[t];
 
-        U_new[t] = u + alpha * k_[t] + K_[t] * delta_x;
+        U_new[t] = u + alpha * k_u_[t] + K_u_[t] * delta_x;
 
         if (control_box_constraint != nullptr) {
             U_new[t] = control_box_constraint->clamp(U_new[t]);

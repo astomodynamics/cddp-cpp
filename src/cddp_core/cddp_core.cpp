@@ -44,7 +44,7 @@ CDDP::CDDP(const Eigen::VectorXd &initial_state,
         initialized_(false)
 {
     initializeCDDP();
-    if (options_.verbose) {
+    if (options_.header_and_footer) {
         printSolverInfo();
         printOptions(options_);
     }
@@ -52,12 +52,42 @@ CDDP::CDDP(const Eigen::VectorXd &initial_state,
 
 cddp::CDDPSolution CDDP::solve(std::string solver_type) {
     if (solver_type == "CLCDDP" || solver_type == "CLDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with CLCDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
         return solveCLCDDP();
     } else if (solver_type == "LogCDDP" || solver_type == "LogDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with LogCDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
         return solveLogCDDP();
     } else if (solver_type == "ASCDDP" || solver_type == "ASDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with ASCDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
         return solveASCDDP();
-    } else {
+    } else if (solver_type == "IPDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with IPDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
+        return solveIPDDP();
+    } else if (solver_type == "FeasibleIPDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with FeasibleIPDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
+        return solveFeasibleIPDDP();
+    } else
+    {
         std::cerr << "CDDP::solve: Unknown solver type" << std::endl;
         throw std::runtime_error("CDDP::solve: Unknown solver type");
     }
@@ -174,8 +204,8 @@ void CDDP::initializeCDDP()
 
 
     // Initialize gains and value reduction
-    k_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
-    K_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, state_dim));
+    k_u_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
+    K_u_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, state_dim));
     dV_.resize(2);
 
     // Initialize Q-function matrices: USED ONLY FOR ASCDDP
@@ -219,6 +249,93 @@ double CDDP::computeConstraintViolation(const std::vector<Eigen::VectorXd>& X,
         }
     }
     return total_violation;
+}
+
+
+void CDDP::increaseRegularization()
+{
+    // For “state” or “both”
+    if (options_.regularization_type == "state" ||
+        options_.regularization_type == "both")
+    {
+        // Increase step
+        regularization_state_step_ = std::max(
+            regularization_state_step_ * options_.regularization_state_factor,
+            options_.regularization_state_factor);
+
+        // Increase actual regularization
+        regularization_state_ = std::max(
+            regularization_state_ * regularization_state_step_,
+            options_.regularization_state_min);
+    }
+
+    // For “control” or “both”
+    if (options_.regularization_type == "control" ||
+        options_.regularization_type == "both")
+    {
+        // Increase step
+        regularization_control_step_ = std::max(
+            regularization_control_step_ * options_.regularization_control_factor,
+            options_.regularization_control_factor);
+
+        // Increase actual regularization
+        regularization_control_ = std::max(
+            regularization_control_ * regularization_control_step_,
+            options_.regularization_control_min);
+    }
+}
+
+
+void CDDP::decreaseRegularization()
+{
+    // For “state” or “both”
+    if (options_.regularization_type == "state" ||
+        options_.regularization_type == "both")
+    {
+        // Decrease step
+        regularization_state_step_ = std::min(
+            regularization_state_step_ / options_.regularization_state_factor,
+            1.0 / options_.regularization_state_factor);
+
+        // Decrease actual regularization
+        regularization_state_ *= regularization_state_step_;
+        if (regularization_state_ < options_.regularization_state_min) {
+            regularization_state_ = options_.regularization_state_min;
+        }
+    }
+
+    // For “control” or “both”
+    if (options_.regularization_type == "control" ||
+        options_.regularization_type == "both")
+    {
+        // Decrease step
+        regularization_control_step_ = std::min(
+            regularization_control_step_ / options_.regularization_control_factor,
+            1.0 / options_.regularization_control_factor);
+
+        // Decrease actual regularization
+        regularization_control_ *= regularization_control_step_;
+        if (regularization_control_ < options_.regularization_control_min) {
+            regularization_control_ = options_.regularization_control_min;
+        }
+    }
+}
+
+
+bool CDDP::isRegularizationLimitReached() const
+{
+    bool state_limit   = (regularization_state_   >= options_.regularization_state_max);
+    bool control_limit = (regularization_control_ >= options_.regularization_control_max);
+
+    if (options_.regularization_type == "state")
+        return state_limit;
+    else if (options_.regularization_type == "control")
+        return control_limit;
+    else if (options_.regularization_type == "both")
+        return (state_limit || control_limit);
+
+    // For “none” or unknown, no limit in practice
+    return false;
 }
 
 void CDDP::printSolverInfo()

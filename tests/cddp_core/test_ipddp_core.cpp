@@ -25,7 +25,7 @@
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
 
-TEST(CDDPTest, Solve) {
+TEST(FeasibleIPDDPTest, Solve) {
     // Problem parameters
     int state_dim = 3;
     int control_dim = 2;
@@ -33,7 +33,7 @@ TEST(CDDPTest, Solve) {
     double timestep = 0.03;
     std::string integration_type = "euler";
 
-    // Create a dubins car instance 
+    // Create a Unicycle instance 
     std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::Unicycle>(timestep, integration_type); // Create unique_ptr
 
     // Create objective function
@@ -57,12 +57,13 @@ TEST(CDDPTest, Solve) {
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 20;
+    options.max_iterations = 2;
     options.cost_tolerance = 1e-2;
     options.use_parallel = true;
     options.num_threads = 10;
     options.verbose = true;
     options.debug = true;
+    options.barrier_coeff = 1e-6;
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(
@@ -95,8 +96,7 @@ TEST(CDDPTest, Solve) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
-    // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
+    cddp::CDDPSolution solution = cddp_solver.solve("FeasibleIPDDP");
 
     ASSERT_TRUE(solution.converged);
 
@@ -139,11 +139,11 @@ TEST(CDDPTest, Solve) {
     // plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
     // plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
     // plt::title("Control Inputs");
-    // plt::save(plotDirectory + "/dubincs_car_cddp_test.png");
+    // plt::save(plotDirectory + "/dubincs_car_ipddp_test.png");
 
     // // Create figure and axes
     // plt::figure_size(800, 600);
-    // plt::title("Dubins Car Trajectory");
+    // plt::title("Unicycle Trajectory");
     // plt::xlabel("x");
     // plt::ylabel("y");
     // plt::xlim(-1, 3); // Adjust limits as needed
@@ -192,7 +192,7 @@ TEST(CDDPTest, Solve) {
     //                 std::vector<double>(y_arr.begin(), y_arr.begin() + i + 1), "b-");
 
     //         // Add plot title
-    //         plt::title("Dubins Car Trajectory");
+    //         plt::title("Unicycle Trajectory");
 
     //         // Set labels
     //         plt::xlabel("x");
@@ -215,12 +215,6 @@ TEST(CDDPTest, Solve) {
     //     }
     // };
 }
-
-// Create gif from images using ImageMagick
-// Installation:
-// $ sudo apt-get install imagemagick
-
-// convert -delay 100 ../results/tests/dubins_car_*.png ../results/tests/dubins_car.gif 
 
 
 /*
@@ -249,7 +243,7 @@ Author: Tomo Sasaki (@astomodynamics)
 ========================================
 Cost Tolerance:       0.01
 Grad Tolerance:     0.0001
-Max Iterations:         20
+Max Iterations:         40
 Max CPU Time:          0
 
 Line Search:
@@ -259,7 +253,7 @@ Line Search:
   Backtracking Factor: 0.501187
 
 Log-Barrier:
-  Barrier Coeff:  0.01
+  Barrier Coeff: 1e-06
   Barrier Factor:   0.1
   Barrier Tolerance: 1e-08
   Relaxation Coeff:     1
@@ -301,109 +295,49 @@ BoxQP:
 ControlBoxConstraint is set
  Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
 -----------------------------------------------------------------------------------------
-    0   2.123e+02  7.905e-323  1.00e+10     1.000  0.00e+00  1.00e-06  1.00e-02  0.00e+00
-    1   2.800e+01   2.800e+01  3.00e+00     1.000  0.00e+00  1.00e-07  1.00e-02  0.00e+00
-    2   4.297e+00   4.297e+00  1.47e+00     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-    3   1.903e+00   1.903e+00  1.45e-01     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-    4   1.763e+00   1.763e+00  9.74e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-    5   1.741e+00   1.741e+00  1.91e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-    6   1.724e+00   1.724e+00  1.46e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-
-========================================
-           CDDP Solution
-========================================
-Converged: Yes
-Iterations: 7
-Solve Time: 6.7100e+03 micro sec
-Final Cost: 1.722832e+00
-========================================
-
-[       OK ] CDDPTest.Solve (6 ms)
-[----------] 1 test from CDDPTest (6 ms total)
-
-[----------] Global test environment tear-down
-[==========] 1 test from 1 test suite ran. (6 ms total)
-[  PASSED  ] 1 test.
-*/
-
-
-
-/* Unconstrained
-========================================
-           CDDP Options
-========================================
-Cost Tolerance:       0.01
-Grad Tolerance:     0.0001
-Max Iterations:         20
-Max CPU Time:          0
-
-Line Search:
-  Max Iterations:    11
-  Backtracking Coeff:     1
-  Backtracking Min:   0.5
-  Backtracking Factor: 0.501187
-
-Log-Barrier:
-  Barrier Coeff:  0.01
-  Barrier Factor:   0.1
-  Barrier Tolerance: 1e-08
-  Relaxation Coeff:     1
-  Barrier Order:     2
-  Filter Acceptance: 1e-08
-  Constraint Tolerance: 1e-12
-
-Regularization:
-  Regularization Type: control
-  Regularization State: 1e-06
-  Regularization State Step:     1
-  Regularization State Max: 10000
-  Regularization State Min: 1e-08
-  Regularization State Factor:    10
-  Regularization Control: 1e-06
-  Regularization Control Step:     1
-  Regularization Control Max: 10000
-  Regularization Control Min: 1e-08
-  Regularization Control Factor:    10
-
-Other:
-  Print Iterations: Yes
-  iLQR: Yes
-  Use Parallel: Yes
-  Num Threads: 10
-  Relaxed Log-Barrier: No
-  Early Termination: Yes
-
-BoxQP:
-  BoxQP Max Iterations: 100
-  BoxQP Min Grad: 1e-08
-  BoxQP Min Rel Improve: 1e-08
-  BoxQP Step Dec: 0.6
-  BoxQP Min Step: 1e-22
-  BoxQP Armijo: 0.1
-  BoxQP Verbose: No
-========================================
-
+    0   2.123e+02   2.123e+02  1.00e+10     1.000  0.00e+00  1.00e-06  1.00e-06  0.00e+00
+    1   1.064e+02   1.064e+02  3.14e+00     0.501  0.00e+00  1.00e-07  1.00e-06  0.00e+00
+    2   7.413e+01   7.413e+01  3.14e+00     0.251  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    3   5.256e+01   5.256e+01  3.19e+00     0.251  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    4   2.596e+01   2.596e+01  3.25e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    5   1.438e+01   1.438e+01  3.36e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    6   8.929e+00   8.929e+00  3.46e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    7   6.145e+00   6.145e+00  3.56e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    8   4.610e+00   4.610e+00  3.64e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+    9   3.703e+00   3.703e+00  3.71e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
  Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
 -----------------------------------------------------------------------------------------
-    0   2.123e+02   0.000e+00  1.00e+10     1.000  0.00e+00  1.00e-06  1.00e-02  0.00e+00
-    1   5.653e+01   5.653e+01  3.00e+00     0.501  0.00e+00  1.00e-07  1.00e-02  0.00e+00
-    2   1.965e+00   1.965e+00  2.15e+00     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-    3   1.728e+00   1.728e+00  7.53e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
+   10   3.136e+00   3.136e+00  3.77e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   11   2.764e+00   2.764e+00  3.83e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   12   2.510e+00   2.510e+00  3.88e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   13   2.330e+00   2.330e+00  3.92e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   14   2.200e+00   2.200e+00  3.97e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   15   2.104e+00   2.104e+00  4.00e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   16   2.031e+00   2.031e+00  4.03e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   17   1.976e+00   1.976e+00  4.06e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   18   1.932e+00   1.932e+00  4.09e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   19   1.898e+00   1.898e+00  4.11e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+ Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
+-----------------------------------------------------------------------------------------
+   20   1.871e+00   1.871e+00  4.13e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   21   1.850e+00   1.850e+00  4.15e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   22   1.833e+00   1.833e+00  4.16e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   23   1.819e+00   1.819e+00  4.18e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
+   24   1.807e+00   1.807e+00  4.19e+00     0.501  0.00e+00  1.00e-08  1.00e-06  0.00e+00
 
 ========================================
            CDDP Solution
 ========================================
 Converged: Yes
-Iterations: 4
-Solve Time: 2.3630e+03 micro sec
-Final Cost: 1.720145e+00
+Iterations: 25
+Solve Time: 2.5739e+04 micro sec
+Final Cost: 1.797722e+00
 ========================================
 
-[       OK ] CDDPTest.Solve (2 ms)
-[----------] 1 test from CDDPTest (2 ms total)
+[       OK ] CDDPTest.Solve (612 ms)
+[----------] 1 test from CDDPTest (612 ms total)
 
 [----------] Global test environment tear-down
-[==========] 1 test from 1 test suite ran. (2 ms total)
+[==========] 1 test from 1 test suite ran. (612 ms total)
 [  PASSED  ] 1 test.
-
 */

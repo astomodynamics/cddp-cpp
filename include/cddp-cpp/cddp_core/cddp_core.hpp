@@ -49,9 +49,15 @@ struct CDDPOptions {
     double backtracking_factor = std::pow(10, (-3.0/10.0));   // Factor for line search backtracking
     double minimum_reduction_ratio = 1e-6;          // Minimum reduction for line search
 
+    // interior-point method
+    double mu_initial = 1e-2;                       // Initial barrier coefficient
+    double mu_min = 1e-8;                           // Minimum barrier coefficient
+    double mu_max = 1e1;                            // Maximum barrier coefficient
+    double mu_reduction_ratio = 0.1;                         // Factor for barrier coefficient
+
     // log-barrier method
     double barrier_coeff = 1e-2;                    // Coefficient for log-barrier method
-    double barrier_factor = 0.90;                   // Factor for log-barrier method
+    double barrier_factor = 0.10;                   // Factor for log-barrier method
     double barrier_tolerance = 1e-8;                // Tolerance for log-barrier method
     double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
     int barrier_order = 2;                          // Order for log-barrier method
@@ -76,6 +82,7 @@ struct CDDPOptions {
     // Other options
     bool verbose = true;                            // Option for debug printing
     bool debug = false;                             // Option for debug mode
+    bool header_and_footer = true;                  // Option for header and footer
     bool is_ilqr = true;                            // Option for iLQR
     bool use_parallel = true;                      // Option for parallel computation
     int num_threads = max_line_search_iterations; // Number of threads to use
@@ -96,9 +103,13 @@ struct CDDPSolution {
     std::vector<double> time_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
     std::vector<Eigen::VectorXd> state_sequence;
+    std::vector<Eigen::VectorXd> dual_sequence;
+    std::vector<Eigen::VectorXd> slack_sequence;
     std::vector<double> cost_sequence;
     std::vector<double> lagrangian_sequence;
-    std::vector<Eigen::MatrixXd> feedback_gain;
+    std::vector<Eigen::MatrixXd> control_gain;
+    std::vector<Eigen::MatrixXd> dual_gain;
+    std::vector<Eigen::MatrixXd> slack_gain;
     int iterations;
     double alpha;
     bool converged;
@@ -108,6 +119,8 @@ struct CDDPSolution {
 struct ForwardPassResult {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
+    std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
+    std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
     double cost;
     double lagrangian;
     double alpha = 1.0;
@@ -143,6 +156,9 @@ public:
     const Eigen::VectorXd& getReferenceState() const { return reference_state_; }
     int getHorizon() const { return horizon_; }
     double getTimestep() const { return timestep_; }
+    int getStateDim() const { return system_->getStateDim(); }
+    int getControlDim() const { return system_->getControlDim(); }
+    int getTotalDualDim() const { return total_dual_dim_; }
     const CDDPOptions& getOptions() const { return options_; }
 
     // Setters
@@ -212,7 +228,14 @@ public:
      * @param constraint constraint object
      */
     void addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
+        // Insert into the map
         constraint_set_[constraint_name] = std::move(constraint);
+
+        // Increment total_dual_dim_
+        int dim = constraint_set_[constraint_name]->getDualDim();
+        total_dual_dim_ += dim;
+
+        initialized_ = false; // Reset the initialization flag
     }
 
     /**
@@ -255,31 +278,49 @@ public:
     
 private:
     // Solver methods
+    // CLCDDP methods
     CDDPSolution solveCLCDDP();
     ForwardPassResult solveCLCDDPForwardPass(double alpha);
     bool solveCLCDDPBackwardPass();
 
+    // LogCDDP methods
     CDDPSolution solveLogCDDP();
     ForwardPassResult solveLogCDDPForwardPass(double alpha);
     bool solveLogCDDPBackwardPass();
 
+    // ASCDDP methods
     CDDPSolution solveASCDDP();
     ForwardPassResult solveASCDDPForwardPass(double alpha);
     bool solveASCDDPBackwardPass();
+    
+    // IPDDP methods
+    void initializeIPDDP();
+    CDDPSolution solveIPDDP();
+    ForwardPassResult solveIPDDPForwardPass(double alpha);
+    bool solveIPDDPBackwardPass();
+
+    // Feasible IPDDP methods
+    void initializeFeasibleIPDDP();
+    CDDPSolution solveFeasibleIPDDP();
+    ForwardPassResult solveFeasibleIPDDPForwardPass(double alpha);
+    bool solveFeasibleIPDDPBackwardPass();
 
     // Helper methods
     double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
 
     bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
 
+    // Regularization methods
+    void increaseRegularization();
+    void decreaseRegularization();
+    bool isRegularizationLimitReached() const;
+
+    // Print methods
     void printSolverInfo();
-
     void printOptions(const CDDPOptions& options);
-
     void printIteration(int iter, double cost, double lagrangian, 
                         double grad_norm, double lambda_state, 
                         double lambda_control, double alpha, double mu, double constraint_violation);
-    
     void printSolution(const CDDPSolution& solution);
 
 private:
@@ -297,9 +338,13 @@ private:
     double timestep_;                  // Time step for the problem
     CDDPOptions options_;              // Options for the solver
 
+    int total_dual_dim_ = 0; // Number of total dual variables across constraints
+
     // Intermediate trajectories
-    std::vector<Eigen::VectorXd> X_;                  // State trajectory
-    std::vector<Eigen::VectorXd> U_;                  // Control trajectory
+    std::vector<Eigen::VectorXd> X_;                            // State trajectory
+    std::vector<Eigen::VectorXd> U_;                            // Control trajectory
+    std::map<std::string, std::vector<Eigen::VectorXd>> Y_;  // Dual trajectory
+    std::map<std::string, std::vector<Eigen::VectorXd>> S_; // Slack trajectory 
 
     // Cost and Lagrangian
     double J_; // Cost 
@@ -316,10 +361,14 @@ private:
     double mu_; // Barrier coefficient
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
-
+    
     // Feedforward and feedback gains
-    std::vector<Eigen::VectorXd> k_;
-    std::vector<Eigen::MatrixXd> K_;
+    std::vector<Eigen::VectorXd> k_u_;
+    std::vector<Eigen::MatrixXd> K_u_;
+    std::map<std::string, std::vector<Eigen::VectorXd>> k_y_;
+    std::map<std::string, std::vector<Eigen::MatrixXd>> K_y_;
+    std::map<std::string, std::vector<Eigen::VectorXd>> k_s_;
+    std::map<std::string, std::vector<Eigen::MatrixXd>> K_s_;
 
     // Q-function matrices
     std::vector<Eigen::MatrixXd> Q_UU_;
