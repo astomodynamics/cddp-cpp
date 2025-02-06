@@ -232,10 +232,6 @@ public:
         return cf_.dot(sabs(final_state - reference_state_, pf_));
     }
 
-    const Eigen::VectorXd& getReferenceState() const override { 
-        return reference_state_; 
-    }
-
 private:
     // Helper function for smooth absolute value (pseudo-Huber)
     Eigen::VectorXd sabs(const Eigen::VectorXd& x, const Eigen::VectorXd& p) const {
