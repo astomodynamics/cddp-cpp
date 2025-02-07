@@ -26,7 +26,7 @@
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
 
-TEST(SQPTest, SolveDubinsCar) {
+TEST(SQPTest, SolveUnicycle) {
     // Problem parameters
     int state_dim = 3;
     int control_dim = 2;
@@ -34,8 +34,8 @@ TEST(SQPTest, SolveDubinsCar) {
     double timestep = 0.03;
     std::string integration_type = "euler";
 
-    // Create a dubins car instance 
-    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::DubinsCar>(
+    // Create a unicycle instance 
+    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::Unicycle>(
         timestep, integration_type
     );
 
@@ -171,7 +171,7 @@ TEST(SQPTest, SolveDubinsCar) {
     // plt::legend();
     // plt::grid(true);
 
-    // plt::save(plotDirectory + "/dubins_car_sqp_test.png");
+    // plt::save(plotDirectory + "/unicycle_sqp_test.png");
     // plt::close();
    
 }
