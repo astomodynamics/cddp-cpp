@@ -43,7 +43,7 @@ struct CDDPOptions {
     double max_cpu_time = 0.0;                      // Maximum CPU time for the solver in seconds
 
     // Line search method
-    int max_line_search_iterations = 11;            // Maximum iterations for line search
+    int max_line_search_iterations = 21;            // Maximum iterations for line search
     double backtracking_coeff = 1.0;                // Maximum step size for line search backtracking
     double backtracking_min = 0.5;                  // Coefficient for line search backtracking
     double backtracking_factor = std::pow(10, (-3.0/10.0));   // Factor for line search backtracking
@@ -69,13 +69,13 @@ struct CDDPOptions {
     
     double regularization_state = 1e-6;             // Regularization for state
     double regularization_state_step = 1.0;         // Regularization step for state
-    double regularization_state_max = 1e4;          // Maximum regularization
+    double regularization_state_max = 1e6;          // Maximum regularization
     double regularization_state_min = 1e-8;         // Minimum regularization
     double regularization_state_factor = 1e1;       // Factor for state regularization
 
     double regularization_control = 1e-6;           // Regularization for control
     double regularization_control_step = 1.0;       // Regularization step for control
-    double regularization_control_max = 1e4;        // Maximum regularization
+    double regularization_control_max = 1e5;        // Maximum regularization
     double regularization_control_min = 1e-8;       // Minimum regularization
     double regularization_control_factor = 1e1;     // Factor for control regularization
 

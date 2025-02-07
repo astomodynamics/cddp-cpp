@@ -179,6 +179,14 @@ if (CDDP_CPP_TORCH)
   set(TORCH_INSTALL_PREFIX ${Torch_DIR}/../../../ CACHE PATH "LibTorch installation directory")
 endif()
 
+# OSQP-CPP for ASDDP
+FetchContent_Declare(
+  osqp-cpp
+  GIT_REPOSITORY https://github.com/astomodynamics/osqp-cpp.git
+  GIT_TAG master
+)
+FetchContent_MakeAvailable(osqp-cpp)
+FetchContent_GetProperties(osqp-cpp)
 
 # Include directories
 include_directories(
@@ -234,6 +242,7 @@ target_link_libraries(${PROJECT_NAME}
   Python3::Python
   Python3::Module
   Python3::NumPy
+  osqp-cpp
 ) 
 
 if (CDDP_CPP_TORCH)
@@ -253,15 +262,6 @@ if(TORCH_FOUND AND CDDP_CPP_TORCH_GPU)
 endif()
 
 if (CDDP_CPP_SQP)
-  # OSQP-CPP
-  FetchContent_Declare(
-    osqp-cpp
-    GIT_REPOSITORY https://github.com/astomodynamics/osqp-cpp.git
-    GIT_TAG master
-  )
-  FetchContent_MakeAvailable(osqp-cpp)
-  FetchContent_GetProperties(osqp-cpp)
-  target_link_libraries(${PROJECT_NAME} osqp-cpp)
   # add sqp solver to cddp
   target_sources(${PROJECT_NAME} PRIVATE src/sqp_core/sqp.cpp)
 endif()

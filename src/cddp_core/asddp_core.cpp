@@ -29,6 +29,7 @@
 #include "cddp_core/helper.hpp"
 #include "cddp_core/boxqp.hpp"
 #include "cddp_core/qp_solver.hpp"
+#include "osqp++.h"
 
 namespace cddp
 {
@@ -442,38 +443,52 @@ ForwardPassResult CDDP::solveASCDDPForwardPass(double alpha)
         const Eigen::MatrixXd &Q_uu = Q_UU_[t];
         const Eigen::MatrixXd &Q_ux = Q_UX_[t];
 
+        // Create QP problem
+        Eigen::SparseMatrix<double> P(Q_uu.rows(), Q_uu.cols()); // Hessian of QP objective
+        int numNonZeros = Q_uu.nonZeros(); 
+        P.reserve(numNonZeros);
+        for (int i = 0; i < Q_uu.rows(); ++i) {
+            for (int j = 0; j < Q_uu.cols(); ++j) {
+                if (Q_uu(i, j) != 0) {
+                    P.insert(i, j) = Q_uu(i, j);
+                }
+            }
+        }
+        P.makeCompressed(); // Important for efficient storage and operations
+
         // Form the gradient of the QP objective:
         // q = alpha * Q_u + Q_ux * delta_x
         Eigen::VectorXd q = alpha * Q_u + Q_ux * delta_x;
+
+        // Create constraints
+        Eigen::SparseMatrix<double> A(control_dim, control_dim);
+        A.setIdentity();
+        A.makeCompressed();
 
         // Determine QP bounds from the control box constraints (relative to the current control).
         const Eigen::VectorXd lb = control_box_constraint->getLowerBound() - u;
         const Eigen::VectorXd ub = control_box_constraint->getUpperBound() - u;
 
-        // Assemble the QP constraint matrix:
-        // Here we stack I and -I so that the constraints become:
-        //   I * delta_u <= ub  and  -I * delta_u <= -lb.
-        Eigen::MatrixXd A(2 * control_dim, control_dim);
-        A.topRows(control_dim) = Eigen::MatrixXd::Identity(control_dim, control_dim);
-        A.bottomRows(control_dim) = -Eigen::MatrixXd::Identity(control_dim, control_dim);
-        Eigen::VectorXd b(2 * control_dim);
-        b.head(control_dim) = ub;
-        b.tail(control_dim) = -lb;
+        // Initialize QP solver
+        osqp::OsqpInstance instance;
 
-        // Set up and solve the QP.
-        QPSolverOptions qp_options;
-        qp_options.verbose = false;
-        QPSolver qp_solver(qp_options);
+        // Set the objective
+        instance.objective_matrix = P;
+        instance.objective_vector = q;
+        instance.constraint_matrix = A;
+        instance.lower_bounds = lb;
+        instance.upper_bounds = ub;
 
-        // Note: Here we assume qp_solver.setDimensions() takes (state_dim, number_of_constraints)
-        qp_solver.setDimensions(state_dim, 2 * control_dim);
-        qp_solver.setHessian(Q_uu);
-        qp_solver.setGradient(q);
-        qp_solver.setConstraints(A, b);
+        // Solve the QP problem
+        osqp::OsqpSolver osqp_solver;
+        osqp::OsqpSettings settings;
+        settings.warm_start = true;
+        settings.verbose = false;
 
-        QPResult qp_result = qp_solver.solve();
+        osqp_solver.Init(instance, settings);
+        osqp::OsqpExitCode exit_code = osqp_solver.Solve();
 
-        if (qp_result.status != QPStatus::OPTIMAL) {
+        if (exit_code != osqp::OsqpExitCode::kOptimal) {
             if (options_.debug) {
                 std::cerr << "CDDP: QP solver failed at time step " << t << std::endl;
             }
@@ -482,7 +497,7 @@ ForwardPassResult CDDP::solveASCDDPForwardPass(double alpha)
         }
 
         // Update control using the QP solution delta_u.
-        const Eigen::VectorXd delta_u = qp_result.x;
+        Eigen::VectorXd delta_u = osqp_solver.primal_solution();
         U_new[t] += delta_u;
 
         // Compute running cost and propagate state.
