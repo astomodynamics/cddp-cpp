@@ -29,10 +29,10 @@ set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
 
 # SQP Configuration
-option(CDDP_CPP_SQP "Whether to use SQP solver" ON)
+option(CDDP_CPP_SQP "Whether to use SQP solver" OFF)
 
 # CasADi Configuration
-option(CDDP_CPP_CASADI "Whether to use CasADi" ON)
+option(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
 
 # Acado Configuration
 option(CDDP_CPP_ACADO "Whether to use Acado" OFF)
