@@ -13,8 +13,8 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#ifndef CDDP_SCP_CORE_HPP
-#define CDDP_SCP_CORE_HPP
+#ifndef CDDP_SQP_CORE_HPP
+#define CDDP_SQP_CORE_HPP
 
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
@@ -31,7 +31,7 @@
 namespace cddp {
 
 /**
- * @brief Configuration options for SCP solver using IPOPT.
+ * @brief Configuration options for SCP solver
  */
 struct SCPOptions {
     int max_iterations = 100;            // Maximum number of iterations
@@ -70,10 +70,7 @@ struct SCPResult {
 };
 
 /**
- * @brief Sequential Convex Programming solver using IPOPT (via CasADi).
- *
- * The solver’s API mimics that of your previous SQP solver. In each SCP iteration the
- * dynamics are linearized about the current trajectory and a convex subproblem is solved.
+ * @brief Sequential Convex Programming solver
  */
 class SCPSolver {
 public:
@@ -178,4 +175,4 @@ private:
 
 } // namespace cddp
 
-#endif // CDDP_SCP_IPOPT_HPP
+#endif // CDDP_SQP_CORE_HPP

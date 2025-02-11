@@ -21,8 +21,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "cddp.hpp"                 // Your main project header
-#include "sqp_core/scp_core.hpp"    // IPOPT version of the SCP solver
+#include "cddp.hpp"               
+#include "sqp_core/sqp_core.hpp"   
 
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;

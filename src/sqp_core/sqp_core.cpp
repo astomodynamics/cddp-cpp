@@ -1,3 +1,18 @@
+/*
+ Copyright 2024 Tomo Sasaki
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
 #include "sqp_core/sqp_core.hpp"
 #include <casadi/casadi.hpp>
 #include <iostream>
@@ -134,8 +149,6 @@ SCPResult SCPSolver::solve() {
         X_prev = X;
         U_prev = U;
 
-        // --- Build the Convex Subproblem using CasADi ---
-        // Create symbolic decision variables for each time step.
         std::vector<MX> x_vars, u_vars;
         for (int t = 0; t <= N; ++t)
             x_vars.push_back(MX::sym("x_" + std::to_string(t), state_dim));
@@ -143,7 +156,6 @@ SCPResult SCPSolver::solve() {
             u_vars.push_back(MX::sym("u_" + std::to_string(t), control_dim));
 
         // --- Define the Objective ---
-        // Cost: sum of squared controls plus a heavy squared penalty on terminal state error.
         MX cost = 0;
         for (int t = 0; t < N; ++t) {
             cost += dot(u_vars[t], u_vars[t]);
@@ -210,8 +222,6 @@ SCPResult SCPSolver::solve() {
         // --- Set Variable and Constraint Bounds ---
         std::vector<double> lbw(n_w, -1e20), ubw(n_w, 1e20);
         // For constraints:
-        // The first (initial state and dynamics) constraints are equality constraints (0),
-        // and the trust-region constraints have box bounds of [-Delta, Delta].
         int num_eq = state_dim + N * state_dim;
         int num_trust = (N + 1) * state_dim + N * control_dim;
         std::vector<double> lbg, ubg;
@@ -224,7 +234,7 @@ SCPResult SCPSolver::solve() {
             ubg.push_back(Delta);
         }
 
-        // --- Formulate and Solve the NLP with IPOPT ---
+        // --- Formulate and Solve the NLP or QP ---
         MXDict nlp = {{"x", w}, {"f", cost}, {"g", g_all}};
         // Dict solver_opts;
         // solver_opts["ipopt.max_iter"] = options_.ipopt_max_iter;
