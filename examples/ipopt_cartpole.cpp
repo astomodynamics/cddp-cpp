@@ -1,27 +1,18 @@
-/**
- * ipopt_cartpole.cpp
- *
- * A CasADi/IPOPT script for solving an optimal control problem for a cartpole system,
- * with post-solution plotting and animation.
- *
- * The continuous dynamics of the cartpole are:
- *
- *   ẋ = ẋ  
- *   θ̇ = θ̇  
- *   ẍ = (F + m_p sin(θ)(l θ̇² + g cos(θ))) / (m_c + m_p sin²(θ))
- *   θ̈ = (-F cos(θ) - m_p l θ̇² cos(θ) sin(θ) - (m_c+m_p)g sin(θ))
- *        / (l (m_c + m_p sin²(θ)))
- *
- * where the state vector is [x, θ, ẋ, θ̇] and the control is the applied force F.
- *
- * A terminal condition is enforced by adding a constraint that the final state equals the goal state.
- *
- * Compilation example (adjust include paths as needed):
- *   g++ ipopt_cartpole.cpp -o ipopt_cartpole -I/path/to/casadi/include -I/path/to/eigen -I/path/to/matplotlib-cpp
- *
- * Author: Your Name
- * Date: February 2025
- */
+/*
+ Copyright 2024 Tomo Sasaki
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
 
 #include <iostream>
 #include <vector>
@@ -37,10 +28,6 @@ namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
 
 int main() {
-    ////////////////////////
-    // Problem Definition //
-    ////////////////////////
-
     // Dimensions and time parameters
     const int state_dim   = 4;   // [x, θ, x_dot, θ_dot]
     const int control_dim = 1;   // [force]
@@ -62,7 +49,6 @@ int main() {
     goal_state << 0.0, M_PI, 0.0, 0.0;        // Cart at origin; pole upright (θ = π)
 
     // Cost weighting matrices
-    // Here we use no running state cost (Q=0) and penalize control effort, with a heavy terminal penalty.
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
     Eigen::MatrixXd R = 0.5 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
@@ -98,8 +84,6 @@ int main() {
     control_upper_bound <<  10.0;
 
     ////////// Decision Variables //////////
-    // The decision vector z contains the state trajectory and control trajectory:
-    //    z = [X₀, X₁, ..., X_N, U₀, U₁, ..., U_{N-1}]
     const int n_states   = (horizon + 1) * state_dim;
     const int n_controls = horizon * control_dim;
     const int n_dec      = n_states + n_controls;
@@ -117,16 +101,6 @@ int main() {
         return U(casadi::Slice(t * control_dim, (t + 1) * control_dim));
     };
 
-    ////////////////////////////////
-    // Discrete Dynamics Function //
-    ////////////////////////////////
-
-    // Define the cartpole dynamics using Euler integration.
-    // Continuous dynamics:
-    //   ẋ = x_dot
-    //   θ̇ = theta_dot
-    //   ẍ = (F + m_p sin(θ)(l θ̇² + g cos(θ))) / (m_c + m_p sin²(θ))
-    //   θ̈ = (-F cos(θ) - m_p l θ̇² cos(θ) sin(θ) - (m_c+m_p)g sin(θ)) / (l (m_c + m_p sin²(θ)))
     auto cartpole_dynamics = [=](casadi::MX state, casadi::MX control) -> casadi::MX {
         // Extract state components
         casadi::MX pos       = state(0);  // cart position
@@ -159,27 +133,24 @@ int main() {
     };
 
     ////////// Constraints //////////
-    // We build constraints for the initial condition and the dynamics.
     casadi::MX g; 
 
-    // Initial state constraint: X₀ = initial_state
+    // Initial state constraint: 
     casadi::DM init_state_dm(std::vector<double>(initial_state.data(), initial_state.data() + state_dim));
     g = casadi::MX::vertcat({g, X_t(0) - init_state_dm});
 
-    // Dynamics constraints: for t = 0, …, horizon-1, enforce Xₜ₊₁ = f(Xₜ, Uₜ)
+    // Dynamics constraints: 
     for (int t = 0; t < horizon; t++) {
         casadi::MX x_next_expr = cartpole_dynamics(X_t(t), U_t(t));
         g = casadi::MX::vertcat({g, X_t(t + 1) - x_next_expr});
     }
 
     // --- Terminal Condition Constraint ---
-    // Enforce that the terminal state equals the goal state:
     casadi::DM goal_dm(std::vector<double>(goal_state.data(), goal_state.data() + state_dim));
     casadi::MX terminal_constr = X_t(horizon) - goal_dm;
     g = casadi::MX::vertcat({g, terminal_constr});
     
     ////////// Cost Function //////////
-    // Build a cost that penalizes deviations along the trajectory and control effort.
     casadi::MX cost = casadi::MX::zeros(1, 1);
     for (int t = 0; t < horizon; t++) {
         casadi::MX x_diff = X_t(t) - goal_dm;
@@ -188,14 +159,11 @@ int main() {
         casadi::MX control_cost = casadi::MX::mtimes({u_diff.T(), R_dm, u_diff});
         cost = cost + state_cost + control_cost;
     }
-    // Terminal cost (optional if using a terminal constraint; here it adds extra penalty)
+
+    // Terminal cost 
     casadi::MX x_diff_final = X_t(horizon) - goal_dm;
     casadi::MX terminal_cost = casadi::MX::mtimes({x_diff_final.T(), Qf_dm, x_diff_final});
     cost = cost + terminal_cost;
-
-    /////////////////////////////////
-    // Decision Variable Bounds    //
-    /////////////////////////////////
 
     std::vector<double> lbx(n_dec, -1e20), ubx(n_dec, 1e20);
     // Apply control bounds to the control part of the decision vector.
@@ -223,11 +191,6 @@ int main() {
             x0[t * state_dim + i] = initial_state(i) + (goal_state(i) - initial_state(i)) * (double)t / horizon;
         }
     }
-    // The control part of the initial guess remains zero.
-
-    /////////////////////////
-    // NLP and IPOPT Setup //
-    /////////////////////////
 
     std::map<std::string, casadi::MX> nlp;
     nlp["x"] = z;
@@ -257,18 +220,12 @@ int main() {
         {"ubg", ubg_dm}
     });
 
-    /////////////////////////
-    // Solve the NLP       //
-    /////////////////////////
     auto start_time = std::chrono::high_resolution_clock::now();
     casadi::DMDict res = solver(arg);
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_time - start_time;
     std::cout << "Solver elapsed time: " << elapsed.count() << " s" << std::endl;
 
-    /////////////////////////////////
-    // Extract the Solution        //
-    /////////////////////////////////
     std::vector<double> sol = std::vector<double>(res.at("x"));
 
     // Recover state and control trajectories.
@@ -294,11 +251,7 @@ int main() {
     for (int t = 0; t <= horizon; t++) {
         t_sol[t] = t * timestep;
     }
-
-    /////////////////////////////////
-    // Plotting Results            //
-    /////////////////////////////////
-
+    
     // Extract state variables for plotting.
     std::vector<double> x_arr, theta_arr, x_dot_arr, theta_dot_arr;
     for (int t = 0; t <= horizon; t++) {
