@@ -262,7 +262,7 @@ if(TORCH_FOUND AND CDDP_CPP_TORCH_GPU)
   set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES native)
 endif()
 
-if (CDDP_CPP_SQP)
+if (CDDP_CPP_SQP AND CDDP_CPP_CASADI)
   # add sqp solver to cddp
   target_sources(${PROJECT_NAME} PRIVATE src/sqp_core/sqp_core.cpp)
 endif()

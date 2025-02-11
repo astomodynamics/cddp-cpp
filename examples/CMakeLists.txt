@@ -58,6 +58,11 @@ if (CDDP_CPP_CASADI)
     target_link_libraries(ipopt_cartpole cddp)
 endif()
 
+if (CDDP_CPP_CASADI AND CDDP_CPP_SQP)
+    add_executable(sqp_unicycle sqp_unicycle.cpp)
+    target_link_libraries(sqp_unicycle cddp)
+endif()
+
 # Acado examples
 if (CDDP_CPP_ACADO)
     add_executable(acado_car acado_car.cpp)

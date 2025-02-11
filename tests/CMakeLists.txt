@@ -109,7 +109,7 @@ if (CDDP_CPP_TORCH)
     gtest_discover_tests(test_neural_pendulum)
 endif()
 
-if (CDDP_CPP_SQP)
+if (CDDP_CPP_SQP AND CDDP_CPP_CASADI)
     add_executable(test_sqp_core sqp_core/test_sqp_core.cpp)
     target_link_libraries(test_sqp_core gtest gmock gtest_main cddp)
     gtest_discover_tests(test_sqp_core)
