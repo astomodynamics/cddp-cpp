@@ -44,9 +44,9 @@ struct CDDPOptions {
 
     // Line search method
     int max_line_search_iterations = 11;            // Maximum iterations for line search
-    double backtracking_coeff = 1.0;                // Maximum step size for line search backtracking
-    double backtracking_min = 0.5;                  // Coefficient for line search backtracking
-    double backtracking_factor = std::pow(10, (-3.0/10.0));   // Factor for line search backtracking
+    double backtracking_coeff = 1.0;                // Coefficient for line search backtracking
+    double backtracking_min = 1e-7;                  // Minimum step size for line search
+    double backtracking_factor = 0.5;   // Factor for line search backtracking
     double minimum_reduction_ratio = 1e-6;          // Minimum reduction for line search
 
     // interior-point method
@@ -121,6 +121,7 @@ struct ForwardPassResult {
     std::vector<Eigen::VectorXd> control_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
+    std::map<std::string, std::vector<Eigen::VectorXd>>  constraint_sequence;
     double cost;
     double lagrangian;
     double alpha = 1.0;
@@ -129,10 +130,17 @@ struct ForwardPassResult {
 };
 
 struct FilterPoint {
-    double cost;
+    double log_cost;
     double violation;
+    
+    // Default constructor
+    FilterPoint() : log_cost(0.0), violation(0.0) {}
+
+    // Constructor with parameters
+    FilterPoint(double lc, double v) : log_cost(lc), violation(v) {}
+
     bool dominates(const FilterPoint& other) const {
-        return cost <= other.cost && violation <= other.violation;
+        return log_cost <= other.log_cost && violation <= other.violation;
     }
 };
 
@@ -304,6 +312,9 @@ private:
     CDDPSolution solveFeasibleIPDDP();
     ForwardPassResult solveFeasibleIPDDPForwardPass(double alpha);
     bool solveFeasibleIPDDPBackwardPass();
+    void resetIPDDPFilter();
+    void initialIPDDPRollout();
+    void resetIPDDPRegularization();
 
     // Helper methods
     double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
@@ -343,6 +354,7 @@ private:
     // Intermediate trajectories
     std::vector<Eigen::VectorXd> X_;                            // State trajectory
     std::vector<Eigen::VectorXd> U_;                            // Control trajectory
+    std::map<std::string, std::vector<Eigen::VectorXd>> G_;    // Constraint trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> Y_;  // Dual trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> S_; // Slack trajectory 
 
@@ -359,6 +371,8 @@ private:
 
     // Log-barrier
     double mu_; // Barrier coefficient
+    std::vector<FilterPoint> filter_; // [logcost, error measure
+    int ipddp_regularization_counter_ = 0; // Regularization counter for IPDDP
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
     

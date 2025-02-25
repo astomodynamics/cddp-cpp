@@ -25,7 +25,7 @@
 namespace plt = matplotlibcpp;
 namespace fs = std::filesystem;
 
-TEST(FeasibleIPDDPTest, Solve) {
+TEST(IPDDPTest, Solve) {
     // Problem parameters
     int state_dim = 3;
     int control_dim = 2;
@@ -38,12 +38,11 @@ TEST(FeasibleIPDDPTest, Solve) {
 
     // Create objective function
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Eigen::MatrixXd R = 0.5 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd R = 0.05 / timestep * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf << 50.0, 0.0, 0.0,
-          0.0, 50.0, 0.0,
-          0.0, 0.0, 10.0;
-    Qf = 0.5 * Qf;
+    Qf << 100.0, 0.0, 0.0,
+          0.0, 100.0, 0.0,
+          0.0, 0.0, 100.0;
     Eigen::VectorXd goal_state(state_dim);
     goal_state << 2.0, 2.0, M_PI/2.0;
 
@@ -57,13 +56,13 @@ TEST(FeasibleIPDDPTest, Solve) {
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 2;
-    options.cost_tolerance = 1e-2;
-    options.use_parallel = true;
-    options.num_threads = 10;
+    options.max_iterations = 60;
+    options.cost_tolerance = 1e-7;
+    options.use_parallel = false;
+    options.num_threads = 1;
     options.verbose = true;
-    options.debug = true;
-    options.barrier_coeff = 1e-6;
+    options.debug = false;
+    options.barrier_coeff = 1e-1;
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(
@@ -74,18 +73,19 @@ TEST(FeasibleIPDDPTest, Solve) {
       std::make_unique<cddp::Unicycle>(timestep, integration_type), 
       std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep), 
       options);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    // cddp_solver.setDynamicalSystem(std::move(system));
+    // cddp_solver.setObjective(std::move(objective));
 
     // Define constraints
-    Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -1.0, -M_PI;
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 1.0, M_PI;
+    control_upper_bound << 1.1, 1*M_PI;
+    Eigen::VectorXd control_lower_bound(control_dim);
+    control_lower_bound = -control_upper_bound;
+    
     
     // Add the constraint to the solver
-    cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-    auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    cddp_solver.addConstraint(std::string("ControlConstraint"), std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    auto constraint = cddp_solver.getConstraint<cddp::ControlConstraint>("ControlConstraint");
 
     // Set options
     cddp_solver.setOptions(options);
@@ -93,10 +93,15 @@ TEST(FeasibleIPDDPTest, Solve) {
     // Set initial trajectory
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    X[0] = initial_state;
+    for (int i = 0; i < horizon; ++i) {
+      U[i] << 0.01, 0.01;
+      X[i+1] = system->getDiscreteDynamics(X[i], U[i]);
+    }
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve("FeasibleIPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
     // ASSERT_TRUE(solution.converged);
 
@@ -136,8 +141,8 @@ TEST(FeasibleIPDDPTest, Solve) {
     // plt::subplot(2, 1, 2);
     // plt::plot(v_arr);
     // plt::plot(omega_arr);
-    // plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
-    // plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
+    // plt::plot(std::vector<double>(U_sol.size(), -1.1), "r--");
+    // plt::plot(std::vector<double>(U_sol.size(), 1.1), "r--");
     // plt::title("Control Inputs");
     // plt::save(plotDirectory + "/dubincs_car_ipddp_test.png");
 
