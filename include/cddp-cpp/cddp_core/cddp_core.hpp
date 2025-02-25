@@ -143,7 +143,6 @@ struct FilterPoint {
     }
 };
 
-
 class CDDP {
 public:
     // Constructor
@@ -314,6 +313,7 @@ private:
     bool solveFeasibleIPDDPBackwardPass();
     void resetIPDDPFilter();
     void initialIPDDPRollout();
+    void resetIPDDPRegularization();
 
     // Helper methods
     double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
@@ -371,6 +371,7 @@ private:
     // Log-barrier
     double mu_; // Barrier coefficient
     std::vector<FilterPoint> filter_; // [logcost, error measure
+    int ipddp_regularization_counter_ = 0; // Regularization counter for IPDDP
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
     

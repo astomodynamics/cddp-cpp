@@ -56,7 +56,7 @@ TEST(IPDDPTest, Solve) {
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 2;
+    options.max_iterations = 10;
     options.cost_tolerance = 1e-2;
     options.use_parallel = false;
     options.num_threads = 1;

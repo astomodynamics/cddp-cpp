@@ -213,6 +213,9 @@ namespace cddp
         resetIPDDPFilter(); // L_ is computed inside this function
         solution.lagrangian_sequence.push_back(L_);
 
+        // Reset regularization
+        resetIPDDPRegularization();
+
         if (options_.verbose)
         {
             printIteration(0, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_); // Initial iteration information
@@ -253,17 +256,17 @@ namespace cddp
                 {
                     std::cerr << "IPDDP: Backward pass failed" << std::endl;
 
-                    // Increase regularization and check limit
-                    increaseRegularization();
+                    // // Increase regularization and check limit
+                    // increaseRegularization();
 
-                    if (isRegularizationLimitReached())
-                    {
-                        if (options_.verbose)
-                        {
-                            std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
-                        }
-                        break; // Exit if regularization limit reached
-                    }
+                    // if (isRegularizationLimitReached())
+                    // {
+                    //     if (options_.verbose)
+                    //     {
+                    //         std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
+                    //     }
+                    //     break; // Exit if regularization limit reached
+                    // }
                     continue; // Continue if backward pass fails
                 }
             }
@@ -362,22 +365,24 @@ namespace cddp
                     solution.converged = true;
                     break;
                 }
-            } else {
+            }
+            else
+            {
                 // Increase regularization
                 increaseRegularization();
-            } 
-            
-            // Check termination 
+            }
+
+            // Check termination
             if (std::max(optimality_gap_, mu_) <= options_.cost_tolerance)
             {
                 solution.converged = true;
                 break;
             }
-            
+
             // From original IPDDP implementation
             if (optimality_gap_ <= 0.2 * mu_)
             {
-                mu_ = std::max(options_.cost_tolerance/10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
+                mu_ = std::max(options_.cost_tolerance / 10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
                 resetIPDDPFilter();
             }
         }
@@ -541,7 +546,7 @@ namespace cddp
             Eigen::MatrixXd K_y = YSinv * (Q_yx + Q_yu * K_u);
             Eigen::VectorXd k_s = -r_p - Q_yu * k_u;
             Eigen::MatrixXd K_s = -Q_yx - Q_yu * K_u;
-            
+
             if (options_.debug)
             {
                 // std::cout << "time step: " << t << std::endl;
@@ -553,9 +558,8 @@ namespace cddp
                 //           << "    K_y: " << K_y << std::endl;
                 // std::cout << "    k_s: " << k_s.transpose() << "\n"
                 //           << "    K_s: " << K_s << std::endl;
-
             }
-            
+
             offset = 0;
             for (auto &cKV : constraint_set_)
             {
@@ -608,7 +612,8 @@ namespace cddp
     } // end solveIPDDPBackwardPass
 
     ForwardPassResult CDDP::solveIPDDPForwardPass(double alpha_)
-    {double alpha = 3.91e-3;
+    {
+        double alpha = 3.91e-3;
         // Prepare result structure with default (failure) values.
         ForwardPassResult result;
         result.success = false;
@@ -733,7 +738,7 @@ namespace cddp
         // Add terminal cost.
         cost_new += objective_->terminal_cost(X_new.back());
         log_cost_new += cost_new;
-        
+
         // Compute the primal residual.
         rp_err = std::max(rp_err, options_.cost_tolerance);
 
@@ -863,6 +868,13 @@ namespace cddp
         J_ = cost;
 
         return;
+    }
+
+    void CDDP::resetIPDDPReglarization()
+    {
+        ipddp_regularization_counter_ = 0;
+        return;
+
     }
 
 } // namespace cddp
