@@ -112,8 +112,8 @@ namespace cddp
             for (int t = 0; t < horizon_; ++t)
             {
                 G_[constraint_name][t] = constraint.second->evaluate(X_[t], U_[t]);
-                Y_[constraint_name][t] = 0.1 * Eigen::VectorXd::Ones(dual_dim);
-                S_[constraint_name][t] = 0.01 * Eigen::VectorXd::Ones(dual_dim);
+                Y_[constraint_name][t] = 1.0 * Eigen::VectorXd::Ones(dual_dim);
+                S_[constraint_name][t] = 1.0 * Eigen::VectorXd::Ones(dual_dim);
 
                 // Gains set to zero.
                 k_y_[constraint_name][t].setZero(dual_dim);
