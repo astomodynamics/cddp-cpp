@@ -220,6 +220,8 @@ namespace cddp
         // Start timer
         auto start_time = std::chrono::high_resolution_clock::now();
         int iter = 0;
+        ForwardPassResult best_result;
+        ipddp_regularization_counter_ = 0; // Reset regularization counter
 
         // Main loop of CDDP
         while (iter < options_.max_iterations)
@@ -252,25 +254,32 @@ namespace cddp
                 {
                     std::cerr << "IPDDP: Backward pass failed" << std::endl;
 
-                    // // Increase regularization and check limit
-                    // increaseRegularization();
+                    // Increase regularization 
+                    if (!best_result.success) {
+                        ipddp_regularization_counter_++;
+                    } else if (best_result.alpha == 1.0) {
+                        ipddp_regularization_counter_--;
+                    } else if (best_result.alpha >= 0.625 /*0.5^-4*/) { 
+                        // ipddp_regularization_counter_ = ipddp_regularization_counter_;
+                    } else {
+                        ipddp_regularization_counter_++;
+                    }
 
-                    // if (isRegularizationLimitReached())
-                    // {
-                    //     if (options_.verbose)
-                    //     {
-                    //         std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
-                    //     }
-                    //     break; // Exit if regularization limit reached
-                    // }
+                    if (ipddp_regularization_counter_ < 0) {
+                        ipddp_regularization_counter_ = 0;
+                    } else if (ipddp_regularization_counter_ > 24) {
+                        ipddp_regularization_counter_ = 24;
+                    }
+                
                     continue; // Continue if backward pass fails
                 }
             }
 
             // 2. Forward pass (either single-threaded or multi-threaded)
-            ForwardPassResult best_result;
+            best_result.success = false;
             best_result.cost = std::numeric_limits<double>::infinity();
             best_result.lagrangian = std::numeric_limits<double>::infinity();
+            best_result.constraint_violation = 0.0;
             bool forward_pass_success = false;
 
             if (!options_.use_parallel)
@@ -353,14 +362,14 @@ namespace cddp
                 solution.lagrangian_sequence.push_back(L_);
 
                 // Decrease regularization
-                decreaseRegularization();
+                // decreaseRegularization();
 
-                // Check termination
-                if (dJ_ < options_.cost_tolerance || (std::max(optimality_gap_, mu_) < options_.grad_tolerance))
-                {
-                    solution.converged = true;
-                    break;
-                }
+                // // Check termination
+                // if (dJ_ < options_.cost_tolerance || (std::max(optimality_gap_, mu_) < options_.grad_tolerance))
+                // {
+                //     solution.converged = true;
+                //     break;
+                // }
             }
             else
             {
@@ -607,9 +616,8 @@ namespace cddp
         return true;
     } // end solveIPDDPBackwardPass
 
-    ForwardPassResult CDDP::solveIPDDPForwardPass(double alpha_)
+    ForwardPassResult CDDP::solveIPDDPForwardPass(double alpha)
     {
-        double alpha = 3.91e-3;
         // Prepare result structure with default (failure) values.
         ForwardPassResult result;
         result.success = false;
@@ -866,7 +874,7 @@ namespace cddp
         return;
     }
 
-    void CDDP::resetIPDDPReglarization()
+    void CDDP::resetIPDDPRegularization()
     {
         ipddp_regularization_counter_ = 0;
         return;
