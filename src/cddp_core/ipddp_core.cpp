@@ -166,10 +166,6 @@ namespace cddp
                                                     options_.barrier_order,
                                                     options_.is_relaxed_log_barrier);
         mu_ = options_.barrier_coeff;
-        // log_barrier_->setBarrierCoeff(mu_);
-        // // Initialize filter acceptance parameter
-        // gamma_ = options_.filter_acceptance;
-        // constraint_violation_ = 0.0;
 
         // Now initialized
         initialized_ = true;
