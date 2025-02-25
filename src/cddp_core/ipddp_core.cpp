@@ -112,8 +112,8 @@ namespace cddp
             for (int t = 0; t < horizon_; ++t)
             {
                 G_[constraint_name][t] = constraint.second->evaluate(X_[t], U_[t]);
-                Y_[constraint_name][t] = 1.0 * Eigen::VectorXd::Ones(dual_dim);
-                S_[constraint_name][t] = 1.0 * Eigen::VectorXd::Ones(dual_dim);
+                Y_[constraint_name][t] = 0.1 * Eigen::VectorXd::Ones(dual_dim);
+                S_[constraint_name][t] = 0.01 * Eigen::VectorXd::Ones(dual_dim);
 
                 // Gains set to zero.
                 k_y_[constraint_name][t].setZero(dual_dim);
@@ -362,60 +362,24 @@ namespace cddp
                     solution.converged = true;
                     break;
                 }
-            }
-            else
+            } else {
+                // Increase regularization
+                increaseRegularization();
+            } 
+            
+            // Check termination 
+            if (std::max(optimality_gap_, mu_) <= options_.cost_tolerance)
             {
-                std::cout << "CDDP: Forward pass failed" << std::endl;
+                solution.converged = true;
+                break;
             }
-            // else {
-            //         bool early_termination_flag = false; // TODO: Improve early termination
-            //         // Increase regularization
-            //         increaseRegularization();
-
-            //         // TODO: Improve early termination
-            //         // Check early termination
-            //         if (options_.early_termination && early_termination_flag) {
-            //             if (dJ_ < options_.cost_tolerance * 1e2 ||
-            //                 (optimality_gap_ < options_.grad_tolerance * 1e1))
-            //             {
-            //                 solution.converged = true;
-            //                 if (options_.verbose) {
-            //                     std::cerr << "CDDP: Early termination due to small cost reduction" << std::endl;
-            //                 }
-            //                 break;
-            //             }
-            //         }
-
-            //         // If limit is reached treat as converged
-            //         if (isRegularizationLimitReached()) {
-            //             if ((dJ_ < options_.cost_tolerance * 1e2) ||
-            //                 (optimality_gap_ < options_.grad_tolerance * 1e1))
-            //             {
-            //                 solution.converged = true;
-            //             }  else
-            //             {
-            //                 // We are forced to large regularization but still not near local min
-            //                 solution.converged = false;
-            //             }
-            //             if (options_.verbose) {
-            //                 std::cerr << "CDDP: Regularization limit reached. "
-            //                         << (solution.converged ? "Treating as converged." : "Not converged.")
-            //                         << std::endl;
-            //             }
-            //             break;
-            //         }
-            //     }
-
-            //     // Print iteration information
-            //     if (options_.verbose) {
-            //        printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_);
-            //     }
-
-            //     // Update barrier parameter mu
-            //     if (forward_pass_success && (optimality_gap_ < 0.2 * mu_)) {
-            //         mu_ = std::max(mu_ * options_.barrier_factor, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
-            //     }
-            //     log_barrier_->setBarrierCoeff(mu_);
+            
+            // From original IPDDP implementation
+            if (optimality_gap_ <= 0.2 * mu_)
+            {
+                mu_ = std::max(options_.cost_tolerance/10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
+                resetIPDDPFilter();
+            }
         }
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
@@ -577,7 +541,22 @@ namespace cddp
             Eigen::MatrixXd K_y = YSinv * (Q_yx + Q_yu * K_u);
             Eigen::VectorXd k_s = -r_p - Q_yu * k_u;
             Eigen::MatrixXd K_s = -Q_yx - Q_yu * K_u;
+            
+            if (options_.debug)
+            {
+                // std::cout << "time step: " << t << std::endl;
+                // std::cout << "[IPDDP Backward Pass]\n"
+                //           << "    k_u: " << k_u.transpose() << "\n"
+                //           << "    K_u: " << K_u << std::endl;
 
+                // std::cout << "    k_y: " << k_y.transpose() << "\n"
+                //           << "    K_y: " << K_y << std::endl;
+                // std::cout << "    k_s: " << k_s.transpose() << "\n"
+                //           << "    K_s: " << K_s << std::endl;
+
+            }
+            
+            offset = 0;
             for (auto &cKV : constraint_set_)
             {
                 const std::string &cname = cKV.first;
@@ -628,8 +607,8 @@ namespace cddp
         return true;
     } // end solveIPDDPBackwardPass
 
-    ForwardPassResult CDDP::solveIPDDPForwardPass(double alpha)
-    {
+    ForwardPassResult CDDP::solveIPDDPForwardPass(double alpha_)
+    {double alpha = 3.91e-3;
         // Prepare result structure with default (failure) values.
         ForwardPassResult result;
         result.success = false;
@@ -687,6 +666,7 @@ namespace cddp
                 // Compute updated dual/slack variables.
                 Eigen::VectorXd y_new = y_old +
                                         alpha * k_y_[cname][t] + K_y_[cname][t] * (X_new[t] - X_[t]);
+
                 Eigen::VectorXd s_new = s_old +
                                         alpha * k_s_[cname][t] + K_s_[cname][t] * (X_new[t] - X_[t]);
 
@@ -700,10 +680,10 @@ namespace cddp
                         if (options_.debug)
                         {
                             std::cerr << "IPDDP: Minimal feasibility violated at time " << t << " for constraint " << cname << std::endl;
-                            std::cout << "y_new: " << y_new.transpose() << std::endl;
-                            std::cout << "y_min: " << y_min.transpose() << std::endl;
-                            std::cout << "s_new: " << s_new.transpose() << std::endl;
-                            std::cout << "s_min: " << s_min.transpose() << std::endl;
+                            // std::cout << "y_new: " << y_new.transpose() << std::endl;
+                            // std::cout << "y_min: " << y_min.transpose() << std::endl;
+                            // std::cout << "s_new: " << s_new.transpose() << std::endl;
+                            // std::cout << "s_min: " << s_min.transpose() << std::endl;
                         }
                         // Early exit: feasibility condition violated.
                         return result;
@@ -742,7 +722,7 @@ namespace cddp
                 G_new[cname][t] = g_vec - cKV.second->getUpperBound();
                 // Compute the slack and log-barrier term.
                 const Eigen::VectorXd &s_vec = S_new[cname][t];
-                log_cost_new -= s_vec.array().log().sum();
+                log_cost_new -= mu_ * s_vec.array().log().sum();
 
                 // Compute the residual for primal feasibility.
                 Eigen::VectorXd r_p = G_new[cname][t] + S_new[cname][t];
@@ -754,11 +734,6 @@ namespace cddp
         cost_new += objective_->terminal_cost(X_new.back());
         log_cost_new += cost_new;
         
-        if (options_.debug)
-        {
-            std::cout << "alpha: " << alpha << " cost: " << cost_new << " log_cost: " << log_cost_new << " rp_err: " << rp_err << std::endl;
-        }
-
         // Compute the primal residual.
         rp_err = std::max(rp_err, options_.cost_tolerance);
 

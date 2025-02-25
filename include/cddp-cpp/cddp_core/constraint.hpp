@@ -267,7 +267,7 @@ public:
             upper_bound_.resize(2*upper_bound.size());
             upper_bound_.head(upper_bound.size()) = upper_bound * scale_factor_;
             upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
-            dim_ = upper_bound.size();
+            dim_ = 2*upper_bound.size();
           }
 
     int getDualDim() const override {

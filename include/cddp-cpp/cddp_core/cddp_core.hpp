@@ -44,9 +44,9 @@ struct CDDPOptions {
 
     // Line search method
     int max_line_search_iterations = 11;            // Maximum iterations for line search
-    double backtracking_coeff = 1.0;                // Maximum step size for line search backtracking
-    double backtracking_min = 0.5;                  // Coefficient for line search backtracking
-    double backtracking_factor = std::pow(10, (-3.0/10.0));   // Factor for line search backtracking
+    double backtracking_coeff = 1.0;                // Coefficient for line search backtracking
+    double backtracking_min = 1e-7;                  // Minimum step size for line search
+    double backtracking_factor = 0.5;   // Factor for line search backtracking
     double minimum_reduction_ratio = 1e-6;          // Minimum reduction for line search
 
     // interior-point method
