@@ -129,12 +129,20 @@ struct ForwardPassResult {
 };
 
 struct FilterPoint {
-    double cost;
+    double log_cost;
     double violation;
+    
+    // Default constructor
+    FilterPoint() : log_cost(0.0), violation(0.0) {}
+
+    // Constructor with parameters
+    FilterPoint(double lc, double v) : log_cost(lc), violation(v) {}
+
     bool dominates(const FilterPoint& other) const {
-        return cost <= other.cost && violation <= other.violation;
+        return log_cost <= other.log_cost && violation <= other.violation;
     }
 };
+
 
 class CDDP {
 public:
@@ -304,6 +312,8 @@ private:
     CDDPSolution solveFeasibleIPDDP();
     ForwardPassResult solveFeasibleIPDDPForwardPass(double alpha);
     bool solveFeasibleIPDDPBackwardPass();
+    void resetIPDDPFilter();
+    void initialIPDDPRollout();
 
     // Helper methods
     double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
@@ -343,6 +353,7 @@ private:
     // Intermediate trajectories
     std::vector<Eigen::VectorXd> X_;                            // State trajectory
     std::vector<Eigen::VectorXd> U_;                            // Control trajectory
+    std::map<std::string, std::vector<Eigen::VectorXd>> G_;    // Constraint trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> Y_;  // Dual trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> S_; // Slack trajectory 
 
@@ -359,6 +370,7 @@ private:
 
     // Log-barrier
     double mu_; // Barrier coefficient
+    std::vector<FilterPoint> filter_; // [logcost, error measure
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
     

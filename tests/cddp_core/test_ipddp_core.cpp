@@ -63,7 +63,7 @@ TEST(FeasibleIPDDPTest, Solve) {
     options.num_threads = 10;
     options.verbose = true;
     options.debug = true;
-    options.barrier_coeff = 1e-6;
+    options.barrier_coeff = 1e-3;
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(
@@ -78,14 +78,15 @@ TEST(FeasibleIPDDPTest, Solve) {
     cddp_solver.setObjective(std::move(objective));
 
     // Define constraints
-    Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -1.0, -M_PI;
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 1.0, M_PI;
+    Eigen::VectorXd control_lower_bound(control_dim);
+    control_lower_bound = -control_upper_bound;
+    
     
     // Add the constraint to the solver
-    cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-    auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    cddp_solver.addConstraint(std::string("ControlConstraint"), std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    auto constraint = cddp_solver.getConstraint<cddp::ControlConstraint>("ControlConstraint");
 
     // Set options
     cddp_solver.setOptions(options);
@@ -96,7 +97,7 @@ TEST(FeasibleIPDDPTest, Solve) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve("FeasibleIPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
     // ASSERT_TRUE(solution.converged);
 
