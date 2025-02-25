@@ -289,7 +289,7 @@ namespace cddp
                 {
                     ForwardPassResult result = solveIPDDPForwardPass(alpha);
 
-                    if (result.success && result.lagrangian < best_result.lagrangian)
+                    if (result.success)
                     {
                         best_result = result;
                         forward_pass_success = true;
@@ -302,56 +302,62 @@ namespace cddp
                     }
                 }
             }
-            else
-            {
-                // Multi-threaded execution
-                std::vector<std::future<ForwardPassResult>> futures;
-                futures.reserve(alphas_.size());
+            // else
+            // {
+            //     // Multi-threaded execution
+            //     std::vector<std::future<ForwardPassResult>> futures;
+            //     futures.reserve(alphas_.size());
 
-                // Launch all forward passes in parallel
-                for (double alpha : alphas_)
-                {
-                    futures.push_back(std::async(std::launch::async,
-                                                 [this, alpha]()
-                                                 { return solveIPDDPForwardPass(alpha); }));
-                }
+            //     // Launch all forward passes in parallel
+            //     for (double alpha : alphas_)
+            //     {
+            //         futures.push_back(std::async(std::launch::async,
+            //                                      [this, alpha]()
+            //                                      { return solveIPDDPForwardPass(alpha); }));
+            //     }
 
-                // Collect results from all threads
-                for (auto &future : futures)
-                {
-                    try
-                    {
-                        if (future.valid())
-                        {
-                            ForwardPassResult result = future.get();
-                            if (result.success && result.lagrangian < best_result.lagrangian)
-                            {
-                                best_result = result;
-                                forward_pass_success = true;
-                            }
-                        }
-                    }
-                    catch (const std::exception &e)
-                    {
-                        if (options_.verbose)
-                        {
-                            std::cerr << "CDDP: Forward pass thread failed: " << e.what() << std::endl;
-                        }
-                        continue;
-                    }
-                }
-            }
+            //     // Collect results from all threads
+            //     for (auto &future : futures)
+            //     {
+            //         try
+            //         {
+            //             if (future.valid())
+            //             {
+            //                 ForwardPassResult result = future.get();
+            //                 if (result.success && result.lagrangian < best_result.lagrangian)
+            //                 {
+            //                     best_result = result;
+            //                     forward_pass_success = true;
+            //                 }
+            //             }
+            //         }
+            //         catch (const std::exception &e)
+            //         {
+            //             if (options_.verbose)
+            //             {
+            //                 std::cerr << "CDDP: Forward pass thread failed: " << e.what() << std::endl;
+            //             }
+            //             continue;
+            //         }
+            //     }
+            // }
 
             // Update solution if a feasible forward pass was found
             if (forward_pass_success)
             {
                 if (options_.debug)
                 {
-                    std::cout << "Best cost: " << best_result.cost << std::endl;
-                    std::cout << "Best alpha: " << best_result.alpha << std::endl;
+                    std::cout << "[IPDDP: Forward pass] " << std::endl;
+                    std::cout << "    cost: " << best_result.cost << std::endl;
+                    std::cout << "    logcost: " << best_result.lagrangian << std::endl;
+                    std::cout << "    alpha: " << best_result.alpha << std::endl;
+                    std::cout << "    rp_err: " << best_result.constraint_violation << std::endl;
                 }
                 X_ = best_result.state_sequence;
                 U_ = best_result.control_sequence;
+                Y_ = best_result.dual_sequence;
+                S_ = best_result.slack_sequence;
+                G_ = best_result.constraint_sequence;
                 dJ_ = J_ - best_result.cost;
                 J_ = best_result.cost;
                 dL_ = L_ - best_result.lagrangian;
@@ -371,10 +377,10 @@ namespace cddp
                 //     break;
                 // }
             }
-            else
-            {
-                // Increase regularization
-                increaseRegularization();
+
+            // Print iteration information
+            if (options_.verbose) {
+                printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_);
             }
 
             // Check termination
@@ -389,6 +395,7 @@ namespace cddp
             {
                 mu_ = std::max(options_.cost_tolerance / 10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
                 resetIPDDPFilter();
+                resetIPDDPRegularization();
             }
         }
         auto end_time = std::chrono::high_resolution_clock::now();
@@ -503,13 +510,13 @@ namespace cddp
             Eigen::MatrixXd Q_ux_reg = Q_ux;
             Eigen::MatrixXd Q_uu_reg = Q_uu;
 
-            // TODO: Add State regularization here
-            if (options_.regularization_type == "control" ||
-                options_.regularization_type == "both")
-            {
-                Q_uu_reg.diagonal().array() += regularization_control_;
-            }
-            Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
+            // // TODO: Add State regularization here
+            // if (options_.regularization_type == "control" ||
+            //     options_.regularization_type == "both")
+            // {
+            //     Q_uu_reg.diagonal().array() += regularization_control_;
+            // }
+            // Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
             Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg + Q_yu.transpose() * YSinv * Q_yu);
             if (llt.info() != Eigen::Success)
@@ -611,7 +618,7 @@ namespace cddp
                       << "    Qu_err:  " << Qu_err << "\n"
                       << "    rp_err:  " << rp_err << "\n"
                       << "    rd_err:  " << rd_err << "\n"
-                      << "    dV:           " << dV_.transpose() << std::endl;
+                      << "    dV:      " << dV_.transpose() << std::endl;
         }
         return true;
     } // end solveIPDDPBackwardPass
@@ -688,7 +695,7 @@ namespace cddp
                     {
                         if (options_.debug)
                         {
-                            std::cerr << "IPDDP: Minimal feasibility violated at time " << t << " for constraint " << cname << std::endl;
+                            // std::cerr << "IPDDP: Minimal feasibility violated at time " << t << " for constraint " << cname << std::endl;
                             // std::cout << "y_new: " << y_new.transpose() << std::endl;
                             // std::cout << "y_min: " << y_min.transpose() << std::endl;
                             // std::cout << "s_new: " << s_new.transpose() << std::endl;
@@ -776,6 +783,7 @@ namespace cddp
                     ++it;
                 }
             }
+
             // Append the candidate to the filter set.
             filter_.push_back(candidate);
 
@@ -791,6 +799,7 @@ namespace cddp
             result.control_sequence = U_new;
             result.dual_sequence = Y_new;
             result.slack_sequence = S_new;
+            result.constraint_sequence = G_new;
             result.cost = cost_new;
             result.lagrangian = log_cost_new;
             result.constraint_violation = rp_err;
@@ -804,6 +813,7 @@ namespace cddp
         // Evaluate log-barrier cost
         L_ = J_; // Assume J_ is already computed
         double rp_err = 0.0;
+        filter_ = {};
         // # TODO: accelerate this process
         for (int t = 0; t < horizon_; ++t)
         {
@@ -813,10 +823,10 @@ namespace cddp
 
                 // Get slack vector for this constraint at time t.
                 const Eigen::VectorXd &s_vec = S_[cname][t];
-                const Eigen::VectorXd &y_vec = Y_[cname][t];
+                const Eigen::VectorXd &g_vec = G_[cname][t];
 
                 L_ -= mu_ * s_vec.array().log().sum();
-                rp_err += (s_vec + y_vec).lpNorm<1>();
+                rp_err += (s_vec + g_vec).lpNorm<1>();
             }
         }
 

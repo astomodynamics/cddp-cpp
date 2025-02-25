@@ -121,6 +121,7 @@ struct ForwardPassResult {
     std::vector<Eigen::VectorXd> control_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
+    std::map<std::string, std::vector<Eigen::VectorXd>>  constraint_sequence;
     double cost;
     double lagrangian;
     double alpha = 1.0;
