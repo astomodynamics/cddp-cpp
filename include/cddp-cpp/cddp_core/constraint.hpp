@@ -257,6 +257,71 @@ private:
     double scale_factor_;
 };
 
+class ControlConstraint : public Constraint {
+public:
+    ControlConstraint(const Eigen::VectorXd& upper_bound, 
+                      double scale_factor = 1.0)
+        : Constraint("ControlConstraint"),
+          scale_factor_(scale_factor) {
+            // Rescale the upper bound for this constraint class
+            upper_bound_.resize(2*upper_bound.size());
+            upper_bound_.head(upper_bound.size()) = upper_bound * scale_factor_;
+            upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
+            dim_ = upper_bound.size();
+          }
+
+    int getDualDim() const override {
+        return dim_;
+    }
+
+    Eigen::VectorXd evaluate(const Eigen::VectorXd& /**/, 
+                             const Eigen::VectorXd& control) const override 
+    {
+        // return [-control; control];
+        Eigen::VectorXd g(2*control.size());
+        g.head(control.size()) = -control;
+        g.tail(control.size()) = control;
+        return g * scale_factor_;
+    }
+
+    Eigen::VectorXd getLowerBound() const override {
+        return Eigen::VectorXd::Constant(upper_bound_.size(), -std::numeric_limits<double>::infinity());
+    }
+
+    Eigen::VectorXd getUpperBound() const override {
+        return upper_bound_;
+    }
+
+    Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, 
+                                     const Eigen::VectorXd& control) const override 
+    {
+        return Eigen::MatrixXd::Zero(dim_, state.size());
+    }
+
+    Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, 
+                                       const Eigen::VectorXd& control) const override 
+    {
+        Eigen::MatrixXd jac(2*control.size(), control.size());
+        jac.topLeftCorner(control.size(), control.size()) = -Eigen::MatrixXd::Identity(control.size(), control.size());
+        jac.bottomRightCorner(control.size(), control.size()) = Eigen::MatrixXd::Identity(control.size(), control.size());
+        return jac;
+    }
+
+    double computeViolation(const Eigen::VectorXd& state, 
+                            const Eigen::VectorXd& control) const override 
+    {
+        Eigen::VectorXd g = evaluate(state, control) - upper_bound_;
+        return computeViolationFromValue(g);
+    }
+
+    double computeViolationFromValue(const Eigen::VectorXd& g) const override {
+        return (g - upper_bound_).cwiseMax(0.0).sum();
+    }
+private:    
+    int dim_;
+    Eigen::VectorXd upper_bound_;
+    double scale_factor_;
+};
 
 class BallConstraint : public Constraint {
 public:
