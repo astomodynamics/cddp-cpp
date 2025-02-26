@@ -173,13 +173,11 @@ int main() {
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 0.5, 2.0;
 
-    cddp_solver.addConstraint("ControlBoxConstraint", 
-        std::make_unique<cddp::ControlBoxConstraint>(
-            control_lower_bound, control_upper_bound));
+    cddp_solver.addConstraint(std::string("ControlConstraint"), std::make_unique<cddp::ControlConstraint>(control_upper_bound));
 
     // Solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 1;
+    options.max_iterations = 10;
     options.verbose = true;
     options.cost_tolerance = 1e-7;
     options.grad_tolerance = 1e-4;
@@ -188,6 +186,7 @@ int main() {
     options.debug = true;
     options.use_parallel = true;
     options.num_threads = 10;
+    options.barrier_coeff = 1e-2;
     cddp_solver.setOptions(options);
 
     // Initialize with random controls
