@@ -408,6 +408,11 @@ bool CDDP::solveASCDDPBackwardPass()
         optimality_gap_ = Qu_error;
     }
 
+    if (options_.debug) {
+        std::cout << "Qu_error: " << Qu_error << std::endl;
+        std::cout << "dV: " << dV_.transpose() << std::endl;
+    }
+
     return true;
 }
 

@@ -744,7 +744,7 @@ ForwardPassResult CDDP::solveFeasibleIPDDPForwardPass(double alpha) {
 
     // Build filter point candidate
     FilterPoint candidate{cost_new, log_cost_new};
-    bool sufficient_progress = (cost_new < current.cost);
+    bool sufficient_progress = (cost_new < current.log_cost);
     bool acceptable = sufficient_progress && !current.dominates(candidate);
 
     if (acceptable)

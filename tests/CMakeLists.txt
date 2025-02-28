@@ -86,9 +86,6 @@ gtest_discover_tests(test_constraint)
 add_executable(test_cddp_pendulum test_cddp_pendulum.cpp)
 target_link_libraries(test_cddp_pendulum gtest gmock gtest_main cddp)
 
-add_executable(test_ipddp_car test_ipddp_car.cpp)
-target_link_libraries(test_ipddp_car cddp)
-
 add_executable(test_cddp_core cddp_core/test_cddp_core.cpp)
 target_link_libraries(test_cddp_core gtest gmock gtest_main cddp)
 gtest_discover_tests(test_cddp_core)
@@ -119,16 +116,19 @@ if (CDDP_CPP_TORCH)
     gtest_discover_tests(test_neural_pendulum)
 endif()
 
-if (CDDP_CPP_SQP)
-    add_executable(test_sqp sqp_core/test_sqp.cpp)
-    target_link_libraries(test_sqp gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_sqp)
+if (CDDP_CPP_SQP AND CDDP_CPP_CASADI)
+    add_executable(test_sqp_core sqp_core/test_sqp_core.cpp)
+    target_link_libraries(test_sqp_core gtest gmock gtest_main cddp)
+    gtest_discover_tests(test_sqp_core)
 endif()
 
 if (CDDP_CPP_CASADI)
     add_executable(test_casadi test_casadi_solver.cpp)
     target_link_libraries(test_casadi gtest gmock gtest_main cddp)
     gtest_discover_tests(test_casadi)
+
+    add_executable(test_ipddp_car test_ipddp_car.cpp)
+    target_link_libraries(test_ipddp_car cddp)
 endif()
 
 # Test for Eigen installation
