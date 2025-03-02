@@ -72,12 +72,12 @@ TEST(CircleConstraintTest, Evaluate) {
     Eigen::VectorXd control(1); // Control doesn't matter for this constraint
     control << 0.0; 
     Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
-    ASSERT_NEAR(constraint_value(0), 2.0, 1e-6); 
+    ASSERT_NEAR(constraint_value(0), -2.0, 1e-6); 
 
     // Test with a state outside the circle
     state << 2.5, 1.5;
     constraint_value = constraint.evaluate(state, control);
-    ASSERT_NEAR(constraint_value(0), 8.5, 1e-6);
+    ASSERT_NEAR(constraint_value(0), -8.5, 1e-6);
 }
 
 TEST(CircleConstraintTest, Gradients) {
@@ -91,14 +91,14 @@ TEST(CircleConstraintTest, Gradients) {
     control << 0.0; 
     Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
     auto gradients = constraint.getJacobians(state, control);
-    ASSERT_TRUE(std::get<0>(gradients).isApprox(Eigen::Vector2d(2.0, 2.0)));
+    ASSERT_TRUE(std::get<0>(gradients).isApprox(Eigen::Vector2d(-2.0, -2.0)));
     ASSERT_TRUE(std::get<1>(gradients).isApprox(Eigen::Vector2d(0.0, 0.0)));
 
     // Test with a state outside the circle
     state << 2.5, 1.5;
     constraint_value = constraint.evaluate(state, control);
     gradients = constraint.getJacobians(state, control);
-    ASSERT_TRUE(std::get<0>(gradients).isApprox(Eigen::Vector2d(5.0, 3.0)));
+    ASSERT_TRUE(std::get<0>(gradients).isApprox(Eigen::Vector2d(-5.0, -3.0)));
     ASSERT_TRUE(std::get<1>(gradients).isApprox(Eigen::Vector2d(0.0, 0.0)));
 }
 
