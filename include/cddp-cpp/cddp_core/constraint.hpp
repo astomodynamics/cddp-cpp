@@ -333,6 +333,7 @@ public:
         center_(center), 
         scale_factor_(scale_factor)
     {
+        dim_ = center.size();
     }
 
     int getDualDim() const override {
@@ -352,7 +353,7 @@ public:
     }
 
     Eigen::VectorXd getUpperBound() const override {
-        return -Eigen::VectorXd::Constant(1, radius_ * radius_);
+        return -Eigen::VectorXd::Constant(1, radius_ * radius_) * scale_factor_;
     }
 
     double computeViolation(const Eigen::VectorXd& state, 
@@ -373,8 +374,12 @@ public:
                                      const Eigen::VectorXd& control) const override 
     {
         const Eigen::VectorXd& diff = state.head(dim_) - center_;
-        Eigen::MatrixXd jac(1, state.size());
-        jac.row(0) = -(2.0 * scale_factor_) * diff.transpose();
+        Eigen::MatrixXd jac = Eigen::MatrixXd::Zero(1, state.size());
+        
+        for (int i = 0; i < dim_; ++i) {
+            jac(0, i) = -2.0 * scale_factor_ * diff(i);
+        }
+
         return jac;
     }
 
