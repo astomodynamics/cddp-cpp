@@ -29,6 +29,7 @@
 #include "cddp_core/helper.hpp"
 #include "cddp_core/boxqp.hpp"
 #include "cddp_core/qp_solver.hpp"
+#include "osqp++.h"
 
 namespace cddp
 {
@@ -64,23 +65,6 @@ CDDPSolution CDDP::solveASCDDP()
 
     // Evaluate Lagrangian
     L_ = J_;
-    // // Loop over horizon
-    // for (int t = 0; t < 1; ++t) {
-    //     // Evaluate state constraint violation
-    //     for (const auto& constraint : constraint_set_) {
-    //         if (constraint.first == "ControlBoxConstraint") {
-    //             L_ += getLogBarrierCost(*constraint.second, X_[t], U_[t], barrier_coeff_, options_.relaxation_coeff);
-    //             // Eigen::VectorXd constraint_violation = constraint.second->evaluate(X_[t], U_[t]);
-    //             // if (constraint_violation.minCoeff() < 0) {
-    //             //     std::cerr << "CDDP: Constraint violation at time " << t << std::endl;
-    //             //     std::cerr << "Constraint violation: " << constraint_violation.transpose() << std::endl;
-    //             //     throw std::runtime_error("Constraint violation");
-    //             // }
-    //         }
-
-    //     }
-    // }
-
     solution.lagrangian_sequence.push_back(L_);
 
     if (options_.verbose) {
@@ -115,25 +99,15 @@ CDDPSolution CDDP::solveASCDDP()
         {
             backward_pass_success = solveASCDDPBackwardPass();
 
-            if (!backward_pass_success)
-            {
-                std::cerr << "CDDP: Backward pass failed" << std::endl;
+            if (!backward_pass_success) {
+                if (options_.debug) {
+                    std::cerr << "CDDP: Backward pass failed" << std::endl;
+                }
 
                 // Increase regularization
-                if (options_.regularization_type == "state") {
-                    regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
-                    regularization_state_ = std::max(regularization_state_ * regularization_state_step_, options_.regularization_state_min);
-                } else if (options_.regularization_type == "control") {
-                    regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
-                    regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_min);
-                } else if (options_.regularization_type == "both") {
-                    regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
-                    regularization_state_ = std::max(regularization_state_ * regularization_state_step_, options_.regularization_state_min);
-                    regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
-                    regularization_control_ = std::max(regularization_control_ * regularization_control_step_, options_.regularization_control_min);
-                } 
+                increaseRegularization();
 
-                if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
+                if (isRegularizationLimitReached()) {
                     if (options_.verbose) {
                         std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
                     }
@@ -162,7 +136,7 @@ CDDPSolution CDDP::solveASCDDP()
                     if (options_.debug) {
                         std::cout << "CDDP: Early termination due to successful forward pass" << std::endl;
                     }
-                    break;
+                    break; // Exit if forward pass is successful
                 }
             }
         }
@@ -184,78 +158,20 @@ CDDPSolution CDDP::solveASCDDP()
             solution.lagrangian_sequence.push_back(L_);
 
             // Decrease regularization
-            if (options_.regularization_type == "state") {
-                regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
-                regularization_state_ *= regularization_state_step_;
-                if (regularization_state_ < options_.regularization_state_min) {
-                    regularization_state_ = options_.regularization_state_min;
-                }
-            } else if (options_.regularization_type == "control") {
-                regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
-                regularization_control_ *= regularization_control_step_;
-                if (regularization_control_ < options_.regularization_control_min) {
-                    regularization_control_ = options_.regularization_control_min;
-                }
-            } else if (options_.regularization_type == "both") {
-                regularization_state_step_ = std::min(regularization_state_step_ / options_.regularization_state_factor, 1 / options_.regularization_state_factor);
-                regularization_state_ *= regularization_state_step_;
-                if (regularization_state_ < options_.regularization_state_min) {
-                    regularization_state_ = options_.regularization_state_min;
-                }
-                regularization_control_step_ = std::min(regularization_control_step_ / options_.regularization_control_factor, 1 / options_.regularization_control_factor);
-                regularization_control_ *= regularization_control_step_;
-                if (regularization_control_ < options_.regularization_control_min) {
-                    regularization_control_ = options_.regularization_control_min;
-                }
-            }
+            decreaseRegularization();
 
-            // Check termination
-            if (dJ_ < options_.cost_tolerance) {
-                solution.converged = true;
-                break;
-            }
+            // // Check termination
+            // if (dJ_ < options_.cost_tolerance) {
+            //     solution.converged = true;
+            //     break;
+            // }
         } else {
             bool early_termination_flag = false; // TODO: Improve early termination
             // Increase regularization
-            if (options_.regularization_type == "state") {
-                if (regularization_state_ < 1e-2) {
-                    early_termination_flag = true; // Early termination if regularization is fairly small
-                }
-                regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
-                regularization_state_ = std::min(regularization_state_ * regularization_state_step_, options_.regularization_state_max);
-                
-            } else if (options_.regularization_type == "control") {
-                if (regularization_control_ < 1e-2) {
-                    early_termination_flag = true; // Early termination if regularization is fairly small
-                }
-                regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
-                regularization_control_ = std::min(regularization_control_ * regularization_control_step_, options_.regularization_control_max);
-            } else if (options_.regularization_type == "both") {
-                if (regularization_state_ < 1e-2 ||  
-                    regularization_control_ < 1e-2) {
-                    early_termination_flag = true; // Early termination if regularization is fairly small
-                }
-                regularization_state_step_ = std::max(regularization_state_step_ * options_.regularization_state_factor, options_.regularization_state_factor);
-                regularization_control_step_ = std::max(regularization_control_step_ * options_.regularization_control_factor, options_.regularization_control_factor);
-            } else {
-                early_termination_flag = true;
-            }
-
-            // Check early termination
-            if (options_.early_termination && early_termination_flag) {
-                if (dJ_ < options_.cost_tolerance * 1e2 ||
-                    (optimality_gap_ < options_.grad_tolerance * 1e1)) 
-                {
-                    solution.converged = true;
-                    if (options_.verbose) {
-                        std::cerr << "CDDP: Early termination due to small cost reduction" << std::endl;
-                    }
-                    break;
-                }
-            }
+            increaseRegularization();
             
-            // Check regularization limit
-            if (regularization_state_ >= options_.regularization_state_max || regularization_control_ >= options_.regularization_control_max) {
+            // If limit is reached treat as converged
+            if (isRegularizationLimitReached()) {
                 if ((dJ_ < options_.cost_tolerance * 1e2) ||
                     (optimality_gap_ < options_.grad_tolerance * 1e1)) 
                 {
@@ -272,6 +188,12 @@ CDDPSolution CDDP::solveASCDDP()
                 }
                 break;
             }
+        }
+
+        // Check convergence
+        if (iter > 0 && dJ_ < options_.cost_tolerance) {
+            solution.converged = true;
+            break;
         }
 
         // Print iteration information
@@ -302,6 +224,7 @@ bool CDDP::solveASCDDPBackwardPass()
     // Initialize variables
     const int state_dim = system_->getStateDim();
     const int control_dim = system_->getControlDim();
+    const int dual_dim = getTotalDualDim() - control_dim;
     const auto active_set_tol = 1e-6;
 
     // Extract control box constraint
@@ -347,32 +270,12 @@ bool CDDP::solveASCDDPBackwardPass()
         auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
         auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
 
-        // TODO: Implement log barrier cost and its derivatives // FIXME: Implement log barrier cost and its derivatives
-        // Get log barrier cost and its derivatives
-        // for (const auto& constraint : constraint_set_) {
-        //     if (constraint.first == "ControlBoxConstraint") {
-        //         const double barrier_cost = getLogBarrierCost(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
-        //         l += barrier_cost;
-        //         const auto [l_x_barrier, l_u_barrier] = getLogBarrierCostGradients(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
-        //         const auto [l_xx_barrier, l_uu_barrier, l_ux_barrier] = getLogBarrierCostHessians(*constraint.second, x, u, barrier_coeff_, options_.relaxation_coeff);
-        //         l_x += l_x_barrier;
-        //         l_u += l_u_barrier;
-        //         // l_xx += l_xx_barrier;
-        //         // l_uu += l_uu_barrier;
-        //         // l_ux += l_ux_barrier;
-        //     }
-        // }
-
         // Compute Q-function matrices
         Q_x = l_x + A.transpose() * V_x;
         Q_u = l_u + B.transpose() * V_x;
         Q_xx = l_xx + A.transpose() * V_xx * A;
         Q_ux = l_ux + B.transpose() * V_xx * A;
         Q_uu = l_uu + B.transpose() * V_xx * B;
-
-        // TODO: Apply Cholesky decomposition to Q_uu later?
-        // // Symmetrize Q_uu for Cholesky decomposition
-        // Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
 
         if (options_.regularization_type == "state" || options_.regularization_type == "both") {
             Q_ux_reg = l_ux + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
@@ -398,10 +301,10 @@ bool CDDP::solveASCDDPBackwardPass()
 
         /*  --- Identify Active Constraint --- */
         int active_constraint_index = 0;
-        Eigen::MatrixXd C(control_dim, control_dim); // Control constraint matrix
-        Eigen::MatrixXd D(control_dim, state_dim);   // State constraint matrix
+        Eigen::MatrixXd C(dual_dim, control_dim); // Control constraint matrix
+        Eigen::MatrixXd D(dual_dim, state_dim);   // State constraint matrix
 
-        // TODO: Implement active set method
+        // Identify constrol constraints
         for (int j = 0; j < control_dim; j++)
         {
             if (u(j) <= control_box_constraint->getLowerBound()(j) + active_set_tol)
@@ -419,6 +322,31 @@ bool CDDP::solveASCDDPBackwardPass()
                 C.row(active_constraint_index) = e;
                 D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
                 active_constraint_index += 1;
+            }
+        }
+
+        // Identify state constraints
+        if (t < horizon_ - 1)
+        {
+            for (auto &constraint : constraint_set_)
+            {
+                if (constraint.first == "ControlBoxConstraint")
+                {
+                    continue;
+                }
+
+                Eigen::VectorXd constraint_vals = constraint.second->evaluate(X_[t + 1], U_[t + 1]) - constraint.second->getUpperBound();
+                Eigen::MatrixXd C_state = constraint.second->getStateJacobian(X_[t + 1], U_[t + 1]);
+                Eigen::MatrixXd D_state = constraint.second->getControlJacobian(X_[t + 1], U_[t + 1]);
+                
+                for (int j = 0; j < constraint_vals.size(); j++)
+                {
+                    if (std::abs(constraint_vals(j)) <= active_set_tol) {  
+                        C.row(active_constraint_index) = C_state.row(j) * Fu;  
+                        D.row(active_constraint_index) = -D_state.row(j) * Fx; 
+                        active_constraint_index++;
+                    }
+                }
             }
         }
 
@@ -509,7 +437,6 @@ bool CDDP::solveASCDDPBackwardPass()
 // Forward pass
 ForwardPassResult CDDP::solveASCDDPForwardPass(double alpha)
 {   
-    // Prepare result struct
     ForwardPassResult result;
     result.success = false;
     result.cost = std::numeric_limits<double>::infinity();
@@ -518,84 +445,145 @@ ForwardPassResult CDDP::solveASCDDPForwardPass(double alpha)
 
     const int state_dim = system_->getStateDim();
     const int control_dim = system_->getControlDim();
+    const int dual_dim = getTotalDualDim() - control_dim;
 
     // Extract control box constraint
     auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
 
-    // Initialize trajectories
+    // Initialize trajectories with current state and control histories.
     std::vector<Eigen::VectorXd> X_new = X_;
     std::vector<Eigen::VectorXd> U_new = U_;
     X_new[0] = initial_state_;
     double J_new = 0.0;
 
+    // Loop over the horizon
     for (int t = 0; t < horizon_; ++t) {
-        const Eigen::VectorXd& x = X_new[t];
-        const Eigen::VectorXd& u = U_new[t];
-        const Eigen::VectorXd& delta_x = x - X_[t];
+        const Eigen::VectorXd &x = X_new[t];
+        const Eigen::VectorXd &u = U_new[t];
+        Eigen::VectorXd delta_x = x - X_[t];
 
-        // Extract Q-function matrices
+        // Extract Q-function matrices computed in the backward pass.
         const Eigen::VectorXd &Q_u = Q_U_[t];
         const Eigen::MatrixXd &Q_uu = Q_UU_[t];
         const Eigen::MatrixXd &Q_ux = Q_UX_[t];
 
-        const Eigen::VectorXd &q = alpha * Q_u + Q_ux * delta_x; // Gradient of QP objective
-
-        // Lower and upper bounds
-        const Eigen::VectorXd& lb = control_box_constraint->getLowerBound() - u;
-        const Eigen::VectorXd& ub = control_box_constraint->getUpperBound() - u;
-
-        // Create b vector
-        Eigen::VectorXd b(2 * control_dim);
-        b << ub, -lb;
-
-        // Create A matrix
-        Eigen::MatrixXd A(2 * control_dim, control_dim); // Upper is identity, lower is -identity
-        A.setIdentity();
-        A.block(control_dim, 0, control_dim, control_dim) = -Eigen::MatrixXd::Identity(control_dim, control_dim);
-
-        QPSolverOptions options;
-        options.verbose = false;
-        QPSolver solver(options);
-
-        solver.setDimensions(state_dim, 2*control_dim);
-        solver.setHessian(Q_uu);
-        solver.setGradient(q);
-        solver.setConstraints(A, b);
-
-        QPResult qp_result = solver.solve();
-
-        if (qp_result.status != QPStatus::OPTIMAL) {
-            if (options_.debug) {
-                std::cerr << "CDDP: QP solver failed" << std::endl;
+        // Create QP problem
+        Eigen::SparseMatrix<double> P(Q_uu.rows(), Q_uu.cols()); // Hessian of QP objective
+        int numNonZeros = Q_uu.nonZeros(); 
+        P.reserve(numNonZeros);
+        for (int i = 0; i < Q_uu.rows(); ++i) {
+            for (int j = 0; j < Q_uu.cols(); ++j) {
+                if (Q_uu(i, j) != 0) {
+                    P.insert(i, j) = Q_uu(i, j);
+                }
             }
-            result.success = false;
-            break;
+        }
+        P.makeCompressed(); // Important for efficient storage and operations
+
+        // Form the gradient of the QP objective:
+        // q = alpha * Q_u + Q_ux * delta_x
+        Eigen::VectorXd q = alpha * Q_u + Q_ux * delta_x;
+
+        // Create QP constraints
+        Eigen::MatrixXd A_dense = Eigen::MatrixXd::Identity(control_dim, control_dim);
+        Eigen::VectorXd lb_dense = control_box_constraint->getLowerBound() - u;
+        Eigen::VectorXd ub_dense = control_box_constraint->getUpperBound() - u;
+
+        Eigen::MatrixXd A_aug = Eigen::MatrixXd::Zero(dual_dim, control_dim);
+        Eigen::VectorXd lb_aug = Eigen::VectorXd::Zero(dual_dim);
+        Eigen::VectorXd ub_aug = Eigen::VectorXd::Zero(dual_dim);   
+
+        // First block: control constraints
+        A_aug.topRows(control_dim) = A_dense;
+        lb_aug.head(control_dim) = lb_dense;
+        ub_aug.head(control_dim) = ub_dense;
+
+        // Second block: state constraints
+        int row_index = control_dim;
+        if (t < horizon_ - 1) {
+            auto [fx, fu] = system_->getJacobians(x, u);
+            Eigen::MatrixXd Fu = timestep_ * fu;
+
+            // Predicted next state
+            Eigen::VectorXd x_next = system_->getDiscreteDynamics(x, u);
+
+            for (const auto &constraint : constraint_set_) {
+                if (constraint.first == "ControlBoxConstraint") {
+                    continue;
+                }
+                Eigen::VectorXd cons_vals = constraint.second->evaluate(x_next, u) - constraint.second->getUpperBound();
+                Eigen::MatrixXd cons_jac_x = constraint.second->getStateJacobian(x_next, u);
+                
+                int m = cons_vals.size();
+                A_aug.block(row_index, 0, m, control_dim) = cons_jac_x * Fu;
+                lb_aug.segment(row_index, m).setConstant(-std::numeric_limits<double>::infinity());
+                ub_aug.segment(row_index, m) = -cons_vals;
+                row_index += m;
+
+            }
         }
 
-        // Extract solution
-        const Eigen::VectorXd &delta_u = qp_result.x;
+        // Convert augmented constraint matrix to sparse format.
+        Eigen::SparseMatrix<double> A_sparse = A_aug.sparseView();
 
-        // Extract solution
+        // Initialize QP solver
+        osqp::OsqpInstance instance;
+
+        // Set the objective
+        instance.objective_matrix = P;
+        instance.objective_vector = q;
+        instance.constraint_matrix = A_sparse;
+        instance.lower_bounds = lb_aug;
+        instance.upper_bounds = ub_aug;
+
+        // Solve the QP problem
+        osqp::OsqpSolver osqp_solver;
+        osqp::OsqpSettings settings;
+        settings.warm_start = true;
+        settings.verbose = false;
+
+        osqp_solver.Init(instance, settings);
+        osqp::OsqpExitCode exit_code = osqp_solver.Solve();
+
+        if (exit_code != osqp::OsqpExitCode::kOptimal) {
+            if (options_.debug) {
+                std::cerr << "CDDP: QP solver failed at time step " << t << std::endl;
+            }
+            result.success = false;
+            return result;
+        }
+
+        // Update control using the QP solution delta_u.
+        Eigen::VectorXd delta_u = osqp_solver.primal_solution();
         U_new[t] += delta_u;
 
-        // Compute cost
+        // Compute running cost and propagate state.
         J_new += objective_->running_cost(x, U_new[t], t);
-
-        // Compute new state
         X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t]);
     }
+    // Add terminal cost.
     J_new += objective_->terminal_cost(X_new.back());
+
+    // Compute actual cost reduction and the predicted improvement.
     double dJ = J_ - J_new;
     double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
-    double reduction_ratio = expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
+    double reduction_ratio = (expected > 0.0) ? dJ / expected : std::copysign(1.0, dJ);
 
-    // Check if cost reduction is sufficient
-    result.success = true;
-    result.state_sequence = X_new;
-    result.control_sequence = U_new;
-    result.cost = J_new;
-    result.lagrangian = J_new;
-
+    // --- Acceptance Criterion ---
+    if (dJ <= 0) {
+        if (options_.debug) {
+            std::cerr << "CDDP: Forward pass did not yield sufficient decrease (dJ: " 
+                      << dJ << ", reduction_ratio: " << reduction_ratio << ")" << std::endl;
+        }
+        result.success = false;
+    } else {
+        result.success = true;
+        result.state_sequence = X_new;
+        result.control_sequence = U_new;
+        result.cost = J_new;
+        result.lagrangian = J_new; // For this example we use the cost as the Lagrangian.
+    }
     return result;
 }
+
 } // namespace cddp

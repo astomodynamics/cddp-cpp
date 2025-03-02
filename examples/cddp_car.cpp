@@ -183,8 +183,9 @@ int main() {
     options.verbose = true;
     options.cost_tolerance = 1e-7;
     options.grad_tolerance = 1e-4;
-    options.regularization_type = "control";
-    // options.regularization_control = 1.0;
+    options.regularization_type = "state";
+    options.regularization_state = 1e-4;
+    options.regularization_control = 1e-6;
     options.debug = false;
     options.use_parallel = true;
     options.num_threads = 10;
@@ -220,7 +221,7 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    // cddp::CDDPSolution solution = cddp_solver.solve("CLCDDP");
         // ========================================
         //    CDDP Solution
         // ========================================
@@ -229,7 +230,7 @@ int main() {
         // Solve Time: 5.507e+05 micro sec
         // Final Cost: 1.90517
         // ========================================
-    // cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();  
+    // cddp::CDDPSolution solution = cddp_solver.solve("LogCDDP");  
         // ========================================
         //    CDDP Solution
         // ========================================
@@ -238,6 +239,7 @@ int main() {
         // Solve Time: 5.441e+05 micro sec
         // Final Cost: 1.90517
         // ========================================
+    cddp::CDDPSolution solution = cddp_solver.solve("ASCDDP");
 
     // Extract solution trajectories
     auto X_sol = solution.state_sequence;
@@ -279,7 +281,7 @@ int main() {
     }
 
     // Create the final GIF
-    animation.createGif("car_parking.gif");
+    animation.createGif("car_parking_asddp.gif");
 
     return 0;
 }
