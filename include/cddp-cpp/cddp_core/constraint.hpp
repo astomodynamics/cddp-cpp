@@ -343,34 +343,17 @@ public:
     Eigen::VectorXd evaluate(const Eigen::VectorXd& state, 
                              const Eigen::VectorXd& control) const override 
     {
-        const Eigen::VectorXd& diff = state - center_;
-        return Eigen::VectorXd::Constant(1, scale_factor_ * diff.squaredNorm());
+        const Eigen::VectorXd& diff = state.head(dim_) - center_;
+        return -Eigen::VectorXd::Constant(1, scale_factor_ * diff.squaredNorm());
     }
 
     Eigen::VectorXd getLowerBound() const override {
-        return Eigen::VectorXd::Constant(1, radius_ * radius_);
+        return -Eigen::VectorXd::Constant(1, std::numeric_limits<double>::infinity()); 
     }
 
     Eigen::VectorXd getUpperBound() const override {
-        return Eigen::VectorXd::Constant(1, std::numeric_limits<double>::infinity());
+        return -Eigen::VectorXd::Constant(1, radius_ * radius_);
     }
-
-
-    Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, 
-                                     const Eigen::VectorXd& control) const override 
-    {
-        const Eigen::VectorXd& diff = state - center_;
-        Eigen::MatrixXd jac(1, state.size());
-        jac.row(0) = (2.0 * scale_factor_) * diff.transpose();
-        return jac;
-    }
-
-    Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, 
-                                       const Eigen::VectorXd& control) const override 
-    {
-        return Eigen::MatrixXd::Zero(1, control.size());
-    }
-
 
     double computeViolation(const Eigen::VectorXd& state, 
                             const Eigen::VectorXd& control) const override 
@@ -385,12 +368,29 @@ public:
         double lb = getLowerBound()(0);
         return std::max(0.0, val - lb);
     }
+    
+    Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, 
+                                     const Eigen::VectorXd& control) const override 
+    {
+        const Eigen::VectorXd& diff = state.head(dim_) - center_;
+        Eigen::MatrixXd jac(1, state.size());
+        jac.row(0) = -(2.0 * scale_factor_) * diff.transpose();
+        return jac;
+    }
+
+    Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, 
+                                       const Eigen::VectorXd& control) const override 
+    {
+        return Eigen::MatrixXd::Zero(1, control.size());
+    }
 
     Eigen::VectorXd getCenter() const { return center_; }
+    double getRadius() const { return radius_; }
 
 private:
     double radius_;
     Eigen::VectorXd center_;
+    int dim_;
     double scale_factor_;
 };
 
