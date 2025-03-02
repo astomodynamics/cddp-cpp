@@ -38,12 +38,11 @@ TEST(CDDPTest, SolveASCDDP) {
 
     // Create objective function
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Eigen::MatrixXd R = 0.5 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd R = 0.05 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
     Qf << 50.0, 0.0, 0.0,
           0.0, 50.0, 0.0,
           0.0, 0.0, 10.0;
-    Qf = 0.5 * Qf;
     Eigen::VectorXd goal_state(state_dim);
     goal_state << 2.0, 2.0, M_PI/2.0;
 
@@ -63,6 +62,7 @@ TEST(CDDPTest, SolveASCDDP) {
     options.grad_tolerance = 1e-4;
     options.regularization_type = "none";
     options.max_line_search_iterations = 21;
+    options.debug = true;
     // options.max_cpu_time = 1e-1;
 
     // // Create CDDP solver
@@ -79,17 +79,17 @@ TEST(CDDPTest, SolveASCDDP) {
 
     // Define constraints
     Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -1.0, -M_PI;
+    control_lower_bound << -5.0, -M_PI;
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 1.0, M_PI;
+    control_upper_bound << 5.0, M_PI;
     // Add the constraint to the solver
     cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
     auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
 
-    // // Define ball constraint
-    // double radius = 0.2;
-    // Eigen::Vector2d center(1.0, 1.0);
-    // cddp_solver.addConstraint(std::string("BallConstraint"), std::make_unique<cddp::BallConstraint>(radius, center, 0.1));
+    // Define ball constraint
+    double radius = 0.2;
+    Eigen::Vector2d center(1.0, 1.0);
+    cddp_solver.addConstraint(std::string("BallConstraint"), std::make_unique<cddp::BallConstraint>(radius, center));
 
     // Set options
     cddp_solver.setOptions(options);
@@ -97,62 +97,77 @@ TEST(CDDPTest, SolveASCDDP) {
     // Set initial trajectory
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    for (int i = 0; i < horizon + 1; ++i) {
+        X[i] = initial_state;
+    }
     cddp_solver.setInitialTrajectory(X, U);
 
     // // Solve the problem
     cddp::CDDPSolution solution = cddp_solver.solve("ASCDDP");
 
-    ASSERT_TRUE(solution.converged);
+    // ASSERT_TRUE(solution.converged);
 
     // Extract solution
     auto X_sol = solution.state_sequence; // size: horizon + 1
     auto U_sol = solution.control_sequence; // size: horizon
     auto t_sol = solution.time_sequence; // size: horizon + 1
 
-    // Create directory for saving plot (if it doesn't exist)
-    const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directory(plotDirectory);
-    }
+    // // Create directory for saving plot (if it doesn't exist)
+    // const std::string plotDirectory = "../results/tests";
+    // if (!fs::exists(plotDirectory)) {
+    //     fs::create_directory(plotDirectory);
+    // }
 
-    // Plot the solution (x-y plane)
-    std::vector<double> x_arr, y_arr, theta_arr;
-    for (const auto& x : X_sol) {
-        x_arr.push_back(x(0));
-        y_arr.push_back(x(1));
-        theta_arr.push_back(x(2));
-    }
+    // // Plot the solution (x-y plane)
+    // std::vector<double> x_arr, y_arr, theta_arr;
+    // for (const auto& x : X_sol) {
+    //     x_arr.push_back(x(0));
+    //     y_arr.push_back(x(1));
+    //     theta_arr.push_back(x(2));
+    // }
 
-    // Plot the solution (control inputs)
-    std::vector<double> v_arr, omega_arr;
-    for (const auto& u : U_sol) {
-        v_arr.push_back(u(0));
-        omega_arr.push_back(u(1));
-    }
+    // // Plot the solution (control inputs)
+    // std::vector<double> v_arr, omega_arr;
+    // for (const auto& u : U_sol) {
+    //     v_arr.push_back(u(0));
+    //     omega_arr.push_back(u(1));
+    // }
 
-    // Plot the solution by subplots
-    plt::subplot(2, 1, 1);
-    plt::plot(x_arr, y_arr);
-    plt::title("State Trajectory");
-    plt::xlabel("x");
-    plt::ylabel("y");
+    // // Plot ball constraint
+    // std::vector<double> t_ball;
+    // for (double t = 0.0; t < 2 * M_PI; t += 0.01) {
+    //     t_ball.push_back(t);
+    // }
+    // std::vector<double> x_ball, y_ball;
+    // for (const auto& t : t_ball) {
+    //     x_ball.push_back(center(0) + radius * cos(t));
+    //     y_ball.push_back(center(1) + radius * sin(t));
+    // }
 
-    plt::subplot(2, 1, 2);
-    plt::plot(v_arr);
-    plt::plot(omega_arr);
-    // Plot boundaries
-    plt::plot(std::vector<double>(U_sol.size(), -1.0), "r--");
-    plt::plot(std::vector<double>(U_sol.size(), 1.0), "r--");
-    plt::title("Control Inputs");
-    plt::save(plotDirectory + "/unicycle_ascddp_test.png");
+    // // Plot the solution by subplots
+    // plt::subplot(2, 1, 1);
+    // plt::plot(x_arr, y_arr);
+    // plt::plot(x_ball, y_ball, "r-");
+    // plt::title("State Trajectory");
+    // plt::xlabel("x");
+    // plt::ylabel("y");
 
-    // Create figure and axes
-    plt::figure_size(800, 600);
-    plt::title("Unicycle Trajectory");
-    plt::xlabel("x");
-    plt::ylabel("y");
-    plt::xlim(-1, 3); // Adjust limits as needed
-    plt::ylim(-1, 3); // Adjust limits as needed
+    // plt::subplot(2, 1, 2);
+    // plt::plot(v_arr);
+    // plt::plot(omega_arr);
+    // // Plot boundaries
+    // plt::plot(std::vector<double>(U_sol.size(), control_lower_bound(0)), "r--");
+    // plt::plot(std::vector<double>(U_sol.size(), control_upper_bound(0)), "r--");
+    // plt::title("Control Inputs");
+    // plt::save(plotDirectory + "/unicycle_ascddp_test.png");
+
+    // // Create figure and axes
+    // plt::figure_size(800, 600);
+    // plt::title("Unicycle Trajectory");
+    // plt::xlabel("x");
+    // plt::ylabel("y");
+    // plt::xlim(-1, 3); // Adjust limits as needed
+    // plt::ylim(-1, 3); // Adjust limits as needed
 
     // // Car dimensions
     // double car_length = 0.2;

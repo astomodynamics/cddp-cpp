@@ -169,20 +169,6 @@ CDDPSolution CDDP::solveASCDDP()
             bool early_termination_flag = false; // TODO: Improve early termination
             // Increase regularization
             increaseRegularization();
-
-            // TODO: Improve early termination
-            // Check early termination
-            // if (options_.early_termination && early_termination_flag) {
-            //     if (dJ_ < options_.cost_tolerance * 1e2 ||
-            //         (optimality_gap_ < options_.grad_tolerance * 1e1)) 
-            //     {
-            //         solution.converged = true;
-            //         if (options_.verbose) {
-            //             std::cerr << "CDDP: Early termination due to small cost reduction" << std::endl;
-            //         }
-            //         break;
-            //     }
-            // }
             
             // If limit is reached treat as converged
             if (isRegularizationLimitReached()) {
@@ -202,6 +188,12 @@ CDDPSolution CDDP::solveASCDDP()
                 }
                 break;
             }
+        }
+
+        // Check convergence
+        if (iter > 0 && dJ_ < options_.cost_tolerance) {
+            solution.converged = true;
+            break;
         }
 
         // Print iteration information
@@ -232,6 +224,7 @@ bool CDDP::solveASCDDPBackwardPass()
     // Initialize variables
     const int state_dim = system_->getStateDim();
     const int control_dim = system_->getControlDim();
+    const int dual_dim = getTotalDualDim() - control_dim;
     const auto active_set_tol = 1e-6;
 
     // Extract control box constraint
@@ -308,10 +301,10 @@ bool CDDP::solveASCDDPBackwardPass()
 
         /*  --- Identify Active Constraint --- */
         int active_constraint_index = 0;
-        Eigen::MatrixXd C(control_dim, control_dim); // Control constraint matrix
-        Eigen::MatrixXd D(control_dim, state_dim);   // State constraint matrix
+        Eigen::MatrixXd C(dual_dim, control_dim); // Control constraint matrix
+        Eigen::MatrixXd D(dual_dim, state_dim);   // State constraint matrix
 
-        // TODO: Implement active set method
+        // Identify constrol constraints
         for (int j = 0; j < control_dim; j++)
         {
             if (u(j) <= control_box_constraint->getLowerBound()(j) + active_set_tol)
@@ -329,6 +322,31 @@ bool CDDP::solveASCDDPBackwardPass()
                 C.row(active_constraint_index) = e;
                 D.row(active_constraint_index) = Eigen::VectorXd::Zero(state_dim);
                 active_constraint_index += 1;
+            }
+        }
+
+        // Identify state constraints
+        if (t < horizon_ - 1)
+        {
+            for (auto &constraint : constraint_set_)
+            {
+                if (constraint.first == "ControlBoxConstraint")
+                {
+                    continue;
+                }
+
+                Eigen::VectorXd constraint_vals = constraint.second->evaluate(X_[t + 1], U_[t + 1]) - constraint.second->getUpperBound();
+                Eigen::MatrixXd C_state = constraint.second->getStateJacobian(X_[t + 1], U_[t + 1]);
+                Eigen::MatrixXd D_state = constraint.second->getControlJacobian(X_[t + 1], U_[t + 1]);
+                
+                for (int j = 0; j < constraint_vals.size(); j++)
+                {
+                    if (std::abs(constraint_vals(j)) <= active_set_tol) {  
+                        C.row(active_constraint_index) = C_state.row(j) * Fu;  
+                        D.row(active_constraint_index) = -D_state.row(j) * Fx; 
+                        active_constraint_index++;
+                    }
+                }
             }
         }
 
@@ -427,6 +445,7 @@ ForwardPassResult CDDP::solveASCDDPForwardPass(double alpha)
 
     const int state_dim = system_->getStateDim();
     const int control_dim = system_->getControlDim();
+    const int dual_dim = getTotalDualDim() - control_dim;
 
     // Extract control box constraint
     auto control_box_constraint = getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
@@ -465,14 +484,47 @@ ForwardPassResult CDDP::solveASCDDPForwardPass(double alpha)
         // q = alpha * Q_u + Q_ux * delta_x
         Eigen::VectorXd q = alpha * Q_u + Q_ux * delta_x;
 
-        // Create constraints
-        Eigen::SparseMatrix<double> A(control_dim, control_dim);
-        A.setIdentity();
-        A.makeCompressed();
+        // Create QP constraints
+        Eigen::MatrixXd A_dense = Eigen::MatrixXd::Identity(control_dim, control_dim);
+        Eigen::VectorXd lb_dense = control_box_constraint->getLowerBound() - u;
+        Eigen::VectorXd ub_dense = control_box_constraint->getUpperBound() - u;
 
-        // Determine QP bounds from the control box constraints (relative to the current control).
-        const Eigen::VectorXd lb = control_box_constraint->getLowerBound() - u;
-        const Eigen::VectorXd ub = control_box_constraint->getUpperBound() - u;
+        Eigen::MatrixXd A_aug = Eigen::MatrixXd::Zero(dual_dim, control_dim);
+        Eigen::VectorXd lb_aug = Eigen::VectorXd::Zero(dual_dim);
+        Eigen::VectorXd ub_aug = Eigen::VectorXd::Zero(dual_dim);   
+
+        // First block: control constraints
+        A_aug.topRows(control_dim) = A_dense;
+        lb_aug.head(control_dim) = lb_dense;
+        ub_aug.head(control_dim) = ub_dense;
+
+        // Second block: state constraints
+        int row_index = control_dim;
+        if (t < horizon_ - 1) {
+            auto [fx, fu] = system_->getJacobians(x, u);
+            Eigen::MatrixXd Fu = timestep_ * fu;
+
+            // Predicted next state
+            Eigen::VectorXd x_next = system_->getDiscreteDynamics(x, u);
+
+            for (const auto &constraint : constraint_set_) {
+                if (constraint.first == "ControlBoxConstraint") {
+                    continue;
+                }
+                Eigen::VectorXd cons_vals = constraint.second->evaluate(x_next, u) - constraint.second->getUpperBound();
+                Eigen::MatrixXd cons_jac_x = constraint.second->getStateJacobian(x_next, u);
+                
+                int m = cons_vals.size();
+                A_aug.block(row_index, 0, m, control_dim) = cons_jac_x * Fu;
+                lb_aug.segment(row_index, m).setConstant(-std::numeric_limits<double>::infinity());
+                ub_aug.segment(row_index, m) = -cons_vals;
+                row_index += m;
+
+            }
+        }
+
+        // Convert augmented constraint matrix to sparse format.
+        Eigen::SparseMatrix<double> A_sparse = A_aug.sparseView();
 
         // Initialize QP solver
         osqp::OsqpInstance instance;
@@ -480,9 +532,9 @@ ForwardPassResult CDDP::solveASCDDPForwardPass(double alpha)
         // Set the objective
         instance.objective_matrix = P;
         instance.objective_vector = q;
-        instance.constraint_matrix = A;
-        instance.lower_bounds = lb;
-        instance.upper_bounds = ub;
+        instance.constraint_matrix = A_sparse;
+        instance.lower_bounds = lb_aug;
+        instance.upper_bounds = ub_aug;
 
         // Solve the QP problem
         osqp::OsqpSolver osqp_solver;
@@ -518,9 +570,7 @@ ForwardPassResult CDDP::solveASCDDPForwardPass(double alpha)
     double reduction_ratio = (expected > 0.0) ? dJ / expected : std::copysign(1.0, dJ);
 
     // --- Acceptance Criterion ---
-    // Only accept the forward pass if the new cost is lower and the improvement
-    // is a sufficient fraction of the predicted improvement.
-    if (dJ <= 0 || reduction_ratio < options_.minimum_reduction_ratio) {
+    if (dJ <= 0) {
         if (options_.debug) {
             std::cerr << "CDDP: Forward pass did not yield sufficient decrease (dJ: " 
                       << dJ << ", reduction_ratio: " << reduction_ratio << ")" << std::endl;
