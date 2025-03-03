@@ -1,39 +1,44 @@
 /*
- * Example code demonstrating the pendulum model with IPDDP
- */
+ Copyright 2024 Tomo Sasaki
+
+ Licensed under the Apache License, Version 2.0 (the "License");
+ you may not use this file except in compliance with the License.
+ You may obtain a copy of the License at
+
+      https://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+*/
+
 #include <iostream>
 #include <vector>
 #include <random>
 #include <cmath>
+#include "gtest/gtest.h"
 #include "cddp.hpp"
 
-
-int main() {
-    // Problem parameters for the pendulum
+TEST(IPDDPPendulumTest, Solve) {
+    // Problem parameters for the pendulum swing-up
     const int state_dim = 2;    // [theta, theta_dot]
     const int control_dim = 1;  // [torque]
     const int horizon = 500;
     const double timestep = 0.05;
     const std::string integration_type = "euler";
 
-    // Random number generator for potential random initialization (if desired)
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::normal_distribution<double> d(0.0, 0.1);
-
-    // Create a pendulum instance with chosen parameters: length, mass, damping
+    // Create a Pendulum instance with parameters: length, mass, damping
     double length = 1.0;
     double mass = 1.0;
     double damping = 0.0;
     std::unique_ptr<cddp::DynamicalSystem> system =
         std::make_unique<cddp::Pendulum>(timestep, length, mass, damping, integration_type);
 
-    // Set initial and goal states for the swing-up task.
-    // Initial state: near the downward equilibrium.
+    // Set initial state (near the downward equilibrium) and goal state (upright position)
     Eigen::VectorXd initial_state(state_dim);
     initial_state << -M_PI, 0.0;
-
-    // Goal state: upright position (swing up) with zero angular velocity.
     Eigen::VectorXd goal_state(state_dim);
     goal_state << 0.0, 0.0;
 
@@ -49,31 +54,28 @@ int main() {
     cddp_solver.setDynamicalSystem(std::move(system));
     cddp_solver.setObjective(std::move(objective));
 
-    // Set control constraints
+    // Set control constraints (upper bound of 0.25 torque)
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 0.25;
-    cddp_solver.addConstraint(std::string("ControlConstraint"),
-                              std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound));
 
     // Set solver options
     cddp::CDDPOptions options;
     options.max_iterations = 500;
-    options.verbose = true;
+    options.verbose = false; // disable verbose output for unit tests
     options.cost_tolerance = 1e-7;
     options.grad_tolerance = 1e-4;
     options.regularization_type = "none";
-    // options.regularization_control = 1.0; // Uncomment and adjust if needed
-    options.debug = true;
+    options.debug = false;
     options.use_parallel = false;
     options.num_threads = 1;
     options.barrier_coeff = 1e-1;
     cddp_solver.setOptions(options);
 
-    // Initialize trajectories: states X and controls U
+    // Initialize trajectories for states X and controls U
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
 
-    // Optionally, add random perturbations to the initial controls
     for (auto& u : U) {
         // u(0) = d(gen);
         u << 0.01;
@@ -81,26 +83,29 @@ int main() {
     X[0] = initial_state;
 
     double J = 0.0;
-    // Simulate the initial trajectory
     for (size_t t = 0; t < horizon; t++) {
         J += cddp_solver.getObjective().running_cost(X[t], U[t], t);
         X[t + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t]);
     }
     J += cddp_solver.getObjective().terminal_cost(X.back());
-    std::cout << "--------------------------------" << std::endl;
     std::cout << "Initial cost: " << J << std::endl;
     std::cout << "Initial state: " << X[0].transpose() << std::endl;
-    std::cout << "Final state: " << X.back().transpose() << std::endl;
+    std::cout << "Final state (pre-solution): " << X.back().transpose() << std::endl;
 
+    // Set the initial trajectory in the solver
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem using IPDDP
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
-    // Extract the solution trajectories:
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
-    std::cout << "Optimized final state: " << X_sol.back().transpose() << std::endl;
+    // Check that the solution converged
+    EXPECT_TRUE(solution.converged);
 
-    return 0;
+    double tol = 0.2;
+    Eigen::VectorXd final_state = solution.state_sequence.back();
+    for (int i = 0; i < state_dim; ++i) {
+        EXPECT_NEAR(final_state(i), goal_state(i), tol);
+    }
+
+    std::cout << "Optimized final state: " << final_state.transpose() << std::endl;
 }
