@@ -19,12 +19,11 @@
 #include <cmath>
 #include <map>
 #include <string>
-#include "gtest/gtest.h"
 #include "cddp.hpp"
 
 namespace plt = matplotlibcpp;
 
-// Define the CarParkingObjective as in the car example.
+// Define the CarParkingObjective 
 namespace cddp {
 
 class CarParkingObjective : public NonlinearObjective {
@@ -52,7 +51,6 @@ public:
     }
 
 private:
-    // Smooth absolute value function 
     Eigen::VectorXd sabs(const Eigen::VectorXd& x, const Eigen::VectorXd& p) const {
         return ((x.array().square() / p.array().square() + 1.0).sqrt() * p.array() - p.array()).matrix();
     }
@@ -67,8 +65,56 @@ private:
 
 } // namespace cddp
 
+namespace {
+    void plotCarBox(const Eigen::VectorXd& state, const Eigen::VectorXd& control,
+                    double length, double width, const std::string& color) {
+        double x = state(0);
+        double y = state(1);
+        double theta = state(2);
+        double steering = control(1);
+
+        // Compute car corner points (5 points to close the polygon)
+        std::vector<double> car_x(5), car_y(5);
+        car_x[0] = x + length/2 * cos(theta) - width/2 * sin(theta);
+        car_y[0] = y + length/2 * sin(theta) + width/2 * cos(theta);
+        car_x[1] = x + length/2 * cos(theta) + width/2 * sin(theta);
+        car_y[1] = y + length/2 * sin(theta) - width/2 * cos(theta);
+        car_x[2] = x - length/2 * cos(theta) + width/2 * sin(theta);
+        car_y[2] = y - length/2 * sin(theta) - width/2 * cos(theta);
+        car_x[3] = x - length/2 * cos(theta) - width/2 * sin(theta);
+        car_y[3] = y - length/2 * sin(theta) + width/2 * cos(theta);
+        car_x[4] = car_x[0];
+        car_y[4] = car_y[0];
+
+        // Plot the car body
+        std::map<std::string, std::string> keywords;
+        keywords["color"] = color;
+        plt::plot(car_x, car_y, keywords);
+
+        // Plot the base point (center of rear axle) in red with a marker
+        std::vector<double> base_x = {x};
+        std::vector<double> base_y = {y};
+        keywords["color"] = "red";
+        keywords["marker"] = "o";
+        plt::plot(base_x, base_y, keywords);
+
+        // Plot the steering direction in green
+        double front_x = x + length/2 * cos(theta);
+        double front_y = y + length/2 * sin(theta);
+        double steering_length = width/2;
+        double steering_angle = theta + steering;
+        double steering_end_x = front_x + steering_length * cos(steering_angle);
+        double steering_end_y = front_y + steering_length * sin(steering_angle);
+        std::vector<double> steer_x = {front_x, steering_end_x};
+        std::vector<double> steer_y = {front_y, steering_end_y};
+        keywords["color"] = "green";
+        keywords.erase("marker");
+        plt::plot(steer_x, steer_y, keywords);
+    }
+}
+
 // Test case that solves the car parking problem, creates an animation, and saves the GIF.
-TEST(IPDDPCarTest, PlotAndSaveGif) {
+int main() {
     // Problem parameters
     const int state_dim = 4;     // [x, y, theta, v]
     const int control_dim = 2;   // [wheel_angle, acceleration]
@@ -129,6 +175,15 @@ TEST(IPDDPCarTest, PlotAndSaveGif) {
     // Solve the problem using IPDDP
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
-    // Verify that the solution converged.
-    EXPECT_TRUE(solution.converged);
+
+    // Prepare trajectory data for plotting
+    std::vector<double> x_hist, y_hist;
+    for (const auto& state : solution.state_sequence) {
+        x_hist.push_back(state(0));
+        y_hist.push_back(state(1));
+    }
+
+    // Plot the trajectory
+    plt::plot(x_hist, y_hist, "b-");
+    plt::show();
 }
