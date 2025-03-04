@@ -63,7 +63,7 @@ Simple car-like robot with velocity and steering control:
 ./examples/cddp_unicycle_safe_ipddp // after building
 ```
 
-<img src="results/tests/unicycle_trajectory_comparison_ipddp.png" width="300" alt="Unicycle Model CDDP with Obstacle Avoidance">
+<img src="results/tests/trajectory_comparison_ipddp.png" width="300" alt="Unicycle Model CDDP with Obstacle Avoidance">
 
 ### Bicycle Model
 
