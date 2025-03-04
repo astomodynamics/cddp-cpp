@@ -187,7 +187,7 @@ int main() {
     
     plt::xlabel("x");
     plt::ylabel("y");
-    plt::title("Trajectory Compariso");
+    plt::title("Trajectory Comparison");
     plt::legend();
     
     // Save the comparison plot

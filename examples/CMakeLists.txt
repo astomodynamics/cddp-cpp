@@ -37,6 +37,9 @@ target_link_libraries(cddp_unicycle_safe cddp)
 add_executable(cddp_unicycle_safe_ipddp cddp_unicycle_safe_ipddp.cpp)
 target_link_libraries(cddp_unicycle_safe_ipddp cddp)
 
+add_executable(cddp_unicycle_safe_ipddp_v2 cddp_unicycle_safe_ipddp_v2.cpp)
+target_link_libraries(cddp_unicycle_safe_ipddp_v2 cddp)
+
 add_executable(cddp_manipulator cddp_manipulator.cpp)
 target_link_libraries(cddp_manipulator cddp)
 
