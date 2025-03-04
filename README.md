@@ -57,6 +57,14 @@ Simple car-like robot with velocity and steering control:
 
 <img src="results/tests/unicycle_trajectory_comparison.png" width="300" alt="Unicycle Model CDDP with Obstacle Avoidance">
 
+### Unicycle with Obstacle Avoidance (infeasible initial guess)
+
+```bash
+./examples/cddp_unicycle_safe_ipddp // after building
+```
+
+<img src="results/tests/unicycle_trajectory_comparison_ipddp.png" width="300" alt="Unicycle Model CDDP with Obstacle Avoidance">
+
 ### Bicycle Model
 
 Bicycle model with velocity and steering control:
