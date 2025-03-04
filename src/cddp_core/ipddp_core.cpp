@@ -236,7 +236,7 @@ namespace cddp
                 auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
                 if (duration.count() * 1e-6 > options_.max_cpu_time)
                 {
-                    if (options_.verbose)
+                    if (options_.debug)
                     {
                         std::cerr << "CDDP: Maximum CPU time reached. Returning current solution" << std::endl;
                     }
@@ -252,26 +252,20 @@ namespace cddp
 
                 if (!backward_pass_success)
                 {
-                    std::cerr << "IPDDP: Backward pass failed" << std::endl;
-
-                    // Increase regularization 
-                    if (!best_result.success) {
-                        ipddp_regularization_counter_++;
-                    } else if (best_result.alpha == 1.0) {
-                        ipddp_regularization_counter_--;
-                    } else if (best_result.alpha >= 0.625 /*0.5^-4*/) { 
-                        // ipddp_regularization_counter_ = ipddp_regularization_counter_;
-                    } else {
-                        ipddp_regularization_counter_++;
+                    if (options_.debug) {
+                        std::cerr << "IPDDP: Backward pass failed" << std::endl;
                     }
 
-                    if (ipddp_regularization_counter_ < 0) {
-                        ipddp_regularization_counter_ = 0;
-                    } else if (ipddp_regularization_counter_ > 24) {
-                        ipddp_regularization_counter_ = 24;
+                    // Increase regularization
+                    increaseRegularization();
+
+                    if (isRegularizationLimitReached()) {
+                        if (options_.debug) {
+                            std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
+                        }
+                        break; // Exit if regularization limit reached
                     }
-                
-                    continue; // Continue if backward pass fails
+                        continue; // Continue if backward pass fails
                 }
             }
 
@@ -302,45 +296,45 @@ namespace cddp
                     }
                 }
             }
-            // else
-            // {
-            //     // Multi-threaded execution
-            //     std::vector<std::future<ForwardPassResult>> futures;
-            //     futures.reserve(alphas_.size());
+            else
+            {
+                // Multi-threaded execution
+                std::vector<std::future<ForwardPassResult>> futures;
+                futures.reserve(alphas_.size());
 
-            //     // Launch all forward passes in parallel
-            //     for (double alpha : alphas_)
-            //     {
-            //         futures.push_back(std::async(std::launch::async,
-            //                                      [this, alpha]()
-            //                                      { return solveIPDDPForwardPass(alpha); }));
-            //     }
+                // Launch all forward passes in parallel
+                for (double alpha : alphas_)
+                {
+                    futures.push_back(std::async(std::launch::async,
+                                                 [this, alpha]()
+                                                 { return solveIPDDPForwardPass(alpha); }));
+                }
 
-            //     // Collect results from all threads
-            //     for (auto &future : futures)
-            //     {
-            //         try
-            //         {
-            //             if (future.valid())
-            //             {
-            //                 ForwardPassResult result = future.get();
-            //                 if (result.success && result.lagrangian < best_result.lagrangian)
-            //                 {
-            //                     best_result = result;
-            //                     forward_pass_success = true;
-            //                 }
-            //             }
-            //         }
-            //         catch (const std::exception &e)
-            //         {
-            //             if (options_.verbose)
-            //             {
-            //                 std::cerr << "CDDP: Forward pass thread failed: " << e.what() << std::endl;
-            //             }
-            //             continue;
-            //         }
-            //     }
-            // }
+                // Collect results from all threads
+                for (auto &future : futures)
+                {
+                    try
+                    {
+                        if (future.valid())
+                        {
+                            ForwardPassResult result = future.get();
+                            if (result.success && result.lagrangian < best_result.lagrangian)
+                            {
+                                best_result = result;
+                                forward_pass_success = true;
+                            }
+                        }
+                    }
+                    catch (const std::exception &e)
+                    {
+                        if (options_.debug)
+                        {
+                            std::cerr << "CDDP: Forward pass thread failed: " << e.what() << std::endl;
+                        }
+                        continue;
+                    }
+                }
+            }
 
             // Update solution if a feasible forward pass was found
             if (forward_pass_success)
@@ -368,14 +362,16 @@ namespace cddp
                 solution.lagrangian_sequence.push_back(L_);
 
                 // Decrease regularization
-                // decreaseRegularization();
+                decreaseRegularization();
+            } else {
+                // Increase regularization
+                increaseRegularization();
 
-                // // Check termination
-                // if (dJ_ < options_.cost_tolerance || (std::max(optimality_gap_, mu_) < options_.grad_tolerance))
-                // {
-                //     solution.converged = true;
-                //     break;
-                // }
+                if (isRegularizationLimitReached()) {
+                    if (options_.verbose) {
+                        std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
+                    }
+                }
             }
 
             // Print iteration information
@@ -510,13 +506,23 @@ namespace cddp
             Eigen::MatrixXd Q_ux_reg = Q_ux;
             Eigen::MatrixXd Q_uu_reg = Q_uu;
 
-            // // TODO: Add State regularization here
-            // if (options_.regularization_type == "control" ||
-            //     options_.regularization_type == "both")
-            // {
-            //     Q_uu_reg.diagonal().array() += regularization_control_;
-            // }
-            // Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
+            if (options_.regularization_type == "state" || 
+                options_.regularization_type == "both") {
+                Q_ux_reg = l_ux + B.transpose() * (
+                           V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
+                Q_uu_reg = l_uu + B.transpose() * (
+                           V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * B;
+            } else {
+                Q_ux_reg = Q_ux;
+                Q_uu_reg = Q_uu;
+            } 
+
+            if (options_.regularization_type == "control" ||
+                options_.regularization_type == "both")
+            {
+                Q_uu_reg.diagonal().array() += regularization_control_;
+            }
+            Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
             Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg + Q_yu.transpose() * YSinv * Q_yu);
             if (llt.info() != Eigen::Success)
@@ -558,19 +564,6 @@ namespace cddp
             Eigen::MatrixXd K_y = YSinv * (Q_yx + Q_yu * K_u);
             Eigen::VectorXd k_s = -r_p - Q_yu * k_u;
             Eigen::MatrixXd K_s = -Q_yx - Q_yu * K_u;
-
-            if (options_.debug)
-            {
-                // std::cout << "time step: " << t << std::endl;
-                // std::cout << "[IPDDP Backward Pass]\n"
-                //           << "    k_u: " << k_u.transpose() << "\n"
-                //           << "    K_u: " << K_u << std::endl;
-
-                // std::cout << "    k_y: " << k_y.transpose() << "\n"
-                //           << "    K_y: " << K_y << std::endl;
-                // std::cout << "    k_s: " << k_s.transpose() << "\n"
-                //           << "    K_s: " << K_s << std::endl;
-            }
 
             offset = 0;
             for (auto &cKV : constraint_set_)
@@ -639,7 +632,7 @@ namespace cddp
         // Define tau as a safeguard parameter.
         double tau = std::max(0.99, 1.0 - mu_);
 
-        // Copy the current (old) trajectories. These include:
+        // Copy the current (old) trajectories:
         //   - X_: state trajectory
         //   - U_: control trajectory
         //   - Y_: dual trajectory (indexed by constraint name)
@@ -693,14 +686,6 @@ namespace cddp
                 {
                     if (y_new[i] < y_min[i] || s_new[i] < s_min[i])
                     {
-                        if (options_.debug)
-                        {
-                            // std::cerr << "IPDDP: Minimal feasibility violated at time " << t << " for constraint " << cname << std::endl;
-                            // std::cout << "y_new: " << y_new.transpose() << std::endl;
-                            // std::cout << "y_min: " << y_min.transpose() << std::endl;
-                            // std::cout << "s_new: " << s_new.transpose() << std::endl;
-                            // std::cout << "s_min: " << s_min.transpose() << std::endl;
-                        }
                         // Early exit: feasibility condition violated.
                         return result;
                     }
