@@ -102,6 +102,14 @@ add_executable(test_ipddp_core cddp_core/test_ipddp_core.cpp)
 target_link_libraries(test_ipddp_core gtest gmock gtest_main cddp)
 gtest_discover_tests(test_ipddp_core)
 
+add_executable(test_ipddp_car test_ipddp_car.cpp)
+target_link_libraries(test_ipddp_car cddp gtest gmock gtest_main)
+gtest_discover_tests(test_ipddp_car)
+
+add_executable(test_ipddp_pendulum test_ipddp_pendulum.cpp)
+target_link_libraries(test_ipddp_pendulum gtest gmock gtest_main cddp)
+gtest_discover_tests(test_ipddp_pendulum)
+
 add_executable(test_animation test_animation.cpp)
 target_link_libraries(test_animation gtest gmock gtest_main cddp)
 
@@ -126,9 +134,6 @@ if (CDDP_CPP_CASADI)
     add_executable(test_casadi test_casadi_solver.cpp)
     target_link_libraries(test_casadi gtest gmock gtest_main cddp)
     gtest_discover_tests(test_casadi)
-
-    add_executable(test_ipddp_car test_ipddp_car.cpp)
-    target_link_libraries(test_ipddp_car cddp)
 endif()
 
 # Test for Eigen installation
