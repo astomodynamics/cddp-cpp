@@ -111,7 +111,7 @@ Cartpole with cart control:
 Quadrotor with thrust control:
 
 ```bash
-./examples/cddp_quadrotor // after building
+./examples/cddp_quadrotor_point // after building
 ```
 
 <img src="results/tests/quadrotor.gif" width="300" alt="Quadrotor CDDP">
