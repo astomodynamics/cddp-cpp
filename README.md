@@ -85,6 +85,12 @@ Car model with limited velocity and steering control:
 
 <img src="results/tests/car_parking.gif" width="300" alt="Car Model CDDP">
 
+```bash
+./examples/cddp_car_ipddp // after building
+```
+
+<img src="results/tests/car_parking_ipddp.gif" width="300" alt="Car Model CDDP">
+
 ### Pendulum
 
 Simple pendulum with torque control:
