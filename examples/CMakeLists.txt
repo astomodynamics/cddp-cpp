@@ -52,6 +52,12 @@ target_link_libraries(cddp_pendulum cddp)
 add_executable(cddp_quadrotor_point cddp_quadrotor_point.cpp)
 target_link_libraries(cddp_quadrotor_point cddp)
 
+add_executable(cddp_quadrotor_circle cddp_quadrotor_circle.cpp)
+target_link_libraries(cddp_quadrotor_circle cddp)
+
+# add_executable(cddp_quadrotor_circle_safe cddp_quadrotor_circle_safe.cpp)
+# target_link_libraries(cddp_quadrotor_circle_safe cddp)
+
 add_executable(cddp_hcw cddp_hcw.cpp)
 target_link_libraries(cddp_hcw cddp)
 

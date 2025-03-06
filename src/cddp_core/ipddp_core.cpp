@@ -160,12 +160,14 @@ namespace cddp
             regularization_control_step_ = 1.0;
         }
 
-        // Initialize Log-barrier object
-        log_barrier_ = std::make_unique<LogBarrier>(options_.barrier_coeff,
-                                                    options_.relaxation_coeff,
-                                                    options_.barrier_order,
-                                                    options_.is_relaxed_log_barrier);
-        mu_ = options_.barrier_coeff;
+        if (constraint_set_.empty())
+        {
+            mu_ = 1e-8;
+        }
+        else
+        {
+            mu_ = options_.barrier_coeff;
+        }
 
         // Now initialized
         initialized_ = true;
@@ -398,8 +400,12 @@ namespace cddp
 
             // From original IPDDP implementation
             if (optimality_gap_ <= 0.2 * mu_)
-            {
-                mu_ = std::max(options_.cost_tolerance / 10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
+            {   
+                if (constraint_set_.empty()) {
+                }
+                else {
+                    mu_ = std::max(options_.cost_tolerance / 10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
+                }
                 resetIPDDPFilter();
                 resetIPDDPRegularization();
             }
