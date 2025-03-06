@@ -146,14 +146,10 @@ sudo apt-get install libeigen3-dev # For Ubuntu
 brew install eigen # For macOS
 ```
 
-* [Matplotlib](https://matplotlib.org/) (Plotting Library in Python)
+* [gnuplot](http://www.gnuplot.info/) (Plotting Library)
 ```bash
-pip install matplotlib
-```
-
-* [numpy](https://numpy.org/) (Numerical Library in Python)
-```bash
-pip install numpy
+sudo apt-get install gnuplot # For Ubuntu
+brew install gnuplot # For macOS
 ```
 
 Although the library automatically finds and installs the following dependencies via [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html), if you do not have ones, here is how you can install on your own.
@@ -193,7 +189,7 @@ This project uses the following open-source libraries:
 
 * [OSQP](https://github.com/google/osqp-cpp) (Apache License 2.0)
 * [osqp-cpp](https://github.com/google/osqp-cpp) (Apache License 2.0)
-* [matplotlibcpp](https://github.com/lava/matplotlib-cpp) (MIT License)
+* [matplotplusplus](https://github.com/alandefreitas/matplotplusplus) (MIT License)
 * [libtorch](https://github.com/pytorch/pytorch) (BSD 3-Clause License)
 
 ## Citing
@@ -207,6 +203,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 * add state constraint handling
 * add initial guess functionality based on path planner solution
 * add automatic differentiation
+* add second-order derivative handling
 * add nonlinear objective and constraint handling
 * improve parallelization
 * improve boxqp
