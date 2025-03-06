@@ -151,6 +151,11 @@ brew install eigen # For macOS
 sudo apt-get install gnuplot # For Ubuntu
 brew install gnuplot # For macOS
 ```
+* [imagemagick](https://imagemagick.org/) (Image Processing Library)
+```bash
+sudo apt-get install imagemagick # For Ubuntu
+brew install imagemagick # For macOS
+```
 
 Although the library automatically finds and installs the following dependencies via [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html), if you do not have ones, here is how you can install on your own.
 

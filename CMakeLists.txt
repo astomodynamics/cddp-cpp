@@ -314,7 +314,7 @@ if (CDDP_CPP_BUILD_TESTS)
 endif()
 
 # Build examples
-# add_subdirectory(examples)
+add_subdirectory(examples)
 
 # Cmake compile commmand:
 # $ mkdir build
