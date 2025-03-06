@@ -853,10 +853,6 @@ namespace cddp
             cost_new += objective_->terminal_cost(X_new.back());
             log_cost_new += cost_new;
 
-            std::cout << "rp_err: " << rp_err << std::endl;
-            std::cout << "cost_new: " << cost_new << std::endl;
-            std::cout << "log_cost_new: " << log_cost_new << std::endl;
-
             // Compute the primal residual.
             rp_err = std::max(rp_err, options_.cost_tolerance);
 
