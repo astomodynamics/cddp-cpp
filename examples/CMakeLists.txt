@@ -55,6 +55,9 @@ target_link_libraries(cddp_quadrotor_point cddp)
 add_executable(cddp_quadrotor_circle cddp_quadrotor_circle.cpp)
 target_link_libraries(cddp_quadrotor_circle cddp)
 
+add_executable(cddp_quadrotor_figure_eight cddp_quadrotor_figure_eight.cpp)
+target_link_libraries(cddp_quadrotor_figure_eight cddp)
+
 # add_executable(cddp_quadrotor_circle_safe cddp_quadrotor_circle_safe.cpp)
 # target_link_libraries(cddp_quadrotor_circle_safe cddp)
 

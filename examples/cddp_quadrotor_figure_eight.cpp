@@ -70,7 +70,6 @@ std::vector<std::vector<double>> transformQuadrotorFrame(
     const Eigen::Vector4d &quat, // [qw, qx, qy, qz]
     double arm_length)
 {
-
     // Define quadrotor motor positions in the body frame
     std::vector<Eigen::Vector3d> body_points = {
         Eigen::Vector3d(arm_length, 0, 0),  // Front motor
@@ -98,7 +97,7 @@ int main()
     // [x, y, z, qw, qx, qy, qz, vx, vy, vz, omega_x, omega_y, omega_z]
     int state_dim = 13;
     int control_dim = 4; // [f1, f2, f3, f4]
-    int horizon = 200;   // Longer horizon for 3D maneuvers
+    int horizon = 400;   // Longer horizon for 3D maneuvers
     double timestep = 0.02;
 
     // Quadrotor parameters
@@ -120,69 +119,105 @@ int main()
 
     // Cost matrices (dimensions updated for state_dim = 13)
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Q(4, 4) = 0.1;
-    Q(5, 5) = 0.1;
-    Q(6, 6) = 0.1;
+    Q(0, 0) = 1.0;
+    Q(1, 1) = 1.0;
+    Q(2, 2) = 1.0;
+    Q(3, 3) = 1.0;
+    Q(4, 4) = 1.0;
+    Q(5, 5) = 1.0;
+    Q(6, 6) = 1.0;
 
     // Control cost matrix (penalize aggressive control inputs)
-    Eigen::MatrixXd R = 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd R = 0.01 * Eigen::MatrixXd::Identity(control_dim, control_dim);
 
     // Terminal cost matrix (important for stability)
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Qf(0, 0) = 50.0; // x position
-    Qf(1, 1) = 50.0; // y position
-    Qf(2, 2) = 50.0; // z position
-    // For orientation (quaternion) we penalize deviation from identity quaternion
-    Qf(3, 3) = 1.0;   // qw
-    Qf(4, 4) = 1.0;   // qx
-    Qf(5, 5) = 1.0;   // qy
-    Qf(6, 6) = 1.0;   // qz
-    Qf(7, 7) = 10.0;  // x velocity
-    Qf(8, 8) = 10.0;  // y velocity
-    Qf(9, 9) = 10.0;  // z velocity
-    // Qf(10, 10) = 0.1; // roll rate
-    // Qf(11, 11) = 0.1; // pitch rate
-    // Qf(12, 12) = 0.1; // yaw rate
+    Qf(0, 0) = 1.0;
+    Qf(1, 1) = 1.0;
+    Qf(2, 2) = 1.0;
+    Qf(3, 3) = 1.0;
+    Qf(4, 4) = 1.0;
+    Qf(5, 5) = 1.0;
+    Qf(6, 6) = 1.0;
 
-    // Goal state: hover at position (3,0,2) with identity quaternion and zero velocities.
+    // Parameters for the horizontal figure-8 trajectory
+    double figure8_scale = 3.0;              // Scale of the figure-8 (in meters)
+    double constant_altitude = 2.0;          // fixed altitude (z)
+    double total_time = horizon * timestep;  // total duration
+    // omega chosen so that the figure-8 is completed once over the horizon
+    double omega = 2 * M_PI / total_time;
+
+    std::vector<Eigen::VectorXd> figure8_reference_states;
+    figure8_reference_states.reserve(horizon + 1);
+
+    for (int i = 0; i <= horizon; ++i)
+    {
+        double t = i * timestep;
+        double angle = omega * t;
+
+        // Create a reference state of dimension state_dim (13)
+        Eigen::VectorXd ref_state = Eigen::VectorXd::Zero(state_dim);
+
+        // Position (x, y, z) using the lemniscate of Gerono:
+        // x = figure8_scale * cos(angle)
+        // y = figure8_scale * sin(angle) * cos(angle)
+        ref_state(0) = figure8_scale * std::cos(angle);
+        ref_state(1) = figure8_scale * std::sin(angle) * std::cos(angle);
+        ref_state(2) = constant_altitude;
+
+        // Orientation: set to identity quaternion [1, 0, 0, 0]
+        ref_state(3) = 1.0; // qw
+        ref_state(4) = 0.0; // qx
+        ref_state(5) = 0.0; // qy
+        ref_state(6) = 0.0; // qz
+
+        figure8_reference_states.push_back(ref_state);
+    }
+
+    // Goal state: hover at the starting point of the figure-8 (x = figure8_scale, y = 0, z constant)
     Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
-    goal_state(0) = 3.0; // x
-    goal_state(2) = 2.0; // z
-    // Set identity quaternion [1, 0, 0, 0]
-    goal_state(3) = 1.0;
-    goal_state(4) = 0.0;
-    goal_state(5) = 0.0;
-    goal_state(6) = 0.0;
+    goal_state(0) = figure8_scale;
+    goal_state(2) = constant_altitude;
+    goal_state(3) = 1.0; // Identity quaternion: qw = 1
 
-    // No intermediate reference states (optional)
-    std::vector<Eigen::VectorXd> empty_reference_states;
     auto objective = std::make_unique<cddp::QuadraticObjective>(
-        Q, R, Qf, goal_state, empty_reference_states, timestep);
+        Q, R, Qf, goal_state, figure8_reference_states, timestep);
 
-    // Initial state (at origin with identity quaternion)
+    // Initial state (at the start of the figure-8: x = figure8_scale, y = 0, z constant)
     Eigen::VectorXd initial_state = Eigen::VectorXd::Zero(state_dim);
+    initial_state(0) = figure8_scale;
+    initial_state(2) = constant_altitude;
     initial_state(3) = 1.0; // Identity quaternion: qw = 1
-
-    // Create the CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
-
-    // Control constraints (motor thrust limits)
-    double min_force = 0.0; // Motors can only produce thrust upward
-    double max_force = 5.0; // Maximum thrust per motor
-    Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
-    Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addConstraint("ControlBoxConstraint",
-                              std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
 
     // Solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 2000;
-    options.max_line_search_iterations = 15;
+    options.max_iterations = 10000;
+    options.verbose = true;
+    options.debug = false;
+    options.use_parallel = true;
+    options.num_threads = 10;
+    options.cost_tolerance = 1e-3;
+    options.grad_tolerance = 1e-2;
     options.regularization_type = "control";
     options.regularization_control = 1e-4;
-    cddp_solver.setOptions(options);
+    options.regularization_state = 0.0;
+    options.barrier_coeff = 1e-3;
+
+    // Create the CDDP solver
+    cddp::CDDP cddp_solver(
+        initial_state,
+        goal_state,
+        horizon,
+        timestep,
+        std::move(system),
+        std::move(objective),
+        options);
+
+    // Control constraints (motor thrust limits)
+    double min_force = 0.0; // Motors can only produce thrust upward
+    double max_force = 4.0; // Maximum thrust per motor
+    Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
+    Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
 
     // Initial trajectory: allocate state and control trajectories
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -202,7 +237,7 @@ int main()
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the optimal control problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
     auto X_sol = solution.state_sequence;
     auto U_sol = solution.control_sequence;
     auto t_sol = solution.time_sequence;
@@ -281,72 +316,13 @@ int main()
     plt::grid(true);
 
     plt::tight_layout();
-    plt::save(plotDirectory + "/quadrotor_point_history.png");
+    plt::save(plotDirectory + "/quadrotor_figure8_history.png");
     plt::clf();
 
-    plt::plot3(x_arr, y_arr, z_arr);
-    plt::xlabel("X [m]");
-    plt::ylabel("Y [m]");
-    plt::set_zlabel("Z [m]");
-    plt::title("3D Quadrotor Trajectory");
-    plt::grid(true);
-    plt::clf();
+    
 
-    double prop_radius = 0.05; // 5cm propeller radius
-
-    // Animation of the quadrotor frame (optional)
-    // 1) Create a single figure + 3D axes, set size/title once.
-    plt::figure_size(800, 600);
-    plt::figure();                        // One figure
-    // plt::subplot(111, "projection=3d");   // Make it 3D
-    plt::title("Quadrotor Animation");
-
-    // Optional: If you want to see the animation in real-time
-    plt::ion();       // Enable interactive mode
-    plt::show(false); // Non-blocking show
-
-    // Example arrays to accumulate the trajectory
-    std::vector<double> x_traj, y_traj, z_traj;
-
-    // Suppose X_sol is your state trajectory
-    for (size_t i = 0; i < X_sol.size(); i += 5)  // render every 5th step
-    {
-        // 2) Clear the *axes* to re-draw on the same figure
-        plt::cla();
-
-        // Extract position & orientation from your state
-        double x = X_sol[i](0);
-        double y = X_sol[i](1);
-        double z = X_sol[i](2);
-        x_traj.push_back(x);
-        y_traj.push_back(y);
-        z_traj.push_back(z);
-
-        // Plot your arms, propellers, etc. in 3D
-        // For example, a simple 3D line:
-        plt::plot3(x_traj, y_traj, z_traj, {{"color", "black"}});
-
-        // Customize axes limits, labels, view, etc.
-        plt::xlabel("X [m]");
-        plt::ylabel("Y [m]");
-        // If set_zlabel doesn’t work, just rely on zlim
-        double plot_size = 3.0;
-        plt::xlim(-plot_size, plot_size);
-        plt::ylim(-plot_size, plot_size);
-        plt::zlim(0, 3);
-        plt::view_init(30, -60);
-        plt::grid(true);
-
-        // Optionally save each frame to file
-        std::string filename = "quadrotor_frame_" + std::to_string(i/5) + ".png";
-        plt::save(filename);
-
-        // 3) Update the same figure window (interactive mode only)
-        plt::draw();
-        plt::pause(0.02);
-    }
     return 0;
 }
 
 // To create a gif from the saved frames, use ImageMagick (for example):
-// convert -delay 5 ../results/tests/quadrotor_frame_*.png ../results/tests/quadrotor.gif
+// convert -delay 5 ../results/tests/quadrotor_frame_*.png ../results/tests/quadrotor_figure8.gif
