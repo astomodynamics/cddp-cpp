@@ -252,20 +252,23 @@ namespace cddp
 
                 if (!backward_pass_success)
                 {
-                    if (options_.debug) {
+                    if (options_.debug)
+                    {
                         std::cerr << "IPDDP: Backward pass failed" << std::endl;
                     }
 
                     // Increase regularization
                     increaseRegularization();
 
-                    if (isRegularizationLimitReached()) {
-                        if (options_.debug) {
+                    if (isRegularizationLimitReached())
+                    {
+                        if (options_.debug)
+                        {
                             std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
                         }
                         break; // Exit if regularization limit reached
                     }
-                        continue; // Continue if backward pass fails
+                    continue; // Continue if backward pass fails
                 }
             }
 
@@ -363,19 +366,26 @@ namespace cddp
 
                 // Decrease regularization
                 decreaseRegularization();
-            } else {
+            }
+            else
+            {
                 // Increase regularization
                 increaseRegularization();
 
-                if (isRegularizationLimitReached()) {
-                    if (options_.verbose) {
+                if (isRegularizationLimitReached())
+                {
+                    if (options_.debug)
+                    {
                         std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
                     }
+
+                    break;
                 }
             }
 
             // Print iteration information
-            if (options_.verbose) {
+            if (options_.verbose)
+            {
                 printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_);
             }
 
@@ -429,191 +439,265 @@ namespace cddp
         double rp_err = 0.0; // primal feasibility
         double rd_err = 0.0; // dual feasibility
 
-        // Backward Recursion
-        for (int t = horizon_ - 1; t >= 0; --t)
+        // If no constraints, use standard DDP recursion.
+        if (constraint_set_.empty())
         {
-            // Expand cost around (x[t], u[t])
-            const Eigen::VectorXd &x = X_[t];
-            const Eigen::VectorXd &u = U_[t];
-
-            // Continuous dynamics
-            const auto [Fx, Fu] = system_->getJacobians(x, u);
-
-            // Discretize
-            Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx;
-            Eigen::MatrixXd B = timestep_ * Fu;
-
-            // Gather dual and slack variables, and constraint values across all constraints
-            Eigen::VectorXd y = Eigen::VectorXd::Zero(total_dual_dim);
-            Eigen::VectorXd s = Eigen::VectorXd::Zero(total_dual_dim);
-            Eigen::VectorXd g = Eigen::VectorXd::Zero(total_dual_dim);
-            Eigen::MatrixXd Q_yu = Eigen::MatrixXd::Zero(total_dual_dim, control_dim);
-            Eigen::MatrixXd Q_yx = Eigen::MatrixXd::Zero(total_dual_dim, state_dim);
-
-            int offset = 0; // offset in [0..total_dual_dim)
-            for (auto &cKV : constraint_set_)
+            for (int t = horizon_ - 1; t >= 0; --t)
             {
-                const std::string &cname = cKV.first;
-                auto &constraint = cKV.second;
-                int dual_dim = constraint->getDualDim();
+                const Eigen::VectorXd &x = X_[t];
+                const Eigen::VectorXd &u = U_[t];
+                const auto [Fx, Fu] = system_->getJacobians(x, u);
+                Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx;
+                Eigen::MatrixXd B = timestep_ * Fu;
 
-                // Slack, dual, and constraint at time t and constraint cname
-                const Eigen::VectorXd &y_vec = Y_[cname][t]; // dual variable
-                const Eigen::VectorXd &s_vec = S_[cname][t]; // slack variable
-                const Eigen::VectorXd &g_vec = G_[cname][t]; // constraint value
-                const Eigen::MatrixXd &g_x = constraint->getStateJacobian(x, u);
-                const Eigen::MatrixXd &g_u = constraint->getControlJacobian(x, u);
+                double l = objective_->running_cost(x, u, t);
+                auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
+                auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
 
-                // Insert into big arrays
-                y.segment(offset, dual_dim) = y_vec;
-                s.segment(offset, dual_dim) = s_vec;
-                g.segment(offset, dual_dim) = g_vec;
-                Q_yx.block(offset, 0, dual_dim, state_dim) = g_x;
-                Q_yu.block(offset, 0, dual_dim, control_dim) = g_u;
+                Eigen::VectorXd Q_x = l_x + A.transpose() * V_x;
+                Eigen::VectorXd Q_u = l_u + B.transpose() * V_x;
+                Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
+                Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
+                Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
 
-                offset += dual_dim;
-            }
+                // Regularization
+                Eigen::MatrixXd Q_ux_reg = Q_ux;
+                Eigen::MatrixXd Q_uu_reg = Q_uu;
 
-            // Cost & derivatives
-            double l = objective_->running_cost(x, u, t);
-            auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
-            auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
-
-            // Q expansions from cost
-            Eigen::VectorXd Q_x = l_x + Q_yx.transpose() * y + A.transpose() * V_x;
-            Eigen::VectorXd Q_u = l_u + Q_yu.transpose() * y + B.transpose() * V_x;
-            Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
-            Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
-            Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
-
-            Eigen::MatrixXd Y = y.asDiagonal();  // Diagonal matrix with y as diagonal
-            Eigen::MatrixXd S = s.asDiagonal();  // Diagonal matrix with s as diagonal
-            Eigen::MatrixXd G = g.asDiagonal();  // Diagonal matrix with g as diagonal
-            Eigen::MatrixXd S_inv = S.inverse(); // Inverse of S
-            Eigen::MatrixXd YSinv = Y * S_inv;   // Y * S_inv
-
-            // Residuals:
-            // r_p = g + s (primal feasibility)
-            Eigen::VectorXd r_p = g + s;
-
-            // r_d   = y.*s - mu (dual feasibility)
-            Eigen::VectorXd r_d = y.cwiseProduct(s).array() - mu_;
-
-            // rhat = y .* r_p - r_d = y.*(g + s) - (y.*s - mu)
-            Eigen::VectorXd rhat = y.cwiseProduct(r_p) - r_d;
-
-            // Regularization
-            Eigen::MatrixXd Q_ux_reg = Q_ux;
-            Eigen::MatrixXd Q_uu_reg = Q_uu;
-
-            if (options_.regularization_type == "state" || 
-                options_.regularization_type == "both") {
-                Q_ux_reg = l_ux + B.transpose() * (
-                           V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
-                Q_uu_reg = l_uu + B.transpose() * (
-                           V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * B;
-            } else {
-                Q_ux_reg = Q_ux;
-                Q_uu_reg = Q_uu;
-            } 
-
-            if (options_.regularization_type == "control" ||
-                options_.regularization_type == "both")
-            {
-                Q_uu_reg.diagonal().array() += regularization_control_;
-            }
-            Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
-
-            Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg + Q_yu.transpose() * YSinv * Q_yu);
-            if (llt.info() != Eigen::Success)
-            {
-                if (options_.debug)
+                if (options_.regularization_type == "state" ||
+                    options_.regularization_type == "both")
                 {
-                    std::cerr << "CDDP: Backward pass failed at time " << t << std::endl;
+                    Q_ux_reg = l_ux + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
+                    Q_uu_reg = l_uu + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * B;
                 }
-                return false;
-            }
+                else
+                {
+                    Q_ux_reg = Q_ux;
+                    Q_uu_reg = Q_uu;
+                }
 
-            Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
-            bigRHS.col(0) = Q_u + Q_yu.transpose() * S_inv * rhat;
-            Eigen::MatrixXd M = //(control_dim, state_dim)
-                Q_ux + Q_yu.transpose() * YSinv * Q_yx;
-            for (int col = 0; col < state_dim; col++)
-            {
-                bigRHS.col(col + 1) = M.col(col);
-            }
+                if (options_.regularization_type == "control" ||
+                    options_.regularization_type == "both")
+                {
+                    Q_uu_reg.diagonal().array() += regularization_control_;
+                }
+                Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
-            Eigen::MatrixXd R = llt.matrixU();
-            Eigen::MatrixXd z = R.triangularView<Eigen::Upper>().solve(bigRHS);
-            Eigen::MatrixXd kK = -R.transpose().triangularView<Eigen::Lower>().solve(z);
+                Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg);
+                if (llt.info() != Eigen::Success)
+                {
+                    return false;
+                }
+                Eigen::VectorXd k_u = -llt.solve(Q_u);
+                Eigen::MatrixXd K_u = -llt.solve(Q_ux);
+                k_u_[t] = k_u;
+                K_u_[t] = K_u;
 
-            // parse out feedforward (ku) and feedback (Ku)
-            Eigen::VectorXd k_u = kK.col(0); // dimension [control_dim]
-            Eigen::MatrixXd K_u(control_dim, state_dim);
-            for (int col = 0; col < state_dim; col++)
-            {
-                K_u.col(col) = kK.col(col + 1);
-            }
+                // Update value function
+                V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
+                V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
 
-            // Save gains
-            k_u_[t] = k_u;
-            K_u_[t] = K_u;
+                // Accumulate cost improvement (if desired)
+                dV_[0] += k_u.dot(Q_u);
+                dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
 
-            // Compute gains for constraints
-            Eigen::VectorXd k_y = S_inv * (rhat + Y * Q_yu * k_u);
-            Eigen::MatrixXd K_y = YSinv * (Q_yx + Q_yu * K_u);
-            Eigen::VectorXd k_s = -r_p - Q_yu * k_u;
-            Eigen::MatrixXd K_s = -Q_yx - Q_yu * K_u;
+                // Error tracking
+                Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
+            } // end for t
 
-            offset = 0;
-            for (auto &cKV : constraint_set_)
-            {
-                const std::string &cname = cKV.first;
-                auto &constraint = cKV.second;
-                int dual_dim = constraint->getDualDim();
-
-                // Now store gains
-                k_y_[cname][t] = k_y.segment(offset, dual_dim);
-                K_y_[cname][t] = K_y.block(offset, 0, dual_dim, state_dim);
-                k_s_[cname][t] = k_s.segment(offset, dual_dim);
-                K_s_[cname][t] = K_s.block(offset, 0, dual_dim, state_dim);
-
-                offset += dual_dim;
-            }
-
-            // Update Q expansions
-            Q_u += Q_yu.transpose() * S_inv * rhat;
-            Q_x += Q_yx.transpose() * S_inv * rhat;
-            Q_xx += Q_yx.transpose() * YSinv * Q_yx;
-            Q_ux += Q_yx.transpose() * YSinv * Q_yu;
-            Q_uu += Q_yu.transpose() * YSinv * Q_yu;
-
-            // Update cost improvement
-            dV_[0] += k_u.dot(Q_u);
-            dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
-
-            // Update value function
-            V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
-            V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
-
-            // Error tracking
-            Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
-            rp_err = std::max(rp_err, r_p.lpNorm<Eigen::Infinity>());
-            rd_err = std::max(rd_err, r_d.lpNorm<Eigen::Infinity>());
-        } // end for t
-
-        // Compute optimality gap and print
-        optimality_gap_ = std::max(Qu_err, std::max(rp_err, rd_err));
-
-        if (options_.debug)
-        {
-            std::cout << "[IPDDP Backward Pass]\n"
-                      << "    Qu_err:  " << Qu_err << "\n"
-                      << "    rp_err:  " << rp_err << "\n"
-                      << "    rd_err:  " << rd_err << "\n"
-                      << "    dV:      " << dV_.transpose() << std::endl;
+            optimality_gap_ = Qu_err;
+            return true;
         }
-        return true;
+        else
+        {
+            // Backward Recursion
+            for (int t = horizon_ - 1; t >= 0; --t)
+            {
+                // Expand cost around (x[t], u[t])
+                const Eigen::VectorXd &x = X_[t];
+                const Eigen::VectorXd &u = U_[t];
+
+                // Continuous dynamics
+                const auto [Fx, Fu] = system_->getJacobians(x, u);
+
+                // Discretize
+                Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx;
+                Eigen::MatrixXd B = timestep_ * Fu;
+
+                // Gather dual and slack variables, and constraint values across all constraints
+                Eigen::VectorXd y = Eigen::VectorXd::Zero(total_dual_dim);
+                Eigen::VectorXd s = Eigen::VectorXd::Zero(total_dual_dim);
+                Eigen::VectorXd g = Eigen::VectorXd::Zero(total_dual_dim);
+                Eigen::MatrixXd Q_yu = Eigen::MatrixXd::Zero(total_dual_dim, control_dim);
+                Eigen::MatrixXd Q_yx = Eigen::MatrixXd::Zero(total_dual_dim, state_dim);
+
+                int offset = 0; // offset in [0..total_dual_dim)
+                for (auto &cKV : constraint_set_)
+                {
+                    const std::string &cname = cKV.first;
+                    auto &constraint = cKV.second;
+                    int dual_dim = constraint->getDualDim();
+
+                    // Slack, dual, and constraint at time t and constraint cname
+                    const Eigen::VectorXd &y_vec = Y_[cname][t]; // dual variable
+                    const Eigen::VectorXd &s_vec = S_[cname][t]; // slack variable
+                    const Eigen::VectorXd &g_vec = G_[cname][t]; // constraint value
+                    const Eigen::MatrixXd &g_x = constraint->getStateJacobian(x, u);
+                    const Eigen::MatrixXd &g_u = constraint->getControlJacobian(x, u);
+
+                    // Insert into big arrays
+                    y.segment(offset, dual_dim) = y_vec;
+                    s.segment(offset, dual_dim) = s_vec;
+                    g.segment(offset, dual_dim) = g_vec;
+                    Q_yx.block(offset, 0, dual_dim, state_dim) = g_x;
+                    Q_yu.block(offset, 0, dual_dim, control_dim) = g_u;
+
+                    offset += dual_dim;
+                }
+
+                // Cost & derivatives
+                double l = objective_->running_cost(x, u, t);
+                auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
+                auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
+
+                // Q expansions from cost
+                Eigen::VectorXd Q_x = l_x + Q_yx.transpose() * y + A.transpose() * V_x;
+                Eigen::VectorXd Q_u = l_u + Q_yu.transpose() * y + B.transpose() * V_x;
+                Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
+                Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
+                Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
+
+                Eigen::MatrixXd Y = y.asDiagonal();  // Diagonal matrix with y as diagonal
+                Eigen::MatrixXd S = s.asDiagonal();  // Diagonal matrix with s as diagonal
+                Eigen::MatrixXd G = g.asDiagonal();  // Diagonal matrix with g as diagonal
+                Eigen::MatrixXd S_inv = S.inverse(); // Inverse of S
+                Eigen::MatrixXd YSinv = Y * S_inv;   // Y * S_inv
+
+                // Residuals:
+                // r_p = g + s (primal feasibility)
+                Eigen::VectorXd r_p = g + s;
+
+                // r_d   = y.*s - mu (dual feasibility)
+                Eigen::VectorXd r_d = y.cwiseProduct(s).array() - mu_;
+
+                // rhat = y .* r_p - r_d = y.*(g + s) - (y.*s - mu)
+                Eigen::VectorXd rhat = y.cwiseProduct(r_p) - r_d;
+
+                // Regularization
+                Eigen::MatrixXd Q_ux_reg = Q_ux;
+                Eigen::MatrixXd Q_uu_reg = Q_uu;
+
+                if (options_.regularization_type == "state" ||
+                    options_.regularization_type == "both")
+                {
+                    Q_ux_reg = l_ux + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * A;
+                    Q_uu_reg = l_uu + B.transpose() * (V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim)) * B;
+                }
+                else
+                {
+                    Q_ux_reg = Q_ux;
+                    Q_uu_reg = Q_uu;
+                }
+
+                if (options_.regularization_type == "control" ||
+                    options_.regularization_type == "both")
+                {
+                    Q_uu_reg.diagonal().array() += regularization_control_;
+                }
+                Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
+
+                Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg + Q_yu.transpose() * YSinv * Q_yu);
+                if (llt.info() != Eigen::Success)
+                {
+                    if (options_.debug)
+                    {
+                        std::cerr << "CDDP: Backward pass failed at time " << t << std::endl;
+                    }
+                    return false;
+                }
+
+                Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
+                bigRHS.col(0) = Q_u + Q_yu.transpose() * S_inv * rhat;
+                Eigen::MatrixXd M = //(control_dim, state_dim)
+                    Q_ux + Q_yu.transpose() * YSinv * Q_yx;
+                for (int col = 0; col < state_dim; col++)
+                {
+                    bigRHS.col(col + 1) = M.col(col);
+                }
+
+                Eigen::MatrixXd R = llt.matrixU();
+                Eigen::MatrixXd z = R.triangularView<Eigen::Upper>().solve(bigRHS);
+                Eigen::MatrixXd kK = -R.transpose().triangularView<Eigen::Lower>().solve(z);
+
+                // parse out feedforward (ku) and feedback (Ku)
+                Eigen::VectorXd k_u = kK.col(0); // dimension [control_dim]
+                Eigen::MatrixXd K_u(control_dim, state_dim);
+                for (int col = 0; col < state_dim; col++)
+                {
+                    K_u.col(col) = kK.col(col + 1);
+                }
+
+                // Save gains
+                k_u_[t] = k_u;
+                K_u_[t] = K_u;
+
+                // Compute gains for constraints
+                Eigen::VectorXd k_y = S_inv * (rhat + Y * Q_yu * k_u);
+                Eigen::MatrixXd K_y = YSinv * (Q_yx + Q_yu * K_u);
+                Eigen::VectorXd k_s = -r_p - Q_yu * k_u;
+                Eigen::MatrixXd K_s = -Q_yx - Q_yu * K_u;
+
+                offset = 0;
+                for (auto &cKV : constraint_set_)
+                {
+                    const std::string &cname = cKV.first;
+                    auto &constraint = cKV.second;
+                    int dual_dim = constraint->getDualDim();
+
+                    // Now store gains
+                    k_y_[cname][t] = k_y.segment(offset, dual_dim);
+                    K_y_[cname][t] = K_y.block(offset, 0, dual_dim, state_dim);
+                    k_s_[cname][t] = k_s.segment(offset, dual_dim);
+                    K_s_[cname][t] = K_s.block(offset, 0, dual_dim, state_dim);
+
+                    offset += dual_dim;
+                }
+
+                // Update Q expansions
+                Q_u += Q_yu.transpose() * S_inv * rhat;
+                Q_x += Q_yx.transpose() * S_inv * rhat;
+                Q_xx += Q_yx.transpose() * YSinv * Q_yx;
+                Q_ux += Q_yx.transpose() * YSinv * Q_yu;
+                Q_uu += Q_yu.transpose() * YSinv * Q_yu;
+
+                // Update cost improvement
+                dV_[0] += k_u.dot(Q_u);
+                dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
+
+                // Update value function
+                V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
+                V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
+
+                // Error tracking
+                Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
+                rp_err = std::max(rp_err, r_p.lpNorm<Eigen::Infinity>());
+                rd_err = std::max(rd_err, r_d.lpNorm<Eigen::Infinity>());
+            } // end for t
+
+            // Compute optimality gap and print
+            optimality_gap_ = std::max(Qu_err, std::max(rp_err, rd_err));
+
+            if (options_.debug)
+            {
+                std::cout << "[IPDDP Backward Pass]\n"
+                          << "    Qu_err:  " << Qu_err << "\n"
+                          << "    rp_err:  " << rp_err << "\n"
+                          << "    rd_err:  " << rd_err << "\n"
+                          << "    dV:      " << dV_.transpose() << std::endl;
+            }
+            return true;
+        }
+        return false;
     } // end solveIPDDPBackwardPass
 
     ForwardPassResult CDDP::solveIPDDPForwardPass(double alpha)
@@ -657,140 +741,173 @@ namespace cddp
         FilterPoint current{L_, constraint_violation_};
 
         // --- Forward pass loop ---
-        for (int t = 0; t < horizon_; ++t)
+        if (constraint_set_.empty())
         {
-            // Dual and slack update.
-            // For each constraint, update the dual and slack variables.
-            //   y_new = y_old + alpha * k_y + K_y*(x_new - x_old)
-            //   s_new = s_old + alpha * k_s + K_s*(x_new - x_old)
-            for (auto &ckv : constraint_set_)
+            // Unconstrained forward pass
+            for (int t = 0; t < horizon_; ++t)
             {
-                const std::string &cname = ckv.first;
-                int dual_dim = ckv.second->getDualDim();
-
-                // Retrieve old dual/slack from previous solution.
-                const Eigen::VectorXd &y_old = Y_[cname][t];
-                const Eigen::VectorXd &s_old = S_[cname][t];
-
-                // Compute updated dual/slack variables.
-                Eigen::VectorXd y_new = y_old +
-                                        alpha * k_y_[cname][t] + K_y_[cname][t] * (X_new[t] - X_[t]);
-
-                Eigen::VectorXd s_new = s_old +
-                                        alpha * k_s_[cname][t] + K_s_[cname][t] * (X_new[t] - X_[t]);
-
-                // Enforce minimal feasibility:
-                Eigen::VectorXd y_min = (1.0 - tau) * y_old;
-                Eigen::VectorXd s_min = (1.0 - tau) * s_old;
-                for (int i = 0; i < dual_dim; i++)
-                {
-                    if (y_new[i] < y_min[i] || s_new[i] < s_min[i])
-                    {
-                        // Early exit: feasibility condition violated.
-                        return result;
-                    }
-                }
-                // Store the updated dual and slack.
-                Y_new[cname][t] = y_new;
-                S_new[cname][t] = s_new;
+                // Update control using the unconstrained gains.
+                U_new[t] = U_[t] + alpha * k_u_[t] + K_u_[t] * (X_new[t] - X_[t]);
+                // Propagate dynamics.
+                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                // Accumulate stage cost.
+                cost_new += objective_->running_cost(X_new[t], U_new[t], t);
             }
-
-            // Update control.
-            // The new control is computed as:
-            //   u_new = u_old + alpha * k_u + K_u*(x_new - x_old)
-            const Eigen::VectorXd &u_old = U_[t];
-            U_new[t] = u_old + alpha * k_u_[t] + K_u_[t] * (X_new[t] - X_[t]);
-
-            // Propagate the dynamics:
-            X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
-        } // end for t
-
-        // Compute the cost metrics.
-        for (int t = 0; t < horizon_; ++t)
-        {
-            // Compute the stage cost.
-            double stage_cost = objective_->running_cost(X_new[t], U_new[t], t);
-            cost_new += stage_cost;
-
-            // For each constraint, evaluate and store the constraint value.
-            for (const auto &cKV : constraint_set_)
-            {
-                const std::string &cname = cKV.first;
-                // Evaluate constraint: g = constraint->evaluate(x, u)
-                Eigen::VectorXd g_vec = cKV.second->evaluate(X_new[t], U_new[t]); // dimension = dual_dim
-
-                // Store the constraint value.
-                G_new[cname][t] = g_vec - cKV.second->getUpperBound();
-                // Compute the slack and log-barrier term.
-                const Eigen::VectorXd &s_vec = S_new[cname][t];
-                log_cost_new -= mu_ * s_vec.array().log().sum();
-
-                // Compute the residual for primal feasibility.
-                Eigen::VectorXd r_p = G_new[cname][t] + S_new[cname][t];
-                rp_err += r_p.lpNorm<1>();
-            }
-        }
-
-        // Add terminal cost.
-        cost_new += objective_->terminal_cost(X_new.back());
-        log_cost_new += cost_new;
-
-        // Compute the primal residual.
-        rp_err = std::max(rp_err, options_.cost_tolerance);
-
-        // Build a candidate filter point from the computed cost metrics.
-        FilterPoint candidate{log_cost_new, rp_err};
-
-        // Check if candidate is dominated by any existing filter point
-        bool candidateDominated = false;
-        for (const auto &fp : filter_)
-        {
-            // If the candidate is dominated by an existing filter point, early exit.
-            if (candidate.log_cost >= fp.log_cost && candidate.violation >= fp.violation)
-            {
-                candidateDominated = true;
-                return result;
-            }
-        }
-
-        if (!candidateDominated)
-        {
-            // Remove any filter points that are dominated by the candidate.
-            for (auto it = filter_.begin(); it != filter_.end();)
-            {
-                if (candidate.log_cost <= it->log_cost && candidate.violation <= it->violation)
-                {
-                    // Candidate dominates this point, so erase it.
-                    it = filter_.erase(it);
-                }
-                else
-                {
-                    ++it;
-                }
-            }
-
-            // Append the candidate to the filter set.
-            filter_.push_back(candidate);
-
-            // Update the filter with the candidate point.
+            cost_new += objective_->terminal_cost(X_new.back());
+            double dJ = J_ - cost_new;
             double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
-            double reduction_ratio = expected > 0.0
-                                         ? (J_ - cost_new) / expected
-                                         : std::copysign(1.0, J_ - cost_new);
+            double reduction_ratio = expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
 
-            // Update the result with the new trajectories and metrics.
-            result.success = true;
+            result.success = reduction_ratio > options_.minimum_reduction_ratio;
             result.state_sequence = X_new;
             result.control_sequence = U_new;
-            result.dual_sequence = Y_new;
-            result.slack_sequence = S_new;
-            result.constraint_sequence = G_new;
             result.cost = cost_new;
-            result.lagrangian = log_cost_new;
-            result.constraint_violation = rp_err;
+            result.lagrangian = cost_new;
+            result.constraint_violation = 0.0;
+            return result;
         }
+        else
+        {
+            // Constrained forward pass
+            for (int t = 0; t < horizon_; ++t)
+            {
+                // Dual and slack update.
+                // For each constraint, update the dual and slack variables.
+                //   y_new = y_old + alpha * k_y + K_y*(x_new - x_old)
+                //   s_new = s_old + alpha * k_s + K_s*(x_new - x_old)
+                for (auto &ckv : constraint_set_)
+                {
+                    const std::string &cname = ckv.first;
+                    int dual_dim = ckv.second->getDualDim();
 
-        return result;
+                    // Retrieve old dual/slack from previous solution.
+                    const Eigen::VectorXd &y_old = Y_[cname][t];
+                    const Eigen::VectorXd &s_old = S_[cname][t];
+
+                    // Compute updated dual/slack variables.
+                    Eigen::VectorXd y_new = y_old +
+                                            alpha * k_y_[cname][t] + K_y_[cname][t] * (X_new[t] - X_[t]);
+
+                    Eigen::VectorXd s_new = s_old +
+                                            alpha * k_s_[cname][t] + K_s_[cname][t] * (X_new[t] - X_[t]);
+
+                    // Enforce minimal feasibility:
+                    Eigen::VectorXd y_min = (1.0 - tau) * y_old;
+                    Eigen::VectorXd s_min = (1.0 - tau) * s_old;
+                    for (int i = 0; i < dual_dim; i++)
+                    {
+                        if (y_new[i] < y_min[i] || s_new[i] < s_min[i])
+                        {
+                            // Early exit: feasibility condition violated.
+                            return result;
+                        }
+                    }
+                    // Store the updated dual and slack.
+                    Y_new[cname][t] = y_new;
+                    S_new[cname][t] = s_new;
+                }
+
+                // Update control.
+                // The new control is computed as:
+                //   u_new = u_old + alpha * k_u + K_u*(x_new - x_old)
+                const Eigen::VectorXd &u_old = U_[t];
+                U_new[t] = u_old + alpha * k_u_[t] + K_u_[t] * (X_new[t] - X_[t]);
+
+                // Propagate the dynamics:
+                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+            } // end for t
+
+            // Compute the cost metrics.
+            for (int t = 0; t < horizon_; ++t)
+            {
+                // Compute the stage cost.
+                double stage_cost = objective_->running_cost(X_new[t], U_new[t], t);
+                cost_new += stage_cost;
+
+                // For each constraint, evaluate and store the constraint value.
+                for (const auto &cKV : constraint_set_)
+                {
+                    const std::string &cname = cKV.first;
+                    // Evaluate constraint: g = constraint->evaluate(x, u)
+                    Eigen::VectorXd g_vec = cKV.second->evaluate(X_new[t], U_new[t]); // dimension = dual_dim
+
+                    // Store the constraint value.
+                    G_new[cname][t] = g_vec - cKV.second->getUpperBound();
+                    // Compute the slack and log-barrier term.
+                    const Eigen::VectorXd &s_vec = S_new[cname][t];
+                    log_cost_new -= mu_ * s_vec.array().log().sum();
+
+                    // Compute the residual for primal feasibility.
+                    Eigen::VectorXd r_p = G_new[cname][t] + S_new[cname][t];
+                    rp_err += r_p.lpNorm<1>();
+                }
+            }
+
+            // Add terminal cost.
+            cost_new += objective_->terminal_cost(X_new.back());
+            log_cost_new += cost_new;
+
+            std::cout << "rp_err: " << rp_err << std::endl;
+            std::cout << "cost_new: " << cost_new << std::endl;
+            std::cout << "log_cost_new: " << log_cost_new << std::endl;
+
+            // Compute the primal residual.
+            rp_err = std::max(rp_err, options_.cost_tolerance);
+
+            // Build a candidate filter point from the computed cost metrics.
+            FilterPoint candidate{log_cost_new, rp_err};
+
+            // Check if candidate is dominated by any existing filter point
+            bool candidateDominated = false;
+            for (const auto &fp : filter_)
+            {
+                // If the candidate is dominated by an existing filter point, early exit.
+                if (candidate.log_cost >= fp.log_cost && candidate.violation >= fp.violation)
+                {
+                    candidateDominated = true;
+                    return result;
+                }
+            }
+
+            if (!candidateDominated)
+            {
+                // Remove any filter points that are dominated by the candidate.
+                for (auto it = filter_.begin(); it != filter_.end();)
+                {
+                    if (candidate.log_cost <= it->log_cost && candidate.violation <= it->violation)
+                    {
+                        // Candidate dominates this point, so erase it.
+                        it = filter_.erase(it);
+                    }
+                    else
+                    {
+                        ++it;
+                    }
+                }
+
+                // Append the candidate to the filter set.
+                filter_.push_back(candidate);
+
+                // Update the filter with the candidate point.
+                double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
+                double reduction_ratio = expected > 0.0
+                                             ? (J_ - cost_new) / expected
+                                             : std::copysign(1.0, J_ - cost_new);
+
+                // Update the result with the new trajectories and metrics.
+                result.success = true;
+                result.state_sequence = X_new;
+                result.control_sequence = U_new;
+                result.dual_sequence = Y_new;
+                result.slack_sequence = S_new;
+                result.constraint_sequence = G_new;
+                result.cost = cost_new;
+                result.lagrangian = log_cost_new;
+                result.constraint_violation = rp_err;
+            }
+
+            return result;
+        }
     } // end solveIPDDPForwardPass
 
     void CDDP::resetIPDDPFilter()
@@ -873,7 +990,6 @@ namespace cddp
     {
         ipddp_regularization_counter_ = 0;
         return;
-
     }
 
 } // namespace cddp
