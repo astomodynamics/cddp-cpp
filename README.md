@@ -83,7 +83,7 @@ Car model with limited velocity and steering control:
 ./examples/cddp_car // after building
 ```
 
-<img src="results/tests/car_motion.gif" width="300" alt="Car Model CDDP">
+<img src="results/tests/car_parking.gif" width="300" alt="Car Model CDDP">
 
 ### Pendulum
 
