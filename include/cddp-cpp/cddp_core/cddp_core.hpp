@@ -56,7 +56,7 @@ struct CDDPOptions {
     double mu_reduction_ratio = 0.1;                         // Factor for barrier coefficient
 
     // log-barrier method
-    double barrier_coeff = 1e-2;                    // Coefficient for log-barrier method
+    double barrier_coeff = 1e-1;                    // Coefficient for log-barrier method
     double barrier_factor = 0.10;                   // Factor for log-barrier method
     double barrier_tolerance = 1e-8;                // Tolerance for log-barrier method
     double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
