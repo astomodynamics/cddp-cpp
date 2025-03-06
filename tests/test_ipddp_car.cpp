@@ -65,7 +65,7 @@ private:
 } // namespace cddp
 
 
-TEST(IPDDPCarTest, PlotAndSaveGif) {
+TEST(IPDDPCarTest, CarParking) {
     // Problem parameters
     const int state_dim = 4;     // [x, y, theta, v]
     const int control_dim = 2;   // [wheel_angle, acceleration]
@@ -102,14 +102,16 @@ TEST(IPDDPCarTest, PlotAndSaveGif) {
     // Set solver options
     cddp::CDDPOptions options;
     options.max_iterations = 600;
-    options.verbose = false;       // Disable verbose output for the test
-    options.cost_tolerance = 1e-7;
+    options.verbose = true;       // Disable verbose output for the test
+    options.cost_tolerance = 1e-6;
     options.grad_tolerance = 1e-4;
-    options.regularization_type = "none";
+    options.regularization_type = "control";
+    options.regularization_state = 1e-8;
+    options.regularization_control = 1e-2;
     options.debug = false;
     options.use_parallel = false;
     options.num_threads = 1;
-    options.barrier_coeff = 1e-1;
+    options.barrier_coeff = 1e-0;
     cddp_solver.setOptions(options);
 
     // Initialize the trajectory with zero controls
