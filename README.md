@@ -128,12 +128,28 @@ Manipulator with joint torque control:
 
 ## Installation
 ### Dependencies
+* [CMake](https://cmake.org/) (Build System)
+```bash
+sudo apt-get install cmake # For Ubuntu
+brew install cmake # For macOS
+```
+
 * [Eigen](https://formulae.brew.sh/formula/eigen) (Linear Algebra Library in CPP)
-    
 ```bash
 sudo apt-get install libeigen3-dev # For Ubuntu
 brew install eigen # For macOS
 ```
+
+* [Matplotlib](https://matplotlib.org/) (Plotting Library in Python)
+```bash
+pip install matplotlib
+```
+
+* [numpy](https://numpy.org/) (Numerical Library in Python)
+```bash
+pip install numpy
+```
+
 Although the library automatically finds and installs the following dependencies via [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html), if you do not have ones, here is how you can install on your own.
 
 * [OSQP](https://osqp.org/) (QP solver) and [osqp-cpp](https://github.com/google/osqp-cpp) (C++ Wrapper for OSQP)
