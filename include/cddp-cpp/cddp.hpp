@@ -50,8 +50,6 @@
 #include "dynamics_model/lti_system.hpp"
 #include "dynamics_model/dreyfus_rocket.hpp"
 
-#include "matplotlibcpp.hpp"
-#include "animation.hpp"
-
+#include "matplot/matplot.h"
 
 #endif // CDDP_HPP

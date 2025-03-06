@@ -25,10 +25,6 @@
 #include "gtest/gtest.h"
 
 #include "dynamics_model/spacecraft_nonlinear.hpp"
-#include "cddp-cpp/matplotlibcpp.hpp"
-
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
 using namespace cddp;
 
 TEST(SpacecraftNonlinearTest, DiscreteDynamics) {
@@ -78,79 +74,6 @@ TEST(SpacecraftNonlinearTest, DiscreteDynamics) {
         // Compute the next state
         state = spacecraft.getDiscreteDynamics(state, control);
     }
-
-    // Basic assertions
-    // ASSERT_EQ(spacecraft.getStateDim(), 10);
-    // ASSERT_EQ(spacecraft.getControlDim(), 3);
-    // ASSERT_DOUBLE_EQ(spacecraft.getTimestep(), 1.0);
-    // ASSERT_EQ(spacecraft.getIntegrationType(), "rk4");
-
-    // // Create directory if it doesn't exist
-    // const std::string plotDirectory = "../results/tests";
-    // if (!fs::exists(plotDirectory)) {
-    //     fs::create_directory(plotDirectory);
-    // }
-
-    // // Create a single figure with 2x2 subplots
-    // plt::figure_size(1200, 800);
-
-    // // XY plane
-    // plt::subplot(2, 2, 1);
-    // std::map<std::string, std::string> blue_style = {{"color", "blue"}};
-    // plt::plot(px_data, py_data, blue_style);
-    // plt::title("X-Y Plane");
-    // plt::xlabel("X [m]");
-    // plt::ylabel("Y [m]");
-    // plt::grid(true);
-
-    // // Find axis limits for consistent scaling
-    // double max_range = 0.125;
-    // plt::xlim(-max_range, max_range);
-    // plt::ylim(-max_range, max_range);
-
-    // // XZ plane
-    // plt::subplot(2, 2, 2);
-    // std::map<std::string, std::string> red_style = {{"color", "red"}};
-    // plt::plot(px_data, pz_data, red_style);
-    // plt::title("X-Z Plane");
-    // plt::xlabel("X [m]");
-    // plt::ylabel("Z [m]");
-    // plt::grid(true);
-    // plt::xlim(-max_range, max_range);
-    // plt::ylim(-max_range, max_range);
-
-    // // YZ plane
-    // plt::subplot(2, 2, 3);
-    // std::map<std::string, std::string> green_style = {{"color", "green"}};
-    // plt::plot(py_data, pz_data, green_style);
-    // plt::title("Y-Z Plane");
-    // plt::xlabel("Y [m]");
-    // plt::ylabel("Z [m]");
-    // plt::grid(true);
-    // plt::xlim(-max_range, max_range);
-    // plt::ylim(-max_range, max_range);
-
-    // 3D plot
-    // plt::subplot(2, 2, 4);
-    // std::map<std::string, std::string> black_style = {{"color", "black"}};
-    // plt::plot3(px_data, py_data, pz_data, black_style);
-    // plt::title("3D Trajectory");
-    // plt::xlabel("X [m]");
-    // plt::ylabel("Y [m]");
-    // plt::set_zlabel("Z [m]");
-    // plt::grid(true);
-
-    // // Set consistent 3D axis limits
-    // plt::xlim(-max_range, max_range);
-    // plt::ylim(-max_range, max_range);
-    // plt::zlim(-max_range, max_range);
-
-    // Add view angle for 3D plot 
-    // plt::view_init(30, 45);
-
-    // plt::tight_layout();
-    // plt::save(plotDirectory + "/spacecraft_nonlinear_projections.png");
-    // plt::close();
 }
 
 int main(int argc, char **argv) {

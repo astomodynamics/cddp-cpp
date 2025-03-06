@@ -47,16 +47,8 @@ option(CDDP_CPP_TORCH "Whether to use LibTorch" OFF)
 option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" OFF)
 set(LIBTORCH_DIR $ENV{HOME}/.local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
-# Python Configuration
-set(Python_EXECUTABLE /usr/bin/python3.10) # Or the path to your desired Python interpreter
-execute_process( # Find the NumPy include directory
-  COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
-  OUTPUT_VARIABLE NUMPY_INCLUDE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE 
-)
-
 # Find packages
 find_package(Eigen3 REQUIRED) 
-find_package(Python3 3.10 EXACT COMPONENTS Interpreter Development NumPy REQUIRED)
 
 if (CDDP_CPP_CASADI)
   # Assuming that CasADi is installed in /usr/local/include/casadi by:
@@ -67,7 +59,7 @@ if (CDDP_CPP_CASADI)
   # cd casadi
   # mkdir build
   # cd build
-  # cmake -DWITH_PYTHON=ON -DWITH_IPOPT=ON -DWITH_OPENMP=ON -DWITH_THREAD=ON ..
+  # cmake -DWITH_IPOPT=ON -DWITH_OPENMP=ON -DWITH_THREAD=ON ..
   # make
   # sudo make install
   # echo "export LD_LIBRARY_PATH=/home/<path_to_casadi>/casadi/build/lib:$LD_LIBRARY_PATH" >> ~/.bashrc && source ~/.bashrc
@@ -88,6 +80,16 @@ endif()
 
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
+
+# Matplotplusplus
+FetchContent_Declare(matplotplusplus
+  GIT_REPOSITORY https://github.com/alandefreitas/matplotplusplus
+  GIT_TAG origin/master) # or whatever tag you want
+FetchContent_GetProperties(matplotplusplus)
+if(NOT matplotplusplus_POPULATED)
+    FetchContent_Populate(matplotplusplus)
+    add_subdirectory(${matplotplusplus_SOURCE_DIR} ${matplotplusplus_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 
 # Googletest
 if (CDDP_CPP_BUILD_TESTS)
@@ -203,8 +205,6 @@ FetchContent_GetProperties(osqp-cpp)
 # Include directories
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${Python3_INCLUDE_DIRS}
-  ${NUMPY_INCLUDE_DIR}
 ) 
 
 # Add your library
@@ -251,9 +251,7 @@ add_library(${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME} 
   Eigen3::Eigen 
-  Python3::Python
-  Python3::Module
-  Python3::NumPy
+  matplot
   osqp-cpp
 ) 
 
@@ -316,7 +314,7 @@ if (CDDP_CPP_BUILD_TESTS)
 endif()
 
 # Build examples
-add_subdirectory(examples)
+# add_subdirectory(examples)
 
 # Cmake compile commmand:
 # $ mkdir build
@@ -324,3 +322,4 @@ add_subdirectory(examples)
 # $ cmake  -DCDDP_CPP_GUROBI=ON -DCDDP_CPP_BUILD_TESTS=ON -DGUROBI_ROOT=/home/tom/.local/lib/gurobi1103/linux64 -DCDDP_CPP_TORCH=ON -DCDDP_CPP_TORCH_GPU=ON -DLIBTORCH_DIR=/home/tom/.local/lib/libtorch ..
 # $ make -j4
 # $ make test
+

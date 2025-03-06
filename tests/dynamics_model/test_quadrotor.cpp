@@ -26,10 +26,6 @@
 #include "gtest/gtest.h"
 
 #include "dynamics_model/quadrotor.hpp"
-#include "cddp-cpp/matplotlibcpp.hpp"
-
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
 using namespace cddp;
 
 // Helper: Convert quaternion [qw, qx, qy, qz] to Euler angles (roll, pitch, yaw)

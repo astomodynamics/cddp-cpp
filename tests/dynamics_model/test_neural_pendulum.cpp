@@ -23,9 +23,6 @@
 #include "cddp.hpp" 
 #include "cddp_core/neural_dynamical_system.hpp"  
 
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
-
 using namespace cddp;
 
 class PendulumModel : public DynamicsModelInterface {

@@ -22,9 +22,6 @@
 #include "gtest/gtest.h"
 #include "cddp.hpp"
 
-namespace plt = matplotlibcpp;
-
-// Define the CarParkingObjective as in the car example.
 namespace cddp {
 
 class CarParkingObjective : public NonlinearObjective {
@@ -67,7 +64,7 @@ private:
 
 } // namespace cddp
 
-// Test case that solves the car parking problem, creates an animation, and saves the GIF.
+
 TEST(IPDDPCarTest, PlotAndSaveGif) {
     // Problem parameters
     const int state_dim = 4;     // [x, y, theta, v]
