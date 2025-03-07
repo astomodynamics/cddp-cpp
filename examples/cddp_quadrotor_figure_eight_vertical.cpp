@@ -367,7 +367,7 @@ int main()
 
     // Save
     f1->draw();
-    f1->save(plotDirectory + "/quadrotor_figure_eight_horizontal_states.png");
+    f1->save(plotDirectory + "/quadrotor_figure_eight_vertical_states.png");
 
     // 3D Trajectory
     auto f2 = figure();
@@ -387,7 +387,7 @@ int main()
     title(ax2, "3D Trajectory (Figure-8)");
     grid(ax2, true);
     f2->draw();
-    f2->save(plotDirectory + "/quadrotor_figure_eight_horizontal_3d.png");
+    f2->save(plotDirectory + "/quadrotor_figure_eight_vertical_3d.png");
 
     // Animation of the quadrotor frame
     auto f_anim = figure();
