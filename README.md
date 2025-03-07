@@ -130,6 +130,17 @@ Quadrotor with thrust control:
 
 <img src="results/tests/quadrotor_circle.gif" width="300" alt="Quadrotor CDDP">
 
+
+```bash
+./examples/cddp_quadrotor_figure_eight_horizontal // after building
+```
+<img src="results/tests/quadrotor_figure_eight_horizontal.gif" width="300" alt="Quadrotor CDDP">
+
+```bash
+./examples/cddp_quadrotor_figure_eight_vertical // after building
+```
+<img src="results/tests/quadrotor_figure_eight_vertical.gif" width="300" alt="Quadrotor CDDP">
+
 ### Manipulator
 
 Manipulator with joint torque control:
