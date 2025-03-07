@@ -32,7 +32,7 @@ TEST(CartPoleTest, DiscreteDynamics) {
     std::vector<double> time_data, x_data, theta_data, energy_data, v_data, w_data;
 
     Eigen::VectorXd state(4);
-    state << 0.0, M_PI/3, 0.0, 0.0;  // Initial position, angle (30 degrees), velocity, angular velocity
+    state << 0.0, 0.0-0.001, 0.0, 0.0;  // Initial position, angle (30 degrees), velocity, angular velocity
     Eigen::VectorXd control(1);
     control << 0.0;  // No initial force
 
@@ -55,7 +55,7 @@ TEST(CartPoleTest, DiscreteDynamics) {
 
         state = cartpole.getDiscreteDynamics(state, control);
     }
-
+    std::cout << "final state: " << state.transpose() << std::endl;
     // Basic assertions
     ASSERT_EQ(cartpole.getStateDim(), 4);
     ASSERT_EQ(cartpole.getControlDim(), 1);

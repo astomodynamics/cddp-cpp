@@ -111,6 +111,8 @@ Cartpole with cart control:
 ```
 
 <img src="results/tests/cartpole.gif" width="300" alt="Cartpole CDDP">
+<img src="results/tests/cartpole_results.png" width="300" alt="Cartpole CDDP">
+
 
 ### Quadrotor
 

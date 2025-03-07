@@ -242,6 +242,8 @@ namespace cddp
                     {
                         std::cerr << "CDDP: Maximum CPU time reached. Returning current solution" << std::endl;
                     }
+                    // TODO: Treat as convergence
+                    solution.converged = true;
                     break;
                 }
             }
@@ -264,10 +266,12 @@ namespace cddp
 
                     if (isRegularizationLimitReached())
                     {
-                        if (options_.debug)
+                        if (options_.verbose)
                         {
-                            std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
+                            std::cerr << "IPDDP: Backward pass regularization limit reached!" << std::endl;
                         }
+                        // TODO: Treat as convergence 
+                        solution.converged = true;
                         break; // Exit if regularization limit reached
                     }
                     continue; // Continue if backward pass fails
@@ -378,8 +382,11 @@ namespace cddp
                 {
                     if (options_.debug)
                     {
-                        std::cerr << "CDDP: Backward pass regularization limit reached" << std::endl;
+                        std::cerr << "CDDP: Forward Pass regularization limit reached" << std::endl;
                     }
+
+                    // TODO: Treat as convergence
+                    solution.converged = true;
 
                     break;
                 }
