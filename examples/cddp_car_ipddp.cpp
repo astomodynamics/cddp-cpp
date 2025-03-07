@@ -223,9 +223,6 @@ int main() {
     auto fig = figure(true);
     auto ax = fig->current_axes();
 
-    // Create a directory for frame images (Linux/Mac style; adjust if needed).
-    std::system("mkdir -p frames");
-
     Eigen::VectorXd empty_control = Eigen::VectorXd::Zero(2);
 
     // Create directory for saving plots
@@ -234,6 +231,9 @@ int main() {
     {
         fs::create_directory(plotDirectory);
     }
+
+    // Create a directory for frame images.
+    (void) std::system("mkdir -p frames");
 
     // Animation loop: update plot for each time step and save frame.
     for (size_t i = 0; i < X_sol.size(); ++i)

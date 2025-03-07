@@ -79,6 +79,9 @@ int main()
         fs::create_directory(plotDirectory);
     }
 
+    // Create a directory for frame images.
+    (void) std::system("mkdir -p frames");
+
     // Extract trajectory data
     std::vector<double> x_arr, y_arr, theta_arr, v_arr;
     for (const auto &x : X_sol)

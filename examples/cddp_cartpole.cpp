@@ -106,6 +106,9 @@ int main() {
         fs::create_directory(plotDirectory);
     }
 
+    // Create a directory for frame images.
+    (void) std::system("mkdir -p frames");
+
     // Extract solution data.
     std::vector<double> x_arr, x_dot_arr, theta_arr, theta_dot_arr, force_arr, time_arr, time_arr2;
     for (size_t i = 0; i < X_sol.size(); ++i) {
