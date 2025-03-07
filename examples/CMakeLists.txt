@@ -25,9 +25,6 @@ target_link_libraries(cddp_car_ipddp cddp)
 add_executable(cddp_cartpole cddp_cartpole.cpp)
 target_link_libraries(cddp_cartpole cddp)
 
-# add_executable(cddp_dubins_car cddp_dubins_car.cpp)
-# target_link_libraries(cddp_dubins_car cddp)
-
 # add_executable(cddp_unicycle cddp_unicycle.cpp)
 # target_link_libraries(cddp_unicycle cddp)
 
