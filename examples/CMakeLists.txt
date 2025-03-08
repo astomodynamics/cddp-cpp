@@ -49,8 +49,8 @@ target_link_libraries(cddp_cartpole cddp)
 add_executable(cddp_quadrotor_point cddp_quadrotor_point.cpp)
 target_link_libraries(cddp_quadrotor_point cddp)
 
-# add_executable(cddp_quadrotor_circle cddp_quadrotor_circle.cpp)
-# target_link_libraries(cddp_quadrotor_circle cddp)
+add_executable(cddp_quadrotor_circle cddp_quadrotor_circle.cpp)
+target_link_libraries(cddp_quadrotor_circle cddp)
 
 add_executable(cddp_quadrotor_figure_eight_horizontal cddp_quadrotor_figure_eight_horizontal.cpp)
 target_link_libraries(cddp_quadrotor_figure_eight_horizontal cddp)
