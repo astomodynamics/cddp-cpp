@@ -20,9 +20,9 @@
 #include <cmath>
 
 #include "cddp.hpp"
-#include "cddp-cpp/matplotlibcpp.hpp"
+#include "matplot/matplot.h"
 
-namespace plt = matplotlibcpp;
+using namespace matplot;
 namespace fs = std::filesystem;
 
 // Helper function: Convert quaternion [qw, qx, qy, qz] to Euler angles (roll, pitch, yaw)
@@ -129,17 +129,17 @@ int main()
 
     // Terminal cost matrix (important for stability)
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Qf(0, 0) = 50.0; // x position
-    Qf(1, 1) = 50.0; // y position
-    Qf(2, 2) = 50.0; // z position
+    Qf(0, 0) = 500.0; // x position
+    Qf(1, 1) = 500.0; // y position
+    Qf(2, 2) = 500.0; // z position
     // For orientation (quaternion) we penalize deviation from identity quaternion
-    Qf(3, 3) = 1.0;   // qw
-    Qf(4, 4) = 1.0;   // qx
-    Qf(5, 5) = 1.0;   // qy
-    Qf(6, 6) = 1.0;   // qz
-    Qf(7, 7) = 10.0;  // x velocity
-    Qf(8, 8) = 10.0;  // y velocity
-    Qf(9, 9) = 10.0;  // z velocity
+    Qf(3, 3) = 1.0;  // qw
+    Qf(4, 4) = 1.0;  // qx
+    Qf(5, 5) = 1.0;  // qy
+    Qf(6, 6) = 1.0;  // qz
+    Qf(7, 7) = 10.0; // x velocity
+    Qf(8, 8) = 10.0; // y velocity
+    Qf(9, 9) = 10.0; // z velocity
     // Qf(10, 10) = 0.1; // roll rate
     // Qf(11, 11) = 0.1; // pitch rate
     // Qf(12, 12) = 0.1; // yaw rate
@@ -173,8 +173,8 @@ int main()
     double max_force = 5.0; // Maximum thrust per motor
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addConstraint("ControlBoxConstraint",
-                              std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+    cddp_solver.addConstraint("ControlConstraint",
+                              std::make_unique<cddp::ControlConstraint>(control_upper_bound));
 
     // Solver options
     cddp::CDDPOptions options;
@@ -202,7 +202,7 @@ int main()
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the optimal control problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
     auto X_sol = solution.state_sequence;
     auto U_sol = solution.control_sequence;
     auto t_sol = solution.time_sequence;
@@ -215,11 +215,20 @@ int main()
     {
         fs::create_directory(plotDirectory);
     }
+    // Create a directory for frame images.
+    (void)std::system("mkdir -p frames");
 
-    // Extract solution data for plotting.
-    // For attitude, convert quaternion (indices 3-6) to Euler angles.
+    // Extract trajectory data
     std::vector<double> time_arr, x_arr, y_arr, z_arr;
     std::vector<double> phi_arr, theta_arr, psi_arr;
+    time_arr.reserve(X_sol.size());
+    x_arr.reserve(X_sol.size());
+    y_arr.reserve(X_sol.size());
+    z_arr.reserve(X_sol.size());
+    phi_arr.reserve(X_sol.size());
+    theta_arr.reserve(X_sol.size());
+    psi_arr.reserve(X_sol.size());
+
     for (size_t i = 0; i < X_sol.size(); ++i)
     {
         time_arr.push_back(t_sol[i]);
@@ -234,9 +243,14 @@ int main()
         psi_arr.push_back(euler(2));
     }
 
-    // Extract control data
+    // Control data
     std::vector<double> time_arr2(time_arr.begin(), time_arr.end() - 1);
     std::vector<double> f1_arr, f2_arr, f3_arr, f4_arr;
+    f1_arr.reserve(U_sol.size());
+    f2_arr.reserve(U_sol.size());
+    f3_arr.reserve(U_sol.size());
+    f4_arr.reserve(U_sol.size());
+
     for (const auto &u : U_sol)
     {
         f1_arr.push_back(u(0));
@@ -245,149 +259,218 @@ int main()
         f4_arr.push_back(u(3));
     }
 
-    // Plot position trajectories
-    plt::figure_size(1200, 800);
-    plt::subplot(3, 1, 1);
-    plt::title("Position Trajectories");
-    plt::plot(time_arr, x_arr, {{"color", "red"}, {"linestyle", "-"}, {"label", "x"}});
-    plt::plot(time_arr, y_arr, {{"color", "green"}, {"linestyle", "-"}, {"label", "y"}});
-    plt::plot(time_arr, z_arr, {{"color", "blue"}, {"linestyle", "-"}, {"label", "z"}});
-    plt::xlabel("Time [s]");
-    plt::ylabel("Position [m]");
-    plt::legend();
-    plt::grid(true);
+    // Plotting
+    auto f1 = figure();
+    f1->size(1200, 800);
 
-    // Plot attitude angles (converted from quaternion)
-    plt::subplot(3, 1, 2);
-    plt::title("Attitude Angles");
-    plt::plot(time_arr, phi_arr, {{"color", "red"}, {"linestyle", "-"}, {"label", "roll"}});
-    plt::plot(time_arr, theta_arr, {{"color", "green"}, {"linestyle", "-"}, {"label", "pitch"}});
-    plt::plot(time_arr, psi_arr, {{"color", "blue"}, {"linestyle", "-"}, {"label", "yaw"}});
-    plt::xlabel("Time [s]");
-    plt::ylabel("Angle [rad]");
-    plt::legend();
-    plt::grid(true);
+    // Position
+    auto ax1_f1 = subplot(3, 1, 0);
+    auto plot_handle1 = plot(ax1_f1, time_arr, x_arr, "-r");
+    plot_handle1->display_name("x");
+    plot_handle1->line_width(2);
+    hold(ax1_f1, true);
+    auto plot_handle2 = plot(ax1_f1, time_arr, y_arr, "-g");
+    plot_handle2->display_name("y");
+    plot_handle2->line_width(2);
+    hold(ax1_f1, true);
+    auto plot_handle3 = plot(ax1_f1, time_arr, z_arr, "-b");
+    plot_handle3->display_name("z");
+    plot_handle3->line_width(2);
 
-    // Plot motor forces
-    plt::subplot(3, 1, 3);
-    plt::title("Motor Forces");
-    plt::plot(time_arr2, f1_arr, {{"color", "red"}, {"linestyle", "-"}, {"label", "f1"}});
-    plt::plot(time_arr2, f2_arr, {{"color", "green"}, {"linestyle", "-"}, {"label", "f2"}});
-    plt::plot(time_arr2, f3_arr, {{"color", "blue"}, {"linestyle", "-"}, {"label", "f3"}});
-    plt::plot(time_arr2, f4_arr, {{"color", "black"}, {"linestyle", "-"}, {"label", "f4"}});
-    plt::xlabel("Time [s]");
-    plt::ylabel("Force [N]");
-    plt::legend();
-    plt::grid(true);
+    title(ax1_f1, "Position Trajectories");
+    xlabel(ax1_f1, "Time [s]");
+    ylabel(ax1_f1, "Position [m]");
+    legend(ax1_f1);
+    grid(ax1_f1, true);
 
-    plt::tight_layout();
-    plt::save(plotDirectory + "/quadrotor_point_history.png");
-    plt::clf();
+    // Attitude
+    auto ax2_f1 = subplot(3, 1, 1);
+    hold(ax2_f1, true);
+    auto plot_handle4 = plot(ax2_f1, time_arr, phi_arr, "-r");
+    plot_handle4->display_name("roll");
+    plot_handle4->line_width(2);
+    auto plot_handle5 = plot(ax2_f1, time_arr, theta_arr, "-g");
+    plot_handle5->display_name("pitch");
+    plot_handle5->line_width(2);
+    hold(ax2_f1, true);
+    auto plot_handle6 = plot(ax2_f1, time_arr, psi_arr, "-b");
+    plot_handle6->display_name("yaw");
+    plot_handle6->line_width(2);
 
-    plt::figure();
-    plt::plot3(x_arr, y_arr, z_arr, {{"color", "blue"}, {"linestyle", "-"}, {"label", "trajectory"}});
-    plt::xlabel("X [m]");
-    plt::ylabel("Y [m]");
-    plt::set_zlabel("Z [m]");
-    plt::title("3D Trajectory");
-    plt::legend();
-    plt::grid(true);
-    plt::save(plotDirectory + "/quadrotor_point_3d.png");
+    title(ax2_f1, "Attitude Angles");
+    xlabel(ax2_f1, "Time [s]");
+    ylabel(ax2_f1, "Angle [rad]");
+    legend(ax2_f1);
+    grid(ax2_f1, true);
 
-    // Animation of the quadrotor frame (optional)
-    plt::figure_size(800, 600);
-    const long fg = plt::figure();
-    plt::title("Quadrotor Animation");
+    // Motor forces
+    auto ax3_f1 = subplot(3, 1, 2);
+    auto plot_handle7 = plot(ax3_f1, time_arr2, f1_arr, "-r");
+    plot_handle7->display_name("f1");
+    plot_handle7->line_width(2);
+    hold(ax3_f1, true);
+    auto plot_handle8 = plot(ax3_f1, time_arr2, f2_arr, "-g");
+    plot_handle8->display_name("f2");
+    plot_handle8->line_width(2);
+    hold(ax3_f1, true);
+    auto plot_handle9 = plot(ax3_f1, time_arr2, f3_arr, "-b");
+    plot_handle9->display_name("f3");
+    plot_handle9->line_width(2);
+    hold(ax3_f1, true);
+    auto plot_handle10 = plot(ax3_f1, time_arr2, f4_arr, "-k");
+    plot_handle10->display_name("f4");
+    plot_handle10->line_width(2);
 
-    double prop_radius = 0.03; // Propeller sphere radius
+    title(ax3_f1, "Motor Forces");
+    xlabel(ax3_f1, "Time [s]");
+    ylabel(ax3_f1, "Force [N]");
+    legend(ax3_f1);
+    grid(ax3_f1, true);
 
-    // Plot settings for arms and trajectory
-    std::map<std::string, std::string> arm_front_back_keywords = {{"color", "blue"}, {"linestyle", "-"}, {"linewidth", "2"}};
-    std::map<std::string, std::string> arm_right_left_keywords = {{"color", "red"}, {"linestyle", "-"}, {"linewidth", "2"}};
-    std::map<std::string, std::string> traj_keywords = {{"color", "black"}, {"linestyle", ":"}, {"linewidth", "1"}};
+    // Save
+    f1->draw();
+    f1->save(plotDirectory + "/quadrotor_point_states.png");
 
-    std::vector<double> x_traj, y_traj, z_traj;
-    for (size_t i = 0; i < X_sol.size(); i += 5) { // Render every 5th frame
-        plt::clf();
+    // 3D Trajectory
+    auto f2 = figure();
+    f2->size(800, 600);
+    auto ax2 = f2->current_axes();
+    hold(ax2, true);
+    auto traj3d = plot3(ax2, x_arr, y_arr, z_arr);
+    traj3d->display_name("Trajectory");
+    traj3d->line_style("-");
+    traj3d->line_width(2);
+    traj3d->color("blue");
+    // Project trajectory onto x-y plane at z=0
+    auto proj_xy = plot3(ax2, x_arr, y_arr, std::vector<double>(x_arr.size(), 0.0));
+    proj_xy->display_name("X-Y Projection");
+    proj_xy->line_style("--");
+    proj_xy->line_width(1);
+    proj_xy->color("gray");
+    xlabel(ax2, "X [m]");
+    ylabel(ax2, "Y [m]");
+    zlabel(ax2, "Z [m]");
+    xlim(ax2, {0, 5});
+    ylim(ax2, {-2, 2});
+    zlim(ax2, {0, 5});
+    title(ax2, "3D Trajectory (Figure-8)");
+    grid(ax2, true);
+    f2->draw();
+    f2->save(plotDirectory + "/quadrotor_point_3d.png");
+
+    // Animation of the quadrotor frame
+    auto f_anim = figure();
+    f_anim->size(800, 600);
+    auto ax_anim = f_anim->current_axes();
+
+    // For collecting the trajectory as we go
+    std::vector<double> anim_x, anim_y, anim_z;
+    anim_x.reserve(X_sol.size());
+    anim_y.reserve(X_sol.size());
+    anim_z.reserve(X_sol.size());
+
+    // Render every Nth frame to reduce #images
+    int frame_stride = 15;
+    double prop_radius = 0.03; // radius for small spheres at motor ends
+
+    for (size_t i = 0; i < X_sol.size(); i += frame_stride)
+    {
+        ax_anim->clear();
+        ax_anim->hold(true);
+        ax_anim->grid(true);
+
         // Current state
         double x = X_sol[i](0);
         double y = X_sol[i](1);
         double z = X_sol[i](2);
-        // Get quaternion from state indices 3-6
-        Eigen::Vector4d quat;
-        quat << X_sol[i](3), X_sol[i](4), X_sol[i](5), X_sol[i](6);
-        // Compute rotation matrix from quaternion
+
+        // Accumulate path
+        anim_x.push_back(x);
+        anim_y.push_back(y);
+        anim_z.push_back(z);
+
+        // Plot the partial trajectory so far (in black dotted line)
+        auto path_plot = plot3(anim_x, anim_y, anim_z);
+        path_plot->line_width(1.5);
+        path_plot->line_style("--");
+        path_plot->color("black");
+
+        // Build rotation from quaternion
+        Eigen::Vector4d quat(X_sol[i](3), X_sol[i](4), X_sol[i](5), X_sol[i](6));
         Eigen::Matrix3d R = getRotationMatrixFromQuaternion(quat(0), quat(1), quat(2), quat(3));
-        Eigen::Vector3d position(x, y, z);
-        x_traj.push_back(x);
-        y_traj.push_back(y);
-        z_traj.push_back(z);
 
-        // Compute arm endpoints (motor locations)
+        // Arm endpoints (front, right, back, left)
         std::vector<Eigen::Vector3d> arm_endpoints;
-        arm_endpoints.push_back(position + R * Eigen::Vector3d(arm_length, 0, 0));    // Front
-        arm_endpoints.push_back(position + R * Eigen::Vector3d(0, arm_length, 0));    // Right
-        arm_endpoints.push_back(position + R * Eigen::Vector3d(-arm_length, 0, 0));   // Back
-        arm_endpoints.push_back(position + R * Eigen::Vector3d(0, -arm_length, 0));   // Left
+        arm_endpoints.push_back(Eigen::Vector3d(arm_length, 0, 0));
+        arm_endpoints.push_back(Eigen::Vector3d(0, arm_length, 0));
+        arm_endpoints.push_back(Eigen::Vector3d(-arm_length, 0, 0));
+        arm_endpoints.push_back(Eigen::Vector3d(0, -arm_length, 0));
 
-        // Plot front-back arm (blue)
-        std::vector<double> front_back_x = {arm_endpoints[0](0), arm_endpoints[2](0)};
-        std::vector<double> front_back_y = {arm_endpoints[0](1), arm_endpoints[2](1)};
-        std::vector<double> front_back_z = {arm_endpoints[0](2), arm_endpoints[2](2)};
-        plt::plot3(front_back_x, front_back_y, front_back_z, arm_front_back_keywords, fg);
-
-        // Plot right-left arm (red)
-        std::vector<double> right_left_x = {arm_endpoints[1](0), arm_endpoints[3](0)};
-        std::vector<double> right_left_y = {arm_endpoints[1](1), arm_endpoints[3](1)};
-        std::vector<double> right_left_z = {arm_endpoints[1](2), arm_endpoints[3](2)};
-        plt::plot3(right_left_x, right_left_y, right_left_z, arm_right_left_keywords, fg);
-
-        // Plot propeller spheres at each motor location
-        for (size_t j = 0; j < arm_endpoints.size(); ++j) {
-            std::vector<std::vector<double>> sphere_x, sphere_y, sphere_z;
-            int resolution = 10;
-            for (int u = 0; u < resolution; ++u) {
-                std::vector<double> x_row, y_row, z_row;
-                for (int v = 0; v < resolution; ++v) {
-                    double theta = u * M_PI / (resolution - 1);
-                    double phi = v * 2 * M_PI / (resolution - 1);
-                    double x_s = arm_endpoints[j](0) + prop_radius * std::sin(theta) * std::cos(phi);
-                    double y_s = arm_endpoints[j](1) + prop_radius * std::sin(theta) * std::sin(phi);
-                    double z_s = arm_endpoints[j](2) + prop_radius * std::cos(theta);
-                    x_row.push_back(x_s);
-                    y_row.push_back(y_s);
-                    z_row.push_back(z_s);
-                }
-                sphere_x.push_back(x_row);
-                sphere_y.push_back(y_row);
-                sphere_z.push_back(z_row);
-            }
-            std::map<std::string, std::string> surf_keywords;
-            surf_keywords["vmin"] = "0";
-            surf_keywords["vmax"] = "1";
-            surf_keywords["alpha"] = "0.99";
-            surf_keywords["cmap"] = (j == 0 || j == 2) ? "Blues" : "Reds";
-            plt::plot_surface(sphere_x, sphere_y, sphere_z, surf_keywords, fg);
+        // Transform to world coords
+        for (auto &pt : arm_endpoints)
+        {
+            pt = Eigen::Vector3d(x, y, z) + R * pt;
         }
 
-        // Plot trajectory
-        plt::plot3(x_traj, y_traj, z_traj, traj_keywords, fg);
+        // Front-back arm
+        std::vector<double> fx = {arm_endpoints[0].x(), arm_endpoints[2].x()};
+        std::vector<double> fy = {arm_endpoints[0].y(), arm_endpoints[2].y()};
+        std::vector<double> fz = {arm_endpoints[0].z(), arm_endpoints[2].z()};
+        auto fb_arm = plot3(fx, fy, fz);
+        fb_arm->line_width(2.0);
+        fb_arm->color("blue");
 
-        plt::xlabel("X [m]");
-        plt::ylabel("Y [m]");
-        plt::set_zlabel("Z [m]");
-        plt::title("Quadrotor Animation");
-        plt::grid(true);
-        double plot_size = 3.0;
-        plt::xlim(-plot_size, plot_size);
-        plt::ylim(-plot_size, plot_size);
-        plt::zlim(0, 3);
-        plt::view_init(30, -60);
+        // Right-left arm
+        std::vector<double> rx = {arm_endpoints[1].x(), arm_endpoints[3].x()};
+        std::vector<double> ry = {arm_endpoints[1].y(), arm_endpoints[3].y()};
+        std::vector<double> rz = {arm_endpoints[1].z(), arm_endpoints[3].z()};
+        auto rl_arm = plot3(rx, ry, rz);
+        rl_arm->line_width(2.0);
+        rl_arm->color("red");
 
-        std::string filename = plotDirectory + "/quadrotor_frame_" + std::to_string(i/5) + ".png";
-        plt::save(filename);
-        plt::pause(0.02);
+        auto sphere_points = linspace(0, 2 * M_PI, 15);
+        for (const auto &motor_pos : arm_endpoints)
+        {
+            std::vector<double> circ_x, circ_y, circ_z;
+            circ_x.reserve(sphere_points.size());
+            circ_y.reserve(sphere_points.size());
+            circ_z.reserve(sphere_points.size());
+            for (auto angle : sphere_points)
+            {
+                circ_x.push_back(motor_pos.x() + prop_radius * cos(angle));
+                circ_y.push_back(motor_pos.y() + prop_radius * sin(angle));
+                circ_z.push_back(motor_pos.z()); // keep the same z for a small ring
+            }
+            auto sphere_plot = plot3(circ_x, circ_y, circ_z);
+            sphere_plot->line_style("solid");
+            sphere_plot->line_width(1.5);
+            sphere_plot->color("cyan");
+        }
+
+        title(ax_anim, "Quadrotor Animation");
+        xlabel(ax_anim, "X [m]");
+        ylabel(ax_anim, "Y [m]");
+        zlabel(ax_anim, "Z [m]");
+        xlim(ax_anim, {0, 5});
+        ylim(ax_anim, {-5, 5});
+        zlim(ax_anim, {0, 5});
+
+        ax_anim->view(30, -30);
+
+        std::string frameFile = plotDirectory + "/quadrotor_anim_frame_" + std::to_string(i / frame_stride) + ".png";
+        f_anim->draw();
+        f_anim->save(frameFile);
+        std::this_thread::sleep_for(std::chrono::milliseconds(80));
     }
+
+    // -----------------------------
+    // Generate GIF from frames using ImageMagick
+    // -----------------------------
+    std::string gif_command = "convert -delay 30 " + plotDirectory + "/quadrotor_anim_frame_*.png " + plotDirectory + "/quadrotor_point.gif";
+    std::system(gif_command.c_str());
+
+    std::string cleanup_command = "rm " + plotDirectory + "/quadrotor_anim_frame_*.png";
+    std::system(cleanup_command.c_str());
     return 0;
 }
 

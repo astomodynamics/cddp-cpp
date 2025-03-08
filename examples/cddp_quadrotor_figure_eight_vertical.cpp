@@ -374,17 +374,24 @@ int main()
     auto f2 = figure();
     f2->size(800, 600);
     auto ax2 = f2->current_axes();
+    hold(ax2, true);
     auto traj3d = plot3(ax2, x_arr, y_arr, z_arr);
     traj3d->display_name("Trajectory");
     traj3d->line_style("-");
     traj3d->line_width(2);
     traj3d->color("blue");
+    // Project trajectory onto x-y plane at z=0
+    auto proj_xy = plot3(ax2, x_arr, y_arr, std::vector<double>(x_arr.size(), 0.0));
+    proj_xy->display_name("X-Y Projection");
+    proj_xy->line_style("--");
+    proj_xy->line_width(1);
+    proj_xy->color("gray");
     xlabel(ax2, "X [m]");
     ylabel(ax2, "Y [m]");
     zlabel(ax2, "Z [m]");
-    xlim(ax2, {-5, 5});
-    ylim(ax2, {0, 5});
-    zlim(ax2, {-5, 5});
+    xlim(ax2, {0, 5});
+    ylim(ax2, {-2, 2});
+    zlim(ax2, {0, 5});
     title(ax2, "3D Trajectory (Figure-8)");
     grid(ax2, true);
     f2->draw();
