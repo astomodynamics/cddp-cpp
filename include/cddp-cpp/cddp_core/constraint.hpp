@@ -22,6 +22,7 @@
 #include <limits>
 #include <tuple>
 #include <algorithm>
+#include <iostream>
 
 namespace cddp
 {
@@ -281,14 +282,22 @@ namespace cddp
     {
     public:
         ControlConstraint(const Eigen::VectorXd &upper_bound,
+                          const Eigen::VectorXd &lower_bound = Eigen::VectorXd(),
                           double scale_factor = 1.0)
             : Constraint("ControlConstraint"),
               scale_factor_(scale_factor)
         {
             // Rescale the upper bound for this constraint class
             upper_bound_.resize(2 * upper_bound.size());
-            upper_bound_.head(upper_bound.size()) = upper_bound * scale_factor_;
-            upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
+            if (lower_bound.size() == 0)
+            {
+                upper_bound_.head(upper_bound.size()) = upper_bound * scale_factor_;
+                upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
+            } else
+            {
+                upper_bound_.head(upper_bound.size()) = -lower_bound * scale_factor_;
+                upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
+            }
             dim_ = 2 * upper_bound.size();
         }
 
