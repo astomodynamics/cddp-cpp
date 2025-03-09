@@ -31,8 +31,8 @@ target_link_libraries(cddp_hcw cddp)
 add_executable(cddp_lti_system cddp_lti_system.cpp)
 target_link_libraries(cddp_lti_system cddp)
 
-# add_executable(cddp_manipulator cddp_manipulator.cpp)
-# target_link_libraries(cddp_manipulator cddp)
+add_executable(cddp_manipulator cddp_manipulator.cpp)
+target_link_libraries(cddp_manipulator cddp)
 
 # add_executable(cddp_pendulum cddp_pendulum.cpp)
 # target_link_libraries(cddp_pendulum cddp)
