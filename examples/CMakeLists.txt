@@ -25,26 +25,18 @@ target_link_libraries(cddp_car_ipddp cddp)
 add_executable(cddp_cartpole cddp_cartpole.cpp)
 target_link_libraries(cddp_cartpole cddp)
 
-# add_executable(cddp_unicycle cddp_unicycle.cpp)
-# target_link_libraries(cddp_unicycle cddp)
-
-# add_executable(cddp_unicycle_safe cddp_unicycle_safe.cpp)
-# target_link_libraries(cddp_unicycle_safe cddp)
-
-# add_executable(cddp_unicycle_safe_ipddp cddp_unicycle_safe_ipddp.cpp)
-# target_link_libraries(cddp_unicycle_safe_ipddp cddp)
-
-# add_executable(cddp_unicycle_safe_ipddp_v2 cddp_unicycle_safe_ipddp_v2.cpp)
-# target_link_libraries(cddp_unicycle_safe_ipddp_v2 cddp)
-
-# add_executable(cddp_manipulator cddp_manipulator.cpp)
-# target_link_libraries(cddp_manipulator cddp)
+add_executable(cddp_hcw cddp_hcw.cpp)
+target_link_libraries(cddp_hcw cddp)
 
 # add_executable(cddp_lti_system cddp_lti_system.cpp)
 # target_link_libraries(cddp_lti_system cddp)
 
+# add_executable(cddp_manipulator cddp_manipulator.cpp)
+# target_link_libraries(cddp_manipulator cddp)
+
 # add_executable(cddp_pendulum cddp_pendulum.cpp)
 # target_link_libraries(cddp_pendulum cddp)
+
 
 add_executable(cddp_quadrotor_point cddp_quadrotor_point.cpp)
 target_link_libraries(cddp_quadrotor_point cddp)
@@ -61,8 +53,17 @@ target_link_libraries(cddp_quadrotor_figure_eight_vertical cddp)
 # # add_executable(cddp_quadrotor_circle_safe cddp_quadrotor_circle_safe.cpp)
 # # target_link_libraries(cddp_quadrotor_circle_safe cddp)
 
-# add_executable(cddp_hcw cddp_hcw.cpp)
-# target_link_libraries(cddp_hcw cddp)
+# add_executable(cddp_unicycle cddp_unicycle.cpp)
+# target_link_libraries(cddp_unicycle cddp)
+
+# add_executable(cddp_unicycle_safe cddp_unicycle_safe.cpp)
+# target_link_libraries(cddp_unicycle_safe cddp)
+
+# add_executable(cddp_unicycle_safe_ipddp cddp_unicycle_safe_ipddp.cpp)
+# target_link_libraries(cddp_unicycle_safe_ipddp cddp)
+
+# add_executable(cddp_unicycle_safe_ipddp_v2 cddp_unicycle_safe_ipddp_v2.cpp)
+# target_link_libraries(cddp_unicycle_safe_ipddp_v2 cddp)
 
 # add_executable(mpc_hcw mpc_hcw.cpp)
 # target_link_libraries(mpc_hcw cddp)
