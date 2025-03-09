@@ -57,23 +57,18 @@ find_package(Eigen3 REQUIRED)
 
 if (CDDP_CPP_CASADI)
   # Assuming that CasADi is installed in /usr/local/include/casadi by:
-  # $ sudo apt install gfortran liblapack-dev pkg-config --install-recommends
-  # $ sudo apt-get install gcc g++ gfortran git patch wget pkg-config liblapack-dev libmetis-dev # for IPOPT
-  # $ sudo apt install swig
-  # $ cd
-  # $ git clone https://github.com/casadi/casadi.git -b main
-  # $ cd casadi
-  # $ mkdir build
-  # $ cd build
-  # $ cmake -DWITH_IPOPT=ON -DWITH_OPENMP=ON -DWITH_THREAD=ON ..
-  # $ make
-  # $ sudo make install
+  # https://github.com/casadi/casadi/wiki/InstallationLinux 
   # $ echo "export LD_LIBRARY_PATH=/home/<path_to_casadi>/casadi/build/lib:$LD_LIBRARY_PATH" >> ~/.bashrc && source ~/.bashrc
 
   find_package(casadi REQUIRED)
-  set(CASADI_INCLUDE_DIR /$ENV{HOME}/local/include/casadi)
+  set(CASADI_INCLUDE_DIR /usr/local/include/casadi)
   find_library(CASADI_LIBRARY NAMES casadi HINTS ${CASADI_INCLUDE_DIR}/../lib $ENV{CASADI_PREFIX}/lib)
   set(CASADI_LIBRARIES ${CASADI_LIBRARIES} ${CASADI_LIBRARY})
+  if (NOT CASADI_LIBRARIES)
+    message(FATAL_ERROR "CasADi library not found. Please set CASADI_PREFIX.")
+  else()
+    message(STATUS "Found CasADi: ${CASADI_LIBRARIES}")
+  endif()
 endif()
 
 if (CDDP_CPP_ACADO)
@@ -326,7 +321,7 @@ add_subdirectory(examples)
 # Cmake compile commmand:
 # $ mkdir build
 # $ cd build
-# $ cmake -DCDDP_CPP_BUILD_TESTS=ON -DCDDP_CPP_TORCH=ON -DCDDP_CPP_TORCH_GPU=ON -DLIBTORCH_DIR=/usr/local/lib/libtorch -DCDDP_CPP_GUROBI=ON -DGUROBI_ROOT=/usr/local/lib/gurobi1201/linux64 ..
+# $ cmake -DCDDP_CPP_BUILD_TESTS=ON -DCDDP_CPP_TORCH=ON -DCDDP_CPP_TORCH_GPU=ON -DLIBTORCH_DIR=/usr/local/lib/libtorch -DCDDP_CPP_SQP=ON -DCDDP_CPP_GUROBI=ON -DGUROBI_ROOT=/usr/local/lib/gurobi1201/linux64 -DCDDP_CPP_CASADI=ON -DCDDP_CPP_ACADO=ON ..
 # $ make -j4
 # $ make test
 
