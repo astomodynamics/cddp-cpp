@@ -37,10 +37,6 @@ target_link_libraries(cddp_manipulator cddp)
 add_executable(cddp_pendulum cddp_pendulum.cpp)
 target_link_libraries(cddp_pendulum cddp)
 
-
-add_executable(cddp_quadrotor_point cddp_quadrotor_point.cpp)
-target_link_libraries(cddp_quadrotor_point cddp)
-
 add_executable(cddp_quadrotor_circle cddp_quadrotor_circle.cpp)
 target_link_libraries(cddp_quadrotor_circle cddp)
 
@@ -50,11 +46,14 @@ target_link_libraries(cddp_quadrotor_figure_eight_horizontal cddp)
 add_executable(cddp_quadrotor_figure_eight_vertical cddp_quadrotor_figure_eight_vertical.cpp)
 target_link_libraries(cddp_quadrotor_figure_eight_vertical cddp)
 
+add_executable(cddp_quadrotor_point cddp_quadrotor_point.cpp)
+target_link_libraries(cddp_quadrotor_point cddp)
+
 # # add_executable(cddp_quadrotor_circle_safe cddp_quadrotor_circle_safe.cpp)
 # # target_link_libraries(cddp_quadrotor_circle_safe cddp)
 
-# add_executable(cddp_unicycle cddp_unicycle.cpp)
-# target_link_libraries(cddp_unicycle cddp)
+add_executable(cddp_unicycle cddp_unicycle.cpp)
+target_link_libraries(cddp_unicycle cddp)
 
 # add_executable(cddp_unicycle_safe cddp_unicycle_safe.cpp)
 # target_link_libraries(cddp_unicycle_safe cddp)
