@@ -21,13 +21,18 @@
 #include <memory>
 #include <cstdlib>
 
-#include "cddp.hpp"          
+#include "cddp.hpp"
 
-namespace plt = matplotlibcpp;
+// Include matplot
+#include "matplot/matplot.h"
+
 namespace fs = std::filesystem;
+using namespace matplot;
 
 int main() {
-    // Problem parameters
+    // -------------------------------------------------------
+    // 1. Problem Setup
+    // -------------------------------------------------------
     int state_dim = 3;
     int control_dim = 2;
     int horizon = 100;
@@ -35,136 +40,190 @@ int main() {
     std::string integration_type = "euler";
 
     // Create a unicycle dynamical system instance
-    std::unique_ptr<cddp::DynamicalSystem> dyn_system = std::make_unique<cddp::Unicycle>(timestep, integration_type);
+    std::unique_ptr<cddp::DynamicalSystem> dyn_system =
+        std::make_unique<cddp::Unicycle>(timestep, integration_type);
 
     // Create objective function
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
     Eigen::MatrixXd R = 0.05 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf << 100.0, 0.0, 0.0,
-          0.0, 100.0, 0.0,
-          0.0, 0.0, 100.0;
+    Qf << 100.0,  0.0,  0.0,
+           0.0, 100.0,  0.0,
+           0.0,   0.0, 100.0;
+
     Eigen::VectorXd goal_state(state_dim);
-    goal_state << 2.0, 2.0, M_PI/2.0;
+    goal_state << 2.0, 2.0, M_PI / 2.0;
 
-    // Create an empty vector for reference states
+    // Empty reference states (if needed)
     std::vector<Eigen::VectorXd> empty_reference_states;
-    auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
+    auto objective = std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, empty_reference_states, timestep
+    );
 
-    // Define initial state
+    // Initial state
     Eigen::VectorXd initial_state(state_dim);
-    initial_state << 0.0, 0.0, M_PI/4.0;
+    initial_state << 0.0, 0.0, M_PI / 4.0;
 
-    // Set up common CDDP options
+    // CDDP options
     cddp::CDDPOptions options;
-    options.max_iterations = 20;
-    options.verbose = false;
+    options.max_iterations = 100;
+    options.verbose = true;
     options.debug = false;
     options.cost_tolerance = 1e-5;
     options.grad_tolerance = 1e-4;
-    options.regularization_type = "none";
+    options.regularization_type = "control";
+    options.regularization_control = 1e-5;
 
-    // Define control box constraint bounds
+    // Define control box constraints
     Eigen::VectorXd control_lower_bound(control_dim);
     control_lower_bound << -2.0, -M_PI;
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 2.0, M_PI;
 
-    // --------------------------
-    // Solve the CDDP problem without the ball constraint
+    // -------------------------------------------------------
+    // 2. Solve the CDDP Problem (No Ball Constraint)
+    // -------------------------------------------------------
     cddp::CDDP solver_baseline(
-        initial_state, 
-        goal_state, 
-        horizon, 
-        timestep, 
+        initial_state,
+        goal_state,
+        horizon,
+        timestep,
         std::make_unique<cddp::Unicycle>(timestep, integration_type),
         std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep),
         options
     );
-    solver_baseline.setDynamicalSystem(std::make_unique<cddp::Unicycle>(timestep, integration_type));
-    solver_baseline.setObjective(std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep));
-    solver_baseline.addConstraint("ControlBoxConstraint", std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
 
-    // Set an initial trajectory (all states equal to the initial state)
-    std::vector<Eigen::VectorXd> X_baseline(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    // Set system, objective, constraints, and initial guess
+    solver_baseline.setDynamicalSystem(std::make_unique<cddp::Unicycle>(timestep, integration_type));
+    solver_baseline.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, empty_reference_states, timestep
+    ));
+    solver_baseline.addConstraint("ControlBoxConstraint",
+        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+
+    // Simple initial guess: states = initial_state, controls = zeros
+    std::vector<Eigen::VectorXd> X_baseline(horizon + 1, initial_state);
     std::vector<Eigen::VectorXd> U_baseline(horizon, Eigen::VectorXd::Zero(control_dim));
-    for (int i = 0; i < horizon + 1; ++i) {
-        X_baseline[i] = initial_state;
-    }
     solver_baseline.setInitialTrajectory(X_baseline, U_baseline);
 
+    // Solve
     cddp::CDDPSolution solution_baseline = solver_baseline.solve("ASCDDP");
-    auto X_baseline_sol = solution_baseline.state_sequence;
+    auto X_baseline_sol = solution_baseline.state_sequence; // size horizon + 1
 
-    // --------------------------
-    // 2. Solve with BallConstraint
+    // -------------------------------------------------------
+    // 3. Solve with BallConstraint
+    // -------------------------------------------------------
     cddp::CDDP solver_ball(
-        initial_state, 
-        goal_state, 
-        horizon, 
-        timestep, 
+        initial_state,
+        goal_state,
+        horizon,
+        timestep,
         std::make_unique<cddp::Unicycle>(timestep, integration_type),
         std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep),
         options
     );
     solver_ball.setDynamicalSystem(std::make_unique<cddp::Unicycle>(timestep, integration_type));
-    solver_ball.setObjective(std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep));
-    solver_ball.addConstraint("ControlBoxConstraint", std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+    solver_ball.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, empty_reference_states, timestep
+    ));
+    solver_ball.addConstraint("ControlBoxConstraint",
+        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+
+    // Add the BallConstraint
     double radius = 0.4;
     Eigen::Vector2d center(1.0, 1.0);
-    solver_ball.addConstraint("BallConstraint", std::make_unique<cddp::BallConstraint>(radius, center));
+    solver_ball.addConstraint("BallConstraint",
+        std::make_unique<cddp::BallConstraint>(radius, center));
 
-    // Set an initial trajectory for the ball-constrained solver
-    std::vector<Eigen::VectorXd> X_ball(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    // Initial trajectory for the ball-constrained solver
+    std::vector<Eigen::VectorXd> X_ball(horizon + 1, initial_state);
     std::vector<Eigen::VectorXd> U_ball(horizon, Eigen::VectorXd::Zero(control_dim));
-    for (int i = 0; i < horizon + 1; ++i) {
-        X_ball[i] = initial_state;
-    }
     solver_ball.setInitialTrajectory(X_ball, U_ball);
 
+    // Solve
     cddp::CDDPSolution solution_ball = solver_ball.solve("ASCDDP");
-    auto X_ball_sol = solution_ball.state_sequence;
+    auto X_ball_sol = solution_ball.state_sequence;  // horizon+1
 
-    // --------------------------
-    // Plot the trajectories
+    // -------------------------------------------------------
+    // 4. Prepare Data for Plotting
+    // -------------------------------------------------------
     std::vector<double> x_baseline, y_baseline;
-    std::vector<double> x_ball, y_ball;
+    std::vector<double> x_ball_vec, y_ball_vec;
+    x_baseline.reserve(X_baseline_sol.size());
+    y_baseline.reserve(X_baseline_sol.size());
+    x_ball_vec.reserve(X_ball_sol.size());
+    y_ball_vec.reserve(X_ball_sol.size());
+
+    // Convert baseline solution states
     for (const auto &state : X_baseline_sol) {
         x_baseline.push_back(state(0));
         y_baseline.push_back(state(1));
     }
+    // Convert ball-constrained solution states
     for (const auto &state : X_ball_sol) {
-        x_ball.push_back(state(0));
-        y_ball.push_back(state(1));
+        x_ball_vec.push_back(state(0));
+        y_ball_vec.push_back(state(1));
     }
 
-    // Plot trajectories on the same figure
-    plt::figure();
-    plt::plot(x_baseline, y_baseline, {{"color", "b"}, {"linestyle", "-"}, {"label", "Without Ball Constraint"}});
-    plt::plot(x_ball, y_ball, {{"color", "r"}, {"linestyle", "-"}, {"label", "With Ball Constraint"}});
+    // Prepare circle points for the ball constraint
+    std::vector<double> x_circle, y_circle;
+    x_circle.reserve(630); // ~ (2*pi / 0.01)
+    y_circle.reserve(630);
 
-    
-    
-    // Also plot the ball for reference
-    std::vector<double> t_ball, x_ball_circle, y_ball_circle;
-    for (double t = 0.0; t < 2 * M_PI; t += 0.01) {
-        t_ball.push_back(t);
-        x_ball_circle.push_back(center(0) + radius * cos(t));
-        y_ball_circle.push_back(center(1) + radius * sin(t));
-    }plt::plot(x_ball_circle, y_ball_circle, {{"color", "g"}, {"linestyle", "--"}, {"label", "Ball Constraint"}});
+    for (double t = 0.0; t < 2.0 * M_PI; t += 0.01) {
+        x_circle.push_back(center(0) + radius * std::cos(t));
+        y_circle.push_back(center(1) + radius * std::sin(t));
+    }
 
-    plt::xlabel("x");
-    plt::ylabel("y");
-    plt::title("Trajectory Comparison: With vs. Without BallConstraint");
-    plt::legend();
-    
-    // Save the comparison plot
+    // -------------------------------------------------------
+    // 5. Plot with matplot
+    // -------------------------------------------------------
+    // Create the figure window
+    auto f1 = figure(true); // 'true' => make it visible (depending on your system)
+    f1->size(800, 600);
+
+    // Create an axes object
+    auto ax = f1->current_axes();
+
+    // Plot the baseline solution (blue)
+    auto h_baseline = plot(ax, x_baseline, y_baseline);
+    h_baseline->line_width(2);
+    h_baseline->display_name("Without Ball Constraint");
+    h_baseline->color("blue");
+
+    // Plot the ball-constrained solution (red)
+    hold(ax, true);
+    auto h_ball = plot(ax, x_ball_vec, y_ball_vec);
+    h_ball->line_width(2);
+    h_ball->display_name("With Ball Constraint");
+    h_ball->color("red");
+
+    // Plot the constraint circle (green, dashed)
+    auto h_circle = plot(ax, x_circle, y_circle);
+    h_circle->line_style("--");
+    h_circle->line_width(2);
+    h_circle->color("green");
+    h_circle->display_name("Ball Constraint Region");
+
+    // Add title, labels, legend
+    title(ax, "Trajectory Comparison: With vs. Without BallConstraint");
+    xlabel(ax, "x");
+    ylabel(ax, "y");
+    xlim(ax, {-0.5, 2.5});
+    ylim(ax, {-0.5, 2.5});
+    legend(ax);
+
+    // Create directory for saving (if not existing)
     std::string plotDirectory = "../results/tests";
     if (!fs::exists(plotDirectory)) {
-        fs::create_directory(plotDirectory);
+        fs::create_directories(plotDirectory);
     }
-    plt::save(plotDirectory + "/trajectory_comparison.png");
-    std::cout << "Trajectory comparison saved to " << plotDirectory + "/trajectory_comparison.png" << std::endl;
+
+    // Save figure
+    f1->draw();
+    f1->save(plotDirectory + "/trajectory_comparison_matplot.png");
+    std::cout << "Trajectory comparison saved to "
+              << plotDirectory + "/trajectory_comparison_matplot.png" << std::endl;
 
     return 0;
 }
