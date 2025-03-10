@@ -221,7 +221,7 @@ int main()
     double max_force = 4.0; // Maximum thrust per motor
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
 
     // Initial trajectory: allocate state and control trajectories
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -260,6 +260,8 @@ int main()
     // Extract trajectory data
     std::vector<double> time_arr, x_arr, y_arr, z_arr;
     std::vector<double> phi_arr, theta_arr, psi_arr;
+    std::vector<double> qw_arr, qx_arr, qy_arr, qz_arr, q_norm_arr;
+
     time_arr.reserve(X_sol.size());
     x_arr.reserve(X_sol.size());
     y_arr.reserve(X_sol.size());
@@ -268,18 +270,36 @@ int main()
     theta_arr.reserve(X_sol.size());
     psi_arr.reserve(X_sol.size());
 
+    qw_arr.reserve(X_sol.size());
+    qx_arr.reserve(X_sol.size());
+    qy_arr.reserve(X_sol.size());
+    qz_arr.reserve(X_sol.size());
+    q_norm_arr.reserve(X_sol.size());
+
     for (size_t i = 0; i < X_sol.size(); ++i)
     {
         time_arr.push_back(t_sol[i]);
         x_arr.push_back(X_sol[i](0));
         y_arr.push_back(X_sol[i](1));
         z_arr.push_back(X_sol[i](2));
-        Eigen::Vector4d quat;
-        quat << X_sol[i](3), X_sol[i](4), X_sol[i](5), X_sol[i](6);
-        Eigen::Vector3d euler = quaternionToEuler(quat(0), quat(1), quat(2), quat(3));
+
+        double qw = X_sol[i](3);
+        double qx = X_sol[i](4);
+        double qy = X_sol[i](5);
+        double qz = X_sol[i](6);
+
+        // Euler angles
+        Eigen::Vector3d euler = quaternionToEuler(qw, qx, qy, qz);
         phi_arr.push_back(euler(0));
         theta_arr.push_back(euler(1));
         psi_arr.push_back(euler(2));
+
+        // Quaternion data
+        qw_arr.push_back(qw);
+        qx_arr.push_back(qx);
+        qy_arr.push_back(qy);
+        qz_arr.push_back(qz);
+        q_norm_arr.push_back(std::sqrt(qw*qw + qx*qx + qy*qy + qz*qz));
     }
 
     // Control data
@@ -300,10 +320,10 @@ int main()
 
     // Plotting
     auto f1 = figure();
-    f1->size(1200, 800);
+    f1->size(1200, 900); // Slightly bigger if you like
 
-    // Position
-    auto ax1_f1 = subplot(3, 1, 0);
+    // (1) Position
+    auto ax1_f1 = subplot(4, 1, 0);
     auto plot_handle1 = plot(ax1_f1, time_arr, x_arr, "-r");
     plot_handle1->display_name("x");
     plot_handle1->line_width(2);
@@ -311,7 +331,6 @@ int main()
     auto plot_handle2 = plot(ax1_f1, time_arr, y_arr, "-g");
     plot_handle2->display_name("y");
     plot_handle2->line_width(2);
-    hold(ax1_f1, true);
     auto plot_handle3 = plot(ax1_f1, time_arr, z_arr, "-b");
     plot_handle3->display_name("z");
     plot_handle3->line_width(2);
@@ -322,8 +341,8 @@ int main()
     legend(ax1_f1);
     grid(ax1_f1, true);
 
-    // Attitude
-    auto ax2_f1 = subplot(3, 1, 1);
+    // (2) Attitude (Euler angles)
+    auto ax2_f1 = subplot(4, 1, 1);
     hold(ax2_f1, true);
     auto plot_handle4 = plot(ax2_f1, time_arr, phi_arr, "-r");
     plot_handle4->display_name("roll");
@@ -331,7 +350,6 @@ int main()
     auto plot_handle5 = plot(ax2_f1, time_arr, theta_arr, "-g");
     plot_handle5->display_name("pitch");
     plot_handle5->line_width(2);
-    hold(ax2_f1, true);
     auto plot_handle6 = plot(ax2_f1, time_arr, psi_arr, "-b");
     plot_handle6->display_name("yaw");
     plot_handle6->line_width(2);
@@ -342,8 +360,8 @@ int main()
     legend(ax2_f1);
     grid(ax2_f1, true);
 
-    // Motor forces
-    auto ax3_f1 = subplot(3, 1, 2);
+    // (3) Motor forces
+    auto ax3_f1 = subplot(4, 1, 2);
     auto plot_handle7 = plot(ax3_f1, time_arr2, f1_arr, "-r");
     plot_handle7->display_name("f1");
     plot_handle7->line_width(2);
@@ -351,11 +369,9 @@ int main()
     auto plot_handle8 = plot(ax3_f1, time_arr2, f2_arr, "-g");
     plot_handle8->display_name("f2");
     plot_handle8->line_width(2);
-    hold(ax3_f1, true);
     auto plot_handle9 = plot(ax3_f1, time_arr2, f3_arr, "-b");
     plot_handle9->display_name("f3");
     plot_handle9->line_width(2);
-    hold(ax3_f1, true);
     auto plot_handle10 = plot(ax3_f1, time_arr2, f4_arr, "-k");
     plot_handle10->display_name("f4");
     plot_handle10->line_width(2);
@@ -366,7 +382,37 @@ int main()
     legend(ax3_f1);
     grid(ax3_f1, true);
 
-    // Save
+    // (4) Quaternion trajectories and norm
+    auto ax4_f1 = subplot(4, 1, 3);
+    hold(ax4_f1, true);
+
+    auto qwh = plot(ax4_f1, time_arr, qw_arr, "-r");
+    qwh->display_name("q_w");
+    qwh->line_width(2);
+
+    auto qxh = plot(ax4_f1, time_arr, qx_arr, "-g");
+    qxh->display_name("q_x");
+    qxh->line_width(2);
+
+    auto qyh = plot(ax4_f1, time_arr, qy_arr, "-b");
+    qyh->display_name("q_y");
+    qyh->line_width(2);
+
+    auto qzh = plot(ax4_f1, time_arr, qz_arr, "-m");
+    qzh->display_name("q_z");
+    qzh->line_width(2);
+
+    // Norm in black
+    auto qnorm_handle = plot(ax4_f1, time_arr, q_norm_arr, "-k");
+    qnorm_handle->display_name("|q|");
+
+    title(ax4_f1, "Quaternion Components and Norm");
+    xlabel(ax4_f1, "Time [s]");
+    ylabel(ax4_f1, "Value");
+    legend(ax4_f1);
+    grid(ax4_f1, true);
+
+    // Save figure 1
     f1->draw();
     f1->save(plotDirectory + "/quadrotor_figure_eight_vertical_states.png");
 
@@ -389,9 +435,9 @@ int main()
     xlabel(ax2, "X [m]");
     ylabel(ax2, "Y [m]");
     zlabel(ax2, "Z [m]");
-    xlim(ax2, {0, 5});
-    ylim(ax2, {-2, 2});
-    zlim(ax2, {0, 5});
+    xlim(ax2, {-5, 5});
+    ylim(ax2, {0, 5});
+    zlim(ax2, {-5, 5});
     title(ax2, "3D Trajectory (Figure-8)");
     grid(ax2, true);
     f2->draw();
