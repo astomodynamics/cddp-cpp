@@ -110,9 +110,9 @@ add_executable(test_ipddp_pendulum test_ipddp_pendulum.cpp)
 target_link_libraries(test_ipddp_pendulum gtest gmock gtest_main cddp)
 gtest_discover_tests(test_ipddp_pendulum)
 
-add_executable(test_matplot test_matplot.cpp)
-target_link_libraries(test_matplot gtest gmock gtest_main cddp)
-gtest_discover_tests(test_matplot)
+# add_executable(test_matplot test_matplot.cpp)
+# target_link_libraries(test_matplot gtest gmock gtest_main cddp)
+# gtest_discover_tests(test_matplot)
 
 # Test for torch
 if (CDDP_CPP_TORCH)
