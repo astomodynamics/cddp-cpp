@@ -49,6 +49,7 @@
 #include "dynamics_model/spacecraft_landing2d.hpp"
 #include "dynamics_model/lti_system.hpp"
 #include "dynamics_model/dreyfus_rocket.hpp"
+#include "dynamics_model/spacecraft_roe.hpp"
 
 #include "matplot/matplot.h"
 
