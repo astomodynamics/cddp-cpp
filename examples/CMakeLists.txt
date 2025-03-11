@@ -25,8 +25,32 @@ target_link_libraries(cddp_car_ipddp cddp)
 add_executable(cddp_cartpole cddp_cartpole.cpp)
 target_link_libraries(cddp_cartpole cddp)
 
-add_executable(cddp_dubins_car cddp_dubins_car.cpp)
-target_link_libraries(cddp_dubins_car cddp)
+add_executable(cddp_hcw cddp_hcw.cpp)
+target_link_libraries(cddp_hcw cddp)
+
+add_executable(cddp_lti_system cddp_lti_system.cpp)
+target_link_libraries(cddp_lti_system cddp)
+
+add_executable(cddp_manipulator cddp_manipulator.cpp)
+target_link_libraries(cddp_manipulator cddp)
+
+add_executable(cddp_pendulum cddp_pendulum.cpp)
+target_link_libraries(cddp_pendulum cddp)
+
+add_executable(cddp_quadrotor_circle cddp_quadrotor_circle.cpp)
+target_link_libraries(cddp_quadrotor_circle cddp)
+
+add_executable(cddp_quadrotor_figure_eight_horizontal cddp_quadrotor_figure_eight_horizontal.cpp)
+target_link_libraries(cddp_quadrotor_figure_eight_horizontal cddp)
+
+add_executable(cddp_quadrotor_figure_eight_vertical cddp_quadrotor_figure_eight_vertical.cpp)
+target_link_libraries(cddp_quadrotor_figure_eight_vertical cddp)
+
+add_executable(cddp_quadrotor_point cddp_quadrotor_point.cpp)
+target_link_libraries(cddp_quadrotor_point cddp)
+
+# # add_executable(cddp_quadrotor_circle_safe cddp_quadrotor_circle_safe.cpp)
+# # target_link_libraries(cddp_quadrotor_circle_safe cddp)
 
 add_executable(cddp_unicycle cddp_unicycle.cpp)
 target_link_libraries(cddp_unicycle cddp)
@@ -40,23 +64,11 @@ target_link_libraries(cddp_unicycle_safe_ipddp cddp)
 add_executable(cddp_unicycle_safe_ipddp_v2 cddp_unicycle_safe_ipddp_v2.cpp)
 target_link_libraries(cddp_unicycle_safe_ipddp_v2 cddp)
 
-add_executable(cddp_manipulator cddp_manipulator.cpp)
-target_link_libraries(cddp_manipulator cddp)
+add_executable(cddp_unicycle_safe_comparison cddp_unicycle_safe_comparison.cpp)
+target_link_libraries(cddp_unicycle_safe_comparison cddp)
 
-add_executable(cddp_lti_system cddp_lti_system.cpp)
-target_link_libraries(cddp_lti_system cddp)
-
-add_executable(cddp_pendulum cddp_pendulum.cpp)
-target_link_libraries(cddp_pendulum cddp)
-
-add_executable(cddp_quadrotor cddp_quadrotor.cpp)
-target_link_libraries(cddp_quadrotor cddp)
-
-add_executable(cddp_hcw cddp_hcw.cpp)
-target_link_libraries(cddp_hcw cddp)
-
-add_executable(mpc_hcw mpc_hcw.cpp)
-target_link_libraries(mpc_hcw cddp)
+# add_executable(mpc_hcw mpc_hcw.cpp)
+# target_link_libraries(mpc_hcw cddp)
 
 # Ipopt examples
 if (CDDP_CPP_CASADI)
@@ -79,12 +91,6 @@ endif()
 if (CDDP_CPP_ACADO)
     add_executable(acado_car acado_car.cpp)
     target_link_libraries(acado_car cddp)
-
-    # add_executable(acado_unicycle acado_unicycle.cpp)
-    # target_link_libraries(acado_unicycle cddp)
-
-    # add_executable(acado_cartpole acado_cartpole.cpp)
-    # target_link_libraries(acado_cartpole cddp)
 endif()
 
 # Neural dynamics examples

@@ -38,49 +38,43 @@ option(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
 option(CDDP_CPP_ACADO "Whether to use Acado" OFF)
 
 # Gurobi Configuration
+# If you want to install Gurobi, please follow the instructions at:
+# https://support.gurobi.com/hc/en-us/articles/4534161999889-How-do-I-install-Gurobi-Optimizer 
 option(CDDP_CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
-set(GUROBI_ROOT $ENV{HOME}/.local/lib/gurobi1103/linux64)
+set(GUROBI_ROOT /usr/local/lib/gurobi1201/linux64)  # FIXME: Change this to your local gurobi installation directory
 
 # LibTorch Configuration
+# If you want to install LibTorch, please follow the instructions at:
+# https://pytorch.org/
+# $ sudo cp -r libtorch /usr/local/lib/
 option(CDDP_CPP_TORCH "Whether to use LibTorch" OFF)
 option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" OFF)
-set(LIBTORCH_DIR $ENV{HOME}/.local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
-
-# Python Configuration
-set(Python_EXECUTABLE /usr/bin/python3.10) # Or the path to your desired Python interpreter
-execute_process( # Find the NumPy include directory
-  COMMAND "${Python_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
-  OUTPUT_VARIABLE NUMPY_INCLUDE_DIR OUTPUT_STRIP_TRAILING_WHITESPACE 
-)
+set(LIBTORCH_DIR /usr/local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Find packages
 find_package(Eigen3 REQUIRED) 
-find_package(Python3 3.10 EXACT COMPONENTS Interpreter Development NumPy REQUIRED)
 
 if (CDDP_CPP_CASADI)
   # Assuming that CasADi is installed in /usr/local/include/casadi by:
-  # sudo apt install gfortran liblapack-dev pkg-config --install-recommends
-  # sudo apt install swig
-  # cd
-  # git clone https://github.com/casadi/casadi.git -b main
-  # cd casadi
-  # mkdir build
-  # cd build
-  # cmake -DWITH_PYTHON=ON -DWITH_IPOPT=ON -DWITH_OPENMP=ON -DWITH_THREAD=ON ..
-  # make
-  # sudo make install
-  # echo "export LD_LIBRARY_PATH=/home/<path_to_casadi>/casadi/build/lib:$LD_LIBRARY_PATH" >> ~/.bashrc && source ~/.bashrc
+  # https://github.com/casadi/casadi/wiki/InstallationLinux 
+  # $ echo "export LD_LIBRARY_PATH=/home/<path_to_casadi>/casadi/build/lib:$LD_LIBRARY_PATH" >> ~/.bashrc && source ~/.bashrc
 
   find_package(casadi REQUIRED)
-  set(CASADI_INCLUDE_DIR /$ENV{HOME}/local/include/casadi)
+  set(CASADI_INCLUDE_DIR /usr/local/include/casadi)
   find_library(CASADI_LIBRARY NAMES casadi HINTS ${CASADI_INCLUDE_DIR}/../lib $ENV{CASADI_PREFIX}/lib)
   set(CASADI_LIBRARIES ${CASADI_LIBRARIES} ${CASADI_LIBRARY})
+  if (NOT CASADI_LIBRARIES)
+    message(FATAL_ERROR "CasADi library not found. Please set CASADI_PREFIX.")
+  else()
+    message(STATUS "Found CasADi: ${CASADI_LIBRARIES}")
+  endif()
 endif()
 
 if (CDDP_CPP_ACADO)
   # Assuming that Acado is installed by: https://acado.github.io/install_linux.html
-  set(ACADO_DIR $ENV{HOME}/github/ACADOtoolkit)
+  set(ACADO_DIR $ENV{HOME}/github/ACADOtoolkit) # FIXME: Change this to your local Acado installation directory
+  
   # Include ACADO header files
   include_directories(${ACADO_DIR})
   include_directories(${ACADO_DIR}/acado)
@@ -88,6 +82,16 @@ endif()
 
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
+
+# Matplotplusplus
+FetchContent_Declare(matplotplusplus
+  GIT_REPOSITORY https://github.com/alandefreitas/matplotplusplus
+  GIT_TAG origin/master) # or whatever tag you want
+FetchContent_GetProperties(matplotplusplus)
+if(NOT matplotplusplus_POPULATED)
+    FetchContent_Populate(matplotplusplus)
+    add_subdirectory(${matplotplusplus_SOURCE_DIR} ${matplotplusplus_BINARY_DIR} EXCLUDE_FROM_ALL)
+endif()
 
 # Googletest
 if (CDDP_CPP_BUILD_TESTS)
@@ -203,8 +207,6 @@ FetchContent_GetProperties(osqp-cpp)
 # Include directories
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${Python3_INCLUDE_DIRS}
-  ${NUMPY_INCLUDE_DIR}
 ) 
 
 # Add your library
@@ -251,9 +253,7 @@ add_library(${PROJECT_NAME}
 
 target_link_libraries(${PROJECT_NAME} 
   Eigen3::Eigen 
-  Python3::Python
-  Python3::Module
-  Python3::NumPy
+  matplot
   osqp-cpp
 ) 
 
@@ -304,7 +304,8 @@ if (CDDP_CPP_GUROBI)
     
     include_directories(${GUROBI_INCLUDE_DIR})
     target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARIES}  gurobi_c++ 
-    gurobi110) 
+    gurobi120) # FIXME: Change this to your local gurobi installation 
+    message(STATUS "Successfully linked Gurobi version 120.") 
   else()
     message(FATAL_ERROR "Could not find Gurobi. Please set GUROBI_ROOT.")
   endif()
@@ -321,6 +322,7 @@ add_subdirectory(examples)
 # Cmake compile commmand:
 # $ mkdir build
 # $ cd build
-# $ cmake  -DCDDP_CPP_GUROBI=ON -DCDDP_CPP_BUILD_TESTS=ON -DGUROBI_ROOT=/home/tom/.local/lib/gurobi1103/linux64 -DCDDP_CPP_TORCH=ON -DCDDP_CPP_TORCH_GPU=ON -DLIBTORCH_DIR=/home/tom/.local/lib/libtorch ..
+# $ cmake -DCDDP_CPP_BUILD_TESTS=ON -DCDDP_CPP_TORCH=ON -DCDDP_CPP_TORCH_GPU=ON -DLIBTORCH_DIR=/usr/local/lib/libtorch -DCDDP_CPP_SQP=ON -DCDDP_CPP_GUROBI=ON -DGUROBI_ROOT=/usr/local/lib/gurobi1201/linux64 -DCDDP_CPP_CASADI=ON -DCDDP_CPP_ACADO=ON ..
 # $ make -j4
 # $ make test
+

@@ -22,9 +22,6 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "cddp.hpp"
-
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
 using namespace cddp;
 
 TEST(PendulumTest, DiscreteDynamics) {
@@ -74,20 +71,4 @@ TEST(PendulumTest, DiscreteDynamics) {
     double initial_energy = 9.81 * (1.0 + std::cos(M_PI/4));  // mgl(1+cos(theta))
     double final_energy = 9.81 * (1.0 + std::cos(theta_data.back()));
     ASSERT_LT(final_energy, initial_energy);
-
-    // // Plot the results
-    // plt::figure();
-    // plt::subplot(2, 1, 1);
-    // plt::plot(time_data, theta_data);
-    // plt::xlabel("Time (s)");
-    // plt::ylabel("Angle (rad)");
-    // plt::title("Pendulum Angle vs. Time");
-
-    // plt::subplot(2, 1, 2);
-    // plt::plot(time_data, theta_dot_data);
-    // plt::xlabel("Time (s)");
-    // plt::ylabel("Angular Velocity (rad/s)");
-    // plt::title("Pendulum Angular Velocity vs. Time");
-
-    // plt::show();
 }

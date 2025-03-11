@@ -26,8 +26,9 @@
 #include <Eigen/Dense>
 
 #include "cddp.hpp"
+#include "matplot/matplot.h"
 
-namespace plt = matplotlibcpp;
+using namespace matplot;
 namespace fs = std::filesystem;
 using namespace cddp;
 
@@ -161,11 +162,11 @@ int main() {
 
     // Create plot directory
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directory(plotDirectory);
+    if (!std::filesystem::exists(plotDirectory)) {
+        std::filesystem::create_directory(plotDirectory);
     }
 
-    // Extract solution data
+    // Extract state data arrays
     std::vector<double> x_arr, y_arr, z_arr, vx_arr, vy_arr, vz_arr, time_arr;
     for (size_t i = 0; i < X_sol.size(); ++i) {
         time_arr.push_back(t_sol[i]);
@@ -177,82 +178,57 @@ int main() {
         vz_arr.push_back(X_sol[i](5));
     }
 
-    // Plot results
-    plt::figure_size(1200, 800);
-    plt::subplot(2, 3, 1);
-    plt::title("X Position");
-    plt::plot(time_arr, x_arr, "b-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Position [m]");
-    plt::grid(true);
-
-    plt::subplot(2, 3, 2);
-    plt::title("Y Position");
-    plt::plot(time_arr, y_arr, "b-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Position [m]");
-    plt::grid(true);
-
-    plt::subplot(2, 3, 3);
-    plt::title("Z Position");
-    plt::plot(time_arr, z_arr, "b-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Position [m]");
-    plt::grid(true);
-
-    plt::subplot(2, 3, 4);
-    plt::title("X Velocity");
-    plt::plot(time_arr, vx_arr, "b-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Velocity [m/s]");
-    plt::grid(true);    
-
-    plt::subplot(2, 3, 5);
-    plt::title("Y Velocity");
-    plt::plot(time_arr, vy_arr, "b-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Velocity [m/s]");
-    plt::grid(true);
-
-    plt::subplot(2, 3, 6);
-    plt::title("Z Velocity");
-    plt::plot(time_arr, vz_arr, "b-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Velocity [m/s]");
-    plt::grid(true);
-
-    // plt::tight_layout();
-    plt::save(plotDirectory + "/hcw_results.png");
-    plt::clf();
-
-    // Plot control inputs
-    std::vector<double> fx_arr, fy_arr, fz_arr, time_arr2;
+    // Extract control data arrays (note: U_sol size is horizon, so use t_sol[i] for control time)
+    std::vector<double> u1_arr, u2_arr, u3_arr, t_control;
     for (size_t i = 0; i < U_sol.size(); ++i) {
-        time_arr2.push_back(t_sol[i]);
-        fx_arr.push_back(U_sol[i](0));
-        fy_arr.push_back(U_sol[i](1));
-        fz_arr.push_back(U_sol[i](2));
+        u1_arr.push_back(U_sol[i](0));
+        u2_arr.push_back(U_sol[i](1));
+        u3_arr.push_back(U_sol[i](2));
+        t_control.push_back(t_sol[i]);  // assign control time to corresponding state time step
     }
 
-    plt::figure_size(800, 600);
-    plt::title("Control Inputs");
-    plt::plot(time_arr2, fx_arr, "b-");
-    plt::plot(time_arr2, fy_arr, "r-");
-    plt::plot(time_arr2, fz_arr, "g-");
-    // Plot the control limits
-    plt::plot(time_arr2, std::vector<double>(time_arr2.size(), umin(0)), "k--");
-    plt::plot(time_arr2, std::vector<double>(time_arr2.size(), umax(0)), "k--");
-    plt::plot(time_arr2, std::vector<double>(time_arr2.size(), umin(1)), "k--");
-    plt::plot(time_arr2, std::vector<double>(time_arr2.size(), umax(1)), "k--");
-    plt::plot(time_arr2, std::vector<double>(time_arr2.size(), umin(2)), "k--");
-    plt::plot(time_arr2, std::vector<double>(time_arr2.size(), umax(2)), "k--");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Force [N]");
-    plt::grid(true);
+    // -------------------------------
+    // Plot state history (position & velocity)
+    // -------------------------------
+    auto fig1 = figure(true);
+    
+    // Position subplot
+    subplot(2,1,1);
+    plot(time_arr, x_arr, "-o")->line_width(2);
+    hold(on);
+    plot(time_arr, y_arr, "-o")->line_width(2);
+    plot(time_arr, z_arr, "-o")->line_width(2);
+    title("Position vs. Time");
+    xlabel("Time [s]");
+    ylabel("Position");
+    legend({"x", "y", "z"});
 
-    plt::save(plotDirectory + "/hcw_control_inputs.png");
-    plt::clf();
+    // Velocity subplot
+    subplot(2,1,2);
+    plot(time_arr, vx_arr, "-o")->line_width(2);
+    hold(on);
+    plot(time_arr, vy_arr, "-o")->line_width(2);
+    plot(time_arr, vz_arr, "-o")->line_width(2);
+    title("Velocity vs. Time");
+    xlabel("Time [s]");
+    ylabel("Velocity");
+    legend({"vx", "vy", "vz"});
 
+    // -------------------------------
+    // Plot control history
+    // -------------------------------
+    auto fig2 = figure(true);
+    plot(t_control, u1_arr, "-o")->line_width(2);
+    hold(on);
+    plot(t_control, u2_arr, "-o")->line_width(2);
+    plot(t_control, u3_arr, "-o")->line_width(2);
+    title("Control Inputs vs. Time");
+    xlabel("Time [s]");
+    ylabel("Control Input");
+    legend({"u1", "u2", "u3"});
 
+    // Optionally save the figures
+    save(fig1, plotDirectory + "/hcw_state_history.png");
+    save(fig2, plotDirectory + "/hcw_control_history.png");
     return 0;
 }

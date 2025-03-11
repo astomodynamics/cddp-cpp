@@ -24,7 +24,7 @@ namespace cddp {
 class Quadrotor : public DynamicalSystem {
 public:
     /**
-     * Constructor for the Quadrotor model
+     * Constructor for the Quaternion-based Quadrotor model
      * @param timestep Time step for discretization
      * @param mass Mass of the quadrotor
      * @param inertia_matrix Inertia matrix of the quadrotor
@@ -36,7 +36,7 @@ public:
 
     /**
      * Computes the continuous-time dynamics of the quadrotor model
-     * State vector: [x, y, z, phi, theta, psi, vx, vy, vz, omega_x, omega_y, omega_z]
+     * State vector: [x, y, z, qw, qx, qy, qz, vx, vy, vz, omega_x, omega_y, omega_z]
      * Control vector: [f1, f2, f3, f4] (motor forces)
      * @param state Current state vector
      * @param control Current control input
@@ -94,24 +94,25 @@ public:
 
 private:
     double mass_;              // Mass of the quadrotor
-    Eigen::Matrix3d inertia_; // Inertia matrix
-    double arm_length_;       // Length of the quadrotor arm
-    double gravity_{9.81};    // Gravitational acceleration
+    Eigen::Matrix3d inertia_;  // Inertia matrix
+    double arm_length_;        // Length of the quadrotor arm
+    double gravity_{9.81};     // Gravitational acceleration
 
-    // State indices
+    // State indices for quaternion-based representation
     static constexpr int STATE_X = 0;       // x position
     static constexpr int STATE_Y = 1;       // y position
     static constexpr int STATE_Z = 2;       // z position
-    static constexpr int STATE_PHI = 3;     // roll angle
-    static constexpr int STATE_THETA = 4;   // pitch angle
-    static constexpr int STATE_PSI = 5;     // yaw angle
-    static constexpr int STATE_VX = 6;      // x velocity
-    static constexpr int STATE_VY = 7;      // y velocity
-    static constexpr int STATE_VZ = 8;      // z velocity
-    static constexpr int STATE_OMEGA_X = 9; // angular velocity around x
-    static constexpr int STATE_OMEGA_Y = 10;// angular velocity around y
-    static constexpr int STATE_OMEGA_Z = 11;// angular velocity around z
-    static constexpr int STATE_DIM = 12;    // state dimension
+    static constexpr int STATE_QW = 3;      // quaternion w (scalar part)
+    static constexpr int STATE_QX = 4;      // quaternion x
+    static constexpr int STATE_QY = 5;      // quaternion y
+    static constexpr int STATE_QZ = 6;      // quaternion z
+    static constexpr int STATE_VX = 7;      // x velocity
+    static constexpr int STATE_VY = 8;      // y velocity
+    static constexpr int STATE_VZ = 9;      // z velocity
+    static constexpr int STATE_OMEGA_X = 10; // angular velocity about x
+    static constexpr int STATE_OMEGA_Y = 11; // angular velocity about y
+    static constexpr int STATE_OMEGA_Z = 12; // angular velocity about z
+    static constexpr int STATE_DIM = 13;    // state dimension
 
     // Control indices (motor forces)
     static constexpr int CONTROL_F1 = 0;    // front motor
@@ -121,13 +122,14 @@ private:
     static constexpr int CONTROL_DIM = 4;   // control dimension
 
     /**
-     * Helper function to compute rotation matrix from Euler angles
-     * @param phi Roll angle
-     * @param theta Pitch angle
-     * @param psi Yaw angle
+     * Helper function to compute rotation matrix from a quaternion
+     * @param qw Scalar part of quaternion
+     * @param qx x component
+     * @param qy y component
+     * @param qz z component
      * @return 3x3 rotation matrix
      */
-    Eigen::Matrix3d getRotationMatrix(double phi, double theta, double psi) const;
+    Eigen::Matrix3d getRotationMatrix(double qw, double qx, double qy, double qz) const;
 };
 
 } // namespace cddp

@@ -22,8 +22,6 @@
 #include "gtest/gtest.h"
 #include "cddp.hpp"
 
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
 using namespace cddp;
 
 TEST(DreyfusRocketTest, DiscreteDynamics) {

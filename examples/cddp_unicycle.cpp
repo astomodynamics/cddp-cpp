@@ -18,8 +18,9 @@
 #include <filesystem>
 
 #include "cddp.hpp"
+#include "matplot/matplot.h"
 
-namespace plt = matplotlibcpp;
+using namespace matplot;
 namespace fs = std::filesystem;
 
 int main() {
@@ -80,8 +81,7 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    // cddp::CDDPSolution solution = cddp_solver.solve("CLCDDP");
-    cddp::CDDPSolution solution = cddp_solver.solve("LogCDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("CLCDDP");
 
     // Extract solution
     auto X_sol = solution.state_sequence; // size: horizon + 1
@@ -109,96 +109,120 @@ int main() {
         omega_arr.push_back(u(1));
     }
 
-    // Plot the solution by subplots
-    plt::subplot(2, 1, 1);
-    plt::plot(x_arr, y_arr);
-    plt::title("State Trajectory");
-    plt::xlabel("x");
-    plt::ylabel("y");
+    // -----------------------------
+    // Plot states and controls
+    // -----------------------------
+    auto f1 = figure();
+    f1->size(1200, 800);
 
-    plt::subplot(2, 1, 2);
-    plt::plot(v_arr);
-    plt::plot(omega_arr);
-    plt::title("Control Inputs");
-    plt::save(plotDirectory + "/unicycle_cddp_test.png");
+    // First subplot: Position Trajectory
+    auto ax1 = subplot(3, 1, 0);
+    auto plot_handle = plot(ax1, x_arr, y_arr, "-b");
+    plot_handle->line_width(3);
+    title(ax1, "Position Trajectory");
+    xlabel(ax1, "x [m]");
+    ylabel(ax1, "y [m]");
 
-    // Create figure and axes
-    plt::figure_size(800, 600);
-    plt::title("unicycle Trajectory");
-    plt::xlabel("x");
-    plt::ylabel("y");
-    plt::xlim(-1, 3); // Adjust limits as needed
-    plt::ylim(-1, 3); // Adjust limits as needed
+    // Second subplot: Heading Angle vs Time
+    auto ax2 = subplot(3, 1, 1);
+    auto heading_plot_handle = plot(ax2, t_sol, theta_arr);
+    heading_plot_handle->line_width(3);
+    title(ax2, "Heading Angle");
+    xlabel(ax2, "Time [s]");
+    ylabel(ax2, "theta [rad]");
 
-    // Car dimensions
-    double car_length = 0.2;
-    double car_width = 0.1;
+    // Fourth subplot: Control Inputs
+    auto ax4 = subplot(3, 1, 2);
+    auto p1 = plot(ax4, v_arr, "--b");
+    p1->line_width(3);
+    p1->display_name("Acceleration");
 
-    // Animation function
-    for (int i = 0; i < X_sol.size(); ++i) {
+    hold(ax4, true);
+    auto p2 = plot(ax4, omega_arr, "--r");
+    p2->line_width(3);
+    p2->display_name("Steering");
 
-        if (i % 5 == 0) {
-            // Clear previous plot
-			plt::clf();
+    title(ax4, "Control Inputs");
+    xlabel(ax4, "Step");
+    ylabel(ax4, "Control");
+    legend(ax4);
 
-            // Plot car as a box with heading
+    f1->draw();
+    f1->save(plotDirectory + "/unicycle_cddp_results.png");
+
+    // -----------------------------
+    // Animation: unicycle Trajectory
+    // -----------------------------
+    auto f2 = figure();
+    f2->size(800, 600);
+    auto ax_anim = f2->current_axes();
+    if (!ax_anim)
+    {
+        ax_anim = axes();
+    }
+
+    double car_length = 0.35;
+    double car_width = 0.15;
+
+    for (size_t i = 0; i < X_sol.size(); ++i)
+    {
+        if (i % 10 == 0)
+        {
+            ax_anim->clear();
+            hold(ax_anim, true);
+
             double x = x_arr[i];
             double y = y_arr[i];
             double theta = theta_arr[i];
-            
-            // Calculate car corner points
-            std::vector<double> car_x(5);
-            std::vector<double> car_y(5);
 
-            car_x[0] = x + car_length/2 * cos(theta) - car_width/2 * sin(theta);
-            car_y[0] = y + car_length/2 * sin(theta) + car_width/2 * cos(theta);
-
-            car_x[1] = x + car_length/2 * cos(theta) + car_width/2 * sin(theta);
-            car_y[1] = y + car_length/2 * sin(theta) - car_width/2 * cos(theta);
-
-            car_x[2] = x - car_length/2 * cos(theta) + car_width/2 * sin(theta);
-            car_y[2] = y - car_length/2 * sin(theta) - car_width/2 * cos(theta);
-
-            car_x[3] = x - car_length/2 * cos(theta) - car_width/2 * sin(theta);
-            car_y[3] = y - car_length/2 * sin(theta) + car_width/2 * cos(theta);
-
-            car_x[4] = car_x[0]; // Close the shape
+            // Compute unicycle rectangle corners
+            std::vector<double> car_x(5), car_y(5);
+            car_x[0] = x + car_length / 2 * cos(theta) - car_width / 2 * sin(theta);
+            car_y[0] = y + car_length / 2 * sin(theta) + car_width / 2 * cos(theta);
+            car_x[1] = x + car_length / 2 * cos(theta) + car_width / 2 * sin(theta);
+            car_y[1] = y + car_length / 2 * sin(theta) - car_width / 2 * cos(theta);
+            car_x[2] = x - car_length / 2 * cos(theta) + car_width / 2 * sin(theta);
+            car_y[2] = y - car_length / 2 * sin(theta) - car_width / 2 * cos(theta);
+            car_x[3] = x - car_length / 2 * cos(theta) - car_width / 2 * sin(theta);
+            car_y[3] = y - car_length / 2 * sin(theta) + car_width / 2 * cos(theta);
+            car_x[4] = car_x[0];
             car_y[4] = car_y[0];
 
-            // Plot the car
-            plt::plot(car_x, car_y, "k-");        
+            auto car_line = plot(ax_anim, car_x, car_y);
+            car_line->color("black");
+            car_line->line_style("solid");
+            car_line->line_width(2);
+            car_line->display_name("Car");
 
-            // Plot trajectory up to current point
-            plt::plot(std::vector<double>(x_arr.begin(), x_arr.begin() + i + 1), 
-                    std::vector<double>(y_arr.begin(), y_arr.begin() + i + 1), "b-");
+            // Plot trajectory up to current frame
+            std::vector<double> traj_x(x_arr.begin(), x_arr.begin() + i + 1);
+            std::vector<double> traj_y(y_arr.begin(), y_arr.begin() + i + 1);
+            auto traj_line = plot(ax_anim, traj_x, traj_y);
+            traj_line->color("blue");
+            traj_line->line_style("solid");
+            traj_line->line_width(1.5);
+            traj_line->display_name("Trajectory");
 
-            // Add plot title
-            plt::title("unicycle Trajectory");
+            title(ax_anim, "unicycle Trajectory");
+            xlabel(ax_anim, "x [m]");
+            ylabel(ax_anim, "y [m]");
+            xlim(ax_anim, {-1, 2.2});
+            ylim(ax_anim, {-1, 2.2});
+            // legend(ax_anim);
 
-            // Set labels
-            plt::xlabel("x");
-            plt::ylabel("y");
-
-            // Adjust limits as needed
-            plt::xlim(-1, 3); 
-            plt::ylim(-1, 3); 
-
-            // Enable legend
-            plt::legend();
-
-            // Save current frame as an image
             std::string filename = plotDirectory + "/unicycle_frame_" + std::to_string(i) + ".png";
-            plt::save(filename);
-            
-            // Display plot continuously
-            plt::pause(0.01); // Pause for a short time
-
+            f2->draw();
+            f2->save(filename);
+            std::this_thread::sleep_for(std::chrono::milliseconds(80));
         }
-    };
+    }
+
+    // -----------------------------
+    // Generate GIF from frames using ImageMagick
+    // -----------------------------
+    std::string gif_command = "convert -delay 30 " + plotDirectory + "/unicycle_frame_*.png " + plotDirectory + "/unicycle.gif";
+    std::system(gif_command.c_str());
+
+    std::string cleanup_command = "rm " + plotDirectory + "/unicycle_frame_*.png";
+    std::system(cleanup_command.c_str());
 }
-
-// Create gif from images using ImageMagick
-// Installation:
-// $ sudo apt-get install imagemagick
-
-// convert -delay 100 ../results/tests/unicycle_frame_*.png ../results/tests/unicycle.gif 

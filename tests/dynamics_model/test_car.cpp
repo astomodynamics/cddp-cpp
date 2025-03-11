@@ -22,11 +22,8 @@
 #include "gtest/gtest.h"
 
 #include "dynamics_model/car.hpp"
-#include "matplotlibcpp.hpp"
 #include "cddp_core/objective.hpp"
 
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
 using namespace cddp;
 
 TEST(CarTest, DiscreteDynamics) {
@@ -82,32 +79,6 @@ TEST(CarTest, DiscreteDynamics) {
     EXPECT_NEAR(state[1], 0.9713, 1e-4);
     EXPECT_NEAR(state[2], 4.7168, 1e-4);
     EXPECT_NEAR(state[3], 1.0030, 1e-4);
-
-
-    // // Create directory for saving plot (if it doesn't exist)
-    // const std::string plotDirectory = "../plots/test";
-    // if (!fs::exists(plotDirectory)) {
-    //     fs::create_directory(plotDirectory);
-    // }
-
-    // // Plot the results
-    // // Plot trajectory in X-Y plane
-    // plt::figure(1);
-    // plt::plot(x_data, y_data, {{"label", "Trajectory"}});
-    // plt::xlabel("X Position");
-    // plt::ylabel("Y Position");
-    // plt::legend();
-    // plt::save(plotDirectory + "/car_trajectory.png");
-
-    // // Plot states over time
-    // plt::figure(2);
-    // plt::plot(time_data, theta_data, {{"label", "Heading"}});
-    // plt::plot(time_data, v_data, {{"label", "Velocity"}});
-    // plt::xlabel("Time");
-    // plt::ylabel("State");
-    // plt::legend();
-    // plt::save(plotDirectory + "/car_states.png");
-    // plt::show();
 }
 
 TEST(CarTest, JacobianTest) {

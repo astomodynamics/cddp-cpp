@@ -22,9 +22,10 @@
 #include <casadi/casadi.hpp>
 #include <Eigen/Dense>
 
-// Include matplotlib-cpp header (ensure you have it installed)
-#include "matplotlibcpp.hpp"
-namespace plt = matplotlibcpp;
+#include "cddp.hpp"
+#include "matplot/matplot.h"
+
+using namespace matplot;
 namespace fs = std::filesystem;
 
 int main() {
@@ -246,138 +247,144 @@ int main() {
         U_sol[t] = u_t;
     }
 
+    // Create plot directory.
+    const std::string plotDirectory = "../results/tests";
+    if (!fs::exists(plotDirectory)) {
+        fs::create_directory(plotDirectory);
+    }
+
     // Create a time vector.
     std::vector<double> t_sol(horizon + 1);
     for (int t = 0; t <= horizon; t++) {
         t_sol[t] = t * timestep;
     }
     
-    // Extract state variables for plotting.
-    std::vector<double> x_arr, theta_arr, x_dot_arr, theta_dot_arr;
-    for (int t = 0; t <= horizon; t++) {
-        x_arr.push_back(X_sol[t](0));
-        theta_arr.push_back(X_sol[t](1));
-        x_dot_arr.push_back(X_sol[t](2));
-        theta_dot_arr.push_back(X_sol[t](3));
+    // Extract solution data.
+    std::vector<double> x_arr, x_dot_arr, theta_arr, theta_dot_arr, force_arr, time_arr, time_arr2;
+    for (size_t i = 0; i < X_sol.size(); ++i) {
+        time_arr.push_back(t_sol[i]);
+        x_arr.push_back(X_sol[i](0));
+        theta_arr.push_back(X_sol[i](1));
+        x_dot_arr.push_back(X_sol[i](2));
+        theta_dot_arr.push_back(X_sol[i](3));
     }
-    // Extract control input (force)
-    std::vector<double> force_arr;
-    for (int t = 0; t < horizon; t++) {
-        force_arr.push_back(U_sol[t](0));
+    for (size_t i = 0; i < U_sol.size(); ++i) {
+        force_arr.push_back(U_sol[i](0));
+        time_arr2.push_back(t_sol[i]);
     }
 
-    // Plot the state trajectories in a 2x2 subplot.
-    plt::figure_size(1200, 800);
-    plt::subplot(2, 2, 1);
-    plt::title("Cart Position");
-    plt::plot(t_sol, x_arr, "b-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Position [m]");
-    plt::grid(true);
+    // --- Plot static results (2x2 plots for state trajectories) ---
+    auto fig1 = figure();
+    fig1->size(1200, 800);
 
-    plt::subplot(2, 2, 2);
-    plt::title("Pole Angle");
-    plt::plot(t_sol, theta_arr, "b-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Angle [rad]");
-    plt::grid(true);
+    auto ax1 = subplot(2, 2, 1);
+    title(ax1, "Cart Position");
+    plot(ax1, time_arr, x_arr)->line_style("b-");
+    xlabel(ax1, "Time [s]");
+    ylabel(ax1, "Position [m]");
+    grid(ax1, true);
 
-    plt::subplot(2, 2, 3);
-    plt::title("Cart Velocity");
-    plt::plot(t_sol, x_dot_arr, "b-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Velocity [m/s]");
-    plt::grid(true);
+    auto ax2 = subplot(2, 2, 2);
+    title(ax2, "Cart Velocity");
+    plot(ax2, time_arr, x_dot_arr)->line_style("b-");
+    xlabel(ax2, "Time [s]");
+    ylabel(ax2, "Velocity [m/s]");
+    grid(ax2, true);
 
-    plt::subplot(2, 2, 4);
-    plt::title("Pole Angular Velocity");
-    plt::plot(t_sol, theta_dot_arr, "b-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Angular Velocity [rad/s]");
-    plt::grid(true);
+    auto ax3 = subplot(2, 2, 3);
+    title(ax3, "Pole Angle");
+    plot(ax3, time_arr, theta_arr)->line_style("b-");
+    xlabel(ax3, "Time [s]");
+    ylabel(ax3, "Angle [rad]");
+    grid(ax3, true);
 
-    plt::tight_layout();
-    plt::show();
+    auto ax4 = subplot(2, 2, 4);
+    title(ax4, "Pole Angular Velocity");
+    plot(ax4, time_arr, theta_dot_arr)->line_style("b-");
+    xlabel(ax4, "Time [s]");
+    ylabel(ax4, "Angular Velocity [rad/s]");
+    grid(ax4, true);
 
-    // Plot control input.
-    std::vector<double> t_u(horizon);
-    for (int t = 0; t < horizon; t++) {
-        t_u[t] = t * timestep;
+    fig1->save(plotDirectory + "/cartpole_results.png");
+
+    // --- Plot control inputs ---
+    auto fig2 = figure();
+    fig2->size(800, 600);
+    title("Control Inputs");
+    plot(time_arr2, force_arr)->line_style("b-");
+    xlabel("Time [s]");
+    ylabel("Force [N]");
+    grid(true);
+    fig2->save(plotDirectory + "/cartpole_control_inputs.png");
+
+    // --- Animation ---
+    auto fig3 = figure();
+    auto ax_fig3 = fig3->current_axes();
+    fig3->size(800, 600);
+    title("CartPole Animation");
+    xlabel("x");
+    ylabel("y");
+
+    double cart_width = 0.3;
+    double cart_height = 0.2;
+    double pole_width = 0.05;
+
+    // Loop over the solution states to generate animation frames.
+    for (size_t i = 0; i < X_sol.size(); ++i) {
+        if (i % 5 == 0) {
+            // Clear previous content.
+            cla(ax_fig3);
+            hold(ax_fig3, true);
+
+            // Current state.
+            double x = x_arr[i];
+            double theta = theta_arr[i];
+
+            // Plot the cart as a rectangle centered at (x, 0).
+            std::vector<double> cart_x = { x - cart_width/2, x + cart_width/2,
+                                           x + cart_width/2, x - cart_width/2,
+                                           x - cart_width/2 };
+            std::vector<double> cart_y = { -cart_height/2, -cart_height/2,
+                                           cart_height/2, cart_height/2,
+                                           -cart_height/2 };
+            plot(cart_x, cart_y)->line_style("k-");
+
+            // Plot the pole as a line from the top center of the cart.
+            double pole_end_x = x + pole_length * std::sin(theta);
+            double pole_end_y = cart_height/2 - pole_length * std::cos(theta);
+            std::vector<double> pole_x = { x, pole_end_x };
+            std::vector<double> pole_y = { cart_height/2, pole_end_y };
+            plot(pole_x, pole_y)->line_style("b-");
+
+            // Plot the pole bob as a circle.
+            std::vector<double> circle_x, circle_y;
+            int num_points = 20;
+            for (int j = 0; j <= num_points; ++j) {
+                double t = 2 * M_PI * j / num_points;
+                circle_x.push_back(pole_end_x + pole_width * std::cos(t));
+                circle_y.push_back(pole_end_y + pole_width * std::sin(t));
+            }
+            plot(circle_x, circle_y)->line_style("b-");
+
+            // Set fixed axis limits for stable animation.
+            xlim({-2.0, 2.0});
+            ylim({-1.5, 1.5});
+
+            // Save the frame.
+            std::string filename = plotDirectory + "/frame_" + std::to_string(i) + ".png";
+            fig3->save(filename);
+            std::this_thread::sleep_for(std::chrono::milliseconds(80));
+        }
     }
-    plt::figure_size(800, 600);
-    plt::title("Control Input (Force)");
-    plt::plot(t_u, force_arr, "r-");
-    plt::xlabel("Time [s]");
-    plt::ylabel("Force [N]");
-    plt::grid(true);
-    plt::show();
 
-    // /////////////////////////////////
-    // // CartPole Animation          //
-    // /////////////////////////////////
+    // Combine all saved frames into a GIF using ImageMagick's convert tool.
+    std::string command = "convert -delay 30 " + plotDirectory + "/frame_*.png " + plotDirectory + "/cartpole_ipopt.gif";
+    std::system(command.c_str());
 
-    // // Create a directory to save animation frames.
-    // std::string plotDirectory = "./cartpole_frames";
-    // if (!fs::exists(plotDirectory)) {
-    //     fs::create_directory(plotDirectory);
-    // }
+    std::string cleanup_command = "rm " + plotDirectory + "/frame_*.png";
+    std::system(cleanup_command.c_str());
 
-    // // Define cart and pole dimensions for drawing.
-    // double cart_width  = 0.3;
-    // double cart_height = 0.2;
-    // double pole_width  = 0.05;
-
-    // plt::figure();
-    // for (int i = 0; i < static_cast<int>(X_sol.size()); i++) {
-    //     // Plot every 5th time step.
-    //     if (i % 5 == 0) {
-    //         plt::clf();
-
-    //         double cart_x = X_sol[i](0);
-    //         double theta  = X_sol[i](1);
-
-    //         // Draw the cart as a rectangle (centered at cart_x).
-    //         std::vector<double> cart_x_coords = {
-    //             cart_x - cart_width / 2, cart_x + cart_width / 2,
-    //             cart_x + cart_width / 2, cart_x - cart_width / 2,
-    //             cart_x - cart_width / 2
-    //         };
-    //         // For visualization, set the cart's vertical position near zero.
-    //         std::vector<double> cart_y_coords = {
-    //             -cart_height / 2, -cart_height / 2,
-    //             cart_height / 2, cart_height / 2,
-    //             -cart_height / 2
-    //         };
-    //         plt::plot(cart_x_coords, cart_y_coords, "k-");
-
-    //         // Draw the pole as a line from the top center of the cart.
-    //         double pole_base_x = cart_x;
-    //         double pole_base_y = cart_height / 2;
-    //         double pole_end_x  = pole_base_x + pole_length * std::sin(theta);
-    //         double pole_end_y  = pole_base_y - pole_length * std::cos(theta);
-    //         std::vector<double> pole_x_coords = {pole_base_x, pole_end_x};
-    //         std::vector<double> pole_y_coords = {pole_base_y, pole_end_y};
-    //         plt::plot(pole_x_coords, pole_y_coords, "b-", 2);
-
-    //         // Draw a circle at the end of the pole to represent the mass.
-    //         std::vector<double> circle_x, circle_y;
-    //         int num_points = 20;
-    //         for (int j = 0; j <= num_points; j++) {
-    //             double angle = 2 * M_PI * j / num_points;
-    //             circle_x.push_back(pole_end_x + pole_width * std::cos(angle));
-    //             circle_y.push_back(pole_end_y + pole_width * std::sin(angle));
-    //         }
-    //         plt::plot(circle_x, circle_y, "b-");
-
-    //         plt::xlim(-2, 2);
-    //         plt::ylim(-2, 2);
-    //         std::string filename = plotDirectory + "/frame_" + std::to_string(i) + ".png";
-    //         plt::save(filename);
-    //         plt::pause(0.01);
-    //     }
-    // }
-
-    // std::cout << "Animation frames saved in directory: " << plotDirectory << std::endl;
+    std::cout << "Animation saved as cartpole_ipopt.gif" << std::endl;
     
     return 0;
 }

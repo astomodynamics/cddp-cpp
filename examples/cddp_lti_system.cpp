@@ -1,26 +1,11 @@
-/*
- Copyright 2024 Tomo Sasaki
-
- Licensed under the Apache License, Version 2.0 (the "License");
- you may not use this file except in compliance with the License.
- You may obtain a copy of the License at
-
-      https://www.apache.org/licenses/LICENSE-2.0
-
- Unless required by applicable law or agreed to in writing, software
- distributed under the License is distributed on an "AS IS" BASIS,
- WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- See the License for the specific language governing permissions and
- limitations under the License.
-*/
-
 #include <iostream>
 #include <vector>
 #include <filesystem>
 #include <random>
 #include "cddp.hpp"
 
-namespace plt = matplotlibcpp;
+#include "matplot/matplot.h"
+using namespace matplot;
 namespace fs = std::filesystem;
 
 namespace cddp {
@@ -54,37 +39,40 @@ void printVector(const std::string& label, const std::vector<T>& vec) {
 }
 
 void plotStateTrajectories(const std::vector<Eigen::VectorXd>& X_sol, 
-                          const std::string& plotDirectory) {
+                             const std::string& plotDirectory) {
     const int state_dim = X_sol[0].size();
     std::vector<std::vector<double>> state_histories(state_dim);
     std::vector<double> time_history;
 
-    // Extract state histories
-    for(size_t t = 0; t < X_sol.size(); t++) {
-        time_history.push_back(t);
-        for(int i = 0; i < state_dim; i++) {
+    // Extract state histories (using the time index as sample number)
+    for (size_t t = 0; t < X_sol.size(); t++) {
+        time_history.push_back(static_cast<double>(t));
+        for (int i = 0; i < state_dim; i++) {
             state_histories[i].push_back(X_sol[t](i));
         }
     }
 
-    // Create subplot for each state dimension
-    plt::figure_size(1200, 800);
-    for(int i = 0; i < state_dim; i++) {
-        plt::subplot(state_dim, 1, i+1);
-        plt::plot(time_history, state_histories[i]);
-        plt::title("State " + std::to_string(i+1));
-        plt::grid(true);
+    // Create a new figure and set its size
+    auto fig = figure(true);
+    fig->size(1200, 800);
+
+    // Create a subplot for each state variable
+    for (int i = 0; i < state_dim; i++) {
+        // Create subplot: (rows, columns, index)
+        subplot(state_dim, 1, i + 1);
+        plot(time_history, state_histories[i])->line_width(2);
+        title("State " + std::to_string(i + 1));
+        grid(on);
     }
     
-    plt::tight_layout();
-    plt::save(plotDirectory + "/lti_states.png");
+    save(fig, plotDirectory + "/lti_states.png");
 }
 
 int main() {
     // Problem parameters
     int state_dim = 4;    // State dimension
-    int control_dim = 2;   // Control dimension
-    int horizon = 1000;    // Time horizon
+    int control_dim = 2;  // Control dimension
+    int horizon = 1000;   // Time horizon
     double timestep = 0.01;  // Time step
     std::string integration_type = "euler";
 
@@ -131,11 +119,11 @@ int main() {
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
     
-    // Random initial controls
+    // Random initial controls (here, a constant small control is used)
     std::random_device rd;
     std::mt19937 gen(rd());
     std::normal_distribution<double> d(0.0, 0.1);
-    for(auto& u : U) {
+    for (auto& u : U) {
         u = 0.01 * Eigen::VectorXd::Ones(control_dim);
     }
 
@@ -144,7 +132,7 @@ int main() {
     // Simulate initial trajectory
     double J = 0.0;
     double cost = 0.0;
-    for(size_t t = 0; t < horizon; t++) {
+    for (size_t t = 0; t < horizon; t++) {
         cost = cddp_solver.getObjective().running_cost(X[t], U[t], t);
         J += cost;
         X[t + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t]);
@@ -156,25 +144,25 @@ int main() {
     
     cddp_solver.setInitialTrajectory(X, U);
 
-    // Solve using different CDDP variants
+    // Solve using the CDDP solver
     cddp::CDDPSolution solution = cddp_solver.solve();
-    // cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
+    // Alternatively: cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
 
     // Extract solution trajectories
     auto X_sol = solution.state_sequence;
     auto U_sol = solution.control_sequence;
     auto t_sol = solution.time_sequence;
 
-    // Create directory for plots
+    // Create directory for plots if it doesn't exist
     const std::string plotDirectory = "../results/tests";
     if (!fs::exists(plotDirectory)) {
         fs::create_directories(plotDirectory);
     }
 
-    // Plot state trajectories
-    // plotStateTrajectories(X_sol, plotDirectory);
+    // Plot state trajectories using the matplot API
+    plotStateTrajectories(X_sol, plotDirectory);
 
-    // Print statistics
+    // Print optimization statistics
     std::cout << "\nOptimization Results:" << std::endl;
     std::cout << "Iterations: " << solution.iterations << std::endl;
     std::cout << "Final cost: " << solution.cost_sequence.back() << std::endl;

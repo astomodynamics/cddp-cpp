@@ -22,7 +22,6 @@
 #include <string>
 #include <vector>
 
-// Your cddp library (for the ground-truth Pendulum)
 #include "cddp.hpp"
 
 struct ODEFuncImpl : public torch::nn::Module {
@@ -214,28 +213,28 @@ int main(int argc, char* argv[])
         std::cout << "Saved CSV: " << out_file << std::endl;
     }
 
-    // 8) Plot the trajectories 
-    // plt args: (x, y, color, linestyle, linewidth, label)
+    // // 8) Plot the trajectories 
+    // // plt args: (x, y, color, linestyle, linewidth, label)
 
-    plt::figure_size(800, 400);
-    plt::subplot(1, 2, 1);
-    plt::title("True vs Predicted (Theta)");
-    plt::plot(theta_vec_true, {{"color", "red"}, {"linestyle", "-"}, {"label", "True theta"}});
-    plt::plot(theta_vec_nn, {{"color", "blue"}, {"linestyle", "--"}, {"label", "Predicted theta"}});
-    plt::legend();
-    plt::xlabel("Time step");
-    plt::ylabel("Theta");
+    // plt::figure_size(800, 400);
+    // plt::subplot(1, 2, 1);
+    // plt::title("True vs Predicted (Theta)");
+    // plt::plot(theta_vec_true, {{"color", "red"}, {"linestyle", "-"}, {"label", "True theta"}});
+    // plt::plot(theta_vec_nn, {{"color", "blue"}, {"linestyle", "--"}, {"label", "Predicted theta"}});
+    // plt::legend();
+    // plt::xlabel("Time step");
+    // plt::ylabel("Theta");
 
-    plt::subplot(1, 2, 2);
-    plt::title("True vs Predicted (Theta_dot)");
-    plt::plot(thetadot_vec_true, {{"color", "red"}, {"linestyle", "-"}, {"label", "True theta_dot"}});
-    plt::plot(thetadot_vec_nn, {{"color", "blue"}, {"linestyle", "--"}, {"label", "Predicted theta_dot"}});
-    plt::legend();
-    plt::xlabel("Time step");
-    plt::ylabel("Theta_dot");
+    // plt::subplot(1, 2, 2);
+    // plt::title("True vs Predicted (Theta_dot)");
+    // plt::plot(thetadot_vec_true, {{"color", "red"}, {"linestyle", "-"}, {"label", "True theta_dot"}});
+    // plt::plot(thetadot_vec_nn, {{"color", "blue"}, {"linestyle", "--"}, {"label", "Predicted theta_dot"}});
+    // plt::legend();
+    // plt::xlabel("Time step");
+    // plt::ylabel("Theta_dot");
 
-    plt::save("../examples/neural_dynamics/neural_models/pendulum_compare.png");
-    std::cout << "Saved plot: pendulum_compare.png" << std::endl;
+    // plt::save("../examples/neural_dynamics/neural_models/pendulum_compare.png");
+    // std::cout << "Saved plot: pendulum_compare.png" << std::endl;
 
     return 0;
 }
