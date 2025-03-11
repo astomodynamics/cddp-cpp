@@ -20,9 +20,13 @@
 #include <cmath>
 #include <casadi/casadi.hpp>
 #include <Eigen/Dense>
+#include <filesystem>
 
-#include "matplotlibcpp.hpp"
-namespace plt = matplotlibcpp;
+#include "cddp.hpp"
+#include "matplot/matplot.h"
+
+using namespace matplot;
+namespace fs = std::filesystem;
 
 int main() {
     ////////// Problem Setup //////////
@@ -39,7 +43,6 @@ int main() {
     goal_state << 2.0, 2.0, M_PI/2.0;          
     // Define cost weighting matrices
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    // (Here you might set Q if you want to penalize state deviations during the trajectory.)
 
     Eigen::MatrixXd R = 0.5 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     
@@ -211,41 +214,170 @@ int main() {
     // The result 'res["x"]' is a DM vector with the optimized decision variables.
     std::vector<double> sol = std::vector<double>(res.at("x"));
 
-    // Extract the state trajectory for plotting: collect x and y coordinates.
-    std::vector<double> x_hist, y_hist;
+    // Convert to state and control trajectories
+    std::vector<Eigen::VectorXd> X_sol(horizon + 1, Eigen::VectorXd(state_dim));
+    std::vector<Eigen::VectorXd> U_sol(horizon, Eigen::VectorXd(control_dim));
+    std::vector<double> t_sol(horizon + 1);
     for (int t = 0; t <= horizon; t++) {
-        double x_val = sol[t * state_dim + 0];
-        double y_val = sol[t * state_dim + 1];
-        x_hist.push_back(x_val);
-        y_hist.push_back(y_val);
+        t_sol[t] = t * timestep;
     }
 
-    // Print the final state and objective value.
-    std::vector<double> final_state(state_dim);
-    for (int i = 0; i < state_dim; i++) {
-        final_state[i] = sol[horizon * state_dim + i];
+    for (int t = 0; t <= horizon; t++)
+    {
+        for (int i = 0; i < state_dim; i++)
+        {
+            X_sol[t](i) = sol[t * state_dim + i];
+        }
     }
-    std::cout << "Final state:";
-    for (double val : final_state)
-        std::cout << " " << val;
-    std::cout << std::endl;
 
-    double final_obj = static_cast<double>(res.at("f"));
-    std::cout << "Final objective: " << final_obj << std::endl;
+    for (int t = 0; t < horizon; t++)
+    {
+        for (int i = 0; i < control_dim; i++)
+        {
+            U_sol[t](i) = sol[n_states + t * control_dim + i];
+        }
+    }
 
-    ////////// Plotting the Trajectory //////////
-    plt::figure();
-    // Plot the trajectory as a blue line.
-    plt::plot(x_hist, y_hist, "b-");
-    // Mark the initial state in green and the goal state in red.
-    plt::scatter(std::vector<double>{initial_state(0)}, std::vector<double>{initial_state(1)}, 100, {{"color", "green"}, {"label", "Start"}});
-    plt::scatter(std::vector<double>{goal_state(0)}, std::vector<double>{goal_state(1)}, 100, {{"color", "red"}, {"label", "Goal"}});
-    plt::xlabel("x");
-    plt::ylabel("y");
-    plt::title("Unicycle Trajectory");
-    plt::legend();
-    plt::grid(true);
-    plt::show();
+    // Create directory for saving plot (if it doesn't exist)
+    const std::string plotDirectory = "../results/tests";
+    if (!fs::exists(plotDirectory)) {
+        fs::create_directory(plotDirectory);
+    }
+
+    // Plot the solution (x-y plane)
+    std::vector<double> x_arr, y_arr, theta_arr;
+    for (const auto& x : X_sol) {
+        x_arr.push_back(x(0));
+        y_arr.push_back(x(1));
+        theta_arr.push_back(x(2));
+    }
+
+    // Plot the solution (control inputs)
+    std::vector<double> v_arr, omega_arr;
+    for (const auto& u : U_sol) {
+        v_arr.push_back(u(0));
+        omega_arr.push_back(u(1));
+    }
+
+    // -----------------------------
+    // Plot states and controls
+    // -----------------------------
+    auto f1 = figure();
+    f1->size(1200, 800);
+
+    // First subplot: Position Trajectory
+    auto ax1 = subplot(3, 1, 0);
+    auto plot_handle = plot(ax1, x_arr, y_arr, "-b");
+    plot_handle->line_width(3);
+    title(ax1, "Position Trajectory");
+    xlabel(ax1, "x [m]");
+    ylabel(ax1, "y [m]");
+
+    // Second subplot: Heading Angle vs Time
+    auto ax2 = subplot(3, 1, 1);
+    auto heading_plot_handle = plot(ax2, t_sol, theta_arr);
+    heading_plot_handle->line_width(3);
+    title(ax2, "Heading Angle");
+    xlabel(ax2, "Time [s]");
+    ylabel(ax2, "theta [rad]");
+
+    // Fourth subplot: Control Inputs
+    auto ax4 = subplot(3, 1, 2);
+    auto p1 = plot(ax4, v_arr, "--b");
+    p1->line_width(3);
+    p1->display_name("Acceleration");
+
+    hold(ax4, true);
+    auto p2 = plot(ax4, omega_arr, "--r");
+    p2->line_width(3);
+    p2->display_name("Steering");
+
+    title(ax4, "Control Inputs");
+    xlabel(ax4, "Step");
+    ylabel(ax4, "Control");
+    legend(ax4);
+
+    f1->draw();
+    f1->save(plotDirectory + "/unicycle_ipopt_results.png");
+
+    // -----------------------------
+    // Animation: unicycle Trajectory
+    // -----------------------------
+    auto f2 = figure();
+    f2->size(800, 600);
+    auto ax_anim = f2->current_axes();
+    if (!ax_anim)
+    {
+        ax_anim = axes();
+    }
+
+    double car_length = 0.35;
+    double car_width = 0.15;
+
+    for (size_t i = 0; i < X_sol.size(); ++i)
+    {
+        if (i % 10 == 0)
+        {
+            ax_anim->clear();
+            hold(ax_anim, true);
+
+            double x = x_arr[i];
+            double y = y_arr[i];
+            double theta = theta_arr[i];
+
+            // Compute unicycle rectangle corners
+            std::vector<double> car_x(5), car_y(5);
+            car_x[0] = x + car_length / 2 * cos(theta) - car_width / 2 * sin(theta);
+            car_y[0] = y + car_length / 2 * sin(theta) + car_width / 2 * cos(theta);
+            car_x[1] = x + car_length / 2 * cos(theta) + car_width / 2 * sin(theta);
+            car_y[1] = y + car_length / 2 * sin(theta) - car_width / 2 * cos(theta);
+            car_x[2] = x - car_length / 2 * cos(theta) + car_width / 2 * sin(theta);
+            car_y[2] = y - car_length / 2 * sin(theta) - car_width / 2 * cos(theta);
+            car_x[3] = x - car_length / 2 * cos(theta) - car_width / 2 * sin(theta);
+            car_y[3] = y - car_length / 2 * sin(theta) + car_width / 2 * cos(theta);
+            car_x[4] = car_x[0];
+            car_y[4] = car_y[0];
+
+            auto car_line = plot(ax_anim, car_x, car_y);
+            car_line->color("black");
+            car_line->line_style("solid");
+            car_line->line_width(2);
+            car_line->display_name("Car");
+
+            // Plot trajectory up to current frame
+            std::vector<double> traj_x(x_arr.begin(), x_arr.begin() + i + 1);
+            std::vector<double> traj_y(y_arr.begin(), y_arr.begin() + i + 1);
+            auto traj_line = plot(ax_anim, traj_x, traj_y);
+            traj_line->color("blue");
+            traj_line->line_style("solid");
+            traj_line->line_width(1.5);
+            traj_line->display_name("Trajectory");
+
+            title(ax_anim, "unicycle Trajectory");
+            xlabel(ax_anim, "x [m]");
+            ylabel(ax_anim, "y [m]");
+            xlim(ax_anim, {-1, 2.2});
+            ylim(ax_anim, {-1, 2.2});
+            // legend(ax_anim);
+
+            std::string filename = plotDirectory + "/unicycle_frame_" + std::to_string(i) + ".png";
+            f2->draw();
+            f2->save(filename);
+            std::this_thread::sleep_for(std::chrono::milliseconds(80));
+        }
+    }
+
+    // -----------------------------
+    // Generate GIF from frames using ImageMagick
+    // -----------------------------
+    std::string gif_command = "convert -delay 30 " + plotDirectory + "/unicycle_frame_*.png " + plotDirectory + "/unicycle_ipopt.gif";
+    std::system(gif_command.c_str());
+
+    std::string cleanup_command = "rm " + plotDirectory + "/unicycle_frame_*.png";
+    std::system(cleanup_command.c_str());
+
+
+    std::cout << "GIF animation created successfully: " << plotDirectory + "/unicycle_ipopt.gif" << std::endl;
 
     return 0;
 }

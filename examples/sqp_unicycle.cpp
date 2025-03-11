@@ -21,11 +21,8 @@
 #include <memory>
 #include <Eigen/Dense>
 
-#include "matplotlibcpp.hpp"
 #include "cddp.hpp"
 #include "sqp_core/sqp_core.hpp"
-
-namespace plt = matplotlibcpp;
 
 int main() {
     ////////// Problem Setup //////////
@@ -125,20 +122,6 @@ int main() {
     std::cout << "Goal state:    " << goal_state.transpose() << std::endl;
     std::cout << "Total iterations: " << solution.iterations << std::endl;
     std::cout << "Solve time (from SCPResult): " << solution.solve_time << " s" << std::endl;
-
-    ////////// Plot the Trajectory //////////
-    plt::figure();
-    plt::plot(x_hist, y_hist, "b-");
-    plt::scatter(std::vector<double>{initial_state(0)}, std::vector<double>{initial_state(1)},
-                 100, {{"color", "green"}, {"label", "Start"}});
-    plt::scatter(std::vector<double>{goal_state(0)}, std::vector<double>{goal_state(1)},
-                 100, {{"color", "red"}, {"label", "Goal"}});
-    plt::xlabel("x");
-    plt::ylabel("y");
-    plt::title("Unicycle Trajectory (SQP)");
-    plt::legend();
-    plt::grid(true);
-    plt::show();
 
     return 0;
 }

@@ -326,14 +326,14 @@ int main(int argc, char* argv[])
     torch::save(model, model_file);
     std::cout << "Model saved to " << model_file << std::endl;
 
-    // 10. Plot the loss
-    plt::figure();
-    plt::plot(losses);
-    plt::title("Training Loss");
-    plt::xlabel("Epoch");
-    plt::ylabel("MSE Loss");
-    plt::save(model_path + "/training_loss.png");
-    std::cout << "Saved plot: " << model_path + "/training_loss.png" << std::endl;
+    // // 10. Plot the loss
+    // plt::figure();
+    // plt::plot(losses);
+    // plt::title("Training Loss");
+    // plt::xlabel("Epoch");
+    // plt::ylabel("MSE Loss");
+    // plt::save(model_path + "/training_loss.png");
+    // std::cout << "Saved plot: " << model_path + "/training_loss.png" << std::endl;
 
     return 0;
 }
