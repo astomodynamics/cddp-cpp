@@ -11,7 +11,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         wget \
         libjpeg-dev \
         libpng-dev \
-        libeigen3-dev \
+        libeigen3-dev && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Cuda Toolkit
