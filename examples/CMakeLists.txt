@@ -49,8 +49,8 @@ target_link_libraries(cddp_quadrotor_figure_eight_vertical cddp)
 add_executable(cddp_quadrotor_point cddp_quadrotor_point.cpp)
 target_link_libraries(cddp_quadrotor_point cddp)
 
-# # add_executable(cddp_quadrotor_circle_safe cddp_quadrotor_circle_safe.cpp)
-# # target_link_libraries(cddp_quadrotor_circle_safe cddp)
+add_executable(cddp_quadrotor_figure_eight_horizontal_safe cddp_quadrotor_figure_eight_horizontal_safe.cpp)
+target_link_libraries(cddp_quadrotor_figure_eight_horizontal_safe cddp)
 
 add_executable(cddp_unicycle cddp_unicycle.cpp)
 target_link_libraries(cddp_unicycle cddp)
