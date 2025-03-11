@@ -23,7 +23,7 @@
 #include <thread>
 #include <chrono>
 
-#include "cddp.hpp"  // Your CDDP classes
+#include "cddp.hpp" 
 #include "matplot/matplot.h"
 
 namespace fs = std::filesystem;
@@ -70,16 +70,43 @@ int main() {
     options_10.num_threads = 1;
     options_10.cost_tolerance = 1e-5;
     options_10.grad_tolerance = 1e-4;
-    options_10.regularization_type = "both";
+    options_10.regularization_type = "control";
     options_10.regularization_control = 1e-2;
-    options_10.regularization_state = 1e-3;
+    options_10.regularization_state = 0.0;
     options_10.barrier_coeff = 1e-1;
+
+    cddp::CDDPOptions options_ipddp;
+    options_ipddp.max_iterations = 1000;
+    options_ipddp.verbose = true;
+    options_ipddp.debug = false;
+    options_ipddp.use_parallel = false;
+    options_ipddp.num_threads = 1;
+    options_ipddp.cost_tolerance = 1e-5;
+    options_ipddp.grad_tolerance = 1e-4;
+    options_ipddp.regularization_type = "control";
+    options_ipddp.regularization_control = 1e-4;
+    options_ipddp.regularization_state = 0.0;
+    options_ipddp.barrier_coeff = 1e-1;
+
+    cddp::CDDPOptions options_asddp;
+    options_asddp.max_iterations = 100;
+    options_asddp.verbose = true;
+    options_asddp.debug = false;
+    options_asddp.use_parallel = false;
+    options_asddp.num_threads = 1;
+    options_asddp.cost_tolerance = 1e-5;
+    options_asddp.grad_tolerance = 1e-4;
+    options_asddp.regularization_type = "control";
+    options_asddp.regularization_control = 1e-5;
+    options_asddp.regularization_state = 1e-6;
 
     // Constraint parameters
     // (Used only by baseline #2 and the subsequent 4 solutions,
     //  but not by the unconstrained solver.)
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 1.1, M_PI;
+    control_upper_bound << 2.0, M_PI;
+    Eigen::VectorXd control_lower_bound(control_dim);
+    control_lower_bound << -2.0, -M_PI;
     double radius = 0.4;
     Eigen::Vector2d center(1.0, 1.0);
 
@@ -138,7 +165,7 @@ int main() {
     // Simple initial guess
     std::vector<Eigen::VectorXd> X_ipddp10_init(horizon + 1, initial_state);
     std::vector<Eigen::VectorXd> U_ipddp10_init(horizon, Eigen::VectorXd::Zero(control_dim));
-    solver_ipddp_10.setInitialTrajectory(X_ipddp10_init, U_ipddp10_init);
+    solver_ipddp_10.setInitialTrajectory(X_unconstrained_sol, U_unconstrained_sol);
 
     // Solve for baseline #2
     cddp::CDDPSolution sol_ipddp_10 = solver_ipddp_10.solve("IPDDP");
@@ -156,21 +183,50 @@ int main() {
     //    C) IPDDP from ipddp_10 baseline
     //    D) ASDDP from ipddp_10 baseline
     //
-    //  All 4 are "with constraints" (control + ball).
-    //
-    //  For demonstration, we keep the same 'options_10' or
-    //  you can use a bigger iteration count to see improvement, e.g. 50 or 100.
     // --------------------------------------------------------
-    auto makeConstrainedSolver = [&](const std::string &method_name) {
-        return cddp::CDDP(
-            initial_state,
-            goal_state,
-            horizon,
-            timestep,
-            std::make_unique<cddp::Unicycle>(timestep, integration_type),
-            std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_ref, timestep),
-            options_10
-        );
+    auto makeConstrainedSolver = [&](const std::string &method_name, bool use_baseline = false) {
+        if (use_baseline) {
+            std::cout << "Using baseline solution as initial guess." << std::endl;
+        } else {
+            std::cout << "Using unconstrained solution as initial guess." << std::endl;
+        }
+
+        if (use_baseline) {
+            return cddp::CDDP(
+                initial_state,
+                goal_state,
+                horizon,
+                timestep,
+                std::make_unique<cddp::Unicycle>(timestep, integration_type),
+                std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_ref, timestep),
+                options_10
+            );
+        } else {
+            if (method_name == "IPDDP") {
+                std::cout << "Using IPDDP method." << std::endl;
+                return cddp::CDDP(
+                    initial_state,
+                    goal_state,
+                    horizon,
+                    timestep,
+                    std::make_unique<cddp::Unicycle>(timestep, integration_type),
+                    std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_ref, timestep),
+                    options_ipddp
+                );
+            } else if (method_name == "ASDDP") {
+                std::cout << "Using ASDDP method." << std::endl;
+                return cddp::CDDP(
+                    initial_state,
+                    goal_state,
+                    horizon,
+                    timestep,
+                    std::make_unique<cddp::Unicycle>(timestep, integration_type),
+                    std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_ref, timestep),
+                    options_asddp
+                );
+            }
+            
+        }
     };
 
     // (A) IPDDP from unconstrained
@@ -187,8 +243,9 @@ int main() {
 
     // (B) ASDDP from unconstrained
     cddp::CDDP solver_asddp_from_unconstrained = makeConstrainedSolver("ASDDP");
-    solver_asddp_from_unconstrained.addConstraint("ControlConstraint",
-        std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    solver_asddp_from_unconstrained.addConstraint("ControlBoxConstraint",
+        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound,
+            control_upper_bound));
     solver_asddp_from_unconstrained.addConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
     solver_asddp_from_unconstrained.setInitialTrajectory(
@@ -211,8 +268,9 @@ int main() {
 
     // (D) ASDDP from ipddp_10 baseline
     cddp::CDDP solver_asddp_from_ipddp10 = makeConstrainedSolver("ASDDP");
-    solver_asddp_from_ipddp10.addConstraint("ControlConstraint",
-        std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    solver_asddp_from_ipddp10.addConstraint("ControlBoxConstraint",
+        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound,
+            control_upper_bound));
     solver_asddp_from_ipddp10.addConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
     solver_asddp_from_ipddp10.setInitialTrajectory(
@@ -301,13 +359,16 @@ int main() {
     title(ax, "Comparison of 6 Trajectories");
     xlabel(ax, "x [m]");
     ylabel(ax, "y [m]");
-    legend(ax);
+    xlim(ax, {-0.2, 2.5});
+    ylim(ax, {-0.2, 2.5});
+    auto l = legend(ax);
+    l->location(legend::general_alignment::topleft);
     grid(ax, true);
 
     f1->draw();
-    f1->save(plotDirectory + "/six_trajectories_comparison.png");
+    f1->save(plotDirectory + "/unicycle_six_trajectories_comparison.png");
     std::cout << "Saved figure with 6 trajectories to "
-              << (plotDirectory + "/six_trajectories_comparison.png") << std::endl;
+              << (plotDirectory + "/unicycle_six_trajectories_comparison.png") << std::endl;
 
     return 0;
 }

@@ -64,6 +64,9 @@ target_link_libraries(cddp_unicycle_safe_ipddp cddp)
 add_executable(cddp_unicycle_safe_ipddp_v2 cddp_unicycle_safe_ipddp_v2.cpp)
 target_link_libraries(cddp_unicycle_safe_ipddp_v2 cddp)
 
+add_executable(cddp_unicycle_safe_comparison cddp_unicycle_safe_comparison.cpp)
+target_link_libraries(cddp_unicycle_safe_comparison cddp)
+
 # add_executable(mpc_hcw mpc_hcw.cpp)
 # target_link_libraries(mpc_hcw cddp)
 
