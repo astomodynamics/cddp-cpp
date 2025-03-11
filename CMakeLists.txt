@@ -73,7 +73,8 @@ endif()
 
 if (CDDP_CPP_ACADO)
   # Assuming that Acado is installed by: https://acado.github.io/install_linux.html
-  set(ACADO_DIR $ENV{HOME}/github/ACADOtoolkit)
+  set(ACADO_DIR $ENV{HOME}/github/ACADOtoolkit) # FIXME: Change this to your local Acado installation directory
+  
   # Include ACADO header files
   include_directories(${ACADO_DIR})
   include_directories(${ACADO_DIR}/acado)
