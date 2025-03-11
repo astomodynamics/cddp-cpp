@@ -27,7 +27,6 @@
 #include <Eigen/Dense>
 #include "cddp.hpp"  
 
-namespace plt = matplotlibcpp;
 
 /**
  * @brief Print a simple progress bar in the console.
@@ -147,28 +146,28 @@ int main(int argc, char* argv[]) {
     csv_file.close();
     std::cout << "Dataset saved to " << csv_filename << std::endl;
 
-    plt::figure_size(1500, 500); // figsize=(15,5) roughly
+    // plt::figure_size(1500, 500); // figsize=(15,5) roughly
 
-    // 1) Plot theta distribution
-    plt::subplot(1, 3, 1);
-    plt::hist(all_theta, 50);  // bins=50
-    plt::title("Theta Distribution");
-    plt::xlabel("Theta (rad)");
+    // // 1) Plot theta distribution
+    // plt::subplot(1, 3, 1);
+    // plt::hist(all_theta, 50);  // bins=50
+    // plt::title("Theta Distribution");
+    // plt::xlabel("Theta (rad)");
 
-    // 2) Plot theta_dot distribution
-    plt::subplot(1, 3, 2);
-    plt::hist(all_theta_dot, 50); // bins=50
-    plt::title("Angular Velocity Distribution");
-    plt::xlabel("Theta_dot (rad/s)");
+    // // 2) Plot theta_dot distribution
+    // plt::subplot(1, 3, 2);
+    // plt::hist(all_theta_dot, 50); // bins=50
+    // plt::title("Angular Velocity Distribution");
+    // plt::xlabel("Theta_dot (rad/s)");
 
-    // 3) Plot phase space
-    plt::subplot(1, 3, 3);
-    plt::scatter(all_theta, all_theta_dot, /*size=*/2.0);
-    plt::title("Phase Space");
-    plt::xlabel("Theta (rad)");
-    plt::ylabel("Theta_dot (rad/s)");
+    // // 3) Plot phase space
+    // plt::subplot(1, 3, 3);
+    // plt::scatter(all_theta, all_theta_dot, /*size=*/2.0);
+    // plt::title("Phase Space");
+    // plt::xlabel("Theta (rad)");
+    // plt::ylabel("Theta_dot (rad/s)");
 
-    plt::save("../examples/neural_dynamics/data/pendulum_dataset.png");
+    // plt::save("../examples/neural_dynamics/data/pendulum_dataset.png");
     // plt::show();
     return 0;
 }

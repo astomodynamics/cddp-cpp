@@ -23,9 +23,6 @@
 #include "cddp.hpp"
 #include "sqp_core/sqp.hpp"
 
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
-
 TEST(SQPTest, SolveUnicycle) {
     // Problem parameters
     int state_dim = 3;
@@ -141,37 +138,4 @@ TEST(SQPTest, SolveUnicycle) {
             omega_arr.push_back(U_sol[i](1));
         }
     }
-
-    // // Create plot directory if needed
-    // const std::string plotDirectory = "../results/tests";
-    // if (!fs::exists(plotDirectory)) {
-    //     fs::create_directory(plotDirectory);
-    // }
-
-    // // Plot results
-    // plt::figure_size(800, 600);
-    // plt::subplot(2, 1, 1);
-    // plt::plot(x_arr, y_arr, "b-");
-    // plt::plot({initial_state(0)}, {initial_state(1)}, "go");
-    // plt::plot({goal_state(0)}, {goal_state(1)}, "ro");
-    // plt::title("State Trajectory");
-    // plt::xlabel("x");
-    // plt::ylabel("y");
-    // plt::legend();
-    // plt::grid(true);
-
-    // plt::subplot(2, 1, 2);
-    // plt::plot(v_arr, "b-");
-    // plt::plot(omega_arr, "r-");
-    // plt::plot(std::vector<double>(U_sol.size(), -1.0), "k--");
-    // plt::plot(std::vector<double>(U_sol.size(), 1.0), "k--");
-    // plt::title("Control Inputs");
-    // plt::xlabel("Time step");
-    // plt::ylabel("Control");
-    // plt::legend();
-    // plt::grid(true);
-
-    // plt::save(plotDirectory + "/unicycle_sqp_test.png");
-    // plt::close();
-   
 }

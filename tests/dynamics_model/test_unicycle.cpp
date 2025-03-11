@@ -23,9 +23,6 @@
 #include "gtest/gtest.h"
 
 #include "cddp.hpp"
-
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
 using namespace cddp;
 
 TEST(UnicycleTest, DiscreteDynamics) {
@@ -55,22 +52,6 @@ TEST(UnicycleTest, DiscreteDynamics) {
         // Compute the next state
         state = unicycle.getDiscreteDynamics(state, control); 
     }
-
-    // // Create directory for saving plot (if it doesn't exist)
-    // const std::string plotDirectory = "../plots/test";
-    // if (!fs::exists(plotDirectory)) {
-    //     fs::create_directory(plotDirectory);
-    // }
-
-    // // Plot the results
-    // plt::figure();
-    // plt::plot(x_data, y_data, {{"label", "Trajectory"}});
-    // plt::xlabel("X");
-    // plt::ylabel("Y");
-    // plt::title("unicycle Trajectory");
-    // plt::legend();
-    // plt::save(plotDirectory + "/unicycle_trajectory.png");
-    // // plt::show();
 
     // Assert true if the unicycle has the correct state dimension
     ASSERT_EQ(unicycle.getStateDim(), 3);

@@ -21,60 +21,9 @@
 #include <vector>
 #include <chrono>
 #include <cmath>
-#include "animation.hpp"        
-#include "matplotlibcpp.hpp"     
-
-namespace plt = matplotlibcpp;
 using namespace ACADO;
 
-//---------------------------------------------------------------------
-// Helper function: Plot a car box using matplotlibcpp and Eigen
-//---------------------------------------------------------------------
-void plotCarBox(const Eigen::VectorXd& state, const Eigen::VectorXd& control,
-                  double length, double width, const std::string& color) {
-    double x     = state(0);
-    double y     = state(1);
-    double theta = state(2);
 
-    // Compute car corners (polygon)
-    std::vector<double> car_x(5), car_y(5);
-
-    // Front right
-    car_x[0] = x + length/2 * cos(theta) - width/2 * sin(theta);
-    car_y[0] = y + length/2 * sin(theta) + width/2 * cos(theta);
-
-    // Front left
-    car_x[1] = x + length/2 * cos(theta) + width/2 * sin(theta);
-    car_y[1] = y + length/2 * sin(theta) - width/2 * cos(theta);
-
-    // Rear left
-    car_x[2] = x - length/2 * cos(theta) + width/2 * sin(theta);
-    car_y[2] = y - length/2 * sin(theta) - width/2 * cos(theta);
-
-    // Rear right
-    car_x[3] = x - length/2 * cos(theta) - width/2 * sin(theta);
-    car_y[3] = y - length/2 * sin(theta) + width/2 * cos(theta);
-
-    // Close the polygon
-    car_x[4] = car_x[0];
-    car_y[4] = car_y[0];
-
-    // Plot the car body
-    std::map<std::string, std::string> keywords;
-    keywords["color"] = color;
-    plt::plot(car_x, car_y, keywords);
-
-    // Plot the base point
-    std::vector<double> base_x = {x};
-    std::vector<double> base_y = {y};
-    keywords["color"] = "red";
-    keywords["marker"] = "o";
-    plt::plot(base_x, base_y, keywords);
-}
-
-//---------------------------------------------------------------------
-// Main function using ACADO to solve the car parking problem
-//---------------------------------------------------------------------
 int main() {
     // Problem parameters
     const int state_dim   = 4;    // [x, y, theta, v]
@@ -142,49 +91,6 @@ int main() {
     std::cout << "Solution retrieved: " 
               << stateGrid.getNumPoints() << " states, " 
               << controlGrid.getNumPoints() << " controls." << std::endl;
-
-    // Extract state trajectory (for plotting/animation)
-    std::vector<double> x_hist, y_hist;
-    for (unsigned int i = 0; i < stateGrid.getNumPoints(); i++) {
-        DVector state = stateGrid.getVector(i);  // state order: [x, y, theta, v]
-        x_hist.push_back(state(0));
-        y_hist.push_back(state(1));
-    }
-
-    // Animation setup (using your custom Animation class)
-    Animation::AnimationConfig config;
-    config.width = 800;
-    config.height = 800;
-    config.frame_skip = 5;
-    config.frame_delay = 10;
-    Animation animation(config);
-
-    double car_length = 2.1;
-    double car_width  = 0.9;
-    Eigen::VectorXd empty_control = Eigen::VectorXd::Zero(control_dim);
-
-    // For each time step, plot the trajectory and the car configuration.
-    for (unsigned int i = 0; i < stateGrid.getNumPoints(); i++) {
-        DVector state = stateGrid.getVector(i);
-        Eigen::VectorXd eigenState(state.getDim());
-        for (int j = 0; j < state.getDim(); j++) {
-            eigenState(j) = state(j);
-        }
-        animation.newFrame();
-        plt::plot(x_hist, y_hist, "b-");
-
-        // Define goal state (same as in your CasADi example)
-        Eigen::VectorXd goal_state(state_dim);
-        goal_state << 0.0, 0.0, 0.0, 0.0;
-        plotCarBox(goal_state, empty_control, car_length, car_width, "r");
-        plotCarBox(eigenState, empty_control, car_length, car_width, "k");
-
-        plt::grid(true);
-        plt::xlim(-4, 4);
-        plt::ylim(-4, 4);
-        animation.saveFrame(i);
-    }
-    animation.createGif("car_parking_acado.gif");
 
     return 0;
 }

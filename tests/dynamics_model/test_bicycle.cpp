@@ -22,10 +22,6 @@
 #include "gtest/gtest.h"
 
 #include "dynamics_model/bicycle.hpp"
-#include "cddp-cpp/matplotlibcpp.hpp"
-
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
 using namespace cddp;
 
 TEST(BicycleTest, DiscreteDynamics) {
@@ -57,31 +53,6 @@ TEST(BicycleTest, DiscreteDynamics) {
         // Compute the next state
         state = bicycle.getDiscreteDynamics(state, control);
     }
-
-    // // Create directory for saving plot (if it doesn't exist)
-    // const std::string plotDirectory = "../plots/test";
-    // if (!fs::exists(plotDirectory)) {
-    //     fs::create_directory(plotDirectory);
-    // }
-
-    // // Plot the results
-    // // Plot trajectory in X-Y plane
-    // plt::figure(1);
-    // plt::plot(x_data, y_data, {{"label", "Trajectory"}});
-    // plt::xlabel("X Position");
-    // plt::ylabel("Y Position");
-    // plt::legend();
-    // plt::save(plotDirectory + "/bicycle_trajectory.png");
-
-    // // Plot states over time
-    // plt::figure(2);
-    // plt::plot(time_data, theta_data, {{"label", "Heading"}});
-    // plt::plot(time_data, v_data, {{"label", "Velocity"}});
-    // plt::xlabel("Time");
-    // plt::ylabel("State");
-    // plt::legend();
-    // plt::save(plotDirectory + "/bicycle_states.png");
-    // plt::show();
 
     // Basic assertions
     ASSERT_EQ(bicycle.getStateDim(), 4);

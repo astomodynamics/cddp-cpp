@@ -21,9 +21,6 @@
 
 #include "cddp-cpp/cddp.hpp"
 
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
-
 TEST(CDDPTest, Solve) {
     int state_dim = 2;
     int control_dim = 1;
@@ -116,39 +113,10 @@ TEST(CDDPTest, Solve) {
     // Solve the problem
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
-auto X_sol = solution.state_sequence;
+    auto X_sol = solution.state_sequence;
     auto U_sol = solution.control_sequence;
     auto t_sol = solution.time_sequence;
 
-    // Create plot directory
-    const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directory(plotDirectory);
-    }
-
-    // Extract solution data
-    std::vector<double> theta_arr, theta_dot_arr, torque_arr;
-    for (const auto& x : X_sol) {
-        theta_arr.push_back(x(0));
-        theta_dot_arr.push_back(x(1));
-    }
-    for (const auto& u : U_sol) {
-        torque_arr.push_back(u(0));
-    }
-
-     // Plot results
-    plt::subplot(2, 1, 1);
-    plt::named_plot("Angle", theta_arr);
-    plt::named_plot("Angular Velocity", theta_dot_arr);
-    plt::title("State Trajectory");
-    plt::legend();
-
-    plt::subplot(2, 1, 2);
-    plt::named_plot("Torque", torque_arr);
-    plt::title("Control Input");
-    plt::legend();
-    
-    plt::save(plotDirectory + "/pendulum_cddp_test.png");
 
 
 }

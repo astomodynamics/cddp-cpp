@@ -83,7 +83,13 @@ Car model with limited velocity and steering control:
 ./examples/cddp_car // after building
 ```
 
-<img src="results/tests/car_motion.gif" width="300" alt="Car Model CDDP">
+<img src="results/tests/car_parking.gif" width="300" alt="Car Model CDDP">
+
+```bash
+./examples/cddp_car_ipddp // after building
+```
+
+<img src="results/tests/car_parking_ipddp.gif" width="300" alt="Car Model CDDP">
 
 ### Pendulum
 
@@ -105,16 +111,35 @@ Cartpole with cart control:
 ```
 
 <img src="results/tests/cartpole.gif" width="300" alt="Cartpole CDDP">
+<img src="results/tests/cartpole_results.png" width="300" alt="Cartpole CDDP">
+
 
 ### Quadrotor
 
 Quadrotor with thrust control:
 
 ```bash
-./examples/cddp_quadrotor // after building
+./examples/cddp_quadrotor_point // after building
 ```
 
 <img src="results/tests/quadrotor.gif" width="300" alt="Quadrotor CDDP">
+
+```bash
+./examples/cddp_quadrotor_circle // after building
+```
+
+<img src="results/tests/quadrotor_circle.gif" width="300" alt="Quadrotor CDDP">
+
+
+```bash
+./examples/cddp_quadrotor_figure_eight_horizontal // after building
+```
+<img src="results/tests/quadrotor_figure_eight_horizontal.gif" width="300" alt="Quadrotor CDDP">
+
+```bash
+./examples/cddp_quadrotor_figure_eight_vertical // after building
+```
+<img src="results/tests/quadrotor_figure_eight_vertical.gif" width="300" alt="Quadrotor CDDP">
 
 ### Manipulator
 
@@ -140,14 +165,15 @@ sudo apt-get install libeigen3-dev # For Ubuntu
 brew install eigen # For macOS
 ```
 
-* [Matplotlib](https://matplotlib.org/) (Plotting Library in Python)
+* [gnuplot](http://www.gnuplot.info/) (Plotting Library)
 ```bash
-pip install matplotlib
+sudo apt-get install gnuplot # For Ubuntu
+brew install gnuplot # For macOS
 ```
-
-* [numpy](https://numpy.org/) (Numerical Library in Python)
+* [imagemagick](https://imagemagick.org/) (Image Processing Library)
 ```bash
-pip install numpy
+sudo apt-get install imagemagick # For Ubuntu
+brew install imagemagick # For macOS
 ```
 
 Although the library automatically finds and installs the following dependencies via [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html), if you do not have ones, here is how you can install on your own.
@@ -187,7 +213,7 @@ This project uses the following open-source libraries:
 
 * [OSQP](https://github.com/google/osqp-cpp) (Apache License 2.0)
 * [osqp-cpp](https://github.com/google/osqp-cpp) (Apache License 2.0)
-* [matplotlibcpp](https://github.com/lava/matplotlib-cpp) (MIT License)
+* [matplotplusplus](https://github.com/alandefreitas/matplotplusplus) (MIT License)
 * [libtorch](https://github.com/pytorch/pytorch) (BSD 3-Clause License)
 
 ## Citing
@@ -201,6 +227,7 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 * add state constraint handling
 * add initial guess functionality based on path planner solution
 * add automatic differentiation
+* add second-order derivative handling
 * add nonlinear objective and constraint handling
 * improve parallelization
 * improve boxqp

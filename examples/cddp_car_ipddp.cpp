@@ -16,104 +16,129 @@
 
 #include <iostream>
 #include <vector>
+#include <filesystem>
 #include <cmath>
 #include <map>
 #include <string>
 #include "cddp.hpp"
+#include "matplot/matplot.h"
 
-namespace plt = matplotlibcpp;
+using namespace matplot;
+namespace fs = std::filesystem;
 
-// Define the CarParkingObjective 
-namespace cddp {
+namespace cddp
+{
 
-class CarParkingObjective : public NonlinearObjective {
-public:
-    CarParkingObjective(const Eigen::VectorXd& goal_state, double timestep)
-        : NonlinearObjective(timestep), reference_state_(goal_state) {
-        cu_ = Eigen::Vector2d(1e-2, 1e-4);
-        cf_ = Eigen::Vector4d(0.1, 0.1, 1.0, 0.3);
-        pf_ = Eigen::Vector4d(0.01, 0.01, 0.01, 1.0);
-        cx_ = Eigen::Vector2d(1e-3, 1e-3);
-        px_ = Eigen::Vector2d(0.1, 0.1);
-    }
+    class CarParkingObjective : public NonlinearObjective
+    {
+    public:
+        CarParkingObjective(const Eigen::VectorXd &goal_state, double timestep)
+            : NonlinearObjective(timestep), reference_state_(goal_state)
+        {
+            // Control cost coefficients: cu = 1e-2*[1 .01]
+            cu_ = Eigen::Vector2d(1e-2, 1e-4);
 
-    double running_cost(const Eigen::VectorXd& state, 
-                        const Eigen::VectorXd& control, 
-                        int index) const override {
-        double lu = cu_.dot(control.array().square().matrix());
-        Eigen::VectorXd xy_state = state.head(2);
-        double lx = cx_.dot(sabs(xy_state, px_));
-        return lu + lx;
-    }
+            // Final cost coefficients: cf = [.1 .1 1 .3]
+            cf_ = Eigen::Vector4d(0.1, 0.1, 1.0, 0.3);
 
-    double terminal_cost(const Eigen::VectorXd& final_state) const override {
-        return cf_.dot(sabs(final_state, pf_)) + running_cost(final_state, Eigen::VectorXd::Zero(2), 0);
-    }
+            // Smoothness scales for final cost: pf = [.01 .01 .01 1]
+            pf_ = Eigen::Vector4d(0.01, 0.01, 0.01, 1.0);
 
-private:
-    Eigen::VectorXd sabs(const Eigen::VectorXd& x, const Eigen::VectorXd& p) const {
-        return ((x.array().square() / p.array().square() + 1.0).sqrt() * p.array() - p.array()).matrix();
-    }
+            // Running cost coefficients: cx = 1e-3*[1 1]
+            cx_ = Eigen::Vector2d(1e-3, 1e-3);
 
-    Eigen::VectorXd reference_state_;
-    Eigen::Vector2d cu_;
-    Eigen::Vector4d cf_;
-    Eigen::Vector4d pf_;
-    Eigen::Vector2d cx_;
-    Eigen::Vector2d px_;
-};
+            // Smoothness scales for running cost: px = [.1 .1]
+            px_ = Eigen::Vector2d(0.1, 0.1);
+        }
 
+        double running_cost(const Eigen::VectorXd &state,
+                            const Eigen::VectorXd &control,
+                            int index) const override
+        {
+            // Control cost: lu = cu*u.^2
+            double lu = cu_.dot(control.array().square().matrix());
+
+            // Running cost on distance from origin: lx = cx*sabs(x(1:2,:),px)
+            Eigen::VectorXd xy_state = state.head(2);
+            double lx = cx_.dot(sabs(xy_state, px_));
+
+            return lu + lx;
+        }
+
+        double terminal_cost(const Eigen::VectorXd &final_state) const override
+        {
+            // Final state cost: llf = cf*sabs(x(:,final),pf);
+            return cf_.dot(sabs(final_state, pf_)) + running_cost(final_state, Eigen::VectorXd::Zero(2), 0);
+        }
+
+    private:
+        // Helper function for smooth absolute value (pseudo-Huber)
+        Eigen::VectorXd sabs(const Eigen::VectorXd &x, const Eigen::VectorXd &p) const
+        {
+            return ((x.array().square() / p.array().square() + 1.0).sqrt() * p.array() - p.array()).matrix();
+        }
+
+        Eigen::VectorXd reference_state_;
+        Eigen::Vector2d cu_; // Control cost coefficients
+        Eigen::Vector4d cf_; // Final cost coefficients
+        Eigen::Vector4d pf_; // Smoothness scales for final cost
+        Eigen::Vector2d cx_; // Running cost coefficients
+        Eigen::Vector2d px_; // Smoothness scales for running cost
+    };
 } // namespace cddp
 
-namespace {
-    void plotCarBox(const Eigen::VectorXd& state, const Eigen::VectorXd& control,
-                    double length, double width, const std::string& color) {
-        double x = state(0);
-        double y = state(1);
-        double theta = state(2);
-        double steering = control(1);
+void plotCarBox(const Eigen::VectorXd &state, const Eigen::VectorXd &control,
+                double length, double width, const std::string &color,
+                axes_handle ax)
+{
+    double x = state(0);
+    double y = state(1);
+    double theta = state(2);
+    double steering = control(1);
 
-        // Compute car corner points (5 points to close the polygon)
-        std::vector<double> car_x(5), car_y(5);
-        car_x[0] = x + length/2 * cos(theta) - width/2 * sin(theta);
-        car_y[0] = y + length/2 * sin(theta) + width/2 * cos(theta);
-        car_x[1] = x + length/2 * cos(theta) + width/2 * sin(theta);
-        car_y[1] = y + length/2 * sin(theta) - width/2 * cos(theta);
-        car_x[2] = x - length/2 * cos(theta) + width/2 * sin(theta);
-        car_y[2] = y - length/2 * sin(theta) - width/2 * cos(theta);
-        car_x[3] = x - length/2 * cos(theta) - width/2 * sin(theta);
-        car_y[3] = y - length/2 * sin(theta) + width/2 * cos(theta);
-        car_x[4] = car_x[0];
-        car_y[4] = car_y[0];
+    // Compute the car's four corners (and close the polygon)
+    std::vector<double> car_x(5), car_y(5);
 
-        // Plot the car body
-        std::map<std::string, std::string> keywords;
-        keywords["color"] = color;
-        plt::plot(car_x, car_y, keywords);
+    // Front right
+    car_x[0] = x + length / 2 * cos(theta) - width / 2 * sin(theta);
+    car_y[0] = y + length / 2 * sin(theta) + width / 2 * cos(theta);
 
-        // Plot the base point (center of rear axle) in red with a marker
-        std::vector<double> base_x = {x};
-        std::vector<double> base_y = {y};
-        keywords["color"] = "red";
-        keywords["marker"] = "o";
-        plt::plot(base_x, base_y, keywords);
+    // Front left
+    car_x[1] = x + length / 2 * cos(theta) + width / 2 * sin(theta);
+    car_y[1] = y + length / 2 * sin(theta) - width / 2 * cos(theta);
 
-        // Plot the steering direction in green
-        double front_x = x + length/2 * cos(theta);
-        double front_y = y + length/2 * sin(theta);
-        double steering_length = width/2;
-        double steering_angle = theta + steering;
-        double steering_end_x = front_x + steering_length * cos(steering_angle);
-        double steering_end_y = front_y + steering_length * sin(steering_angle);
-        std::vector<double> steer_x = {front_x, steering_end_x};
-        std::vector<double> steer_y = {front_y, steering_end_y};
-        keywords["color"] = "green";
-        keywords.erase("marker");
-        plt::plot(steer_x, steer_y, keywords);
-    }
+    // Rear left
+    car_x[2] = x - length / 2 * cos(theta) + width / 2 * sin(theta);
+    car_y[2] = y - length / 2 * sin(theta) - width / 2 * cos(theta);
+
+    // Rear right
+    car_x[3] = x - length / 2 * cos(theta) - width / 2 * sin(theta);
+    car_y[3] = y - length / 2 * sin(theta) + width / 2 * cos(theta);
+
+    // Close polygon
+    car_x[4] = car_x[0];
+    car_y[4] = car_y[0];
+
+    // Plot car body as a polygon line.
+    plot(ax, car_x, car_y, color + "-");
+
+    // Plot base point (center of rear axle) as a red circle.
+    plot(ax, std::vector<double>{x}, std::vector<double>{y}, "ro");
+
+    // Compute steering direction
+    double front_x = x + length / 2 * cos(theta);
+    double front_y = y + length / 2 * sin(theta);
+    double steering_length = width / 2;
+    double steering_angle = theta + steering;
+    double steering_end_x = front_x + steering_length * cos(steering_angle);
+    double steering_end_y = front_y + steering_length * sin(steering_angle);
+
+    std::vector<double> steer_x = {front_x, steering_end_x};
+    std::vector<double> steer_y = {front_y, steering_end_y};
+    plot(ax, steer_x, steer_y, "g-");
 }
 
-// Test case that solves the car parking problem, creates an animation, and saves the GIF.
+
 int main() {
     // Problem parameters
     const int state_dim = 4;     // [x, y, theta, v]
@@ -151,14 +176,18 @@ int main() {
     // Set solver options
     cddp::CDDPOptions options;
     options.max_iterations = 600;
-    options.verbose = false;       // Disable verbose output for the test
-    options.cost_tolerance = 1e-7;
-    options.grad_tolerance = 1e-4;
-    options.regularization_type = "none";
+    options.verbose = true;  
+    options.cost_tolerance = 1e-4;
+    options.grad_tolerance = 1e-3;
+    options.regularization_type = "control";
+    // options.regularization_state = 1e-1;
+    options.regularization_control = 1e-5;
     options.debug = false;
     options.use_parallel = false;
     options.num_threads = 1;
     options.barrier_coeff = 1e-1;
+    options.dual_scale = 1e-2;
+    options.slack_scale = 1e-3;
     cddp_solver.setOptions(options);
 
     // Initialize the trajectory with zero controls
@@ -166,8 +195,8 @@ int main() {
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
     X[0] = initial_state;
     for (int i = 0; i < horizon; ++i) {
-        U[i](0) = 0.0;
-        U[i](1) = 0.0;
+        U[i](0) = 0.01;
+        U[i](1) = 0.01;
         X[i + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[i], U[i]);
     }
     cddp_solver.setInitialTrajectory(X, U);
@@ -175,6 +204,10 @@ int main() {
     // Solve the problem using IPDDP
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
+    // Extract solution trajectories
+    auto X_sol = solution.state_sequence;
+    auto U_sol = solution.control_sequence;
+    auto t_sol = solution.time_sequence;
 
     // Prepare trajectory data for plotting
     std::vector<double> x_hist, y_hist;
@@ -182,8 +215,71 @@ int main() {
         x_hist.push_back(state(0));
         y_hist.push_back(state(1));
     }
+    // Car dimensions.
+    double car_length = 2.1;
+    double car_width = 0.9;
 
-    // Plot the trajectory
-    plt::plot(x_hist, y_hist, "b-");
-    plt::show();
+    // Create a figure and get current axes.
+    auto fig = figure(true);
+    auto ax = fig->current_axes();
+
+    Eigen::VectorXd empty_control = Eigen::VectorXd::Zero(2);
+
+    // Create directory for saving plots
+    const std::string plotDirectory = "../results/tests";
+    if (!fs::exists(plotDirectory))
+    {
+        fs::create_directory(plotDirectory);
+    }
+
+    // Create a directory for frame images.
+    (void) std::system("mkdir -p frames");
+
+    // Animation loop: update plot for each time step and save frame.
+    for (size_t i = 0; i < X_sol.size(); ++i)
+    {
+        // Skip every 10th frame for smoother animation.
+        if (i % 10 == 0)
+        {
+            // Clear previous content.
+            cla(ax);
+            hold(ax, true);
+
+            // Plot the full trajectory.
+            plot(ax, x_hist, y_hist, "b-");
+
+            // Plot goal configuration.
+            plotCarBox(goal_state, empty_control, car_length, car_width, "r", ax);
+
+            // Plot current car state.
+            if (i < U_sol.size())
+                plotCarBox(X_sol[i], U_sol[i], car_length, car_width, "k", ax);
+            else
+                plotCarBox(X_sol[i], empty_control, car_length, car_width, "k", ax);
+
+            // Set grid and axis limits.
+            grid(ax, true);
+            xlim(ax, {-4, 4});
+            ylim(ax, {-4, 4});
+
+            // Update drawing.
+            fig->draw();
+
+            // Save the frame to a PNG file.
+            std::string frame_filename = plotDirectory + "/frame_" + std::to_string(i) + ".png";
+            fig->save(frame_filename);
+            std::this_thread::sleep_for(std::chrono::milliseconds(80));
+        }
+    }
+
+    // Combine all saved frames into a GIF using ImageMagick's convert tool.
+    std::string command = "convert -delay 15 " + plotDirectory + "/frame_*.png " + plotDirectory + "/car_parking_ipddp.gif";
+    std::system(command.c_str());
+
+    std::string cleanup_command = "rm " + plotDirectory + "/frame_*.png";
+    std::system(cleanup_command.c_str());
+
+    std::cout << "Animation saved as car_parking_ipddp.gif" << std::endl;
+
+    return 0;
 }

@@ -152,50 +152,50 @@ TEST(QPSolver, ComparisonTest) {
                     elapsed.count(), static_cast<int>(result.status));
     }
 
-    // 4. Test Gurobi
-    {   
-        GRBEnv env = GRBEnv();
-        GRBModel model = GRBModel(env);
+    // // 4. Test Gurobi
+    // {   
+    //     GRBEnv env = GRBEnv();
+    //     GRBModel model = GRBModel(env);
 
-        // Create 5 variables with box constraints: 0 ≤ x ≤ 2
-        GRBVar x[5];
-        for (int i = 0; i < n; ++i) {
-            x[i] = model.addVar(0.0, 2.0, 0.0, GRB_CONTINUOUS, "x" + std::to_string(i+1));
-        }
+    //     // Create 5 variables with box constraints: 0 ≤ x ≤ 2
+    //     GRBVar x[5];
+    //     for (int i = 0; i < n; ++i) {
+    //         x[i] = model.addVar(0.0, 2.0, 0.0, GRB_CONTINUOUS, "x" + std::to_string(i+1));
+    //     }
 
-        // Set objective:
-        GRBQuadExpr obj = 0.0;
-        // Add quadratic terms
-        for (int i = 0; i < n; i++) {
-            // diagonal terms
-            obj += 0.5 * Q(i,i) * x[i] * x[i];
-            // off-diagonal terms (take only j > i to avoid double-counting)
-            for (int j = i+1; j < n; j++) {
-                if (Q(i,j) != 0.0) {
-                    // Add (Q(i,j) + Q(j,i))/2 * x_i * x_j because Q is symmetric
-                    double val = 0.5 * (Q(i,j) + Q(j,i));
-                    obj += val * x[i] * x[j];
-                }
-            }
-        }
+    //     // Set objective:
+    //     GRBQuadExpr obj = 0.0;
+    //     // Add quadratic terms
+    //     for (int i = 0; i < n; i++) {
+    //         // diagonal terms
+    //         obj += 0.5 * Q(i,i) * x[i] * x[i];
+    //         // off-diagonal terms (take only j > i to avoid double-counting)
+    //         for (int j = i+1; j < n; j++) {
+    //             if (Q(i,j) != 0.0) {
+    //                 // Add (Q(i,j) + Q(j,i))/2 * x_i * x_j because Q is symmetric
+    //                 double val = 0.5 * (Q(i,j) + Q(j,i));
+    //                 obj += val * x[i] * x[j];
+    //             }
+    //         }
+    //     }
 
-        // Add linear terms
-        for (int i = 0; i < n; i++) {
-            if (q(i) != 0.0) {
-                obj += q(i) * x[i];
-            }
-        }
-        model.setObjective(obj, GRB_MINIMIZE);
-        model.getEnv().set(GRB_IntParam_OutputFlag, 0);
+    //     // Add linear terms
+    //     for (int i = 0; i < n; i++) {
+    //         if (q(i) != 0.0) {
+    //             obj += q(i) * x[i];
+    //         }
+    //     }
+    //     model.setObjective(obj, GRB_MINIMIZE);
+    //     model.getEnv().set(GRB_IntParam_OutputFlag, 0);
 
-        auto start_time = std::chrono::high_resolution_clock::now();
-        model.optimize();
-        auto end_time = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> elapsed = end_time - start_time;
+    //     auto start_time = std::chrono::high_resolution_clock::now();
+    //     model.optimize();
+    //     auto end_time = std::chrono::high_resolution_clock::now();
+    //     std::chrono::duration<double> elapsed = end_time - start_time;
 
-        printResults("Gurobi", VectorXd::Zero(n), model.get(GRB_DoubleAttr_ObjVal), 
-                    elapsed.count(), model.get(GRB_IntAttr_Status));
-    }
+    //     printResults("Gurobi", VectorXd::Zero(n), model.get(GRB_DoubleAttr_ObjVal), 
+    //                 elapsed.count(), model.get(GRB_IntAttr_Status));
+    // }
 
     // 5. Test our QP solver 
     {

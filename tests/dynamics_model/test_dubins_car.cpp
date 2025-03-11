@@ -22,10 +22,7 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "cddp.hpp" // Adjust if you have a different header for including DubinsCar
-
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
+#include "cddp.hpp"
 using namespace cddp;
 
 TEST(DubinsCarTest, DiscreteDynamics) {
@@ -59,21 +56,6 @@ TEST(DubinsCarTest, DiscreteDynamics) {
         // Compute the next state
         state = dubins_car.getDiscreteDynamics(state, control); 
     }
-
-    const std::string plotDirectory = "../plots/test";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
-
-    // Optional: Plot results with matplotlibcpp (commented out by default)
-    // plt::figure();
-    // plt::plot(x_data, y_data, {{"label", "Trajectory"}});
-    // plt::xlabel("X");
-    // plt::ylabel("Y");
-    // plt::title("DubinsCar Trajectory");
-    // plt::legend();
-    // plt::save(plotDirectory + "/dubins_car_trajectory.png");
-    // plt::show();
 
     // Check state dimension
     ASSERT_EQ(dubins_car.getStateDim(), 3);

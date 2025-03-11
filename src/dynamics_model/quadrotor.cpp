@@ -31,82 +31,91 @@ Eigen::VectorXd Quadrotor::getContinuousDynamics(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
-    
-    // Extract state variables
-    const double phi = state(STATE_PHI);      // roll
-    const double theta = state(STATE_THETA);  // pitch
-    const double psi = state(STATE_PSI);      // yaw
-    
-    const double vx = state(STATE_VX);
-    const double vy = state(STATE_VY);
-    const double vz = state(STATE_VZ);
-    
-    const double omega_x = state(STATE_OMEGA_X);
-    const double omega_y = state(STATE_OMEGA_Y);
-    const double omega_z = state(STATE_OMEGA_Z);
-    
+
+    // --- Position Derivative ---
+    // The derivative of the position is the linear velocity.
+    state_dot.segment<3>(STATE_X) = state.segment<3>(STATE_VX);
+
+    // --- Quaternion Derivative ---
+    // Extract the quaternion (assumed to be [qw, qx, qy, qz])
+    double qw = state(STATE_QW);
+    double qx = state(STATE_QX);
+    double qy = state(STATE_QY);
+    double qz = state(STATE_QZ);
+
+    // Normalize the quaternion to enforce unit norm before further use.
+    double norm = std::sqrt(qw*qw + qx*qx + qy*qy + qz*qz);
+    if (norm > 1e-6) {
+        qw /= norm;
+        qx /= norm;
+        qy /= norm;
+        qz /= norm;
+    } else {
+        // In degenerate cases, default to the identity quaternion.
+        qw = 1.0; qx = 0.0; qy = 0.0; qz = 0.0;
+    }
+
+    // Extract body angular velocity components
+    double omega_x = state(STATE_OMEGA_X);
+    double omega_y = state(STATE_OMEGA_Y);
+    double omega_z = state(STATE_OMEGA_Z);
+
+    // Compute quaternion derivative using: q_dot = 0.5 * q ⊗ [0, omega]
+    // Quaternion multiplication yields:
+    // q_dot[0] = -0.5 * (qx*omega_x + qy*omega_y + qz*omega_z)
+    // q_dot[1] =  0.5 * (qw*omega_x + qy*omega_z - qz*omega_y)
+    // q_dot[2] =  0.5 * (qw*omega_y - qx*omega_z + qz*omega_x)
+    // q_dot[3] =  0.5 * (qw*omega_z + qx*omega_y - qy*omega_x)
+    state_dot(STATE_QW) = -0.5 * (qx * omega_x + qy * omega_y + qz * omega_z);
+    state_dot(STATE_QX) =  0.5 * (qw * omega_x + qy * omega_z - qz * omega_y);
+    state_dot(STATE_QY) =  0.5 * (qw * omega_y - qx * omega_z + qz * omega_x);
+    state_dot(STATE_QZ) =  0.5 * (qw * omega_z + qx * omega_y - qy * omega_x);
+
+    // --- Velocity Derivative ---
     // Extract control variables (motor forces)
     const double f1 = control(CONTROL_F1);
     const double f2 = control(CONTROL_F2);
     const double f3 = control(CONTROL_F3);
     const double f4 = control(CONTROL_F4);
     
-    // Compute total thrust and moments
+    // Compute total thrust and moments 
     const double thrust = f1 + f2 + f3 + f4;
-    const double tau_x = arm_length_ * (f1 - f3);  // roll moment
-    const double tau_y = arm_length_ * (f2 - f4);  // pitch moment
-    const double tau_z = 0.1 * (f1 - f2 + f3 - f4); // yaw moment (assumed drag coefficient)
-    
-    // Get rotation matrix
-    Eigen::Matrix3d R = getRotationMatrix(phi, theta, psi);
-    
-    // Position derivatives (velocity)
-    state_dot.segment<3>(STATE_X) = state.segment<3>(STATE_VX);
-    
-    // Velocity derivatives (acceleration)
+    const double tau_x = arm_length_ * (f1 - f3);
+    const double tau_y = arm_length_ * (f2 - f4);
+    const double tau_z = 0.1 * (f1 - f2 + f3 - f4);
+
+    // Compute rotation matrix from the normalized quaternion
+    Eigen::Matrix3d R = getRotationMatrix(qw, qx, qy, qz);
+
+    // Thrust is applied along the body z-axis. 
     Eigen::Vector3d F_thrust(0, 0, thrust);
-    Eigen::Vector3d acceleration = (1.0/mass_) * (R * F_thrust) - 
-                                 Eigen::Vector3d(0, 0, gravity_);
+    Eigen::Vector3d acceleration = (1.0/mass_) * (R * F_thrust) - Eigen::Vector3d(0, 0, gravity_);
     state_dot.segment<3>(STATE_VX) = acceleration;
-    
-    // Angular velocity to Euler rates transformation
-    double c_phi = std::cos(phi);
-    double s_phi = std::sin(phi);
-    double c_theta = std::cos(theta);
-    double t_theta = std::tan(theta);
-    
-    Eigen::Matrix3d W;
-    W << 1, s_phi*t_theta, c_phi*t_theta,
-         0, c_phi, -s_phi,
-         0, s_phi/c_theta, c_phi/c_theta;
-    
-    // Euler angle derivatives
-    state_dot.segment<3>(STATE_PHI) = W * state.segment<3>(STATE_OMEGA_X);
-    
-    // Angular acceleration
+
+    // --- Angular Velocity Derivative ---
     Eigen::Vector3d omega(omega_x, omega_y, omega_z);
     Eigen::Vector3d tau(tau_x, tau_y, tau_z);
-    Eigen::Vector3d angular_acc = inertia_.inverse() * 
-        (tau - omega.cross(inertia_ * omega));
-    
+    Eigen::Vector3d angular_acc = inertia_.inverse() * (tau - omega.cross(inertia_ * omega));
     state_dot.segment<3>(STATE_OMEGA_X) = angular_acc;
-    
+
     return state_dot;
 }
 
-Eigen::Matrix3d Quadrotor::getRotationMatrix(double phi, double theta, double psi) const {
-    // Compute rotation matrix from Euler angles (ZYX convention)
-    double c_phi = std::cos(phi);
-    double s_phi = std::sin(phi);
-    double c_theta = std::cos(theta);
-    double s_theta = std::sin(theta);
-    double c_psi = std::cos(psi);
-    double s_psi = std::sin(psi);
-    
+Eigen::Matrix3d Quadrotor::getRotationMatrix(double qw, double qx, double qy, double qz) const {
+    // Compute the rotation matrix from a unit quaternion.
+    // The quaternion is assumed to be normalized and in the form [qw, qx, qy, qz]
     Eigen::Matrix3d R;
-    R << c_psi*c_theta, c_psi*s_theta*s_phi - s_psi*c_phi, c_psi*s_theta*c_phi + s_psi*s_phi,
-         s_psi*c_theta, s_psi*s_theta*s_phi + c_psi*c_phi, s_psi*s_theta*c_phi - c_psi*s_phi,
-         -s_theta, c_theta*s_phi, c_theta*c_phi;
+    R(0, 0) = 1 - 2 * (qy * qy + qz * qz);
+    R(0, 1) = 2 * (qx * qy - qz * qw);
+    R(0, 2) = 2 * (qx * qz + qy * qw);
+    
+    R(1, 0) = 2 * (qx * qy + qz * qw);
+    R(1, 1) = 1 - 2 * (qx * qx + qz * qz);
+    R(1, 2) = 2 * (qy * qz - qx * qw);
+    
+    R(2, 0) = 2 * (qx * qz - qy * qw);
+    R(2, 1) = 2 * (qy * qz + qx * qw);
+    R(2, 2) = 1 - 2 * (qx * qx + qy * qy);
     
     return R;
 }
@@ -130,11 +139,14 @@ Eigen::MatrixXd Quadrotor::getControlJacobian(
     return finite_difference_jacobian(f, control);
 }
 
+
+// TODO: Implement this
 Eigen::MatrixXd Quadrotor::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
 }
 
+// TODO: Implement this
 Eigen::MatrixXd Quadrotor::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);

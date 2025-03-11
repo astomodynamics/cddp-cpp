@@ -56,13 +56,17 @@ struct CDDPOptions {
     double mu_reduction_ratio = 0.1;                         // Factor for barrier coefficient
 
     // log-barrier method
-    double barrier_coeff = 1e-2;                    // Coefficient for log-barrier method
+    double barrier_coeff = 1e-1;                    // Coefficient for log-barrier method
     double barrier_factor = 0.10;                   // Factor for log-barrier method
     double barrier_tolerance = 1e-8;                // Tolerance for log-barrier method
     double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
     int barrier_order = 2;                          // Order for log-barrier method
     double filter_acceptance = 1e-8;                            // Small value for filter acceptance
     double constraint_tolerance = 1e-12;             // Tolerance for constraint violation
+
+    // ipddp options
+    double dual_scale = 1e-1;                       // Initial scale for dual variables
+    double slack_scale = 1e-2;                      // Initial scale for slack variables
 
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]

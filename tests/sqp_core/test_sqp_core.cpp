@@ -24,9 +24,6 @@
 #include "cddp.hpp"               
 #include "sqp_core/sqp_core.hpp"   
 
-namespace plt = matplotlibcpp;
-namespace fs = std::filesystem;
-
 TEST(SQPIPOPTTest, CheckPointers) {
     // Problem parameters.
     int state_dim = 3;
