@@ -110,6 +110,10 @@ add_executable(test_ipddp_pendulum test_ipddp_pendulum.cpp)
 target_link_libraries(test_ipddp_pendulum gtest gmock gtest_main cddp)
 gtest_discover_tests(test_ipddp_pendulum)
 
+add_executable(test_spacecraft_roe dynamics_model/test_spacecraft_roe.cpp)
+target_link_libraries(test_spacecraft_roe gtest gmock gtest_main cddp)
+gtest_discover_tests(test_spacecraft_roe)
+
 # add_executable(test_matplot test_matplot.cpp)
 # target_link_libraries(test_matplot gtest gmock gtest_main cddp)
 # gtest_discover_tests(test_matplot)
