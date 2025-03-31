@@ -176,15 +176,6 @@ sudo apt-get install imagemagick # For Ubuntu
 brew install imagemagick # For macOS
 ```
 
-Although the library automatically finds and installs the following dependencies via [FetchContent](https://cmake.org/cmake/help/latest/module/FetchContent.html), if you do not have ones, here is how you can install on your own.
-
-* [OSQP](https://osqp.org/) (QP solver) and [osqp-cpp](https://github.com/google/osqp-cpp) (C++ Wrapper for OSQP)
-```bash
-conda install -c conda-forge osqp # Optional
-```
-* [libtorch](https://pytorch.org/get-started/locally/) : This library utilizes Torch for its underlying computations. It will be automatically installed during the build process.
-
-* [CUDA](https://developer.nvidia.com/cuda-toolkit)(Optional): If you want to leverage GPU acceleration for torch, ensure you have CUDA installed. You can download it from the [NVIDIA website](https://developer.nvidia.com/cuda-12-4-0-download-archive?target_os=Linux&target_arch=x86_64&Distribution=Ubuntu&target_version=22.04&target_type=deb_local).
 
 ### Building
 ```bash
@@ -215,6 +206,7 @@ This project uses the following open-source libraries:
 * [osqp-cpp](https://github.com/google/osqp-cpp) (Apache License 2.0)
 * [matplotplusplus](https://github.com/alandefreitas/matplotplusplus) (MIT License)
 * [libtorch](https://github.com/pytorch/pytorch) (BSD 3-Clause License)
+* [autodiff](https://github.com/autodiff/autodiff) (MIT License)
 
 ## Citing
 If you use this work in an academic context, please cite this repository.
