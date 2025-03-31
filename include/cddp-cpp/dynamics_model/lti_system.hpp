@@ -88,14 +88,16 @@ public:
 
     /**
      * @brief Computes state Hessian (zero for linear system)
+     * @return Vector of state Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
                                    const Eigen::VectorXd& control) const override;
 
     /**
      * @brief Computes control Hessian (zero for linear system)
+     * @return Vector of control Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
     // Getters

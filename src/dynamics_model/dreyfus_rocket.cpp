@@ -61,15 +61,28 @@ Eigen::MatrixXd DreyfusRocket::getControlJacobian(
     return B;
 }
 
-Eigen::MatrixXd DreyfusRocket::getStateHessian(
+std::vector<Eigen::MatrixXd> DreyfusRocket::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    return hessians;
 }
 
-Eigen::MatrixXd DreyfusRocket::getControlHessian(
+std::vector<Eigen::MatrixXd> DreyfusRocket::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    
+    // The only non-zero element is the second derivative of x_dot with respect to theta
+    const double theta = control(CONTROL_THETA);
+    hessians[STATE_X_DOT](CONTROL_THETA, CONTROL_THETA) = -thrust_acceleration_ * std::cos(theta);
+    
+    return hessians;
 }
 
 } // namespace cddp

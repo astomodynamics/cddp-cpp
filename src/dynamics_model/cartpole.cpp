@@ -82,14 +82,22 @@ Eigen::MatrixXd CartPole::getControlJacobian(
 }
 
 
-Eigen::MatrixXd CartPole::getStateHessian(
+std::vector<Eigen::MatrixXd> CartPole::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    return hessians;
 }
 
-Eigen::MatrixXd CartPole::getControlHessian(
+std::vector<Eigen::MatrixXd> CartPole::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    return hessians;
 }
 
 } // namespace cddp

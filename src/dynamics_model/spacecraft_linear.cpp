@@ -103,16 +103,24 @@ Eigen::MatrixXd HCW::getControlJacobian(
     return B;
 }
 
-Eigen::MatrixXd HCW::getStateHessian(
+std::vector<Eigen::MatrixXd> HCW::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     // HCW equations are linear, so state Hessian is zero
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    return hessians;
 }
 
-Eigen::MatrixXd HCW::getControlHessian(
+std::vector<Eigen::MatrixXd> HCW::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     // HCW equations are linear in control, so control Hessian is zero
-    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    return hessians;
 }
 
 } // namespace cddp

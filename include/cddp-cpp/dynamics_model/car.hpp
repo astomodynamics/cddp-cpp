@@ -97,18 +97,18 @@ public:
      * @brief Computes the Hessian of the dynamics with respect to the state
      * @param state Current state vector
      * @param control Current control input
-     * @return State Hessian matrix (d²f/dx²)
+     * @return Vector of state Hessian matrices, one per state dimension (d²f/dx²)
      */
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
                                    const Eigen::VectorXd& control) const override;
 
     /**
      * @brief Computes the Hessian of the dynamics with respect to the control
      * @param state Current state vector
      * @param control Current control input
-     * @return Control Hessian matrix (d²f/du²)
+     * @return Vector of control Hessian matrices, one per state dimension (d²f/du²)
      */
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
 private:

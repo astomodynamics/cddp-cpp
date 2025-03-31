@@ -17,6 +17,7 @@
 #define CDDP_DYNAMICAL_SYSTEM_HPP
 
 #include <Eigen/Dense>
+#include <vector>
 #include "cddp_core/helper.hpp"
 
 namespace cddp {
@@ -51,29 +52,38 @@ public:
         return {getStateJacobian(state, control), getControlJacobian(state, control)};
     }
 
-    // TODO: Add methods for Hessian calculations
     // Hessian of dynamics w.r.t state: d^2f/dx^2
-    // Note: This is a tensor, but we represent it as a matrix for now.
-    // Each row corresponds to the Hessian for one state dimension
-    virtual Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state, 
+    // This is a tensor (state_dim x state_dim x state_dim), represented as a vector of matrices
+    // Each matrix is state_dim x state_dim, and corresponds to the Hessian of one state dimension
+    virtual std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
                                       const Eigen::VectorXd& control) const = 0;
 
     // Hessian of dynamics w.r.t control: d^2f/du^2
-    // Similar representation as state Hessian
-    virtual Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, 
+    // This is a tensor (state_dim x control_dim x control_dim), represented as a vector of matrices
+    // Each matrix is control_dim x control_dim, and corresponds to the Hessian of one state dimension
+    virtual std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                         const Eigen::VectorXd& control) const = 0;
 
     // Hessian of dynamics w.r.t state and control: d^2f/dudx
-    // Similar representation
-    virtual Eigen::MatrixXd getCrossHessian(const Eigen::VectorXd& state, 
+    // This is a tensor (state_dim x control_dim x state_dim), represented as a vector of matrices
+    // Each matrix is control_dim x state_dim, and corresponds to the Hessian of one state dimension
+    virtual std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd& state, 
                                       const Eigen::VectorXd& control) const {
-        return Eigen::MatrixXd::Zero(state.size() * control.size(), state.size()); 
+        std::vector<Eigen::MatrixXd> cross_hessian(state_dim_);
+        for (int i = 0; i < state_dim_; ++i) {
+            cross_hessian[i] = Eigen::MatrixXd::Zero(control_dim_, state_dim_);
+        }
+        return cross_hessian;
     }
 
     // Hessian of dynamics w.r.t state and control: d^2f/dx^2, d^2f/du^2, d^2f/dudx
-    virtual std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> getHessians(const             Eigen::VectorXd& state, 
-                                                                            const Eigen::VectorXd& control) const {
-        return {getStateHessian(state, control), getControlHessian(state, control), getCrossHessian(state, control)};
+    virtual std::tuple<std::vector<Eigen::MatrixXd>, 
+                      std::vector<Eigen::MatrixXd>, 
+                      std::vector<Eigen::MatrixXd>> getHessians(const Eigen::VectorXd& state, 
+                                                               const Eigen::VectorXd& control) const {
+        return {getStateHessian(state, control), 
+                getControlHessian(state, control), 
+                getCrossHessian(state, control)};
     }
 
     // Accessor methods

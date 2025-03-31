@@ -140,23 +140,51 @@ Eigen::MatrixXd NeuralDynamicalSystem::getControlJacobian(const Eigen::VectorXd&
 // ----------------------------------------------------------------------------
 //                         Hessians (placeholders)
 // ----------------------------------------------------------------------------
-Eigen::MatrixXd NeuralDynamicalSystem::getStateHessian(const Eigen::VectorXd& /*state*/,
-                                                       const Eigen::VectorXd& /*control*/) const
+std::vector<Eigen::MatrixXd> NeuralDynamicalSystem::getStateHessian(
+    const Eigen::VectorXd& state,
+    const Eigen::VectorXd& control) const
 {
-    // Typically a 3D object. Return zero or implement if needed.
-    return Eigen::MatrixXd::Zero(state_dim_ * state_dim_, state_dim_);
+    // Initialize vector of matrices (one matrix per state dimension)
+    std::vector<Eigen::MatrixXd> hessian(state_dim_);
+    for (int i = 0; i < state_dim_; ++i) {
+        hessian[i] = Eigen::MatrixXd::Zero(state_dim_, state_dim_);
+    }
+    
+    // For neural network models, computing Hessians usually requires
+    // second-order automatic differentiation or finite differencing.
+    // This is a placeholder implementation that returns zeros.
+    
+    return hessian;
 }
 
-Eigen::MatrixXd NeuralDynamicalSystem::getControlHessian(const Eigen::VectorXd& /*state*/,
-                                                         const Eigen::VectorXd& /*control*/) const
+std::vector<Eigen::MatrixXd> NeuralDynamicalSystem::getControlHessian(
+    const Eigen::VectorXd& state,
+    const Eigen::VectorXd& control) const
 {
-    return Eigen::MatrixXd::Zero(control_dim_ * control_dim_, state_dim_);
+    // Initialize vector of matrices (one matrix per state dimension)
+    std::vector<Eigen::MatrixXd> hessian(state_dim_);
+    for (int i = 0; i < state_dim_; ++i) {
+        hessian[i] = Eigen::MatrixXd::Zero(control_dim_, control_dim_);
+    }
+    
+    // Placeholder implementation
+    
+    return hessian;
 }
 
-Eigen::MatrixXd NeuralDynamicalSystem::getCrossHessian(const Eigen::VectorXd& /*state*/,
-                                                       const Eigen::VectorXd& /*control*/) const
+std::vector<Eigen::MatrixXd> NeuralDynamicalSystem::getCrossHessian(
+    const Eigen::VectorXd& state,
+    const Eigen::VectorXd& control) const
 {
-    return Eigen::MatrixXd::Zero(state_dim_ * control_dim_, state_dim_);
+    // Initialize vector of matrices (one matrix per state dimension)
+    std::vector<Eigen::MatrixXd> hessian(state_dim_);
+    for (int i = 0; i < state_dim_; ++i) {
+        hessian[i] = Eigen::MatrixXd::Zero(control_dim_, state_dim_);
+    }
+    
+    // Placeholder implementation
+    
+    return hessian;
 }
 
 // ----------------------------------------------------------------------------

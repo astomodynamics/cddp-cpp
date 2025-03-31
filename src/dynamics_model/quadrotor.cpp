@@ -140,16 +140,24 @@ Eigen::MatrixXd Quadrotor::getControlJacobian(
 }
 
 
-// TODO: Implement this
-Eigen::MatrixXd Quadrotor::getStateHessian(
+// TODO: Implement a more accurate version if needed
+std::vector<Eigen::MatrixXd> Quadrotor::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    return hessians;
 }
 
-// TODO: Implement this
-Eigen::MatrixXd Quadrotor::getControlHessian(
+// TODO: Implement a more accurate version if needed
+std::vector<Eigen::MatrixXd> Quadrotor::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    return hessians;
 }
 
 } // namespace cddp

@@ -85,16 +85,37 @@ Eigen::MatrixXd Unicycle::getControlJacobian(
     return B;
 }
 
-Eigen::MatrixXd Unicycle::getStateHessian(
+std::vector<Eigen::MatrixXd> Unicycle::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, 2);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    
+    // Non-zero elements
+    // Hessian of x w.r.t. theta twice
+    const double v = control(CONTROL_V);
+    const double theta = state(STATE_THETA);
+    hessians[STATE_X](STATE_THETA, STATE_THETA) = -v * std::cos(theta);
+    
+    // Hessian of y w.r.t. theta twice
+    hessians[STATE_Y](STATE_THETA, STATE_THETA) = -v * std::sin(theta);
+    
+    return hessians;
 }
 
-Eigen::MatrixXd Unicycle::getControlHessian(
+std::vector<Eigen::MatrixXd> Unicycle::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    // TODO: Compute and return the Hessian tensor d^2f/du^2 (represented as a matrix)
-    return Eigen::MatrixXd::Zero(STATE_DIM * 2, 2);
+    
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    
+    // No non-zero terms in control Hessian for this model
+    
+    return hessians;
 }
 
 } // namespace cddp

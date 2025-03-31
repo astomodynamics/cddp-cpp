@@ -84,17 +84,21 @@ public:
     /**
      * @brief Hessian of the dynamics wrt. the state
      *
-     * For many simpler models, often zero or handled by separate higher-order libraries.
+     * @param state Current state
+     * @param control Current control
+     * @return Vector of state Hessian matrices (one per state dimension)
      */
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state,
+    std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state,
                                     const Eigen::VectorXd& control) const override;
 
     /**
      * @brief Hessian of the dynamics wrt. the control
      *
-     * Typically zero or not used for simpler models.
+     * @param state Current state
+     * @param control Current control
+     * @return Vector of control Hessian matrices (one per state dimension)
      */
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state,
+    std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state,
                                       const Eigen::VectorXd& control) const override;
 
 private:

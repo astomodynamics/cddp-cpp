@@ -93,21 +93,21 @@ public:
                                       const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Computes state Hessian matrix (∂²f/∂x²)
+     * @brief Computes state Hessian tensor (∂²f/∂x²)
      * @param state Current state vector
      * @param control Current control input
-     * @return State Hessian matrix
+     * @return Vector of state Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
                                    const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Computes control Hessian matrix (∂²f/∂u²)
+     * @brief Computes control Hessian tensor (∂²f/∂u²)
      * @param state Current state vector
      * @param control Current control input
-     * @return Control Hessian matrix
+     * @return Vector of control Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
     // Getters

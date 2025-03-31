@@ -87,18 +87,26 @@ Eigen::MatrixXd LTISystem::getControlJacobian(
     return B_/timestep_;
 }
 
-Eigen::MatrixXd LTISystem::getStateHessian(
+std::vector<Eigen::MatrixXd> LTISystem::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     // State Hessian is zero for linear system
-    return Eigen::MatrixXd::Zero(state_dim_ * state_dim_, state_dim_);
+    std::vector<Eigen::MatrixXd> hessians(state_dim_);
+    for (int i = 0; i < state_dim_; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(state_dim_, state_dim_);
+    }
+    return hessians;
 }
 
-Eigen::MatrixXd LTISystem::getControlHessian(
+std::vector<Eigen::MatrixXd> LTISystem::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     // Control Hessian is zero for linear system
-    return Eigen::MatrixXd::Zero(state_dim_ * control_dim_, control_dim_);
+    std::vector<Eigen::MatrixXd> hessians(state_dim_);
+    for (int i = 0; i < state_dim_; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(control_dim_, control_dim_);
+    }
+    return hessians;
 }
 
 } // namespace cddp

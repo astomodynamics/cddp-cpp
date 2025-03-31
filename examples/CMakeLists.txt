@@ -37,6 +37,9 @@ target_link_libraries(cddp_manipulator cddp)
 add_executable(cddp_pendulum cddp_pendulum.cpp)
 target_link_libraries(cddp_pendulum cddp)
 
+add_executable(hessian_example hessian_example.cpp)
+target_link_libraries(hessian_example cddp)
+
 add_executable(cddp_quadrotor_circle cddp_quadrotor_circle.cpp)
 target_link_libraries(cddp_quadrotor_circle cddp)
 

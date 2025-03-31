@@ -60,14 +60,22 @@ Eigen::MatrixXd SpacecraftTwobody::getControlJacobian(
   return finite_difference_jacobian(f, control);
 }
 
-Eigen::MatrixXd SpacecraftTwobody::getStateHessian(
+std::vector<Eigen::MatrixXd> SpacecraftTwobody::getStateHessian(
     const Eigen::VectorXd &state, const Eigen::VectorXd &control) const {
-  return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+  std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+  for (int i = 0; i < STATE_DIM; ++i) {
+    hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+  }
+  return hessians;
 }
 
-Eigen::MatrixXd SpacecraftTwobody::getControlHessian(
+std::vector<Eigen::MatrixXd> SpacecraftTwobody::getControlHessian(
     const Eigen::VectorXd &state, const Eigen::VectorXd &control) const {
-  return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+  std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+  for (int i = 0; i < STATE_DIM; ++i) {
+    hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+  }
+  return hessians;
 }
 
 } // namespace cddp
