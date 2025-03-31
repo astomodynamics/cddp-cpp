@@ -150,6 +150,11 @@ add_executable(test_eigen test_eigen.cpp)
 target_link_libraries(test_eigen gtest gmock gtest_main cddp)
 gtest_discover_tests(test_eigen)
 
+# Test for autodiff
+add_executable(test_autodiff test_autodiff.cpp)
+target_link_libraries(test_autodiff gtest gmock gtest_main cddp)
+gtest_discover_tests(test_autodiff)
+
 # Test for gurobi
 if (CDDP_CPP_GUROBI)
     add_executable(test_gurobi test_gurobi.cpp)
