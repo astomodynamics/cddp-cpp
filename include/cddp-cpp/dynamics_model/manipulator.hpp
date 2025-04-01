@@ -81,18 +81,18 @@ public:
      * Computes the Hessian of the dynamics with respect to the state
      * @param state Current state vector
      * @param control Current control input
-     * @return State Hessian matrix
+     * @return Vector of state Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state,
+    std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state,
                                    const Eigen::VectorXd& control) const override;
 
     /**
      * Computes the Hessian of the dynamics with respect to the control
      * @param state Current state vector
      * @param control Current control input
-     * @return Control Hessian matrix
+     * @return Vector of control Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state,
+    std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state,
                                      const Eigen::VectorXd& control) const override;
 
     /**
@@ -130,6 +130,17 @@ public:
             default: return 0.0;
         }
     }
+
+    /**
+     * Computes the continuous-time dynamics of the manipulator
+     * State vector: [q1, q2, q3, dq1, dq2, dq3]
+     * Control vector: [tau1, tau2, tau3]
+     * @param state Current state vector
+     * @param control Current control input (joint torques)
+     * @return State derivative vector
+     */
+    VectorXdual2nd getContinuousDynamicsAutodiff(
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
 
 private:
     // Link lengths (match MATLAB example)
@@ -182,6 +193,21 @@ private:
      * @return Gravity torque vector
      */
     Eigen::VectorXd getGravityVector(const Eigen::VectorXd& q) const;
+
+    /**
+     * Computes the mass matrix M(q) of the manipulator
+     * @param q Joint positions
+     * @return Mass matrix
+     */
+    Eigen::Matrix<autodiff::dual2nd, Eigen::Dynamic, Eigen::Dynamic> getMassMatrixAutodiff(
+        const VectorXdual2nd& q) const;
+
+    /**
+     * Computes the gravity compensation terms
+     * @param q Joint positions
+     * @return Gravity torque vector
+     */
+    VectorXdual2nd getGravityVectorAutodiff(const VectorXdual2nd& q) const;
 };
 
 } // namespace cddp

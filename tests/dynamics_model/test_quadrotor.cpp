@@ -25,7 +25,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "dynamics_model/quadrotor.hpp"
+#include "cddp-cpp/dynamics_model/quadrotor.hpp"
+#include "cddp-cpp/cddp_core/helper.hpp"
 using namespace cddp;
 
 // Helper: Convert quaternion [qw, qx, qy, qz] to Euler angles (roll, pitch, yaw)
@@ -217,6 +218,276 @@ TEST(QuadrotorTest, ContinuousDynamics) {
     
     // Check that the angular acceleration in x (roll) is non-zero
     EXPECT_GT(std::abs(state_dot[10]), 0.0);
+}
+
+TEST(QuadrotorTest, StateJacobianFiniteDifference) {
+    // Create quadrotor instance
+    double timestep = 0.01;
+    double mass = 1.0;
+    double arm_length = 0.2;
+    Eigen::Matrix3d inertia;
+    inertia << 0.01, 0, 0,
+               0, 0.01, 0,
+               0, 0, 0.02;
+    Quadrotor quadrotor(timestep, mass, inertia, arm_length, "euler");
+
+    // Test state and control
+    Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
+    state(2) = 1.0;  // 1m height
+    // Set identity quaternion [1, 0, 0, 0]
+    state(3) = 1.0;
+    state(4) = 0.0;
+    state(5) = 0.0;
+    state(6) = 0.0;
+
+    double hover_thrust = mass * 9.81 / 4.0;
+    Eigen::VectorXd control(4);
+    control << hover_thrust, hover_thrust, hover_thrust, hover_thrust;
+
+    // Get analytical Jacobian
+    Eigen::MatrixXd A_analytical = quadrotor.getStateJacobian(state, control);
+
+    // Get numerical Jacobian
+    auto f_A = [&](const Eigen::VectorXd& x) {
+        return quadrotor.getContinuousDynamics(x, control);
+    };
+    Eigen::MatrixXd A_numerical = finite_difference_jacobian(f_A, state);
+
+    // Test dimensions
+    ASSERT_EQ(A_analytical.rows(), 13);
+    ASSERT_EQ(A_analytical.cols(), 13);
+
+    // Compare analytical and numerical Jacobians
+    double tolerance = 1e-4;
+    EXPECT_NEAR((A_analytical - A_numerical).norm(), 0.0, tolerance);
+
+    // Test with non-zero velocities and rotations
+    state(4) = 0.1;  // non-zero quaternion components
+    state(5) = 0.1;
+    state(6) = 0.1;
+    state(7) = 0.2;  // non-zero linear velocities
+    state(8) = 0.2;
+    state(9) = 0.2;
+    state(10) = 0.1;  // non-zero angular velocities
+    state(11) = 0.1;
+    state(12) = 0.1;
+    
+    // Normalize quaternion
+    double qnorm = std::sqrt(state(3)*state(3) + state(4)*state(4) + 
+                             state(5)*state(5) + state(6)*state(6));
+    state(3) /= qnorm;
+    state(4) /= qnorm;
+    state(5) /= qnorm;
+    state(6) /= qnorm;
+
+    // Get Jacobians for non-zero state
+    A_analytical = quadrotor.getStateJacobian(state, control);
+    A_numerical = finite_difference_jacobian(f_A, state);
+    
+    // Compare again
+    EXPECT_NEAR((A_analytical - A_numerical).norm(), 0.0, tolerance);
+}
+
+TEST(QuadrotorTest, ControlJacobianFiniteDifference) {
+    // Create quadrotor instance
+    double timestep = 0.01;
+    double mass = 1.0;
+    double arm_length = 0.2;
+    Eigen::Matrix3d inertia;
+    inertia << 0.01, 0, 0,
+               0, 0.01, 0,
+               0, 0, 0.02;
+    Quadrotor quadrotor(timestep, mass, inertia, arm_length, "euler");
+
+    // Test state and control
+    Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
+    state(2) = 1.0;  // 1m height
+    // Set identity quaternion [1, 0, 0, 0]
+    state(3) = 1.0;
+    state(4) = 0.0;
+    state(5) = 0.0;
+    state(6) = 0.0;
+
+    double hover_thrust = mass * 9.81 / 4.0;
+    Eigen::VectorXd control(4);
+    control << hover_thrust, hover_thrust, hover_thrust, hover_thrust;
+
+    // Get analytical Jacobian
+    Eigen::MatrixXd B_analytical = quadrotor.getControlJacobian(state, control);
+
+    // Get numerical Jacobian
+    auto f_B = [&](const Eigen::VectorXd& u) {
+        return quadrotor.getContinuousDynamics(state, u);
+    };
+    Eigen::MatrixXd B_numerical = finite_difference_jacobian(f_B, control);
+
+    // Test dimensions
+    ASSERT_EQ(B_analytical.rows(), 13);
+    ASSERT_EQ(B_analytical.cols(), 4);
+
+    // Compare analytical and numerical Jacobians
+    double tolerance = 1e-4;
+    EXPECT_NEAR((B_analytical - B_numerical).norm(), 0.0, tolerance);
+
+    // Test with non-zero velocities and rotations
+    state(4) = 0.1;  // non-zero quaternion components
+    state(5) = 0.1;
+    state(6) = 0.1;
+    state(7) = 0.2;  // non-zero linear velocities
+    state(8) = 0.2;
+    state(9) = 0.2;
+    state(10) = 0.1;  // non-zero angular velocities
+    state(11) = 0.1;
+    state(12) = 0.1;
+    
+    // Normalize quaternion
+    double qnorm = std::sqrt(state(3)*state(3) + state(4)*state(4) + 
+                             state(5)*state(5) + state(6)*state(6));
+    state(3) /= qnorm;
+    state(4) /= qnorm;
+    state(5) /= qnorm;
+    state(6) /= qnorm;
+
+    // Also try non-uniform control
+    control << hover_thrust*1.1, hover_thrust*0.9, hover_thrust*1.1, hover_thrust*0.9;
+
+    // Get Jacobians for non-zero state and non-uniform control
+    B_analytical = quadrotor.getControlJacobian(state, control);
+    B_numerical = finite_difference_jacobian(f_B, control);
+    
+    // Compare again
+    EXPECT_NEAR((B_analytical - B_numerical).norm(), 0.0, tolerance);
+}
+
+TEST(QuadrotorTest, StateJacobianAutodiff) {
+    // Create quadrotor instance
+    double timestep = 0.01;
+    double mass = 1.0;
+    double arm_length = 0.2;
+    Eigen::Matrix3d inertia;
+    inertia << 0.01, 0, 0,
+               0, 0.01, 0,
+               0, 0, 0.02;
+    Quadrotor quadrotor(timestep, mass, inertia, arm_length, "euler");
+
+    // Test state and control
+    Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
+    state(2) = 1.0;  // 1m height
+    // Set identity quaternion [1, 0, 0, 0]
+    state(3) = 1.0;
+    state(4) = 0.0;
+    state(5) = 0.0;
+    state(6) = 0.0;
+
+    double hover_thrust = mass * 9.81 / 4.0;
+    Eigen::VectorXd control(4);
+    control << hover_thrust, hover_thrust, hover_thrust, hover_thrust;
+
+    // Get Jacobian using autodiff (which is the default implementation)
+    Eigen::MatrixXd A_autodiff = quadrotor.getStateJacobian(state, control);
+
+    // Get numerical Jacobian for comparison
+    auto f_A = [&](const Eigen::VectorXd& x) {
+        return quadrotor.getContinuousDynamics(x, control);
+    };
+    Eigen::MatrixXd A_numerical = finite_difference_jacobian(f_A, state);
+
+    // Compare autodiff and numerical Jacobians
+    double tolerance = 1e-4;
+    EXPECT_NEAR((A_autodiff - A_numerical).norm(), 0.0, tolerance);
+
+    // Try non-zero state
+    state(4) = 0.1;  // non-zero quaternion components
+    state(5) = 0.1;
+    state(6) = 0.1;
+    state(7) = 0.2;  // non-zero linear velocities
+    state(8) = 0.2;
+    state(9) = 0.2;
+    state(10) = 0.1;  // non-zero angular velocities
+    state(11) = 0.1;
+    state(12) = 0.1;
+    
+    // Normalize quaternion
+    double qnorm = std::sqrt(state(3)*state(3) + state(4)*state(4) + 
+                             state(5)*state(5) + state(6)*state(6));
+    state(3) /= qnorm;
+    state(4) /= qnorm;
+    state(5) /= qnorm;
+    state(6) /= qnorm;
+
+    // Get Jacobians for non-zero state
+    A_autodiff = quadrotor.getStateJacobian(state, control);
+    A_numerical = finite_difference_jacobian(f_A, state);
+    
+    // Compare again
+    EXPECT_NEAR((A_autodiff - A_numerical).norm(), 0.0, tolerance);
+}
+
+TEST(QuadrotorTest, ControlJacobianAutodiff) {
+    // Create quadrotor instance
+    double timestep = 0.01;
+    double mass = 1.0;
+    double arm_length = 0.2;
+    Eigen::Matrix3d inertia;
+    inertia << 0.01, 0, 0,
+               0, 0.01, 0,
+               0, 0, 0.02;
+    Quadrotor quadrotor(timestep, mass, inertia, arm_length, "euler");
+
+    // Test state and control
+    Eigen::VectorXd state = Eigen::VectorXd::Zero(13);
+    state(2) = 1.0;  // 1m height
+    // Set identity quaternion [1, 0, 0, 0]
+    state(3) = 1.0;
+    state(4) = 0.0;
+    state(5) = 0.0;
+    state(6) = 0.0;
+
+    double hover_thrust = mass * 9.81 / 4.0;
+    Eigen::VectorXd control(4);
+    control << hover_thrust, hover_thrust, hover_thrust, hover_thrust;
+
+    // Get Jacobian using autodiff (which is the default implementation)
+    Eigen::MatrixXd B_autodiff = quadrotor.getControlJacobian(state, control);
+
+    // Get numerical Jacobian for comparison
+    auto f_B = [&](const Eigen::VectorXd& u) {
+        return quadrotor.getContinuousDynamics(state, u);
+    };
+    Eigen::MatrixXd B_numerical = finite_difference_jacobian(f_B, control);
+
+    // Compare autodiff and numerical Jacobians
+    double tolerance = 1e-4;
+    EXPECT_NEAR((B_autodiff - B_numerical).norm(), 0.0, tolerance);
+
+    // Try non-zero state and non-uniform control
+    state(4) = 0.1;  // non-zero quaternion components
+    state(5) = 0.1;
+    state(6) = 0.1;
+    state(7) = 0.2;  // non-zero linear velocities
+    state(8) = 0.2;
+    state(9) = 0.2;
+    state(10) = 0.1;  // non-zero angular velocities
+    state(11) = 0.1;
+    state(12) = 0.1;
+    
+    // Normalize quaternion
+    double qnorm = std::sqrt(state(3)*state(3) + state(4)*state(4) + 
+                             state(5)*state(5) + state(6)*state(6));
+    state(3) /= qnorm;
+    state(4) /= qnorm;
+    state(5) /= qnorm;
+    state(6) /= qnorm;
+
+    // Also try non-uniform control
+    control << hover_thrust*1.1, hover_thrust*0.9, hover_thrust*1.1, hover_thrust*0.9;
+
+    // Get Jacobians for non-zero state and non-uniform control
+    B_autodiff = quadrotor.getControlJacobian(state, control);
+    B_numerical = finite_difference_jacobian(f_B, control);
+    
+    // Compare again
+    EXPECT_NEAR((B_autodiff - B_numerical).norm(), 0.0, tolerance);
 }
 
 int main(int argc, char **argv) {

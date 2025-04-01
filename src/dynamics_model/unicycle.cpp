@@ -16,6 +16,8 @@
 
 #include "dynamics_model/unicycle.hpp"
 #include <cmath>
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -85,16 +87,57 @@ Eigen::MatrixXd Unicycle::getControlJacobian(
     return B;
 }
 
-Eigen::MatrixXd Unicycle::getStateHessian(
+std::vector<Eigen::MatrixXd> Unicycle::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, 2);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    
+    // Non-zero elements
+    // Hessian of x w.r.t. theta twice
+    const double v = control(CONTROL_V);
+    const double theta = state(STATE_THETA);
+    hessians[STATE_X](STATE_THETA, STATE_THETA) = -v * std::cos(theta);
+    
+    // Hessian of y w.r.t. theta twice
+    hessians[STATE_Y](STATE_THETA, STATE_THETA) = -v * std::sin(theta);
+    
+    return hessians;
 }
 
-Eigen::MatrixXd Unicycle::getControlHessian(
+std::vector<Eigen::MatrixXd> Unicycle::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    // TODO: Compute and return the Hessian tensor d^2f/du^2 (represented as a matrix)
-    return Eigen::MatrixXd::Zero(STATE_DIM * 2, 2);
+    
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    
+    // No non-zero terms in control Hessian for this model
+    
+    return hessians;
+}
+
+VectorXdual2nd Unicycle::getContinuousDynamicsAutodiff(
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+
+    // Extract state (dual2nd)
+    const autodiff::dual2nd theta = state(STATE_THETA);
+
+    // Extract control (dual2nd)
+    const autodiff::dual2nd v = control(CONTROL_V);
+    const autodiff::dual2nd omega = control(CONTROL_OMEGA);
+
+    // Dynamics using ADL for math
+    state_dot(STATE_X) = v * cos(theta);
+    state_dot(STATE_Y) = v * sin(theta);
+    state_dot(STATE_THETA) = omega;
+
+    return state_dot;
 }
 
 } // namespace cddp

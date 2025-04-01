@@ -114,22 +114,22 @@ public:
         const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Compute state Hessian matrix
+     * @brief Compute state Hessian tensor
      * @param state Current state vector
      * @param control Current control vector
-     * @return State Hessian matrix
+     * @return Vector of state Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getStateHessian(
+    std::vector<Eigen::MatrixXd> getStateHessian(
         const Eigen::VectorXd& state,
         const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Compute control Hessian matrix
+     * @brief Compute control Hessian tensor
      * @param state Current state vector
      * @param control Current control vector
-     * @return Control Hessian matrix
+     * @return Vector of control Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getControlHessian(
+    std::vector<Eigen::MatrixXd> getControlHessian(
         const Eigen::VectorXd& state,
         const Eigen::VectorXd& control) const override;
 

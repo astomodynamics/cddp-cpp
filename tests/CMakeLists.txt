@@ -66,6 +66,10 @@ add_executable(test_spacecraft_nonlinear dynamics_model/test_spacecraft_nonlinea
 target_link_libraries(test_spacecraft_nonlinear gtest gmock gtest_main cddp)
 gtest_discover_tests(test_spacecraft_nonlinear)
 
+add_executable(test_hessian test_hessian.cpp)
+target_link_libraries(test_hessian gtest gmock gtest_main cddp)
+gtest_discover_tests(test_hessian)
+
 # Core tests
 add_executable(test_boxqp cddp_core/test_boxqp.cpp)
 target_link_libraries(test_boxqp gtest gmock gtest_main cddp)
@@ -145,6 +149,11 @@ endif()
 add_executable(test_eigen test_eigen.cpp)
 target_link_libraries(test_eigen gtest gmock gtest_main cddp)
 gtest_discover_tests(test_eigen)
+
+# Test for autodiff
+add_executable(test_autodiff test_autodiff.cpp)
+target_link_libraries(test_autodiff gtest gmock gtest_main cddp)
+gtest_discover_tests(test_autodiff)
 
 # Test for gurobi
 if (CDDP_CPP_GUROBI)

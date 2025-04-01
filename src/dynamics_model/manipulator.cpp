@@ -16,6 +16,9 @@
 
 #include "dynamics_model/manipulator.hpp"
 #include <cmath>
+#include "cddp_core/helper.hpp"
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -66,18 +69,26 @@ Eigen::MatrixXd Manipulator::getControlJacobian(
     return finite_difference_jacobian(f, control);
 }
 
-Eigen::MatrixXd Manipulator::getStateHessian(
+std::vector<Eigen::MatrixXd> Manipulator::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     // For the simplified model, return zero Hessian
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    return hessians;
 }
 
-Eigen::MatrixXd Manipulator::getControlHessian(
+std::vector<Eigen::MatrixXd> Manipulator::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     // For the simplified model, return zero Hessian
-    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    return hessians;
 }
 
 Eigen::Matrix4d Manipulator::rotX(double alpha) const {
@@ -200,6 +211,70 @@ Eigen::VectorXd Manipulator::getGravityVector(const Eigen::VectorXd& q) const {
     G(2) = -m3 * gravity_ * lc_ * cos(q(1) + q(2));
     
     return G;
+}
+
+Eigen::Matrix<autodiff::dual2nd, Eigen::Dynamic, Eigen::Dynamic> Manipulator::getMassMatrixAutodiff(const autodiff::VectorXdual2nd& q) const {
+    Eigen::Matrix<autodiff::dual2nd, Eigen::Dynamic, Eigen::Dynamic> M = Eigen::Matrix<autodiff::dual2nd, Eigen::Dynamic, Eigen::Dynamic>::Zero(NUM_JOINTS, NUM_JOINTS);
+    
+    // Simplified mass matrix - assuming point masses at the end of each link
+    double m1 = 1.0;  // Mass of first link
+    double m2 = 1.0;  // Mass of second link
+    double m3 = 0.5;  // Mass of third link (end effector)
+    
+    // Use ADL for math functions
+    autodiff::dual2nd cos_q1 = cos(q(1));
+    autodiff::dual2nd cos_q2 = cos(q(2));
+    autodiff::dual2nd cos_q1_plus_q2 = cos(q(1) + q(2));
+    
+    // Diagonal terms (simplified)
+    M(0,0) = (m1 + m2 + m3) * (la_ * la_);
+    M(1,1) = (m2 + m3) * (lb_ * lb_);
+    M(2,2) = m3 * (lc_ * lc_);
+    
+    // Off-diagonal terms (coupling between joints - simplified)
+    M(0,1) = M(1,0) = (m2 + m3) * la_ * lb_ * cos_q1;
+    M(1,2) = M(2,1) = m3 * lb_ * lc_ * cos_q2;
+    M(0,2) = M(2,0) = m3 * la_ * lc_ * cos_q1_plus_q2;
+    
+    return M;
+}
+
+autodiff::VectorXdual2nd Manipulator::getGravityVectorAutodiff(const autodiff::VectorXdual2nd& q) const {
+    autodiff::VectorXdual2nd G = autodiff::VectorXdual2nd::Zero(NUM_JOINTS);
+    
+    double m1 = 1.0;
+    double m2 = 1.0;
+    double m3 = 0.5;
+    
+    G(0) = 0;  // Base joint not affected by gravity
+    G(1) = -(m2 + m3) * gravity_ * lb_ * cos(q(1)) 
+           - m3 * gravity_ * lc_ * cos(q(1) + q(2));
+    G(2) = -m3 * gravity_ * lc_ * cos(q(1) + q(2));
+    
+    return G;
+}
+
+autodiff::VectorXdual2nd Manipulator::getContinuousDynamicsAutodiff(
+    const autodiff::VectorXdual2nd& state, const autodiff::VectorXdual2nd& control) const {
+    autodiff::VectorXdual2nd state_dot = autodiff::VectorXdual2nd::Zero(STATE_DIM);
+    
+    // Extract joint positions and velocities
+    autodiff::VectorXdual2nd q = state.segment(0, NUM_JOINTS);
+    autodiff::VectorXdual2nd dq = state.segment(NUM_JOINTS, NUM_JOINTS);
+    
+    // Get dynamic matrices
+    Eigen::Matrix<autodiff::dual2nd, Eigen::Dynamic, Eigen::Dynamic> M = getMassMatrixAutodiff(q);
+    autodiff::VectorXdual2nd G = getGravityVectorAutodiff(q);
+    
+    // Compute accelerations using simplified dynamics:
+    // M(q)ddq + G(q) = tau
+    autodiff::VectorXdual2nd ddq = M.inverse() * (control - G);
+    
+    // State derivative
+    state_dot.segment(0, NUM_JOINTS) = dq;
+    state_dot.segment(NUM_JOINTS, NUM_JOINTS) = ddq;
+    
+    return state_dot;
 }
 
 } // namespace cddp

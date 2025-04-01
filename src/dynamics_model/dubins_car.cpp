@@ -16,6 +16,8 @@
 
 #include "dynamics_model/dubins_car.hpp"  // Adjust include path as needed
 #include <cmath>
+#include <autodiff/forward/dual.hpp> // Include dual types and math functions
+#include <autodiff/forward/dual/eigen.hpp> // Include Eigen support for dual types
 
 namespace cddp {
 
@@ -43,6 +45,25 @@ Eigen::VectorXd DubinsCar::getContinuousDynamics(
     state_dot(STATE_X)     = speed_ * std::cos(theta);
     state_dot(STATE_Y)     = speed_ * std::sin(theta);
     state_dot(STATE_THETA) = omega;
+
+    return state_dot;
+}
+
+cddp::VectorXdual2nd DubinsCar::getContinuousDynamicsAutodiff(
+    const cddp::VectorXdual2nd& state, const cddp::VectorXdual2nd& control) const {
+
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+
+    // Extract states (dual2nd)
+    const autodiff::dual2nd theta = state(STATE_THETA);
+
+    // Extract controls (dual2nd)
+    const autodiff::dual2nd omega = control(CONTROL_OMEGA);
+
+    // Use ADL for math functions
+    state_dot(STATE_X)     = speed_ * cos(theta);
+    state_dot(STATE_Y)     = speed_ * sin(theta);
+    state_dot(STATE_THETA) = omega; // dtheta/dt = omega
 
     return state_dot;
 }
@@ -77,18 +98,46 @@ Eigen::MatrixXd DubinsCar::getControlJacobian(
     return B;
 }
 
-Eigen::MatrixXd DubinsCar::getStateHessian(
-    const Eigen::VectorXd& /*state*/,
-    const Eigen::VectorXd& /*control*/) const
+std::vector<Eigen::MatrixXd> DubinsCar::getStateHessian(
+    const Eigen::VectorXd& state,
+    const Eigen::VectorXd& control) const
 {
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, CONTROL_DIM);
+    (void)control; // Not used for state Hessian
+    
+    // Initialize vector of matrices (one matrix per state dimension)
+    std::vector<Eigen::MatrixXd> hessian(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessian[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    
+    // Extract state components
+    const double theta = state(STATE_THETA);
+    
+    // Second derivatives of x with respect to theta: d^2x/dtheta^2 = -speed * cos(theta)
+    hessian[STATE_X](STATE_THETA, STATE_THETA) = -speed_ * std::cos(theta);
+    
+    // Second derivatives of y with respect to theta: d^2y/dtheta^2 = -speed * sin(theta)
+    hessian[STATE_Y](STATE_THETA, STATE_THETA) = -speed_ * std::sin(theta);
+    
+    // No second derivatives for theta state
+    
+    return hessian;
 }
 
-Eigen::MatrixXd DubinsCar::getControlHessian(
-    const Eigen::VectorXd& /*state*/,
-    const Eigen::VectorXd& /*control*/) const
+std::vector<Eigen::MatrixXd> DubinsCar::getControlHessian(
+    const Eigen::VectorXd& state,
+    const Eigen::VectorXd& control) const
 {
-    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+    (void)state;
+    (void)control;
+    
+    std::vector<Eigen::MatrixXd> hessian(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessian[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    
+    
+    return hessian;
 }
 
 } // namespace cddp

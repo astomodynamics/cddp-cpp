@@ -78,19 +78,37 @@ public:
      * Computes the Hessian of the dynamics with respect to the state
      * @param state Current state vector
      * @param control Current control input
-     * @return State Hessian matrix
+     * @return Vector of state Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
                                    const Eigen::VectorXd& control) const override;
 
     /**
      * Computes the Hessian of the dynamics with respect to the control
      * @param state Current state vector
      * @param control Current control input
-     * @return Control Hessian matrix
+     * @return Vector of control Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
+
+    /**
+     * Computes the cross Hessian of the dynamics with respect to both state and control
+     * @param state Current state vector
+     * @param control Current control input
+     * @return Vector of cross Hessian matrices, one per state dimension
+     */
+    std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd& state, 
+                                     const Eigen::VectorXd& control) const override;
+
+    /**
+     * Computes the continuous-time dynamics of the quadrotor model using autodiff
+     * @param state Current state vector
+     * @param control Current control input
+     * @return State derivative vector
+     */
+    VectorXdual2nd getContinuousDynamicsAutodiff(const VectorXdual2nd& state, 
+                                                const VectorXdual2nd& control) const override;
 
 private:
     double mass_;              // Mass of the quadrotor
@@ -130,6 +148,18 @@ private:
      * @return 3x3 rotation matrix
      */
     Eigen::Matrix3d getRotationMatrix(double qw, double qx, double qy, double qz) const;
+
+    /**
+     * Helper function to compute rotation matrix from a quaternion using autodiff
+     * @param qw Scalar part of quaternion
+     * @param qx x component
+     * @param qy y component
+     * @param qz z component
+     * @return 3x3 rotation matrix
+     */
+    Eigen::Matrix<autodiff::dual2nd, 3, 3> getRotationMatrixAutodiff(
+        const autodiff::dual2nd& qw, const autodiff::dual2nd& qx,
+        const autodiff::dual2nd& qy, const autodiff::dual2nd& qz) const;
 };
 
 } // namespace cddp

@@ -16,6 +16,8 @@
 
 #include "dynamics_model/bicycle.hpp"
 #include <cmath>
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -43,6 +45,28 @@ Eigen::VectorXd Bicycle::getContinuousDynamics(
     state_dot(STATE_THETA) = (v / wheelbase_) * std::tan(delta); // dtheta/dt
     state_dot(STATE_V) = a;                                    // dv/dt
     
+    return state_dot;
+}
+
+VectorXdual2nd Bicycle::getContinuousDynamicsAutodiff(
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+
+    // Extract state variables (now dual2nd types)
+    const autodiff::dual2nd theta = state(STATE_THETA);  // heading angle
+    const autodiff::dual2nd v = state(STATE_V);          // velocity
+
+    // Extract control variables (now dual2nd types)
+    const autodiff::dual2nd a = control(CONTROL_ACC);      // acceleration
+    const autodiff::dual2nd delta = control(CONTROL_DELTA); // steering angle
+
+    // Use ADL for math functions
+    state_dot(STATE_X) = v * cos(theta);
+    state_dot(STATE_Y) = v * sin(theta);
+    state_dot(STATE_THETA) = (v / wheelbase_) * tan(delta);
+    state_dot(STATE_V) = a;
+
     return state_dot;
 }
 
@@ -96,55 +120,56 @@ Eigen::MatrixXd Bicycle::getControlJacobian(
     return B;
 }
 
-
-Eigen::MatrixXd Bicycle::getStateHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control) 
-const {
-    // TODO: Compute and return the Hessian tensor d^2f/dx^2 (represented as a matrix)
-    return Eigen::MatrixXd::Zero(4*4, 2); 
+std::vector<Eigen::MatrixXd> Bicycle::getStateHessian(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    
+    // Extract state variables
+    const double theta = state(STATE_THETA);  // heading angle
+    const double v = state(STATE_V);          // velocity
+    
+    // Second derivatives with respect to states
+    // d²(dx/dt)/dtheta²
+    hessians[STATE_X](STATE_THETA, STATE_THETA) = -v * std::cos(theta);
+    
+    // d²(dx/dt)/(dtheta*dv)
+    hessians[STATE_X](STATE_THETA, STATE_V) = -std::sin(theta);
+    hessians[STATE_X](STATE_V, STATE_THETA) = -std::sin(theta);
+    
+    // d²(dy/dt)/dtheta²
+    hessians[STATE_Y](STATE_THETA, STATE_THETA) = -v * std::sin(theta);
+    
+    // d²(dy/dt)/(dtheta*dv)
+    hessians[STATE_Y](STATE_THETA, STATE_V) = std::cos(theta);
+    hessians[STATE_Y](STATE_V, STATE_THETA) = std::cos(theta);
+    
+    return hessians;
 }
 
-Eigen::MatrixXd Bicycle::getControlHessian(const Eigen::VectorXd& state, const Eigen::VectorXd& control)
-const {
-    // TODO: Compute and return the Hessian tensor d^2f/du^2 (represented as a matrix)
-    return Eigen::MatrixXd::Zero(4*2, 2); 
+std::vector<Eigen::MatrixXd> Bicycle::getControlHessian(
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    
+    // Extract state variables
+    const double v = state(STATE_V);          // velocity
+    
+    // Extract control variables
+    const double delta = control(CONTROL_DELTA); // steering angle
+    
+    // Second derivatives with respect to controls
+    // d²(dtheta/dt)/ddelta²
+    hessians[STATE_THETA](CONTROL_DELTA, CONTROL_DELTA) = 
+        2.0 * v * std::sin(delta) / (wheelbase_ * std::pow(std::cos(delta), 3));
+    
+    return hessians;
 }
-
-// Eigen::MatrixXd Bicycle::getStateHessian(
-//     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    
-//     Eigen::MatrixXd H = Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
-    
-//     // Extract state variables
-//     const double theta = state(STATE_THETA);  // heading angle
-//     const double v = state(STATE_V);          // velocity
-    
-//     // Second derivatives with respect to states
-//     // d²(dx/dt)/dtheta²
-//     H(STATE_THETA * STATE_DIM + STATE_X, STATE_THETA) = -v * std::cos(theta);
-    
-//     // d²(dy/dt)/dtheta²
-//     H(STATE_THETA * STATE_DIM + STATE_Y, STATE_THETA) = -v * std::sin(theta);
-    
-//     return H;
-// }
-
-// Eigen::MatrixXd Bicycle::getControlHessian(
-//     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    
-//     Eigen::MatrixXd H = Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
-    
-//     // Extract state variables
-//     const double v = state(STATE_V);          // velocity
-    
-//     // Extract control variables
-//     const double delta = control(CONTROL_DELTA); // steering angle
-    
-//     // Second derivatives with respect to controls
-//     // d²(dtheta/dt)/ddelta²
-//     H(CONTROL_DELTA * STATE_DIM + STATE_THETA, CONTROL_DELTA) = 
-//         2.0 * v * std::sin(delta) / (wheelbase_ * std::pow(std::cos(delta), 3));
-    
-//     return H;
-// }
 
 } // namespace cddp

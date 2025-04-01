@@ -42,6 +42,10 @@ public:
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
                                          const Eigen::VectorXd& control) const override;
 
+    // Add the autodiff version declaration
+    VectorXdual2nd getContinuousDynamicsAutodiff(
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+
     /**
      * Computes the discrete-time dynamics using the specified integration method
      * @param state Current state vector
@@ -75,18 +79,18 @@ public:
      * Computes the Hessian of the dynamics with respect to the state
      * @param state Current state vector
      * @param control Current control input
-     * @return State Hessian matrix
+     * @return Vector of state Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
                                    const Eigen::VectorXd& control) const override;
 
     /**
      * Computes the Hessian of the dynamics with respect to the control
      * @param state Current state vector
      * @param control Current control input
-     * @return Control Hessian matrix
+     * @return Vector of control Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
 private:

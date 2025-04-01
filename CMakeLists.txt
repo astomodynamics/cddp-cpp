@@ -93,6 +93,17 @@ if(NOT matplotplusplus_POPULATED)
     add_subdirectory(${matplotplusplus_SOURCE_DIR} ${matplotplusplus_BINARY_DIR} EXCLUDE_FROM_ALL)
 endif()
 
+# autodiff
+set(AUTODIFF_BUILD_TESTS OFF CACHE BOOL "Don't build autodiff tests")
+set(AUTODIFF_BUILD_EXAMPLES OFF CACHE BOOL "Don't build autodiff examples")
+set(AUTODIFF_BUILD_PYTHON OFF CACHE BOOL "Don't build autodiff Python bindings")
+FetchContent_Declare(
+  autodiff
+  GIT_REPOSITORY https://github.com/autodiff/autodiff.git
+  GIT_TAG v1.1.2  # Use a stable version tag instead of main
+)
+FetchContent_MakeAvailable(autodiff)
+
 # Googletest
 if (CDDP_CPP_BUILD_TESTS)
   enable_testing()
@@ -256,6 +267,7 @@ add_library(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME} 
   Eigen3::Eigen 
   matplot
+  autodiff
   osqp-cpp
 ) 
 

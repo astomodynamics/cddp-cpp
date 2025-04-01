@@ -16,6 +16,8 @@
 
 #include "dynamics_model/spacecraft_linear.hpp"
 #include <cmath>
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -103,16 +105,58 @@ Eigen::MatrixXd HCW::getControlJacobian(
     return B;
 }
 
-Eigen::MatrixXd HCW::getStateHessian(
+std::vector<Eigen::MatrixXd> HCW::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     // HCW equations are linear, so state Hessian is zero
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    return hessians;
 }
 
-Eigen::MatrixXd HCW::getControlHessian(
+std::vector<Eigen::MatrixXd> HCW::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     // HCW equations are linear in control, so control Hessian is zero
-    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    return hessians;
+}
+
+VectorXdual2nd HCW::getContinuousDynamicsAutodiff(
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+
+    // Extract state variables (dual2nd)
+    const autodiff::dual2nd x = state(STATE_X);
+    const autodiff::dual2nd y = state(STATE_Y);
+    const autodiff::dual2nd z = state(STATE_Z);
+    const autodiff::dual2nd vx = state(STATE_VX);
+    const autodiff::dual2nd vy = state(STATE_VY);
+    const autodiff::dual2nd vz = state(STATE_VZ);
+
+    // Extract control variables (dual2nd)
+    const autodiff::dual2nd Fx = control(CONTROL_FX);
+    const autodiff::dual2nd Fy = control(CONTROL_FY);
+    const autodiff::dual2nd Fz = control(CONTROL_FZ);
+
+    // Constants
+    const double n = mean_motion_;
+    const double n2 = n * n;
+
+    // Position derivatives
+    state_dot(STATE_X) = vx;
+    state_dot(STATE_Y) = vy;
+    state_dot(STATE_Z) = vz;
+
+    // Velocity derivatives (HCW equations)
+    state_dot(STATE_VX) = 2.0 * n * vy + 3.0 * n2 * x + Fx/mass_;
+    state_dot(STATE_VY) = -2.0 * n * vx + Fy/mass_;
+    state_dot(STATE_VZ) = -n2 * z + Fz/mass_;
+
+    return state_dot;
 }
 
 } // namespace cddp

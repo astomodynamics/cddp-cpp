@@ -88,19 +88,25 @@ public:
 
     /**
      * @brief Computes state Hessian (zero for linear system)
+     * @return Vector of state Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
                                    const Eigen::VectorXd& control) const override;
 
     /**
      * @brief Computes control Hessian (zero for linear system)
+     * @return Vector of control Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
     // Getters
     const Eigen::MatrixXd& getA() const { return A_; }
     const Eigen::MatrixXd& getB() const { return B_; }
+
+
+    VectorXdual2nd getContinuousDynamicsAutodiff(
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
 
 private:
     Eigen::MatrixXd A_;  ///< System matrix
@@ -110,6 +116,10 @@ private:
      * @brief Initialize random stable system matrices
      */
     void initializeRandomSystem();
+
+    // Ensure helper declaration exists
+    VectorXdual2nd getDiscreteDynamicsAutodiff( 
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const;
 };
 
 } // namespace cddp

@@ -125,21 +125,29 @@ namespace cddp
     }
 
     //-----------------------------------------------------------------------------
-    Eigen::MatrixXd SpacecraftROE::getStateHessian(
+    std::vector<Eigen::MatrixXd> SpacecraftROE::getStateHessian(
         const Eigen::VectorXd & /*state*/,
         const Eigen::VectorXd & /*control*/) const
     {
         // For this linear(ish) model, second derivatives wrt state are zero.
-        return Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+        std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+        for (int i = 0; i < STATE_DIM; ++i) {
+            hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+        }
+        return hessians;
     }
 
     //-----------------------------------------------------------------------------
-    Eigen::MatrixXd SpacecraftROE::getControlHessian(
+    std::vector<Eigen::MatrixXd> SpacecraftROE::getControlHessian(
         const Eigen::VectorXd & /*state*/,
         const Eigen::VectorXd & /*control*/) const
     {
         // Similarly, second derivatives wrt control are zero for a linear system.
-        return Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+        std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+        for (int i = 0; i < STATE_DIM; ++i) {
+            hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+        }
+        return hessians;
     }
 
     //-----------------------------------------------------------------------------
