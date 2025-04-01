@@ -23,6 +23,7 @@
 
 // #include "cddp-cpp/sdqp.hpp"
 #include "cddp_core/dynamical_system.hpp"
+#include "cddp_core/autodiff_dynamical_system.hpp"
 #include "cddp_core/objective.hpp"
 #include "cddp_core/constraint.hpp"
 #include "cddp_core/barrier.hpp"
@@ -37,6 +38,7 @@
 
 // Models
 #include "dynamics_model/pendulum.hpp"
+#include "dynamics_model/autodiff_pendulum.hpp"
 #include "dynamics_model/unicycle.hpp"
 #include "dynamics_model/bicycle.hpp"
 #include "dynamics_model/car.hpp"
