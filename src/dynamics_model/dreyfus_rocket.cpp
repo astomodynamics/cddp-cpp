@@ -17,6 +17,8 @@
 #include "dynamics_model/dreyfus_rocket.hpp"
 #include <cmath>
 #include "cddp_core/helper.hpp"
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -61,15 +63,41 @@ Eigen::MatrixXd DreyfusRocket::getControlJacobian(
     return B;
 }
 
-Eigen::MatrixXd DreyfusRocket::getStateHessian(
+std::vector<Eigen::MatrixXd> DreyfusRocket::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    return hessians;
 }
 
-Eigen::MatrixXd DreyfusRocket::getControlHessian(
+std::vector<Eigen::MatrixXd> DreyfusRocket::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    
+    // The only non-zero element is the second derivative of x_dot with respect to theta
+    const double theta = control(CONTROL_THETA);
+    hessians[STATE_X_DOT](CONTROL_THETA, CONTROL_THETA) = -thrust_acceleration_ * std::cos(theta);
+    
+    return hessians;
+}
+
+VectorXdual2nd DreyfusRocket::getContinuousDynamicsAutodiff(
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+    const autodiff::dual2nd x_dot = state(STATE_X_DOT);
+    const autodiff::dual2nd theta = control(CONTROL_THETA);
+
+    state_dot(STATE_X) = x_dot;
+    state_dot(STATE_X_DOT) = thrust_acceleration_ * cos(theta) - gravity_acceleration_;
+
+    return state_dot;
 }
 
 } // namespace cddp

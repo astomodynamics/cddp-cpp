@@ -102,18 +102,26 @@ Eigen::MatrixXd SpacecraftNonlinear::getControlJacobian(
     return finite_difference_jacobian(f, control);
 }
 
-Eigen::MatrixXd SpacecraftNonlinear::getStateHessian(
+std::vector<Eigen::MatrixXd> SpacecraftNonlinear::getStateHessian(
     const Eigen::VectorXd& state,
     const Eigen::VectorXd& control) const {
     
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    return hessians;
 }
 
-Eigen::MatrixXd SpacecraftNonlinear::getControlHessian(
+std::vector<Eigen::MatrixXd> SpacecraftNonlinear::getControlHessian(
     const Eigen::VectorXd& state,
     const Eigen::VectorXd& control) const {
 
-    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    return hessians;
 }
 
 

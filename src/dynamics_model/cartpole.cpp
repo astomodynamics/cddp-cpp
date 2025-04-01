@@ -19,6 +19,8 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include "cddp_core/helper.hpp"
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -35,8 +37,6 @@ CartPole::CartPole(double timestep, std::string integration_type,
 
 Eigen::VectorXd CartPole::getContinuousDynamics(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    // TODO: Implement damping term
-    
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
     
     const double x = state(STATE_X);
@@ -62,6 +62,36 @@ Eigen::VectorXd CartPole::getContinuousDynamics(
     return state_dot;
 }
 
+cddp::VectorXdual2nd CartPole::getContinuousDynamicsAutodiff(
+    const cddp::VectorXdual2nd& state, const cddp::VectorXdual2nd& control) const {
+
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+
+    const autodiff::dual2nd theta = state(STATE_THETA);
+    const autodiff::dual2nd x_dot = state(STATE_X_DOT);
+    const autodiff::dual2nd theta_dot = state(STATE_THETA_DOT);
+
+    const autodiff::dual2nd force = control(CONTROL_FORCE);
+
+    const double total_mass = cart_mass_ + pole_mass_;
+
+    const autodiff::dual2nd sin_theta = sin(theta);
+    const autodiff::dual2nd cos_theta = cos(theta);
+
+    const autodiff::dual2nd mp_sin2_theta = pole_mass_ * sin_theta * sin_theta;
+    const autodiff::dual2nd den = cart_mass_ + mp_sin2_theta;
+
+    state_dot(STATE_X) = x_dot;
+
+    state_dot(STATE_THETA) = theta_dot;
+
+    state_dot(STATE_X_DOT) = (force + pole_mass_ * sin_theta * (pole_length_ * theta_dot * theta_dot + gravity_ * cos_theta)) / den;
+
+    state_dot(STATE_THETA_DOT) = (-force * cos_theta - pole_mass_ * pole_length_ * theta_dot * theta_dot * cos_theta * sin_theta - total_mass * gravity_ * sin_theta - damping_ * theta_dot) / (pole_length_ * den);
+
+    return state_dot;
+}
+
 Eigen::MatrixXd CartPole::getStateJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
 
@@ -82,14 +112,22 @@ Eigen::MatrixXd CartPole::getControlJacobian(
 }
 
 
-Eigen::MatrixXd CartPole::getStateHessian(
+std::vector<Eigen::MatrixXd> CartPole::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return Eigen::MatrixXd::Zero(STATE_DIM * STATE_DIM, STATE_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+    }
+    return hessians;
 }
 
-Eigen::MatrixXd CartPole::getControlHessian(
+std::vector<Eigen::MatrixXd> CartPole::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return Eigen::MatrixXd::Zero(STATE_DIM * CONTROL_DIM, CONTROL_DIM);
+    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
+    for (int i = 0; i < STATE_DIM; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
+    }
+    return hessians;
 }
 
 } // namespace cddp

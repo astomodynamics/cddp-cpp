@@ -52,6 +52,9 @@ public:
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
                                          const Eigen::VectorXd& control) const override;
 
+    VectorXdual2nd getContinuousDynamicsAutodiff( // Use alias
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+
     Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state, 
                                        const Eigen::VectorXd& control) const override {
         return DynamicalSystem::getDiscreteDynamics(state, control);
@@ -63,10 +66,10 @@ public:
     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, 
                                       const Eigen::VectorXd& control) const override;
 
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
                                    const Eigen::VectorXd& control) const override;
 
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state, 
+    std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
     // Accessors

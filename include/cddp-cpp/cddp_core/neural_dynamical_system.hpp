@@ -97,33 +97,33 @@ public:
                                        const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Hessian of the dynamics w.r.t. state (flattened or block representation).
+     * @brief Hessian of the dynamics w.r.t. state
      *
      * @param state Current state (Eigen vector)
      * @param control Current control (Eigen vector)
-     * @return Eigen::MatrixXd Hessian d^2f/dx^2
+     * @return std::vector<Eigen::MatrixXd> Vector of Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getStateHessian(const Eigen::VectorXd& state,
+    std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state,
                                     const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Hessian of the dynamics w.r.t. control (flattened or block representation).
+     * @brief Hessian of the dynamics w.r.t. control
      *
      * @param state Current state (Eigen vector)
      * @param control Current control (Eigen vector)
-     * @return Eigen::MatrixXd Hessian d^2f/du^2
+     * @return std::vector<Eigen::MatrixXd> Vector of Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getControlHessian(const Eigen::VectorXd& state,
+    std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state,
                                       const Eigen::VectorXd& control) const override;
 
     /**
-     * @brief Hessian of the dynamics w.r.t. state and control (flattened or block representation).
+     * @brief Hessian of the dynamics w.r.t. state and control
      *
      * @param state Current state (Eigen vector)
      * @param control Current control (Eigen vector)
-     * @return Eigen::MatrixXd Hessian d^2f/dudx
+     * @return std::vector<Eigen::MatrixXd> Vector of Hessian matrices, one per state dimension
      */
-    Eigen::MatrixXd getCrossHessian(const Eigen::VectorXd& state,
+    std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd& state,
                                     const Eigen::VectorXd& control) const override;
 
 private:

@@ -1,5 +1,9 @@
 #include "dynamics_model/lti_system.hpp"
 #include <unsupported/Eigen/MatrixFunctions>
+#include <stdexcept>
+#include <random>
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -87,18 +91,38 @@ Eigen::MatrixXd LTISystem::getControlJacobian(
     return B_/timestep_;
 }
 
-Eigen::MatrixXd LTISystem::getStateHessian(
+std::vector<Eigen::MatrixXd> LTISystem::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     // State Hessian is zero for linear system
-    return Eigen::MatrixXd::Zero(state_dim_ * state_dim_, state_dim_);
+    std::vector<Eigen::MatrixXd> hessians(state_dim_);
+    for (int i = 0; i < state_dim_; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(state_dim_, state_dim_);
+    }
+    return hessians;
 }
 
-Eigen::MatrixXd LTISystem::getControlHessian(
+std::vector<Eigen::MatrixXd> LTISystem::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
     // Control Hessian is zero for linear system
-    return Eigen::MatrixXd::Zero(state_dim_ * control_dim_, control_dim_);
+    std::vector<Eigen::MatrixXd> hessians(state_dim_);
+    for (int i = 0; i < state_dim_; ++i) {
+        hessians[i] = Eigen::MatrixXd::Zero(control_dim_, control_dim_);
+    }
+    return hessians;
+}
+
+
+VectorXdual2nd LTISystem::getDiscreteDynamicsAutodiff(
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    return A_ * state + B_ * control;
+}
+
+VectorXdual2nd LTISystem::getContinuousDynamicsAutodiff(
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    VectorXdual2nd next_state = this->getDiscreteDynamicsAutodiff(state, control);
+    return (next_state - state) / timestep_;
 }
 
 } // namespace cddp
