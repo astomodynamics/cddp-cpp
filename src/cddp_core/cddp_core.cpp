@@ -86,6 +86,13 @@ cddp::CDDPSolution CDDP::solve(std::string solver_type) {
             std::cout << "--------------------" << std::endl;
         }
         return solveFeasibleIPDDP();
+    } else if (solver_type == "ALDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with ALDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
+        return solveALDDP();
     } else
     {
         std::cerr << "CDDP::solve: Unknown solver type" << std::endl;
@@ -254,7 +261,7 @@ double CDDP::computeConstraintViolation(const std::vector<Eigen::VectorXd>& X,
 
 void CDDP::increaseRegularization()
 {
-    // For “state” or “both”
+    // For "state" or "both"
     if (options_.regularization_type == "state" ||
         options_.regularization_type == "both")
     {
@@ -269,7 +276,7 @@ void CDDP::increaseRegularization()
             options_.regularization_state_min);
     }
 
-    // For “control” or “both”
+    // For "control" or "both"
     if (options_.regularization_type == "control" ||
         options_.regularization_type == "both")
     {
@@ -288,7 +295,7 @@ void CDDP::increaseRegularization()
 
 void CDDP::decreaseRegularization()
 {
-    // For “state” or “both”
+    // For "state" or "both"
     if (options_.regularization_type == "state" ||
         options_.regularization_type == "both")
     {
@@ -304,7 +311,7 @@ void CDDP::decreaseRegularization()
         }
     }
 
-    // For “control” or “both”
+    // For "control" or "both"
     if (options_.regularization_type == "control" ||
         options_.regularization_type == "both")
     {
@@ -334,7 +341,7 @@ bool CDDP::isRegularizationLimitReached() const
     else if (options_.regularization_type == "both")
         return (state_limit || control_limit);
 
-    // For “none” or unknown, no limit in practice
+    // For "none" or unknown, no limit in practice
     return false;
 }
 
