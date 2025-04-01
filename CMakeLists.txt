@@ -243,7 +243,6 @@ endif()
 
 set(dynamics_model_srcs
   src/dynamics_model/pendulum.cpp
-  src/dynamics_model/autodiff_pendulum.cpp
   src/dynamics_model/unicycle.cpp
   src/dynamics_model/bicycle.cpp
   src/dynamics_model/cartpole.cpp

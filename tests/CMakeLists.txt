@@ -50,10 +50,6 @@ add_executable(test_pendulum dynamics_model/test_pendulum.cpp)
 target_link_libraries(test_pendulum gtest gmock gtest_main cddp)
 gtest_discover_tests(test_pendulum)
 
-add_executable(test_autodiff_pendulum dynamics_model/test_autodiff_pendulum.cpp)
-target_link_libraries(test_autodiff_pendulum gtest gmock gtest_main cddp)
-gtest_discover_tests(test_autodiff_pendulum)  
-
 add_executable(test_quadrotor dynamics_model/test_quadrotor.cpp)
 target_link_libraries(test_quadrotor gtest gmock gtest_main cddp)
 gtest_discover_tests(test_quadrotor)
