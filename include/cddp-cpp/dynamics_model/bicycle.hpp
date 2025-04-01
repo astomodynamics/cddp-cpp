@@ -42,6 +42,10 @@ public:
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
                                          const Eigen::VectorXd& control) const override;
 
+    // Add the autodiff version declaration
+    VectorXdual2nd getContinuousDynamicsAutodiff(
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+
     /**
      * Computes the discrete-time dynamics using the specified integration method
      * @param state Current state vector

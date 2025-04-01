@@ -16,6 +16,8 @@
 
 #include "dynamics_model/bicycle.hpp"
 #include <cmath>
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -43,6 +45,28 @@ Eigen::VectorXd Bicycle::getContinuousDynamics(
     state_dot(STATE_THETA) = (v / wheelbase_) * std::tan(delta); // dtheta/dt
     state_dot(STATE_V) = a;                                    // dv/dt
     
+    return state_dot;
+}
+
+VectorXdual2nd Bicycle::getContinuousDynamicsAutodiff(
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+
+    // Extract state variables (now dual2nd types)
+    const autodiff::dual2nd theta = state(STATE_THETA);  // heading angle
+    const autodiff::dual2nd v = state(STATE_V);          // velocity
+
+    // Extract control variables (now dual2nd types)
+    const autodiff::dual2nd a = control(CONTROL_ACC);      // acceleration
+    const autodiff::dual2nd delta = control(CONTROL_DELTA); // steering angle
+
+    // Kinematic bicycle model equations using ADL for math functions
+    state_dot(STATE_X) = v * cos(theta);                  // dx/dt
+    state_dot(STATE_Y) = v * sin(theta);                  // dy/dt
+    state_dot(STATE_THETA) = (v / wheelbase_) * tan(delta); // dtheta/dt
+    state_dot(STATE_V) = a;                                        // dv/dt
+
     return state_dot;
 }
 
