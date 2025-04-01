@@ -120,7 +120,7 @@ VectorXdual2nd LTISystem::getDiscreteDynamicsAutodiff(
 }
 
 VectorXdual2nd LTISystem::getContinuousDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const 
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
     VectorXdual2nd next_state = this->getDiscreteDynamicsAutodiff(state, control);
     return (next_state - state) / timestep_;
 }
