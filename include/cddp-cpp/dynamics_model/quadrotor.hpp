@@ -92,6 +92,15 @@ public:
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
+    /**
+     * Computes the continuous-time dynamics of the quadrotor model using autodiff
+     * @param state Current state vector
+     * @param control Current control input
+     * @return State derivative vector
+     */
+    VectorXdual2nd getContinuousDynamicsAutodiff(const VectorXdual2nd& state, 
+                                                const VectorXdual2nd& control) const override;
+
 private:
     double mass_;              // Mass of the quadrotor
     Eigen::Matrix3d inertia_;  // Inertia matrix
@@ -130,6 +139,18 @@ private:
      * @return 3x3 rotation matrix
      */
     Eigen::Matrix3d getRotationMatrix(double qw, double qx, double qy, double qz) const;
+
+    /**
+     * Helper function to compute rotation matrix from a quaternion using autodiff
+     * @param qw Scalar part of quaternion
+     * @param qx x component
+     * @param qy y component
+     * @param qz z component
+     * @return 3x3 rotation matrix
+     */
+    Eigen::Matrix<autodiff::dual2nd, 3, 3> getRotationMatrixAutodiff(
+        const autodiff::dual2nd& qw, const autodiff::dual2nd& qx,
+        const autodiff::dual2nd& qy, const autodiff::dual2nd& qz) const;
 };
 
 } // namespace cddp

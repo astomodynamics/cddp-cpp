@@ -64,6 +64,15 @@ public:
                                          const Eigen::VectorXd& control) const override;
 
     /**
+     * @brief Computes continuous-time system dynamics using autodiff
+     * @param state Current state vector
+     * @param control Current control input
+     * @return State derivative vector
+     */
+    VectorXdual2nd getContinuousDynamicsAutodiff(const VectorXdual2nd& state, 
+                                                const VectorXdual2nd& control) const override;
+
+    /**
      * @brief Computes discrete-time system dynamics
      * @param state Current state vector
      * @param control Current control input

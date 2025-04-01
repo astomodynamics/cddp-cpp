@@ -52,6 +52,10 @@ public:
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
                                          const Eigen::VectorXd& control) const override;
 
+    // **** Add declaration ****
+    VectorXdual2nd getContinuousDynamicsAutodiff( // Use alias
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+
     Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state, 
                                        const Eigen::VectorXd& control) const override {
         return DynamicalSystem::getDiscreteDynamics(state, control);

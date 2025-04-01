@@ -45,9 +45,12 @@ public:
                                   const Eigen::VectorXd& control) const;
     
     // Autodiff version of continuous dynamics using second-order duals
-    // Derived classes MUST implement this to use autodiff for derivatives.
+    // Derived classes MUST implement this to use the default autodiff-based derivative functions (getJacobians, getHessians).
+    // If not overridden, calling functions that depend on it will result in a runtime error.
     virtual VectorXdual2nd getContinuousDynamicsAutodiff(const VectorXdual2nd& state,
-                                                         const VectorXdual2nd& control) const = 0; // Takes and returns dual2nd
+                                                         const VectorXdual2nd& control) const {
+        throw std::logic_error("getContinuousDynamicsAutodiff must be overridden in the derived class to use Autodiff-based derivatives.");
+    }
 
     // Discrete dynamics function: x_{t+1} = f(x_t, u_t)
     // Uses integration based on getContinuousDynamics

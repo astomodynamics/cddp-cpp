@@ -109,6 +109,10 @@ public:
     double getDamping() const { return damping_; }
     double getGravity() const { return gravity_; }
 
+    // Ensure declaration exists and matches
+    VectorXdual2nd getContinuousDynamicsAutodiff( // Use alias
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+
 private:
     // Pendulum parameters
     double length_;  // length [m]

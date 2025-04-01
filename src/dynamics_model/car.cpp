@@ -130,7 +130,7 @@ cddp::VectorXdual2nd Car::getDiscreteDynamicsAutodiff(
     const double h = timestep_;
     const autodiff::dual2nd d = wheelbase_;
 
-    // Use ADL for math functions (remove 'autodiff::')
+    // Use ADL for math functions
     const autodiff::dual2nd cos_theta = cos(theta);
     const autodiff::dual2nd sin_theta = sin(theta);
 

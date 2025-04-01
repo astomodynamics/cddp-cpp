@@ -16,6 +16,8 @@
 
 #include "dynamics_model/pendulum.hpp"
 #include <cmath>
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -111,6 +113,22 @@ std::vector<Eigen::MatrixXd> Pendulum::getControlHessian(
     // No need to set any values as the matrices are already initialized to zero
     
     return hessian;
+}
+
+VectorXdual2nd Pendulum::getContinuousDynamicsAutodiff( // Use alias
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+    const autodiff::dual2nd theta = state(STATE_THETA);
+    const autodiff::dual2nd theta_dot = state(STATE_THETA_DOT);
+    const autodiff::dual2nd torque = control(CONTROL_TORQUE);
+    const double inertia = mass_ * length_ * length_;
+
+    state_dot(STATE_THETA) = theta_dot;
+    // Corrected sign for gravity assumed (theta=0 down)
+    state_dot(STATE_THETA_DOT) = (torque - damping_ * theta_dot - mass_ * gravity_ * length_ * sin(theta)) / inertia; // Use ADL
+
+    return state_dot;
 }
 
 } // namespace cddp

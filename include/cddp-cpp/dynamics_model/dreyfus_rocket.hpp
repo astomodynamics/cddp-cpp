@@ -100,6 +100,10 @@ public:
     double getThrustAcceleration() const { return thrust_acceleration_; }
     double getGravityAcceleration() const { return gravity_acceleration_; }
 
+    // Ensure declaration exists and matches
+    VectorXdual2nd getContinuousDynamicsAutodiff( // Use alias
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+
 private:
     // State indices
     static constexpr int STATE_X = 0;        ///< Position index

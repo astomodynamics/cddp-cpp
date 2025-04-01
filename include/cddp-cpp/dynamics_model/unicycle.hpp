@@ -97,6 +97,10 @@ public:
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
+    // Add declaration
+    VectorXdual2nd getContinuousDynamicsAutodiff( // Use alias
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+
 private:
     // State indices
     static constexpr int STATE_X = 0;      // x position

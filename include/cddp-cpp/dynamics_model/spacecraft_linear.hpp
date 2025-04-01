@@ -93,6 +93,15 @@ public:
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
+    /**
+     * Computes the continuous-time dynamics of the HCW model using autodiff
+     * @param state Current state vector
+     * @param control Current control input
+     * @return State derivative vector
+     */
+    VectorXdual2nd getContinuousDynamicsAutodiff(const VectorXdual2nd& state, 
+                                                const VectorXdual2nd& control) const override;
+
 private:
     double mean_motion_;  // Mean motion of reference orbit
     double mass_;         // Mass of the chaser spacecraft

@@ -16,6 +16,8 @@
 
 #include "dynamics_model/unicycle.hpp"
 #include <cmath>
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -116,6 +118,26 @@ std::vector<Eigen::MatrixXd> Unicycle::getControlHessian(
     // No non-zero terms in control Hessian for this model
     
     return hessians;
+}
+
+VectorXdual2nd Unicycle::getContinuousDynamicsAutodiff( // Use alias
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+
+    // Extract state (dual2nd)
+    const autodiff::dual2nd theta = state(STATE_THETA);
+
+    // Extract control (dual2nd)
+    const autodiff::dual2nd v = control(CONTROL_V);
+    const autodiff::dual2nd omega = control(CONTROL_OMEGA);
+
+    // Dynamics using ADL for math
+    state_dot(STATE_X) = v * cos(theta);
+    state_dot(STATE_Y) = v * sin(theta);
+    state_dot(STATE_THETA) = omega;
+
+    return state_dot;
 }
 
 } // namespace cddp

@@ -18,6 +18,7 @@
 #define CDDP_DUBINS_CAR_HPP
 
 #include "cddp_core/dynamical_system.hpp"
+#include "cddp_core/dynamical_system.hpp"
 
 namespace cddp {
 
@@ -100,6 +101,10 @@ public:
      */
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state,
                                       const Eigen::VectorXd& control) const override;
+
+    // Add the required autodiff version declaration
+    VectorXdual2nd getContinuousDynamicsAutodiff(
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
 
 private:
     // State indices

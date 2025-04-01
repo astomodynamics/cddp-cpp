@@ -61,11 +61,11 @@ VectorXdual2nd Bicycle::getContinuousDynamicsAutodiff(
     const autodiff::dual2nd a = control(CONTROL_ACC);      // acceleration
     const autodiff::dual2nd delta = control(CONTROL_DELTA); // steering angle
 
-    // Kinematic bicycle model equations using ADL for math functions
-    state_dot(STATE_X) = v * cos(theta);                  // dx/dt
-    state_dot(STATE_Y) = v * sin(theta);                  // dy/dt
-    state_dot(STATE_THETA) = (v / wheelbase_) * tan(delta); // dtheta/dt
-    state_dot(STATE_V) = a;                                        // dv/dt
+    // Use ADL for math functions
+    state_dot(STATE_X) = v * cos(theta);
+    state_dot(STATE_Y) = v * sin(theta);
+    state_dot(STATE_THETA) = (v / wheelbase_) * tan(delta);
+    state_dot(STATE_V) = a;
 
     return state_dot;
 }

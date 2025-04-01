@@ -104,6 +104,10 @@ public:
     const Eigen::MatrixXd& getA() const { return A_; }
     const Eigen::MatrixXd& getB() const { return B_; }
 
+    // Ensure declaration exists and matches base class
+    VectorXdual2nd getContinuousDynamicsAutodiff( // Use alias
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+
 private:
     Eigen::MatrixXd A_;  ///< System matrix
     Eigen::MatrixXd B_;  ///< Input matrix
@@ -112,6 +116,10 @@ private:
      * @brief Initialize random stable system matrices
      */
     void initializeRandomSystem();
+
+    // Ensure helper declaration exists
+    VectorXdual2nd getDiscreteDynamicsAutodiff( // Use alias
+        const VectorXdual2nd& state, const VectorXdual2nd& control) const;
 };
 
 } // namespace cddp

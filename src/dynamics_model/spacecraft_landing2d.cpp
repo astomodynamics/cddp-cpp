@@ -16,6 +16,9 @@
 
 #include "dynamics_model/spacecraft_landing2d.hpp"
 #include <cmath>
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
+#include <algorithm>
 
 namespace cddp {
 
@@ -110,6 +113,44 @@ std::vector<Eigen::MatrixXd> SpacecraftLanding2D::getControlHessian(
         hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
     }
     return hessians;
+}
+
+VectorXdual2nd SpacecraftLanding2D::getContinuousDynamicsAutodiff(
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+
+    // Extract state variables (dual2nd)
+    const autodiff::dual2nd theta = state(STATE_THETA);
+    const autodiff::dual2nd x_dot = state(STATE_X_DOT);
+    const autodiff::dual2nd y_dot = state(STATE_Y_DOT);
+    const autodiff::dual2nd theta_dot = state(STATE_THETA_DOT);
+
+    // Extract control variables (dual2nd) - Assume valid inputs (no clamping here)
+    autodiff::dual2nd thrust_cmd = control(CONTROL_THRUST);
+    autodiff::dual2nd gimble_angle_cmd = control(CONTROL_ANGLE);
+
+    // Total angle of thrust vector in world frame
+    const autodiff::dual2nd total_angle = gimble_angle_cmd + theta;
+
+    // Calculate forces in world frame using ADL for math
+    const autodiff::dual2nd F_x = thrust_cmd * sin(total_angle);
+    const autodiff::dual2nd F_y = thrust_cmd * cos(total_angle);
+
+    // Calculate torque using ADL for math
+    const autodiff::dual2nd T = -thrust_cmd * (length_ / 2.0) * sin(gimble_angle_cmd);
+
+    // Position derivatives
+    state_dot(STATE_X) = x_dot;
+    state_dot(STATE_Y) = y_dot;
+    state_dot(STATE_THETA) = theta_dot;
+
+    // Velocity derivatives
+    state_dot(STATE_X_DOT) = F_x / mass_;
+    state_dot(STATE_Y_DOT) = F_y / mass_ - gravity_;
+    state_dot(STATE_THETA_DOT) = T / inertia_;
+
+    return state_dot;
 }
 
 } // namespace cddp

@@ -16,6 +16,8 @@
 
 #include "dynamics_model/dubins_car.hpp"  // Adjust include path as needed
 #include <cmath>
+#include <autodiff/forward/dual.hpp> // Include dual types and math functions
+#include <autodiff/forward/dual/eigen.hpp> // Include Eigen support for dual types
 
 namespace cddp {
 
@@ -43,6 +45,25 @@ Eigen::VectorXd DubinsCar::getContinuousDynamics(
     state_dot(STATE_X)     = speed_ * std::cos(theta);
     state_dot(STATE_Y)     = speed_ * std::sin(theta);
     state_dot(STATE_THETA) = omega;
+
+    return state_dot;
+}
+
+cddp::VectorXdual2nd DubinsCar::getContinuousDynamicsAutodiff(
+    const cddp::VectorXdual2nd& state, const cddp::VectorXdual2nd& control) const {
+
+    VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
+
+    // Extract states (dual2nd)
+    const autodiff::dual2nd theta = state(STATE_THETA);
+
+    // Extract controls (dual2nd)
+    const autodiff::dual2nd omega = control(CONTROL_OMEGA);
+
+    // Use ADL for math functions
+    state_dot(STATE_X)     = speed_ * cos(theta);
+    state_dot(STATE_Y)     = speed_ * sin(theta);
+    state_dot(STATE_THETA) = omega; // dtheta/dt = omega
 
     return state_dot;
 }

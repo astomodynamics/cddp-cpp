@@ -1,5 +1,9 @@
 #include "dynamics_model/lti_system.hpp"
 #include <unsupported/Eigen/MatrixFunctions>
+#include <stdexcept>
+#include <random>
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -107,6 +111,22 @@ std::vector<Eigen::MatrixXd> LTISystem::getControlHessian(
         hessians[i] = Eigen::MatrixXd::Zero(control_dim_, control_dim_);
     }
     return hessians;
+}
+
+// **** Autodiff Implementation ****
+
+// Helper definition (should be present)
+VectorXdual2nd LTISystem::getDiscreteDynamicsAutodiff( // Use alias
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    return A_ * state + B_ * control;
+}
+
+// **** Ensure this definition exists and matches the header ****
+VectorXdual2nd LTISystem::getContinuousDynamicsAutodiff( // Use alias
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const { // MUST be const
+    VectorXdual2nd next_state = this->getDiscreteDynamicsAutodiff(state, control);
+    // Approximate continuous dynamics: x_dot = (x_{k+1} - x_k) / dt
+    return (next_state - state) / timestep_;
 }
 
 } // namespace cddp

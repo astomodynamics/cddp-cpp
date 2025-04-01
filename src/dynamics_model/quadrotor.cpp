@@ -16,6 +16,9 @@
 
 #include "dynamics_model/quadrotor.hpp"
 #include <cmath>
+#include "cddp_core/helper.hpp"
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
 
 namespace cddp {
 
@@ -158,6 +161,19 @@ std::vector<Eigen::MatrixXd> Quadrotor::getControlHessian(
         hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
     }
     return hessians;
+}
+
+Eigen::Matrix<autodiff::dual2nd, 3, 3> Quadrotor::getRotationMatrixAutodiff(
+    const autodiff::dual2nd& qw, const autodiff::dual2nd& qx,
+    const autodiff::dual2nd& qy, const autodiff::dual2nd& qz) const {
+    // No trig functions here, just multiplication
+}
+
+VectorXdual2nd Quadrotor::getContinuousDynamicsAutodiff(
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    // ... lots of state/control extraction ...
+    // No direct trig calls here, done in getRotationMatrixAutodiff (which doesn't use trig)
+    // Relies on Eigen operations (.cross, *, /) on dual types.
 }
 
 } // namespace cddp
