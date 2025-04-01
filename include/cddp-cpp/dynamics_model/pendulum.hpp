@@ -109,8 +109,8 @@ public:
     double getDamping() const { return damping_; }
     double getGravity() const { return gravity_; }
 
-    // Ensure declaration exists and matches
-    VectorXdual2nd getContinuousDynamicsAutodiff( // Use alias
+
+    VectorXdual2nd getContinuousDynamicsAutodiff(
         const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
 
 private:

@@ -102,7 +102,6 @@ public:
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state,
                                       const Eigen::VectorXd& control) const override;
 
-    // Add the required autodiff version declaration
     VectorXdual2nd getContinuousDynamicsAutodiff(
         const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
 

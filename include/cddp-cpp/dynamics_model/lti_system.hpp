@@ -104,8 +104,8 @@ public:
     const Eigen::MatrixXd& getA() const { return A_; }
     const Eigen::MatrixXd& getB() const { return B_; }
 
-    // Ensure declaration exists and matches base class
-    VectorXdual2nd getContinuousDynamicsAutodiff( // Use alias
+
+    VectorXdual2nd getContinuousDynamicsAutodiff(
         const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
 
 private:
@@ -118,7 +118,7 @@ private:
     void initializeRandomSystem();
 
     // Ensure helper declaration exists
-    VectorXdual2nd getDiscreteDynamicsAutodiff( // Use alias
+    VectorXdual2nd getDiscreteDynamicsAutodiff( 
         const VectorXdual2nd& state, const VectorXdual2nd& control) const;
 };
 
