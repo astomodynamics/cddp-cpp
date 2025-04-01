@@ -93,6 +93,15 @@ public:
                                      const Eigen::VectorXd& control) const override;
 
     /**
+     * Computes the cross Hessian of the dynamics with respect to both state and control
+     * @param state Current state vector
+     * @param control Current control input
+     * @return Vector of cross Hessian matrices, one per state dimension
+     */
+    std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd& state, 
+                                     const Eigen::VectorXd& control) const override;
+
+    /**
      * Computes the continuous-time dynamics of the quadrotor model using autodiff
      * @param state Current state vector
      * @param control Current control input
