@@ -131,14 +131,11 @@ std::vector<Eigen::MatrixXd> DubinsCar::getControlHessian(
     (void)state;
     (void)control;
     
-    // Initialize vector of matrices (one matrix per state dimension)
     std::vector<Eigen::MatrixXd> hessian(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
         hessian[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
     }
     
-    // For the Dubins car, all second derivatives with respect to control are zero
-    // No need to set any values as the matrices are already initialized to zero
     
     return hessian;
 }

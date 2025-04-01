@@ -115,7 +115,7 @@ std::vector<Eigen::MatrixXd> Pendulum::getControlHessian(
     return hessian;
 }
 
-VectorXdual2nd Pendulum::getContinuousDynamicsAutodiff( // Use alias
+VectorXdual2nd Pendulum::getContinuousDynamicsAutodiff(
     const VectorXdual2nd& state, const VectorXdual2nd& control) const {
 
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);

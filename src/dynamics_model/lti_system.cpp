@@ -113,19 +113,15 @@ std::vector<Eigen::MatrixXd> LTISystem::getControlHessian(
     return hessians;
 }
 
-// **** Autodiff Implementation ****
 
-// Helper definition (should be present)
-VectorXdual2nd LTISystem::getDiscreteDynamicsAutodiff( // Use alias
+VectorXdual2nd LTISystem::getDiscreteDynamicsAutodiff(
     const VectorXdual2nd& state, const VectorXdual2nd& control) const {
     return A_ * state + B_ * control;
 }
 
-// **** Ensure this definition exists and matches the header ****
-VectorXdual2nd LTISystem::getContinuousDynamicsAutodiff( // Use alias
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const { // MUST be const
+VectorXdual2nd LTISystem::getContinuousDynamicsAutodiff(
+    const VectorXdual2nd& state, const VectorXdual2nd& control) const 
     VectorXdual2nd next_state = this->getDiscreteDynamicsAutodiff(state, control);
-    // Approximate continuous dynamics: x_dot = (x_{k+1} - x_k) / dt
     return (next_state - state) / timestep_;
 }
 

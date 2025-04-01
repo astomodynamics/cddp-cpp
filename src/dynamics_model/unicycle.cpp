@@ -120,7 +120,7 @@ std::vector<Eigen::MatrixXd> Unicycle::getControlHessian(
     return hessians;
 }
 
-VectorXdual2nd Unicycle::getContinuousDynamicsAutodiff( // Use alias
+VectorXdual2nd Unicycle::getContinuousDynamicsAutodiff(
     const VectorXdual2nd& state, const VectorXdual2nd& control) const {
 
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);

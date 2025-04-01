@@ -166,14 +166,12 @@ std::vector<Eigen::MatrixXd> Quadrotor::getControlHessian(
 Eigen::Matrix<autodiff::dual2nd, 3, 3> Quadrotor::getRotationMatrixAutodiff(
     const autodiff::dual2nd& qw, const autodiff::dual2nd& qx,
     const autodiff::dual2nd& qy, const autodiff::dual2nd& qz) const {
-    // No trig functions here, just multiplication
+    // TODO: Implement this
 }
 
 VectorXdual2nd Quadrotor::getContinuousDynamicsAutodiff(
     const VectorXdual2nd& state, const VectorXdual2nd& control) const {
-    // ... lots of state/control extraction ...
-    // No direct trig calls here, done in getRotationMatrixAutodiff (which doesn't use trig)
-    // Relies on Eigen operations (.cross, *, /) on dual types.
+    // TODO: Implement this
 }
 
 } // namespace cddp
