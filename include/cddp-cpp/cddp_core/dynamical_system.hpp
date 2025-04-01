@@ -58,12 +58,11 @@ public:
                                   const Eigen::VectorXd& control) const;
 
     // Jacobian of dynamics w.r.t state: df/dx
-    // Default implementation uses autodiff via getContinuousDynamicsAutodiff
+
     virtual Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, 
                                         const Eigen::VectorXd& control) const;
 
     // Jacobian of dynamics w.r.t control: df/du
-    // Default implementation uses autodiff via getContinuousDynamicsAutodiff
     virtual Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, 
                                           const Eigen::VectorXd& control) const;
 
@@ -76,19 +75,17 @@ public:
 
     // Hessian of dynamics w.r.t state: d^2f/dx^2
     // Tensor (state_dim x state_dim x state_dim), vector<MatrixXd> (size state_dim)
-    // Default implementation uses autodiff via getContinuousDynamicsAutodiff
     virtual std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
                                       const Eigen::VectorXd& control) const;
 
     // Hessian of dynamics w.r.t control: d^2f/du^2
     // Tensor (state_dim x control_dim x control_dim), vector<MatrixXd> (size state_dim)
-    // Default implementation uses autodiff via getContinuousDynamicsAutodiff
+
     virtual std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                         const Eigen::VectorXd& control) const;
 
     // Hessian of dynamics w.r.t state and control: d^2f/dudx
     // Tensor (state_dim x control_dim x state_dim), vector<MatrixXd> (size state_dim)
-    // Default implementation uses autodiff via getContinuousDynamicsAutodiff
     virtual std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd& state, 
                                       const Eigen::VectorXd& control) const;
 
@@ -97,7 +94,6 @@ public:
                       std::vector<Eigen::MatrixXd>, 
                       std::vector<Eigen::MatrixXd>> getHessians(const Eigen::VectorXd& state, 
                                                                const Eigen::VectorXd& control) const {
-        // This can now call the default implementations or overridden ones
         return {getStateHessian(state, control), 
                 getControlHessian(state, control), 
                 getCrossHessian(state, control)};
