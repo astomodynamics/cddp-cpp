@@ -59,16 +59,26 @@ Eigen::VectorXd Car::getDiscreteDynamics(
 Eigen::MatrixXd Car::getStateJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    // Use the finite difference Jacobian helper function
-    auto dynamics_func = [this, &control](const Eigen::VectorXd& s) {
-        return this->getDiscreteDynamics(s, control);
-    };
+    // Convert inputs to autodiff types
+    VectorXdual2nd state_dual = state.cast<autodiff::dual2nd>();
+    VectorXdual2nd control_dual = control.cast<autodiff::dual2nd>();
     
-    // Get discretized Jacobian 
-    Eigen::MatrixXd J = finite_difference_jacobian(dynamics_func, state);
+    // Initialize Jacobian
+    Eigen::MatrixXd J = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
+
+    // Calculate Jacobian using autodiff
+    for (int i = 0; i < STATE_DIM; ++i) {
+        // Create a lambda that returns the i-th component of the dynamics
+        auto dynamics_i = [this, i, &control_dual](const VectorXdual2nd& x) -> autodiff::dual2nd {
+            VectorXdual2nd dynamics = this->getDiscreteDynamicsAutodiff(x, control_dual);
+            return dynamics(i);
+        };
+
+        // Calculate gradient of the i-th output with respect to state
+        J.row(i) = autodiff::gradient(dynamics_i, autodiff::wrt(state_dual), at(state_dual));
+    }
 
     // Convert discrete Jacobian to continuous time Jacobian
-    // A = timestep_ * Fx + I -> Fx = (A - I)/timestep_
     J.diagonal().array() -= 1.0;
     J /= timestep_;
     
@@ -78,16 +88,26 @@ Eigen::MatrixXd Car::getStateJacobian(
 Eigen::MatrixXd Car::getControlJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
     
-    // Use the finite difference Jacobian helper function
-    auto dynamics_func = [this, &state](const Eigen::VectorXd& c) {
-        return this->getDiscreteDynamics(state, c); 
-    };
+    // Convert inputs to autodiff types
+    VectorXdual2nd state_dual = state.cast<autodiff::dual2nd>();
+    VectorXdual2nd control_dual = control.cast<autodiff::dual2nd>();
     
-    // Get discretized Jacobian
-    Eigen::MatrixXd J = finite_difference_jacobian(dynamics_func, control);
+    // Initialize Jacobian
+    Eigen::MatrixXd J = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);
+
+    // Calculate Jacobian using autodiff
+    for (int i = 0; i < STATE_DIM; ++i) {
+        // Create a lambda that returns the i-th component of the dynamics
+        auto dynamics_i = [this, i, &state_dual](const VectorXdual2nd& u) -> autodiff::dual2nd {
+            VectorXdual2nd dynamics = this->getDiscreteDynamicsAutodiff(state_dual, u);
+            return dynamics(i);
+        };
+
+        // Calculate gradient of the i-th output with respect to control
+        J.row(i) = autodiff::gradient(dynamics_i, autodiff::wrt(control_dual), at(control_dual));
+    }
 
     // Convert discrete Jacobian to continuous time Jacobian
-    // B = timestep_ * Fu -> Fu = B/timestep_
     J /= timestep_;
     
     return J;
@@ -95,23 +115,65 @@ Eigen::MatrixXd Car::getControlJacobian(
 
 std::vector<Eigen::MatrixXd> Car::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    // Convert inputs to autodiff types
+    VectorXdual2nd state_dual = state.cast<autodiff::dual2nd>();
+    VectorXdual2nd control_dual = control.cast<autodiff::dual2nd>();
+    
+    // Initialize Hessians
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
         hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
     }
+
+    // Calculate Hessians using autodiff
+    for (int i = 0; i < STATE_DIM; ++i) {
+        // Create a lambda that returns the i-th component of the dynamics
+        auto dynamics_i = [this, i, &control_dual](const VectorXdual2nd& x) -> autodiff::dual2nd {
+            VectorXdual2nd dynamics = this->getDiscreteDynamicsAutodiff(x, control_dual);
+            return dynamics(i);
+        };
+
+        // Calculate Hessian of the i-th output with respect to state
+        hessians[i] = autodiff::hessian(dynamics_i, autodiff::wrt(state_dual), at(state_dual));
+        
+        // Convert discrete Hessian to continuous time Hessian
+        hessians[i] /= timestep_;
+    }
+    
     return hessians;
 }
 
 std::vector<Eigen::MatrixXd> Car::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    
+    // Convert inputs to autodiff types
+    VectorXdual2nd state_dual = state.cast<autodiff::dual2nd>();
+    VectorXdual2nd control_dual = control.cast<autodiff::dual2nd>();
+    
+    // Initialize Hessians
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
         hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
     }
+
+    // Calculate Hessians using autodiff
+    for (int i = 0; i < STATE_DIM; ++i) {
+        // Create a lambda that returns the i-th component of the dynamics
+        auto dynamics_i = [this, i, &state_dual](const VectorXdual2nd& u) -> autodiff::dual2nd {
+            VectorXdual2nd dynamics = this->getDiscreteDynamicsAutodiff(state_dual, u);
+            return dynamics(i);
+        };
+
+        // Calculate Hessian of the i-th output with respect to control
+        hessians[i] = autodiff::hessian(dynamics_i, autodiff::wrt(control_dual), at(control_dual));
+        
+        // Convert discrete Hessian to continuous time Hessian
+        hessians[i] /= timestep_;
+    }
+    
     return hessians;
 }
-
-// **** Autodiff Implementation ****
 
 // Helper: Autodiff version of discrete dynamics
 cddp::VectorXdual2nd Car::getDiscreteDynamicsAutodiff(

@@ -164,6 +164,73 @@ TEST(CarTest, JacobianTest) {
     }
 }
 
+TEST(CarTest, HessianTest) {
+    // Create a car instance
+    double timestep = 0.03;
+    double wheelbase = 2.0;
+    std::string integration_type = "euler";
+    cddp::Car car(timestep, wheelbase, integration_type);
+
+    // Initial state and control for testing
+    Eigen::VectorXd state(4);
+    state << 1.0, 1.0, 3*M_PI/2, 1.0;
+    Eigen::VectorXd control(2);
+    control << 0.3, 0.1;
+
+    // Get the state and control Hessians
+    std::vector<Eigen::MatrixXd> state_hessians = car.getStateHessian(state, control);
+    std::vector<Eigen::MatrixXd> control_hessians = car.getControlHessian(state, control);
+
+    // Scale Hessians back since they were divided by timestep in implementation
+    for (auto& H : state_hessians) {
+        H *= timestep;
+    }
+    for (auto& H : control_hessians) {
+        H *= timestep;
+    }
+
+    // Expected values from autodiff calculation
+    double expected_state_theta_v_v = 8.71e-08;     // d²theta/dv²
+    double expected_control_theta_delta_delta = -0.00443;  // d²theta/ddelta²
+    double expected_state_x_v_theta = 0.0287;       // d²x/dv·dθ
+
+    // Verify dimensions
+    ASSERT_EQ(state_hessians.size(), 4);
+    ASSERT_EQ(control_hessians.size(), 4);
+    
+    for (int i = 0; i < 4; ++i) {
+        ASSERT_EQ(state_hessians[i].rows(), 4);
+        ASSERT_EQ(state_hessians[i].cols(), 4);
+        ASSERT_EQ(control_hessians[i].rows(), 2);
+        ASSERT_EQ(control_hessians[i].cols(), 2);
+    }
+
+    // Check specific values using autodiff-calculated expectations
+    EXPECT_NEAR(state_hessians[2](3, 3), expected_state_theta_v_v, 1e-4);
+    EXPECT_NEAR(control_hessians[2](0, 0), expected_control_theta_delta_delta, 1e-4);
+    EXPECT_NEAR(state_hessians[0](3, 2), expected_state_x_v_theta, 1e-4);
+    EXPECT_NEAR(control_hessians[0](0, 1), 0.0, 1e-4); // d²x/dδ·da
+    
+    // Test another state point
+    state << 1.0, 1.0, 3*M_PI/2, 0.0;
+    control << 0.01, 0.01;
+    
+    state_hessians = car.getStateHessian(state, control);
+    control_hessians = car.getControlHessian(state, control);
+    
+    // Scale Hessians back
+    for (auto& H : state_hessians) {
+        H *= timestep;
+    }
+    for (auto& H : control_hessians) {
+        H *= timestep;
+    }
+    
+    // For near-zero velocity, check that the non-zero Hessian components are smaller
+    EXPECT_LT(state_hessians[2](3, 3), expected_state_theta_v_v);
+    EXPECT_LT(std::abs(control_hessians[2](0, 0)), std::abs(expected_control_theta_delta_delta));
+}
+
 namespace cddp {
 class CarParkingObjective : public NonlinearObjective {
 public:
