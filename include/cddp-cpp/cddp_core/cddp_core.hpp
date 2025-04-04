@@ -321,6 +321,7 @@ private:
     void resetIPDDPRegularization();
 
     // ALDDP (Augmented Lagrangian DDP) implementation
+    void initializeALDDP();
     CDDPSolution solveALDDP();
     bool solveALDDPBackwardPass(const std::map<std::string, std::vector<Eigen::VectorXd>>& lambda, double rho);
     ForwardPassResult solveALDDPForwardPass(double alpha, const std::map<std::string, std::vector<Eigen::VectorXd>>& lambda, double rho);
