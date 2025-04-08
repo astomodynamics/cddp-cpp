@@ -66,6 +66,10 @@ add_executable(test_spacecraft_nonlinear dynamics_model/test_spacecraft_nonlinea
 target_link_libraries(test_spacecraft_nonlinear gtest gmock gtest_main cddp)
 gtest_discover_tests(test_spacecraft_nonlinear)
 
+add_executable(test_usv_3dof dynamics_model/test_usv_3dof.cpp)
+target_link_libraries(test_usv_3dof gtest gmock gtest_main cddp)
+gtest_discover_tests(test_usv_3dof)
+
 add_executable(test_hessian test_hessian.cpp)
 target_link_libraries(test_hessian gtest gmock gtest_main cddp)
 gtest_discover_tests(test_hessian)
