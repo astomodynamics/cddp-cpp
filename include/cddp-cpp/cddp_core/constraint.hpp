@@ -23,6 +23,7 @@
 #include <tuple>
 #include <algorithm>
 #include <iostream>
+#include <cmath> // For std::acos, std::sqrt, std::max, M_PI
 
 namespace cddp
 {
@@ -492,7 +493,7 @@ namespace cddp
             }
             Eigen::Vector3d p = state.head(3);
             Eigen::Vector3d diff = p - center_;
-            // Axial distance along the cylinder’s axis.
+            // Axial distance along the cylinder's axis.
             double d_axis = diff.dot(axis_);
             // Radial component (projection of diff onto the plane perpendicular to the axis).
             Eigen::Vector3d radial_vec = diff - d_axis * axis_;
@@ -629,60 +630,139 @@ namespace cddp
         double scale_factor_;    // Scaling factor for the constraint value.
     };
 
-    // class QuadraticConstraint : public Constraint {
-    // public:
-    //     QuadraticConstraint(const Eigen::MatrixXd& Q,
-    //                         const Eigen::VectorXd& q,
-    //                         double r,
-    //                         double scale_factor = 1.0)
-    //         : Constraint("QuadraticConstraint"),
-    //           Q_(Q),
-    //           q_(q),
-    //           r_(r),
-    //           scale_factor_(scale_factor) {}
+    // Second-order cone constraint: Ensures the state stays inside a cone
+    class SecondOrderConeConstraint : public Constraint
+    {
+    public:
+        SecondOrderConeConstraint(const Eigen::Vector3d& cone_origin,
+                                const Eigen::Vector3d& opening_direction, // Changed from cone_axis: Represents the direction the cone opens towards
+                                double cone_angle_fov, // In radians [0, PI]
+                                double regularization_epsilon = 1e-6, // Small positive number for regularization
+                                const std::string& name = "SecondOrderConeConstraint")
+            : Constraint(name),
+              p_o_(cone_origin),
+              axis_(opening_direction.normalized()), // Ensure unit vector, storing the opening direction
+              cos_fov_(std::cos(cone_angle_fov)),
+              epsilon_(regularization_epsilon)
+        {
+            if (cone_angle_fov < 0 || cone_angle_fov > M_PI) {
+                throw std::invalid_argument("SecondOrderConeConstraint: Cone angle must be between 0 and PI.");
+            }
+            if (regularization_epsilon <= 0) {
+                throw std::invalid_argument("SecondOrderConeConstraint: Regularization epsilon must be positive.");
+            }
+            // Optional: Warn if the provided opening direction was not unit
+            if (std::abs(opening_direction.norm() - 1.0) > 1e-6 && opening_direction.norm() != 0.0) {
+                std::cerr << "Warning: SecondOrderConeConstraint provided opening_direction was not a unit vector. Normalizing." << std::endl;
+            } else if (opening_direction.norm() == 0.0) {
+                throw std::invalid_argument("SecondOrderConeConstraint: Opening direction cannot be zero vector.");
+            }
+        }
 
-    //     Eigen::VectorXd evaluate(const Eigen::VectorXd& state,
-    //                              const Eigen::VectorXd& control) const override
-    //     {
-    //         return 0.5 * state.transpose() * Q_ * state + q_.transpose() * state + r_;
-    //     }
+        int getDualDim() const override
+        {
+            return 1; // Scalar inequality constraint g(x) <= 0
+        }
 
-    //     Eigen::VectorXd getLowerBound() const override {
-    //         return Eigen::VectorXd::Constant(1, -std::numeric_limits<double>::infinity());
-    //     }
+        // Evaluate g(x) = cos(theta_fov) * sqrt(||p_s - p_o||^2 + epsilon) - (p_s - p_o) . axis
+        Eigen::VectorXd evaluate(const Eigen::VectorXd &state,
+                                const Eigen::VectorXd & /*control*/) const override
+        {
+            if (state.size() < 3) {
+                throw std::invalid_argument("SecondOrderConeConstraint: State dimension must be at least 3.");
+            }
+            Eigen::Vector3d p_s = state.head(3);
+            Eigen::Vector3d v = p_s - p_o_; // Vector from origin to state point
+            double v_squared = v.squaredNorm();
+            double reg_norm = std::sqrt(v_squared + epsilon_); // Regularized norm ||p_s - p_o||
 
-    //     Eigen::VectorXd getUpperBound() const override {
-    //         return Eigen::VectorXd::Zero(1);
-    //     }
+            double dot_prod = v.dot(axis_); // (p_s - p_o) . axis
+            double g_val = reg_norm * cos_fov_ - dot_prod;
 
-    //     Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state,
-    //                                      const Eigen::VectorXd& control) const override
-    //     {
-    //         return Q_ * state + q_;
-    //     }
+            Eigen::VectorXd result(1);
+            result(0) = g_val;
+            return result;
+        }
 
-    //     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state,
-    //                                        const Eigen::VectorXd& control) const override
-    //     {
-    //         return Eigen::MatrixXd::Zero(1, control.size());
-    //     }
+        Eigen::VectorXd getLowerBound() const override
+        {
+            // g(x) <= 0
+            return Eigen::VectorXd::Constant(1, -std::numeric_limits<double>::infinity());
+        }
 
-    //     double computeViolation(const Eigen::VectorXd& state,
-    //                             const Eigen::VectorXd& control) const override
-    //     {
-    //         Eigen::VectorXd g = evaluate(state, control);
-    //         return computeViolationFromValue(g);
-    //     }
+        Eigen::VectorXd getUpperBound() const override
+        {
+            // g(x) <= 0
+            return Eigen::VectorXd::Zero(1);
+        }
 
-    //     double computeViolationFromValue(const Eigen::VectorXd& g) const override {
-    //         return std::max(0.0, g(0));
-    //     }
-    // private:
-    //     Eigen::MatrixXd Q_;
-    //     Eigen::VectorXd q_;
-    //     double r_;
-    //     double scale_factor_;
-    // };
+        // Calculate Jacobian dg/dx = dg/dp_s * dp_s/dx
+        Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state,
+                                        const Eigen::VectorXd & /*control*/) const override
+        {
+            if (state.size() < 3) {
+                throw std::invalid_argument("SecondOrderConeConstraint: State dimension must be at least 3 for Jacobian calculation.");
+            }
+            Eigen::Vector3d p_s = state.head(3);
+            Eigen::Vector3d v = p_s - p_o_; // Vector from origin to state point
+            double v_squared = v.squaredNorm();
+            double reg_norm = std::sqrt(v_squared + epsilon_); // Regularized norm ||p_s - p_o||
+
+            // Jacobian dg/dx = dg/dp_s * dp_s/dx
+            // Assuming p_s = state.head(3), then dp_s/dx = [I_3x3, 0]
+            Eigen::MatrixXd dp_s_dx = Eigen::MatrixXd::Zero(3, state.size());
+            dp_s_dx.leftCols(3) = Eigen::Matrix3d::Identity();
+
+            // Calculate dg/dp_s:
+            // g = cos(fov) * sqrt(||p_s - p_o||^2 + epsilon) - (p_s - p_o) . axis
+            // dg/dp_s = cos(fov) * d/dp_s sqrt(||p_s - p_o||^2 + epsilon) - d/dp_s (p_s . axis)
+            // dg/dp_s = cos(fov) * ( (p_s - p_o)^T / sqrt(||p_s - p_o||^2 + epsilon) ) - axis^T
+            // dg/dp_s = cos(fov) * (v^T / reg_norm) - axis^T
+            Eigen::RowVector3d dg_dps;
+            if (reg_norm > 1e-9) { // Avoid division by zero if p_s is very close to p_o
+                 dg_dps = cos_fov_ * (v.transpose() / reg_norm) - axis_.transpose();
+            } else {
+                 dg_dps = -axis_.transpose(); // Or handle as appropriate, maybe zero?
+            }
+
+            // Chain rule: dg/dx = dg/dp_s * dp_s/dx
+            Eigen::MatrixXd jacobian = dg_dps * dp_s_dx;
+            return jacobian;
+        }
+
+        Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd &state,
+                                          const Eigen::VectorXd &control) const override
+        {
+            // Assumes constraint only depends on state
+            if (state.size() < 3) {
+                throw std::invalid_argument("SecondOrderConeConstraint: State dimension must be at least 3.");
+            }
+            return Eigen::MatrixXd::Zero(1, control.size());
+        }
+
+        double computeViolation(const Eigen::VectorXd &state,
+                              const Eigen::VectorXd &control) const override
+        {
+            Eigen::VectorXd g = evaluate(state, control);
+            return computeViolationFromValue(g);
+        }
+
+        double computeViolationFromValue(const Eigen::VectorXd &g) const override
+        {
+            // Violation occurs when g > upper_bound (which is 0)
+            // Ensure g has at least one element
+            if (g.size() < 1) {
+                throw std::runtime_error("SecondOrderConeConstraint: Input vector g is empty in computeViolationFromValue.");
+            }
+            return std::max(0.0, g(0));
+        }
+
+    private:
+        Eigen::Vector3d p_o_;         // Cone origin position
+        Eigen::Vector3d axis_;        // Cone axis (unit vector, represents OPENING direction)
+        double cos_fov_;              // Cosine of the cone field-of-view half-angle
+        double epsilon_;              // Regularization parameter for differentiability
+    };
 } // namespace cddp
 
 #endif // CDDP_CONSTRAINT_HPP
