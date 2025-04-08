@@ -123,3 +123,74 @@ TEST(LinearConstraintTest, Evaluate) {
     constraint_value = constraint.evaluate(state, control);
     ASSERT_NEAR(constraint_value(0), 0.0, 1e-6);
 }
+
+// New test suite for SecondOrderConeConstraint
+TEST(SecondOrderConeConstraintTest, Evaluate) {
+    Eigen::Vector3d origin(0.0, 0.0, 0.0);
+    Eigen::Vector3d axis(0.0, 0.0, 1.0); // Pointing up Z-axis
+    double fov = M_PI / 4.0; // 45 degrees half-angle
+    double epsilon = 1e-8;
+    cddp::SecondOrderConeConstraint constraint(origin, axis, fov, epsilon);
+
+    Eigen::VectorXd control(1); // Control doesn't matter
+    control << 0.0;
+
+    // Test with a state INSIDE the cone (g <= 0)
+    // Points behind the origin along the axis are inside
+    Eigen::VectorXd state_inside(3);
+    state_inside << 0.0, 0.0, -1.0; 
+    Eigen::VectorXd constraint_value_inside = constraint.evaluate(state_inside, control);
+    ASSERT_LT(constraint_value_inside(0), 0.0); // Check if strictly inside
+
+    // Test with a state OUTSIDE the cone (g > 0)
+    Eigen::VectorXd state_outside(3);
+    state_outside << 5.0, 0.0, 0.0;
+    Eigen::VectorXd constraint_value_outside = constraint.evaluate(state_outside, control);
+    ASSERT_GT(constraint_value_outside(0), 0.0);
+
+    // Test with a state ON the boundary (g approx 0)
+    // Point geometrically on the cone boundary behind origin
+    Eigen::VectorXd state_boundary(3);
+    state_boundary << 0.0, std::sin(fov), -std::cos(fov);
+    Eigen::VectorXd constraint_value_boundary = constraint.evaluate(state_boundary, control);
+    ASSERT_NEAR(constraint_value_boundary(0), 0.0, 1e-6); // Use tolerance due to epsilon
+}
+
+TEST(SecondOrderConeConstraintTest, Gradients) {
+    Eigen::Vector3d origin(0.0, 0.0, 0.0);
+    Eigen::Vector3d axis(0.0, 0.0, 1.0);
+    double fov = M_PI / 4.0; // 45 degrees
+    double cos_fov = std::cos(fov);
+    double epsilon = 1e-8;
+    cddp::SecondOrderConeConstraint constraint(origin, axis, fov, epsilon);
+
+    Eigen::VectorXd state(3);
+    state << 0.0, 0.5, -0.5; // A point inside the cone
+    Eigen::VectorXd control(1);
+    control << 0.0;
+
+    // Calculate Jacobians
+    auto jacobians = constraint.getJacobians(state, control);
+    Eigen::MatrixXd state_jacobian = std::get<0>(jacobians);
+    Eigen::MatrixXd control_jacobian = std::get<1>(jacobians);
+
+    // Calculate expected state Jacobian using the analytical formula
+    Eigen::Vector3d p_s = state.head(3);
+    Eigen::Vector3d v = origin - p_s; 
+    double v_squared = v.squaredNorm(); 
+    double reg_norm = std::sqrt(v_squared + epsilon); 
+    Eigen::RowVector3d expected_dg_dps = -cos_fov * (v.transpose() / reg_norm) + axis.transpose();
+
+    // Construct expected full Jacobian dg/dx = dg/dp_s * [I, 0]
+    Eigen::MatrixXd expected_state_jacobian = Eigen::MatrixXd::Zero(1, state.size());
+    expected_state_jacobian.leftCols(3) = expected_dg_dps;
+
+    ASSERT_EQ(state_jacobian.rows(), 1);
+    ASSERT_EQ(state_jacobian.cols(), state.size());
+    ASSERT_TRUE(state_jacobian.isApprox(expected_state_jacobian, 1e-6));
+
+    // Expected control Jacobian should be zero
+    ASSERT_EQ(control_jacobian.rows(), 1);
+    ASSERT_EQ(control_jacobian.cols(), control.size());
+    ASSERT_TRUE(control_jacobian.isApprox(Eigen::MatrixXd::Zero(1, control.size())));
+}
