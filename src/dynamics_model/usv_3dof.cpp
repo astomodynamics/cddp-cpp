@@ -7,8 +7,8 @@
 namespace cddp {
 
 // Define convenient aliases for state/control indices
-using State = Usv3Dof::StateIndex;
-using Control = Usv3Dof::ControlIndex;
+// using State = Usv3Dof::StateIndex; // Removed - incorrect
+// using Control = Usv3Dof::ControlIndex; // Removed - incorrect
 
 Usv3Dof::Usv3Dof(double timestep, std::string integration_type)
     : DynamicalSystem(STATE_DIM, CONTROL_DIM, timestep, integration_type)
@@ -62,10 +62,10 @@ Eigen::VectorXd Usv3Dof::getContinuousDynamics(
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
 
     // Extract state components
-    const double psi = state(State::PSI);
-    const double u = state(State::U);
-    const double v = state(State::V);
-    const double r = state(State::R);
+    const double psi = state(Usv3Dof::STATE_PSI);
+    const double u = state(Usv3Dof::STATE_U);
+    const double v = state(Usv3Dof::STATE_V);
+    const double r = state(Usv3Dof::STATE_R);
     Eigen::Vector3d nu(u, v, r); // Body velocity vector
 
     // Extract control inputs (forces/torque)
@@ -74,9 +74,9 @@ Eigen::VectorXd Usv3Dof::getContinuousDynamics(
     // --- 1. Kinematics: eta_dot = J(psi) * nu ---
     const double c_psi = std::cos(psi);
     const double s_psi = std::sin(psi);
-    state_dot(State::X) = c_psi * u - s_psi * v;
-    state_dot(State::Y) = s_psi * u + c_psi * v;
-    state_dot(State::PSI) = r;
+    state_dot(Usv3Dof::STATE_X) = c_psi * u - s_psi * v;
+    state_dot(Usv3Dof::STATE_Y) = s_psi * u + c_psi * v;
+    state_dot(Usv3Dof::STATE_PSI) = r;
 
     // --- 2. Dynamics: nu_dot = M_inv * (tau - C(nu)*nu - D_L*nu) ---
     // Coriolis matrix C(nu)
@@ -92,9 +92,9 @@ Eigen::VectorXd Usv3Dof::getContinuousDynamics(
 
     // Calculate accelerations
     Eigen::Vector3d nu_dot = M_inv_ * (tau - C * nu - D_L_ * nu);
-    state_dot(State::U) = nu_dot(0);
-    state_dot(State::V) = nu_dot(1);
-    state_dot(State::R) = nu_dot(2);
+    state_dot(Usv3Dof::STATE_U) = nu_dot(0);
+    state_dot(Usv3Dof::STATE_V) = nu_dot(1);
+    state_dot(Usv3Dof::STATE_R) = nu_dot(2);
 
     return state_dot;
 }
@@ -107,27 +107,27 @@ VectorXdual2nd Usv3Dof::getContinuousDynamicsAutodiff(
     using autodiff::dual2nd; // Use autodiff's dual number type
 
     // Extract state components
-    const dual2nd psi = state(State::PSI);
-    const dual2nd u = state(State::U);
-    const dual2nd v = state(State::V);
-    const dual2nd r = state(State::R);
-    Vector3dual2nd nu;
+    const dual2nd psi = state(Usv3Dof::STATE_PSI);
+    const dual2nd u = state(Usv3Dof::STATE_U);
+    const dual2nd v = state(Usv3Dof::STATE_V);
+    const dual2nd r = state(Usv3Dof::STATE_R);
+    autodiff::Vector3dual2nd nu; // Added autodiff:: prefix
     nu << u, v, r; // Body velocity vector
 
     // Extract control inputs (forces/torque)
-    const Vector3dual2nd tau = control;
+    const autodiff::Vector3dual2nd tau = control; // Added autodiff:: prefix
 
     // --- 1. Kinematics: eta_dot = J(psi) * nu ---
     // Use autodiff math functions (cos, sin)
     const dual2nd c_psi = cos(psi);
     const dual2nd s_psi = sin(psi);
-    state_dot(State::X) = c_psi * u - s_psi * v;
-    state_dot(State::Y) = s_psi * u + c_psi * v;
-    state_dot(State::PSI) = r;
+    state_dot(Usv3Dof::STATE_X) = c_psi * u - s_psi * v;
+    state_dot(Usv3Dof::STATE_Y) = s_psi * u + c_psi * v;
+    state_dot(Usv3Dof::STATE_PSI) = r;
 
     // --- 2. Dynamics: nu_dot = M_inv * (tau - C(nu)*nu - D_L*nu) ---
     // Coriolis matrix C(nu) with dual numbers
-    Matrix3dual2nd C = Matrix3dual2nd::Zero();
+    autodiff::Matrix3dual2nd C = autodiff::Matrix3dual2nd::Zero(); // Added autodiff:: prefixes
     const double m_x = m_ - X_udot_; // Constants remain double
     const double m_y = m_ - Y_vdot_;
     const double m_yr = -Y_rdot_;
@@ -137,10 +137,12 @@ VectorXdual2nd Usv3Dof::getContinuousDynamicsAutodiff(
     C(2, 0) =  m_y * v + m_yr * r;
     C(2, 1) = -m_x * u;
 
-    Vector3dual2nd nu_dot = M_inv_.cast<dual2nd>() * (tau - C * nu - D_L_.cast<dual2nd>() * nu);
-    state_dot(State::U) = nu_dot(0);
-    state_dot(State::V) = nu_dot(1);
-    state_dot(State::R) = nu_dot(2);
+    // Calculate accelerations using Eigen operations compatible with dual types
+    // Need M_inv_ and D_L_ as dual matrices (or cast) for compatibility
+    autodiff::Vector3dual2nd nu_dot = M_inv_.cast<dual2nd>() * (tau - C * nu - D_L_.cast<dual2nd>() * nu); // Added autodiff:: prefix
+    state_dot(Usv3Dof::STATE_U) = nu_dot(0);
+    state_dot(Usv3Dof::STATE_V) = nu_dot(1);
+    state_dot(Usv3Dof::STATE_R) = nu_dot(2);
 
     return state_dot;
 }
@@ -154,26 +156,26 @@ Eigen::MatrixXd Usv3Dof::getStateJacobian(
      Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
 
     // Extract state components needed for Jacobians
-    const double psi = state(State::PSI);
-    const double u = state(State::U);
-    const double v = state(State::V);
-    const double r = state(State::R);
+    const double psi = state(Usv3Dof::STATE_PSI);
+    const double u = state(Usv3Dof::STATE_U);
+    const double v = state(Usv3Dof::STATE_V);
+    const double r = state(Usv3Dof::STATE_R);
 
     // --- Kinematic Part (Upper Left 3x6 Block) ---
     const double c_psi = std::cos(psi);
     const double s_psi = std::sin(psi);
 
     // d(eta_dot)/d(psi)
-    A(State::X, State::PSI) = -s_psi * u - c_psi * v;
-    A(State::Y, State::PSI) =  c_psi * u - s_psi * v;
-    // A(State::PSI, State::PSI) = 0; // Already zero
+    A(Usv3Dof::STATE_X, Usv3Dof::STATE_PSI) = -s_psi * u - c_psi * v;
+    A(Usv3Dof::STATE_Y, Usv3Dof::STATE_PSI) =  c_psi * u - s_psi * v;
+    // A(Usv3Dof::STATE_PSI, Usv3Dof::STATE_PSI) = 0; // Already zero
 
     // d(eta_dot)/d(nu) - The rotation matrix J(psi)
-    A(State::X, State::U) = c_psi;
-    A(State::X, State::V) = -s_psi;
-    A(State::Y, State::U) = s_psi;
-    A(State::Y, State::V) = c_psi;
-    A(State::PSI, State::R) = 1.0;
+    A(Usv3Dof::STATE_X, Usv3Dof::STATE_U) = c_psi;
+    A(Usv3Dof::STATE_X, Usv3Dof::STATE_V) = -s_psi;
+    A(Usv3Dof::STATE_Y, Usv3Dof::STATE_U) = s_psi;
+    A(Usv3Dof::STATE_Y, Usv3Dof::STATE_V) = c_psi;
+    A(Usv3Dof::STATE_PSI, Usv3Dof::STATE_R) = 1.0;
 
     // --- Dynamic Part (Lower Right 3x3 Block) ---
     // d(nu_dot)/d(nu) = M_inv * (-d(C*nu)/d(nu) - D_L)
@@ -200,7 +202,7 @@ Eigen::MatrixXd Usv3Dof::getStateJacobian(
 
     // Lower right block of A
     Eigen::MatrixXd A_dyn = M_inv_ * (-dCnu_dnu - D_L_);
-    A.block<3, 3>(State::U, State::U) = A_dyn;
+    A.block<3, 3>(Usv3Dof::STATE_U, Usv3Dof::STATE_U) = A_dyn;
 
     // d(nu_dot)/d(eta) = 0 (Lower Left 3x3 Block is zero)
     return A;
@@ -216,7 +218,7 @@ Eigen::MatrixXd Usv3Dof::getControlJacobian(
     // d(eta_dot)/d(tau) = 0 (Upper 3x3 block is zero)
 
     // d(nu_dot)/d(tau) = M_inv * d(tau)/d(tau) = M_inv
-    B.block<3, 3>(State::U, Control::TAU_U) = M_inv_;
+    B.block<3, 3>(Usv3Dof::STATE_U, Usv3Dof::CONTROL_TAU_U) = M_inv_;
 
     return B;
 }

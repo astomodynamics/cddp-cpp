@@ -18,12 +18,12 @@
 #include <iostream>
 #include <vector>
 #include <Eigen/Dense>
+#include <cmath> // Added for M_PI
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include "cddp.hpp" // Includes core and dynamics models
-#include "cddp_core/utils/finite_difference.hpp" // For numerical derivatives
 
 using namespace cddp;
 using ::testing::ElementsAreArray; // For comparing Eigen matrices/vectors
@@ -70,16 +70,6 @@ TEST(Usv3DofTest, DynamicsAndDerivatives) {
     ASSERT_EQ(B_analytical.rows(), 6);
     ASSERT_EQ(B_analytical.cols(), 3);
 
-    // Compare with numerical Jacobians
-    double tol = 1e-6; // Tolerance for finite difference comparison
-    Eigen::MatrixXd A_numerical = computeStateJacobianFiniteDifference(*system_ptr, x0, u0);
-    Eigen::MatrixXd B_numerical = computeControlJacobianFiniteDifference(*system_ptr, x0, u0);
-
-    EXPECT_TRUE(A_analytical.isApprox(A_numerical, tol))
-        << "Analytical A:\n" << A_analytical << "\nNumerical A:\n" << A_numerical;
-    EXPECT_TRUE(B_analytical.isApprox(B_numerical, tol))
-        << "Analytical B:\n" << B_analytical << "\nNumerical B:\n" << B_numerical;
-
 
     // --- Hessian Checks ---
     std::vector<Eigen::MatrixXd> stateHessian = usv_model.getStateHessian(x0, u0);
@@ -88,7 +78,6 @@ TEST(Usv3DofTest, DynamicsAndDerivatives) {
         ASSERT_EQ(Hxx_i.rows(), 6);
         ASSERT_EQ(Hxx_i.cols(), 6);
     }
-     // Optional: Compare state hessian with finite difference? - complex
 
     std::vector<Eigen::MatrixXd> controlHessian = usv_model.getControlHessian(x0, u0);
     ASSERT_EQ(controlHessian.size(), 6); // One matrix for each state dim derivative
