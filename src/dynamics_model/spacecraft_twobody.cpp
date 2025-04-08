@@ -10,7 +10,7 @@
 namespace cddp {
 
 SpacecraftTwobody::SpacecraftTwobody(double timestep, double mu, double mass)
-    : DynamicalSystem(STATE_DIM, CONTROL_DIM, timestep), mu_(mu), mass_(mass) {}
+    : DynamicalSystem(STATE_DIM, CONTROL_DIM, timestep, "euler"), mu_(mu), mass_(mass) {}
 
 Eigen::VectorXd SpacecraftTwobody::getContinuousDynamics(
     const Eigen::VectorXd &state, const Eigen::VectorXd &control) const {

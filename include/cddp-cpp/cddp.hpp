@@ -50,6 +50,7 @@
 #include "dynamics_model/lti_system.hpp"
 #include "dynamics_model/dreyfus_rocket.hpp"
 #include "dynamics_model/spacecraft_roe.hpp"
+#include "dynamics_model/usv_3dof.hpp"
 
 #include "matplot/matplot.h"
 
