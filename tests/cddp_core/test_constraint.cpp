@@ -17,6 +17,8 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "cddp-cpp/cddp_core/constraint.hpp"
+#include <matplot/matplot.h>
+#include <sys/stat.h>
 
 TEST(ControlBoxConstraintTest, Evaluate) {
     // Create a constraint with lower and upper bounds
@@ -127,8 +129,9 @@ TEST(LinearConstraintTest, Evaluate) {
 // New test suite for SecondOrderConeConstraint
 TEST(SecondOrderConeConstraintTest, Evaluate) {
     Eigen::Vector3d origin(0.0, 0.0, 0.0);
-    Eigen::Vector3d axis(0.0, 0.0, 1.0); // Pointing up Z-axis
+    Eigen::Vector3d axis(0.0, 1.0, 0.0); // Opening along positive Y-axis
     double fov = M_PI / 4.0; // 45 degrees half-angle
+    double tan_fov = std::tan(fov);
     double epsilon = 1e-8;
     cddp::SecondOrderConeConstraint constraint(origin, axis, fov, epsilon);
 
@@ -136,36 +139,36 @@ TEST(SecondOrderConeConstraintTest, Evaluate) {
     control << 0.0;
 
     // Test with a state INSIDE the cone (g <= 0)
-    // Points behind the origin along the axis are inside
     Eigen::VectorXd state_inside(3);
-    state_inside << 0.0, 0.0, -1.0; 
+    state_inside << 0.0, 1.0, 0.0; // Point along positive Y-axis
     Eigen::VectorXd constraint_value_inside = constraint.evaluate(state_inside, control);
-    ASSERT_LT(constraint_value_inside(0), 0.0); // Check if strictly inside
+    ASSERT_LT(constraint_value_inside(0), 0.0); // g = cos(fov)*||p|| - p.axis = cos(fov)*1 - 1 < 0
 
     // Test with a state OUTSIDE the cone (g > 0)
     Eigen::VectorXd state_outside(3);
-    state_outside << 5.0, 0.0, 0.0;
+    state_outside << 0.0, -1.0, 0.0; // Point along negative Y-axis
     Eigen::VectorXd constraint_value_outside = constraint.evaluate(state_outside, control);
-    ASSERT_GT(constraint_value_outside(0), 0.0);
+    ASSERT_GT(constraint_value_outside(0), 0.0); // g = cos(fov)*||p|| - p.axis = cos(fov)*1 - (-1) > 0
 
     // Test with a state ON the boundary (g approx 0)
-    // Point geometrically on the cone boundary behind origin
     Eigen::VectorXd state_boundary(3);
-    state_boundary << 0.0, std::sin(fov), -std::cos(fov);
+    double y_val = 1.5;
+    double radius_at_y = std::abs(y_val) * tan_fov;
+    state_boundary << radius_at_y, y_val, 0.0; // Point on boundary at y=1.5
     Eigen::VectorXd constraint_value_boundary = constraint.evaluate(state_boundary, control);
     ASSERT_NEAR(constraint_value_boundary(0), 0.0, 1e-6); // Use tolerance due to epsilon
 }
 
 TEST(SecondOrderConeConstraintTest, Gradients) {
     Eigen::Vector3d origin(0.0, 0.0, 0.0);
-    Eigen::Vector3d axis(0.0, 0.0, 1.0);
+    Eigen::Vector3d axis(0.0, 1.0, 0.0); // Opening along positive Y-axis
     double fov = M_PI / 4.0; // 45 degrees
     double cos_fov = std::cos(fov);
     double epsilon = 1e-8;
     cddp::SecondOrderConeConstraint constraint(origin, axis, fov, epsilon);
 
     Eigen::VectorXd state(3);
-    state << 0.0, 0.5, -0.5; // A point inside the cone
+    state << 0.1, 0.5, 0.1; // A point inside the cone, in positive Y
     Eigen::VectorXd control(1);
     control << 0.0;
 
@@ -174,12 +177,18 @@ TEST(SecondOrderConeConstraintTest, Gradients) {
     Eigen::MatrixXd state_jacobian = std::get<0>(jacobians);
     Eigen::MatrixXd control_jacobian = std::get<1>(jacobians);
 
-    // Calculate expected state Jacobian using the analytical formula
+    // Calculate expected state Jacobian using the NEW analytical formula
+    // dg/dp_s = cos(fov) * (v^T / reg_norm) - axis^T, where v = p_s - origin
     Eigen::Vector3d p_s = state.head(3);
-    Eigen::Vector3d v = origin - p_s; 
+    Eigen::Vector3d v = p_s - origin; 
     double v_squared = v.squaredNorm(); 
-    double reg_norm = std::sqrt(v_squared + epsilon); 
-    Eigen::RowVector3d expected_dg_dps = -cos_fov * (v.transpose() / reg_norm) + axis.transpose();
+    double reg_norm = std::sqrt(v_squared + epsilon);
+    Eigen::RowVector3d expected_dg_dps;
+    if (reg_norm > 1e-9) {
+        expected_dg_dps = cos_fov * (v.transpose() / reg_norm) - axis.transpose();
+    } else {
+        expected_dg_dps = -axis.transpose();
+    }
 
     // Construct expected full Jacobian dg/dx = dg/dp_s * [I, 0]
     Eigen::MatrixXd expected_state_jacobian = Eigen::MatrixXd::Zero(1, state.size());
@@ -193,4 +202,143 @@ TEST(SecondOrderConeConstraintTest, Gradients) {
     ASSERT_EQ(control_jacobian.rows(), 1);
     ASSERT_EQ(control_jacobian.cols(), control.size());
     ASSERT_TRUE(control_jacobian.isApprox(Eigen::MatrixXd::Zero(1, control.size())));
+}
+
+// New test case for visualization
+TEST(SecondOrderConeConstraintTest, Visualization) {
+    namespace plt = matplot;
+
+    // 1. Define Cone Parameters
+    Eigen::Vector3d origin(0.0, 0.0, 0.0);
+    Eigen::Vector3d axis(0.0, 1.0, 0.0); // Changed to Y-axis
+    axis.normalize(); // Ensure axis is normalized
+    double fov = M_PI / 4.0; // 45 degrees half-angle
+    double tan_fov = std::tan(fov);
+    double epsilon = 1e-8; // Small regularization term
+    cddp::SecondOrderConeConstraint constraint(origin, axis, fov, epsilon);
+
+
+    // 2. Generate Cone Surface Points
+    std::vector<double> h_vals = plt::linspace(0, 2, 20); // Height along opening axis (non-negative for this definition)
+    std::vector<double> theta_vals = plt::linspace(0, 2 * M_PI, 40); // Angle around axis
+
+    auto [H, THETA] = plt::meshgrid(h_vals, theta_vals);
+
+    // Find orthogonal vectors u, v to the axis
+    Eigen::Vector3d temp_vec = (std::abs(axis.x()) > 1e-6 || std::abs(axis.z()) > 1e-6) ? Eigen::Vector3d(0,0,1) : Eigen::Vector3d(1,0,0);
+    Eigen::Vector3d u = axis.cross(temp_vec).normalized();
+    Eigen::Vector3d v = axis.cross(u).normalized();
+
+    // Calculate X, Y, Z coordinates for the cone surface
+    std::vector<std::vector<double>> X(H.size(), std::vector<double>(H[0].size()));
+    std::vector<std::vector<double>> Y(H.size(), std::vector<double>(H[0].size()));
+    std::vector<std::vector<double>> Z(H.size(), std::vector<double>(H[0].size()));
+
+    for (size_t i = 0; i < H.size(); ++i) {
+        for (size_t j = 0; j < H[0].size(); ++j) {
+            double h = H[i][j];
+            double theta = THETA[i][j];
+            // Radius depends on the projection onto the axis, which is h
+            double radius = std::abs(h) * tan_fov;
+            Eigen::Vector3d point_on_circle = radius * (std::cos(theta) * u + std::sin(theta) * v);
+            Eigen::Vector3d point = origin + axis * h + point_on_circle;
+            X[i][j] = point.x();
+            Y[i][j] = point.y();
+            Z[i][j] = point.z();
+        }
+    }
+
+    // 3. Generate Sample Points (Inside/Outside)
+    Eigen::VectorXd control(1); control << 0.0; // Dummy control
+
+    std::vector<double> x_inside, y_inside, z_inside;
+    std::vector<double> x_outside, y_outside, z_outside;
+    std::vector<double> x_boundary, y_boundary, z_boundary; // Added for boundary points
+
+    // Points to test (as Eigen::VectorXd for the constraint function)
+    // Cone opens along positive Y-axis
+    Eigen::VectorXd p_in_axis(3); p_in_axis << 0.0, 1.0, 0.0;      // Inside: Along positive axis
+    Eigen::VectorXd p_in_near(3); p_in_near << 0.1, 0.5, 0.1;      // Inside: Near origin
+    Eigen::VectorXd p_out_neg(3); p_out_neg << 0.0, -1.0, 0.0;     // Outside: Along negative axis
+    Eigen::VectorXd p_out_far(3); p_out_far << 1.0, 1.0, 1.0;      // Outside: Large radius
+    Eigen::VectorXd p_out_perp(3); p_out_perp << 1.0, 0.0, 0.0;     // Outside: Perpendicular to axis at origin
+
+    Eigen::VectorXd p_boundary1(3); // Boundary point at y=1
+    double radius_at_h1 = std::abs(1.0) * tan_fov;
+    p_boundary1 << radius_at_h1, 1.0, 0.0;
+
+    Eigen::VectorXd p_boundary2(3); // Boundary point at y=2
+    double radius_at_h2 = std::abs(2.0) * tan_fov;
+    p_boundary2 << 0.0, 2.0, -radius_at_h2; // On Z-axis part of circle
+
+
+    // Check and categorize points
+    auto check_and_add = [&](const Eigen::VectorXd& p, const std::string& name) {
+        double val = constraint.evaluate(p, control)(0);
+        if (val < -1e-7) { // Allow small tolerance for strictly inside
+             x_inside.push_back(p(0)); y_inside.push_back(p(1)); z_inside.push_back(p(2));
+             std::cout << name << " is inside (value: " << val << ")" << std::endl;
+        } else if (val > 1e-7) { // Allow small tolerance for strictly outside
+            x_outside.push_back(p(0)); y_outside.push_back(p(1)); z_outside.push_back(p(2));
+            std::cout << name << " is outside (value: " << val << ")" << std::endl;
+        } else { // Consider it on the boundary
+             x_boundary.push_back(p(0)); y_boundary.push_back(p(1)); z_boundary.push_back(p(2)); // Store boundary points
+             std::cout << name << " is on boundary (value: " << val << ")" << std::endl;
+             // Removed plotting as inside
+        }
+    };
+
+    check_and_add(p_in_axis, "p_in_axis");
+    check_and_add(p_in_near, "p_in_near");
+    check_and_add(p_out_neg, "p_out_neg");
+    check_and_add(p_out_far, "p_out_far");
+    check_and_add(p_out_perp, "p_out_perp");
+    check_and_add(p_boundary1, "p_boundary1");
+    check_and_add(p_boundary2, "p_boundary2");
+
+
+    // // 4. Create Plot (Commented out for testing)
+    // auto fig = plt::figure();
+    // plt::surf(X, Y, Z)->face_alpha(0.5).edge_color("none");
+    // plt::hold(true);
+
+    // if (!x_inside.empty()) {
+    //     plt::plot3(x_inside, y_inside, z_inside, "go")->marker_size(10).display_name("Inside"); // Changed display name
+    // }
+    // if (!x_outside.empty()) {
+    //     plt::plot3(x_outside, y_outside, z_outside, "rx")->marker_size(10).display_name("Outside");
+    // }
+    // if (!x_boundary.empty()) { // Added plotting for boundary points
+    //     plt::plot3(x_boundary, y_boundary, z_boundary, "bs")->marker_size(10).display_name("Boundary");
+    // }
+
+    // // Plot origin and axis
+    // plt::plot3(std::vector<double>{origin.x()}, std::vector<double>{origin.y()}, std::vector<double>{origin.z()}, "k*")->marker_size(12).display_name("Origin");
+    // Eigen::Vector3d axis_start = origin - axis * 2.5; // Show axis extending both ways
+    // Eigen::Vector3d axis_end = origin + axis * 2.5;
+    // plt::plot3(std::vector<double>{axis_start.x(), axis_end.x()},
+    //            std::vector<double>{axis_start.y(), axis_end.y()},
+    //            std::vector<double>{axis_start.z(), axis_end.z()}, "b-.")->line_width(2).display_name("Axis");
+
+
+    // plt::hold(false);
+    // plt::xlabel("X");
+    // plt::ylabel("Y");
+    // plt::zlabel("Z");
+    // plt::title("Second Order Cone Constraint Visualization");
+    // plt::legend();
+    // plt::grid(true);
+    // plt::axis("equal");
+    // // plt::show();
+    // // plt::view(45, 30); // Adjust view angle if needed
+
+    // // Save the plot to a file
+    // std::string filename = "cone_visualization.png";
+    // plt::save(filename);
+    // std::cout << "Saved cone visualization to " << filename << std::endl;
+
+
+    // // Assert that the file was created
+    // struct stat buffer;
+    // ASSERT_EQ(stat(filename.c_str(), &buffer), 0) << "Plot file '" << filename << "' was not generated.";
 }

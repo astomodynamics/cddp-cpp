@@ -635,13 +635,13 @@ namespace cddp
     {
     public:
         SecondOrderConeConstraint(const Eigen::Vector3d& cone_origin,
-                                const Eigen::Vector3d& cone_axis, // Should be unit vector
+                                const Eigen::Vector3d& opening_direction, // Changed from cone_axis: Represents the direction the cone opens towards
                                 double cone_angle_fov, // In radians [0, PI]
                                 double regularization_epsilon = 1e-6, // Small positive number for regularization
                                 const std::string& name = "SecondOrderConeConstraint")
             : Constraint(name),
               p_o_(cone_origin),
-              axis_(cone_axis.normalized()), // Ensure unit vector
+              axis_(opening_direction.normalized()), // Ensure unit vector, storing the opening direction
               cos_fov_(std::cos(cone_angle_fov)),
               epsilon_(regularization_epsilon)
         {
@@ -651,11 +651,11 @@ namespace cddp
             if (regularization_epsilon <= 0) {
                 throw std::invalid_argument("SecondOrderConeConstraint: Regularization epsilon must be positive.");
             }
-            // Optional: Warn if the provided axis was not unit
-            if (std::abs(cone_axis.norm() - 1.0) > 1e-6 && cone_axis.norm() != 0.0) {
-                std::cerr << "Warning: SecondOrderConeConstraint provided cone axis was not a unit vector. Normalizing." << std::endl;
-            } else if (cone_axis.norm() == 0.0) {
-                throw std::invalid_argument("SecondOrderConeConstraint: Cone axis cannot be zero vector.");
+            // Optional: Warn if the provided opening direction was not unit
+            if (std::abs(opening_direction.norm() - 1.0) > 1e-6 && opening_direction.norm() != 0.0) {
+                std::cerr << "Warning: SecondOrderConeConstraint provided opening_direction was not a unit vector. Normalizing." << std::endl;
+            } else if (opening_direction.norm() == 0.0) {
+                throw std::invalid_argument("SecondOrderConeConstraint: Opening direction cannot be zero vector.");
             }
         }
 
@@ -664,7 +664,7 @@ namespace cddp
             return 1; // Scalar inequality constraint g(x) <= 0
         }
 
-        // Evaluate g(x) = sqrt(||p_o - p_s||^2 + epsilon) * cos(theta_fov) - (p_o - p_s) . a
+        // Evaluate g(x) = cos(theta_fov) * sqrt(||p_s - p_o||^2 + epsilon) - (p_s - p_o) . axis
         Eigen::VectorXd evaluate(const Eigen::VectorXd &state,
                                 const Eigen::VectorXd & /*control*/) const override
         {
@@ -672,11 +672,11 @@ namespace cddp
                 throw std::invalid_argument("SecondOrderConeConstraint: State dimension must be at least 3.");
             }
             Eigen::Vector3d p_s = state.head(3);
-            Eigen::Vector3d v = p_o_ - p_s;
+            Eigen::Vector3d v = p_s - p_o_; // Vector from origin to state point
             double v_squared = v.squaredNorm();
-            double reg_norm = std::sqrt(v_squared + epsilon_);
+            double reg_norm = std::sqrt(v_squared + epsilon_); // Regularized norm ||p_s - p_o||
 
-            double dot_prod = v.dot(axis_);
+            double dot_prod = v.dot(axis_); // (p_s - p_o) . axis
             double g_val = reg_norm * cos_fov_ - dot_prod;
 
             Eigen::VectorXd result(1);
@@ -704,9 +704,9 @@ namespace cddp
                 throw std::invalid_argument("SecondOrderConeConstraint: State dimension must be at least 3 for Jacobian calculation.");
             }
             Eigen::Vector3d p_s = state.head(3);
-            Eigen::Vector3d v = p_o_ - p_s;
+            Eigen::Vector3d v = p_s - p_o_; // Vector from origin to state point
             double v_squared = v.squaredNorm();
-            double reg_norm = std::sqrt(v_squared + epsilon_);
+            double reg_norm = std::sqrt(v_squared + epsilon_); // Regularized norm ||p_s - p_o||
 
             // Jacobian dg/dx = dg/dp_s * dp_s/dx
             // Assuming p_s = state.head(3), then dp_s/dx = [I_3x3, 0]
@@ -714,11 +714,16 @@ namespace cddp
             dp_s_dx.leftCols(3) = Eigen::Matrix3d::Identity();
 
             // Calculate dg/dp_s:
-            // g = sqrt(||p_o - p_s||^2 + epsilon) * cos(fov) - (p_o - p_s) . a
-            // dg/dp_s = cos(fov) * d/dp_s sqrt(||p_o - p_s||^2 + epsilon) - d/dp_s (-p_s . a)
-            // dg/dp_s = cos(fov) * (-(p_o - p_s)^T / sqrt(||p_o - p_s||^2 + epsilon)) + a^T
-            // dg/dp_s = -cos(fov) * (v^T / reg_norm) + a^T
-            Eigen::RowVector3d dg_dps = -cos_fov_ * (v.transpose() / reg_norm) + axis_.transpose();
+            // g = cos(fov) * sqrt(||p_s - p_o||^2 + epsilon) - (p_s - p_o) . axis
+            // dg/dp_s = cos(fov) * d/dp_s sqrt(||p_s - p_o||^2 + epsilon) - d/dp_s (p_s . axis)
+            // dg/dp_s = cos(fov) * ( (p_s - p_o)^T / sqrt(||p_s - p_o||^2 + epsilon) ) - axis^T
+            // dg/dp_s = cos(fov) * (v^T / reg_norm) - axis^T
+            Eigen::RowVector3d dg_dps;
+            if (reg_norm > 1e-9) { // Avoid division by zero if p_s is very close to p_o
+                 dg_dps = cos_fov_ * (v.transpose() / reg_norm) - axis_.transpose();
+            } else {
+                 dg_dps = -axis_.transpose(); // Or handle as appropriate, maybe zero?
+            }
 
             // Chain rule: dg/dx = dg/dp_s * dp_s/dx
             Eigen::MatrixXd jacobian = dg_dps * dp_s_dx;
@@ -754,7 +759,7 @@ namespace cddp
 
     private:
         Eigen::Vector3d p_o_;         // Cone origin position
-        Eigen::Vector3d axis_;        // Cone axis (unit vector)
+        Eigen::Vector3d axis_;        // Cone axis (unit vector, represents OPENING direction)
         double cos_fov_;              // Cosine of the cone field-of-view half-angle
         double epsilon_;              // Regularization parameter for differentiability
     };
