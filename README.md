@@ -216,16 +216,9 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 
 ## TODO
 * add **python binding**
-* add state constraint handling
 * add initial guess functionality based on path planner solution
-* add automatic differentiation
-* add second-order derivative handling
-* add nonlinear objective and constraint handling
 * improve parallelization
-* improve boxqp
 * add simulation and its plots
-  * Quadrotor
   * Quadruped robot
   * Manipulator
-  * Spacecraft
   * Humanoid
