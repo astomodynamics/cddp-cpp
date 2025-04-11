@@ -215,14 +215,12 @@ TEST(LinearConstraintTest, Visualization) {
     // ASSERT_EQ(stat(filename.c_str(), &buffer), 0) << "Plot file '" << filename << "' was not generated.";
 }
 
-// New test suite for SecondOrderConeConstraint
 TEST(SecondOrderConeConstraintTest, Evaluate) {
     Eigen::Vector3d origin(0.0, 0.0, 0.0);
     Eigen::Vector3d axis(0.0, 1.0, 0.0); // Opening along positive Y-axis
     double fov = M_PI / 4.0; // 45 degrees half-angle
-    double tan_fov = std::tan(fov);
-    double epsilon = 1e-8;
-    cddp::SecondOrderConeConstraint constraint(origin, axis, fov, epsilon);
+    double cos_fov_sq = std::pow(std::cos(fov), 2);
+    cddp::SecondOrderConeConstraint constraint(origin, axis, fov);
 
     Eigen::VectorXd control(1); // Control doesn't matter
     control << 0.0;
@@ -230,67 +228,85 @@ TEST(SecondOrderConeConstraintTest, Evaluate) {
     // Test with a state INSIDE the cone (g <= 0)
     Eigen::VectorXd state_inside(3);
     state_inside << 0.0, 1.0, 0.0; // Point along positive Y-axis
+    double v_norm_sq_inside = (state_inside - origin).squaredNorm();
+    double dot_inside = (state_inside - origin).dot(axis);
+    double expected_g_inside = cos_fov_sq * v_norm_sq_inside - dot_inside * dot_inside;
     Eigen::VectorXd constraint_value_inside = constraint.evaluate(state_inside, control);
-    ASSERT_LT(constraint_value_inside(0), 0.0); // g = cos(fov)*||p|| - p.axis = cos(fov)*1 - 1 < 0
+    // Expecting cos(fov)^2 * 1^2 - (1)^2 = 0.5 - 1 = -0.5
+    ASSERT_NEAR(constraint_value_inside(0), expected_g_inside, 1e-9);
+    ASSERT_LT(constraint_value_inside(0), 0.0);
 
     // Test with a state OUTSIDE the cone (g > 0)
     Eigen::VectorXd state_outside(3);
-    state_outside << 0.0, -1.0, 0.0; // Point along negative Y-axis
+    state_outside << 1.0, 1.0, 0.0; // Point off-axis but positive Y
+    double v_norm_sq_outside = (state_outside - origin).squaredNorm();
+    double dot_outside = (state_outside - origin).dot(axis);
+    double expected_g_outside = cos_fov_sq * v_norm_sq_outside - dot_outside * dot_outside;
     Eigen::VectorXd constraint_value_outside = constraint.evaluate(state_outside, control);
-    ASSERT_GT(constraint_value_outside(0), 0.0); // g = cos(fov)*||p|| - p.axis = cos(fov)*1 - (-1) > 0
+    // Expecting cos(fov)^2 * (1^2 + 1^2) - (1)^2 = 0.5 * 2 - 1 = 0
+    // Let's move it slightly outside: state_outside << 1.1, 1.0, 0.0;
+    state_outside << 1.1, 1.0, 0.0;
+    v_norm_sq_outside = (state_outside - origin).squaredNorm(); // 1.21 + 1 = 2.21
+    dot_outside = (state_outside - origin).dot(axis); // 1.0
+    expected_g_outside = cos_fov_sq * v_norm_sq_outside - dot_outside * dot_outside; // 0.5 * 2.21 - 1 = 1.105 - 1 = 0.105
+    constraint_value_outside = constraint.evaluate(state_outside, control);
+    ASSERT_NEAR(constraint_value_outside(0), expected_g_outside, 1e-9);
+    ASSERT_GT(constraint_value_outside(0), 0.0);
 
     // Test with a state ON the boundary (g approx 0)
     Eigen::VectorXd state_boundary(3);
     double y_val = 1.5;
-    double radius_at_y = std::abs(y_val) * tan_fov;
-    state_boundary << radius_at_y, y_val, 0.0; // Point on boundary at y=1.5
+    double radius_at_y = std::abs(y_val) * std::tan(fov); // tan(45) = 1, so radius = 1.5
+    state_boundary << radius_at_y, y_val, 0.0; // (1.5, 1.5, 0.0)
+    double v_norm_sq_boundary = (state_boundary - origin).squaredNorm(); // 1.5^2 + 1.5^2 = 2.25 * 2 = 4.5
+    double dot_boundary = (state_boundary - origin).dot(axis); // 1.5
+    double expected_g_boundary = cos_fov_sq * v_norm_sq_boundary - dot_boundary * dot_boundary; // 0.5 * 4.5 - 1.5^2 = 2.25 - 2.25 = 0
     Eigen::VectorXd constraint_value_boundary = constraint.evaluate(state_boundary, control);
-    ASSERT_NEAR(constraint_value_boundary(0), 0.0, 1e-6); // Use tolerance due to epsilon
+    ASSERT_NEAR(constraint_value_boundary(0), expected_g_boundary, 1e-9);
+    ASSERT_NEAR(constraint_value_boundary(0), 0.0, 1e-9); // Check against 0 directly
 }
 
 TEST(SecondOrderConeConstraintTest, Gradients) {
     Eigen::Vector3d origin(0.0, 0.0, 0.0);
     Eigen::Vector3d axis(0.0, 1.0, 0.0); // Opening along positive Y-axis
     double fov = M_PI / 4.0; // 45 degrees
-    double cos_fov = std::cos(fov);
-    double epsilon = 1e-8;
-    cddp::SecondOrderConeConstraint constraint(origin, axis, fov, epsilon);
+    double cos_fov_sq = std::pow(std::cos(fov), 2); // 0.5
+    cddp::SecondOrderConeConstraint constraint(origin, axis, fov);
 
-    Eigen::VectorXd state(3);
-    state << 0.1, 0.5, 0.1; // A point inside the cone, in positive Y
-    Eigen::VectorXd control(1);
-    control << 0.0;
+    Eigen::VectorXd state(4); // Use state dim > 3
+    state << 0.1, 0.5, 0.2, 99.0; // A point inside the cone, in positive Y
+    Eigen::VectorXd control(2);
+    control << 0.0, 0.0;
 
-    // Calculate Jacobians
+    // Calculate Jacobians using the class method
     auto jacobians = constraint.getJacobians(state, control);
     Eigen::MatrixXd state_jacobian = std::get<0>(jacobians);
     Eigen::MatrixXd control_jacobian = std::get<1>(jacobians);
 
-    // Calculate expected state Jacobian using the NEW analytical formula
-    // dg/dp_s = cos(fov) * (v^T / reg_norm) - axis^T, where v = p_s - origin
-    Eigen::Vector3d p_s = state.head(3);
-    Eigen::Vector3d v = p_s - origin; 
-    double v_squared = v.squaredNorm(); 
-    double reg_norm = std::sqrt(v_squared + epsilon);
-    Eigen::RowVector3d expected_dg_dps;
-    if (reg_norm > 1e-9) {
-        expected_dg_dps = cos_fov * (v.transpose() / reg_norm) - axis.transpose();
-    } else {
-        expected_dg_dps = -axis.transpose();
-    }
+    // Calculate expected state Jacobian using the squared analytical formula
+    // dg/dp_s = 2 * (cos_fov_sq * v^T - (v . axis) * axis^T)
+    Eigen::Vector3d p_s = state.head(3); // (0.1, 0.5, 0.2)
+    Eigen::Vector3d v = p_s - origin;    // (0.1, 0.5, 0.2)
+    double dot_prod = v.dot(axis);       // 0.5
+    Eigen::RowVector3d expected_dg_dps =
+        2.0 * (cos_fov_sq * v.transpose() - dot_prod * axis.transpose());
+    // expected_dg_dps = 2.0 * (0.5 * [0.1, 0.5, 0.2] - 0.5 * [0.0, 1.0, 0.0])
+    // expected_dg_dps = 2.0 * ([0.05, 0.25, 0.1] - [0.0, 0.5, 0.0])
+    // expected_dg_dps = 2.0 * [0.05, -0.25, 0.1]
+    // expected_dg_dps = [0.1, -0.5, 0.2]
 
-    // Construct expected full Jacobian dg/dx = dg/dp_s * [I, 0]
+    // Construct expected full Jacobian dg/dx = dg/dp_s * [I_3x3, 0]
     Eigen::MatrixXd expected_state_jacobian = Eigen::MatrixXd::Zero(1, state.size());
     expected_state_jacobian.leftCols(3) = expected_dg_dps;
 
     ASSERT_EQ(state_jacobian.rows(), 1);
     ASSERT_EQ(state_jacobian.cols(), state.size());
-    ASSERT_TRUE(state_jacobian.isApprox(expected_state_jacobian, 1e-6));
+    ASSERT_TRUE(state_jacobian.isApprox(expected_state_jacobian, 1e-9));
 
     // Expected control Jacobian should be zero
     ASSERT_EQ(control_jacobian.rows(), 1);
     ASSERT_EQ(control_jacobian.cols(), control.size());
-    ASSERT_TRUE(control_jacobian.isApprox(Eigen::MatrixXd::Zero(1, control.size())));
+    ASSERT_TRUE(control_jacobian.isApprox(Eigen::MatrixXd::Zero(1, control.size()), 1e-9));
 }
 
 // New test case for visualization
@@ -303,8 +319,8 @@ TEST(SecondOrderConeConstraintTest, Visualization) {
     axis.normalize(); // Ensure axis is normalized
     double fov = M_PI / 4.0; // 45 degrees half-angle
     double tan_fov = std::tan(fov);
-    double epsilon = 1e-8; // Small regularization term
-    cddp::SecondOrderConeConstraint constraint(origin, axis, fov, epsilon);
+    double epsilon = 1e-6; // Regularization
+    cddp::SecondOrderConeConstraint constraint(origin, axis, fov);
 
 
     // 2. Generate Cone Surface Points
