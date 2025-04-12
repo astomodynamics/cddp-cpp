@@ -215,6 +215,7 @@ TEST(LinearConstraintTest, Visualization) {
     // ASSERT_EQ(stat(filename.c_str(), &buffer), 0) << "Plot file '" << filename << "' was not generated.";
 }
 
+// New test suite for SecondOrderConeConstraint
 TEST(SecondOrderConeConstraintTest, Evaluate) {
     Eigen::Vector3d origin(0.0, 0.0, 0.0);
     Eigen::Vector3d axis(0.0, 1.0, 0.0); // Opening along positive Y-axis
