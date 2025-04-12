@@ -73,6 +73,9 @@ target_link_libraries(cddp_unicycle_safe_ipddp_v3 cddp)
 add_executable(cddp_unicycle_safe_comparison cddp_unicycle_safe_comparison.cpp)
 target_link_libraries(cddp_unicycle_safe_comparison cddp)
 
+add_executable(cddp_spacecraft_linear_docking cddp_spacecraft_linear_docking.cpp)
+target_link_libraries(cddp_spacecraft_linear_docking cddp)
+
 # add_executable(mpc_hcw mpc_hcw.cpp)
 # target_link_libraries(mpc_hcw cddp)
 
