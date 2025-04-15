@@ -258,6 +258,7 @@ set(dynamics_model_srcs
   src/dynamics_model/lti_system.cpp
   src/dynamics_model/spacecraft_twobody.cpp
   src/dynamics_model/usv_3dof.cpp
+  src/dynamics_model/mrp_attitude.cpp
 )
 
 add_library(${PROJECT_NAME} 

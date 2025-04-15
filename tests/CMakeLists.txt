@@ -70,6 +70,10 @@ add_executable(test_usv_3dof dynamics_model/test_usv_3dof.cpp)
 target_link_libraries(test_usv_3dof gtest gmock gtest_main cddp)
 gtest_discover_tests(test_usv_3dof)
 
+add_executable(test_mrp_attitude dynamics_model/test_mrp_attitude.cpp)
+target_link_libraries(test_mrp_attitude gtest gmock gtest_main cddp matplot)
+gtest_discover_tests(test_mrp_attitude)
+
 add_executable(test_hessian test_hessian.cpp)
 target_link_libraries(test_hessian gtest gmock gtest_main cddp)
 gtest_discover_tests(test_hessian)
