@@ -272,7 +272,7 @@ TEST_F(MrpAttitudeTest, SimulationAndPlotting) {
     hold(ax2, off);
 
     // Show the plot (disable saving for tests unless specifically needed)
-    show(); 
+    // show(); 
     // If you want to save instead:
     // const std::string plotDirectory = "../results/tests";
     // if (!std::filesystem::exists(plotDirectory)) {
