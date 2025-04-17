@@ -14,25 +14,30 @@
  limitations under the License.
 */
 
-#ifndef CDDP_MRP_ATTITUDE_HPP
-#define CDDP_MRP_ATTITUDE_HPP
+#ifndef CDDP_QUATERNION_ATTITUDE_HPP
+#define CDDP_QUATERNION_ATTITUDE_HPP
 
 #include "cddp_core/dynamical_system.hpp"
+#include <Eigen/Core>                     
+#include <Eigen/Dense>                    
+#include <autodiff/forward/dual.hpp>       
+#include <autodiff/forward/dual/eigen.hpp> 
 
 namespace cddp
 {
 
-    class MrpAttitude : public DynamicalSystem
+    class QuaternionAttitude : public DynamicalSystem
     {
     public:
         // State indices
-        static constexpr int STATE_MRP_X = 0;
-        static constexpr int STATE_MRP_Y = 1;
-        static constexpr int STATE_MRP_Z = 2;
-        static constexpr int STATE_OMEGA_X = 3;
-        static constexpr int STATE_OMEGA_Y = 4;
-        static constexpr int STATE_OMEGA_Z = 5;
-        static constexpr int STATE_DIM = 6;
+        static constexpr int STATE_QUAT_W = 0; // Scalar part
+        static constexpr int STATE_QUAT_X = 1; // Vector part x
+        static constexpr int STATE_QUAT_Y = 2; // Vector part y
+        static constexpr int STATE_QUAT_Z = 3; // Vector part z
+        static constexpr int STATE_OMEGA_X = 4;
+        static constexpr int STATE_OMEGA_Y = 5;
+        static constexpr int STATE_OMEGA_Z = 6;
+        static constexpr int STATE_DIM = 7;
 
         // Control indices (torques)
         static constexpr int CONTROL_TAU_X = 0;
@@ -41,17 +46,17 @@ namespace cddp
         static constexpr int CONTROL_DIM = 3;
 
         /**
-         * Constructor for the MRP-based Attitude Dynamics model
+         * Constructor for the Quaternion-based Attitude Dynamics model
          * @param timestep Time step for discretization
          * @param inertia_matrix Inertia matrix of the rigid body
          * @param integration_type Integration method ("euler" by default)
          */
-        MrpAttitude(double timestep, const Eigen::Matrix3d &inertia_matrix,
-                    std::string integration_type = "euler");
+        QuaternionAttitude(double timestep, const Eigen::Matrix3d &inertia_matrix,
+                           std::string integration_type = "euler");
 
         /**
-         * Computes the continuous-time dynamics of the MRP attitude model
-         * State vector: [mrp_x, mrp_y, mrp_z, omega_x, omega_y, omega_z]
+         * Computes the continuous-time dynamics of the quaternion attitude model
+         * State vector: [q_w, q_x, q_y, q_z, omega_x, omega_y, omega_z]
          * Control vector: [tau_x, tau_y, tau_z] (applied torques)
          * @param state Current state vector
          * @param control Current control input
@@ -62,9 +67,6 @@ namespace cddp
 
         /**
          * Computes the discrete-time dynamics using the specified integration method
-         * @param state Current state vector
-         * @param control Current control input
-         * @return Next state vector
          */
         Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd &state,
                                             const Eigen::VectorXd &control) const override
@@ -73,55 +75,38 @@ namespace cddp
         }
 
         /**
-         * Computes the Jacobian of the dynamics with respect to the state
-         * @param state Current state vector
-         * @param control Current control input
-         * @return State Jacobian matrix (A matrix)
+         * Computes the Jacobian of the dynamics with respect to the state using Autodiff.
          */
         Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state,
                                          const Eigen::VectorXd &control) const override;
 
         /**
-         * Computes the Jacobian of the dynamics with respect to the control input
-         * @param state Current state vector
-         * @param control Current control input
-         * @return Control Jacobian matrix (B matrix)
+         * Computes the Jacobian of the dynamics with respect to the control input using Autodiff.
          */
         Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd &state,
                                            const Eigen::VectorXd &control) const override;
 
         /**
-         * Computes the Hessian of the dynamics with respect to the state
-         * @param state Current state vector
-         * @param control Current control input
-         * @return Vector of state Hessian matrices, one per state dimension
+         * Computes the Hessian of the dynamics with respect to the state using Autodiff.
          */
         std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state,
                                                      const Eigen::VectorXd &control) const override;
 
         /**
-         * Computes the Hessian of the dynamics with respect to the control
-         * @param state Current state vector
-         * @param control Current control input
-         * @return Vector of control Hessian matrices, one per state dimension
+         * Computes the Hessian of the dynamics with respect to the control using Autodiff.
          */
         std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd &state,
                                                        const Eigen::VectorXd &control) const override;
 
         /**
-         * Computes the cross Hessian of the dynamics with respect to both state and control
-         * @param state Current state vector
-         * @param control Current control input
-         * @return Vector of cross Hessian matrices, one per state dimension
+         * Computes the cross Hessian of the dynamics w.r.t. state and control using Autodiff.
          */
         std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state,
                                                      const Eigen::VectorXd &control) const override;
 
         /**
-         * Computes the continuous-time dynamics of the MRP attitude model using autodiff
-         * @param state Current state vector
-         * @param control Current control input
-         * @return State derivative vector
+         * Computes the continuous-time dynamics using Autodiff types.
+         * Used internally for calculating Jacobians and Hessians.
          */
         VectorXdual2nd getContinuousDynamicsAutodiff(const VectorXdual2nd &state,
                                                      const VectorXdual2nd &control) const override;
@@ -141,16 +126,19 @@ namespace cddp
             return S;
         }
 
-        // Helper function for MRP kinematics matrix B(mrp)
+        // Helper function for quaternion kinematics matrix Omega(omega)
         template <typename T>
-        Eigen::Matrix<T, 3, 3> mrpKinematicsMatrix(const Eigen::Matrix<T, 3, 1> &mrp) const
+        Eigen::Matrix<T, 4, 4> quatKinematicsMatrix(const Eigen::Matrix<T, 3, 1> &omega) const
         {
-            T mrp_norm_sq = mrp.squaredNorm();
-            Eigen::Matrix<T, 3, 3> I = Eigen::Matrix<T, 3, 3>::Identity();
-            return (T(1.0) - mrp_norm_sq) * I + T(2.0) * skew(mrp) + T(2.0) * mrp * mrp.transpose();
+            Eigen::Matrix<T, 4, 4> O;
+            O << T(0), -omega(0), -omega(1), -omega(2),
+                omega(0), T(0), omega(2), -omega(1),
+                omega(1), -omega(2), T(0), omega(0),
+                omega(2), omega(1), -omega(0), T(0);
+            return O;
         }
     };
 
 } // namespace cddp
 
-#endif // CDDP_MRP_ATTITUDE_HPP
+#endif // CDDP_QUATERNION_ATTITUDE_HPP
