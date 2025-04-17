@@ -70,6 +70,22 @@ add_executable(test_usv_3dof dynamics_model/test_usv_3dof.cpp)
 target_link_libraries(test_usv_3dof gtest gmock gtest_main cddp)
 gtest_discover_tests(test_usv_3dof)
 
+add_executable(test_mrp_attitude dynamics_model/test_mrp_attitude.cpp)
+target_link_libraries(test_mrp_attitude gtest gmock gtest_main cddp matplot)
+gtest_discover_tests(test_mrp_attitude)
+
+# add_executable(test_euler_attitude dynamics_model/test_euler_attitude.cpp)
+# target_link_libraries(test_euler_attitude gtest gmock gtest_main cddp matplot)
+# gtest_discover_tests(test_euler_attitude)
+
+# add_executable(test_quaternion_attitude dynamics_model/test_quaternion_attitude.cpp)
+# target_link_libraries(test_quaternion_attitude gtest gmock gtest_main cddp matplot)
+# gtest_discover_tests(test_quaternion_attitude)
+
+add_executable(test_attitude_dynamics dynamics_model/test_attitude_dynamics.cpp)
+target_link_libraries(test_attitude_dynamics gtest gmock gtest_main cddp matplot)
+gtest_discover_tests(test_attitude_dynamics)
+
 add_executable(test_hessian test_hessian.cpp)
 target_link_libraries(test_hessian gtest gmock gtest_main cddp)
 gtest_discover_tests(test_hessian)
