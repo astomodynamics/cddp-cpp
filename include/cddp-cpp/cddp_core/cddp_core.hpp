@@ -109,11 +109,13 @@ struct CDDPSolution {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> dual_sequence;
     std::vector<Eigen::VectorXd> slack_sequence;
+    std::vector<Eigen::VectorXd> lambda_sequence;
     std::vector<double> cost_sequence;
     std::vector<double> lagrangian_sequence;
     std::vector<Eigen::MatrixXd> control_gain;
     std::vector<Eigen::MatrixXd> dual_gain;
     std::vector<Eigen::MatrixXd> slack_gain;
+    std::vector<Eigen::MatrixXd> lambda_gain;
     int iterations;
     double alpha;
     bool converged;
@@ -126,6 +128,7 @@ struct ForwardPassResult {
     std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>>  constraint_sequence;
+    std::map<std::string, std::vector<Eigen::VectorXd>>  lambda_sequence;
     double cost;
     double lagrangian;
     double alpha = 1.0;
@@ -310,15 +313,25 @@ private:
     CDDPSolution solveIPDDP();
     ForwardPassResult solveIPDDPForwardPass(double alpha);
     bool solveIPDDPBackwardPass();
+    void resetIPDDPFilter();
+    void initialIPDDPRollout();
+    void resetIPDDPRegularization();
+
+    // MSIPDDP methods
+    void initializeMSIPDDP();
+    CDDPSolution solveMSIPDDP();
+    ForwardPassResult solveMSIPDDPForwardPass(double alpha);
+    bool solveMSIPDDPBackwardPass();
+    void resetMSIPDDPFilter();
+    void initialMSIPDDPRollout();
+    void resetMSIPDDPRegularization();
 
     // Feasible IPDDP methods
     void initializeFeasibleIPDDP();
     CDDPSolution solveFeasibleIPDDP();
     ForwardPassResult solveFeasibleIPDDPForwardPass(double alpha);
     bool solveFeasibleIPDDPBackwardPass();
-    void resetIPDDPFilter();
-    void initialIPDDPRollout();
-    void resetIPDDPRegularization();
+    
 
     // Helper methods
     double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
@@ -358,6 +371,7 @@ private:
     // Intermediate trajectories
     std::vector<Eigen::VectorXd> X_;                            // State trajectory
     std::vector<Eigen::VectorXd> U_;                            // Control trajectory
+    std::vector<Eigen::VectorXd> Lambda_;
     std::map<std::string, std::vector<Eigen::VectorXd>> G_;    // Constraint trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> Y_;  // Dual trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> S_; // Slack trajectory 
@@ -383,6 +397,10 @@ private:
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_u_;
     std::vector<Eigen::MatrixXd> K_u_;
+    std::vector<Eigen::VectorXd> k_x_;
+    std::vector<Eigen::MatrixXd> K_x_;
+    std::vector<Eigen::VectorXd> k_lambda_;
+    std::vector<Eigen::MatrixXd> K_lambda_;
     std::map<std::string, std::vector<Eigen::VectorXd>> k_y_;
     std::map<std::string, std::vector<Eigen::MatrixXd>> K_y_;
     std::map<std::string, std::vector<Eigen::VectorXd>> k_s_;

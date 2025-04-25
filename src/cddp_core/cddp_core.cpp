@@ -86,6 +86,13 @@ cddp::CDDPSolution CDDP::solve(std::string solver_type) {
             std::cout << "--------------------" << std::endl;
         }
         return solveFeasibleIPDDP();
+    } else if (solver_type == "MSIPDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with MSIPDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
+        return solveMSIPDDP();
     } else
     {
         std::cerr << "CDDP::solve: Unknown solver type" << std::endl;

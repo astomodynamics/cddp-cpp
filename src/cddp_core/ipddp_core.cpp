@@ -34,12 +34,6 @@ namespace cddp
 
     void CDDP::initializeIPDDP()
     {
-        if (initialized_)
-        {
-            // Already done—return.
-            return;
-        }
-
         if (!system_)
         {
             initialized_ = false;
@@ -175,8 +169,8 @@ namespace cddp
 
     CDDPSolution CDDP::solveIPDDP()
     {
-        // Initialize if not done
-        if (!initialized_)
+        // Initialize if not done or if S_ is not defined
+        if (!initialized_ || S_.empty())
         {
             initializeIPDDP();
         }
