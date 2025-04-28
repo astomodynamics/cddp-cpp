@@ -264,7 +264,7 @@ namespace cddp
                         {
                             std::cerr << "IPDDP: Backward pass regularization limit reached!" << std::endl;
                         }
-                        // TODO: Treat as convergence 
+                        // TODO: Treat as convergence
                         solution.converged = true;
                         break; // Exit if regularization limit reached
                     }
@@ -401,10 +401,12 @@ namespace cddp
 
             // From original IPDDP implementation
             if (optimality_gap_ <= 0.2 * mu_)
-            {   
-                if (constraint_set_.empty()) {
+            {
+                if (constraint_set_.empty())
+                {
                 }
-                else {
+                else
+                {
                     mu_ = std::max(options_.cost_tolerance / 10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
                 }
                 resetIPDDPFilter();
@@ -459,7 +461,8 @@ namespace cddp
 
                 // Get dynamics hessians if not using iLQR
                 std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
-                if (!options_.is_ilqr) {
+                if (!options_.is_ilqr)
+                {
                     const auto hessians = system_->getHessians(x, u);
                     Fxx = std::get<0>(hessians);
                     Fuu = std::get<1>(hessians);
@@ -472,33 +475,39 @@ namespace cddp
 
                 Eigen::VectorXd Q_x = l_x + A.transpose() * V_x;
                 Eigen::VectorXd Q_u = l_u + B.transpose() * V_x;
-                
+
                 // Standard Q_xx calculation
                 Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
-                
+
                 // Add state hessian term if not using iLQR
-                if (!options_.is_ilqr) {
-                    for (int i = 0; i < state_dim; ++i) {
+                if (!options_.is_ilqr)
+                {
+                    for (int i = 0; i < state_dim; ++i)
+                    {
                         Q_xx += timestep_ * V_x(i) * Fxx[i];
                     }
                 }
-                
+
                 // Standard Q_ux calculation
                 Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
-                
+
                 // Add cross hessian term if not using iLQR
-                if (!options_.is_ilqr) {
-                    for (int i = 0; i < state_dim; ++i) {
+                if (!options_.is_ilqr)
+                {
+                    for (int i = 0; i < state_dim; ++i)
+                    {
                         Q_ux += timestep_ * V_x(i) * Fux[i];
                     }
                 }
-                
+
                 // Standard Q_uu calculation
                 Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
-                
+
                 // Add control hessian term if not using iLQR
-                if (!options_.is_ilqr) {
-                    for (int i = 0; i < state_dim; ++i) {
+                if (!options_.is_ilqr)
+                {
+                    for (int i = 0; i < state_dim; ++i)
+                    {
                         Q_uu += timestep_ * V_x(i) * Fuu[i];
                     }
                 }
@@ -512,14 +521,16 @@ namespace cddp
                 {
                     // Apply regularization to the value function Hessian
                     Eigen::MatrixXd V_xx_reg = V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim);
-                    
+
                     // Recompute Q_ux and Q_uu with regularized V_xx
                     Q_ux_reg = l_ux + B.transpose() * V_xx_reg * A;
                     Q_uu_reg = l_uu + B.transpose() * V_xx_reg * B;
-                    
+
                     // Add hessian terms with regularized V_xx if not using iLQR
-                    if (!options_.is_ilqr) {
-                        for (int i = 0; i < state_dim; ++i) {
+                    if (!options_.is_ilqr)
+                    {
+                        for (int i = 0; i < state_dim; ++i)
+                        {
                             Q_ux_reg += timestep_ * V_x(i) * Fux[i];
                             Q_uu_reg += timestep_ * V_x(i) * Fuu[i];
                         }
@@ -561,6 +572,12 @@ namespace cddp
             } // end for t
 
             optimality_gap_ = Qu_err;
+            if (options_.debug)
+            {
+                std::cout << "[IPDDP Backward Pass]\n"
+                          << "    Qu_err:  " << Qu_err << "\n"
+                          << "    dV:      " << dV_.transpose() << std::endl;
+            }
             return true;
         }
         else
@@ -577,7 +594,8 @@ namespace cddp
 
                 // Get dynamics hessians if not using iLQR
                 std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
-                if (!options_.is_ilqr) {
+                if (!options_.is_ilqr)
+                {
                     const auto hessians = system_->getHessians(x, u);
                     Fxx = std::get<0>(hessians);
                     Fuu = std::get<1>(hessians);
@@ -627,33 +645,39 @@ namespace cddp
                 // Q expansions from cost
                 Eigen::VectorXd Q_x = l_x + Q_yx.transpose() * y + A.transpose() * V_x;
                 Eigen::VectorXd Q_u = l_u + Q_yu.transpose() * y + B.transpose() * V_x;
-                
+
                 // Standard Q_xx calculation
                 Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
-                
+
                 // Add state hessian term if not using iLQR
-                if (!options_.is_ilqr) {
-                    for (int i = 0; i < state_dim; ++i) {
+                if (!options_.is_ilqr)
+                {
+                    for (int i = 0; i < state_dim; ++i)
+                    {
                         Q_xx += timestep_ * V_x(i) * Fxx[i];
                     }
                 }
-                
+
                 // Standard Q_ux calculation
                 Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
-                
+
                 // Add cross hessian term if not using iLQR
-                if (!options_.is_ilqr) {
-                    for (int i = 0; i < state_dim; ++i) {
+                if (!options_.is_ilqr)
+                {
+                    for (int i = 0; i < state_dim; ++i)
+                    {
                         Q_ux += timestep_ * V_x(i) * Fux[i];
                     }
                 }
-                
+
                 // Standard Q_uu calculation
                 Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
-                
+
                 // Add control hessian term if not using iLQR
-                if (!options_.is_ilqr) {
-                    for (int i = 0; i < state_dim; ++i) {
+                if (!options_.is_ilqr)
+                {
+                    for (int i = 0; i < state_dim; ++i)
+                    {
                         Q_uu += timestep_ * V_x(i) * Fuu[i];
                     }
                 }
@@ -683,14 +707,16 @@ namespace cddp
                 {
                     // Apply regularization to the value function Hessian
                     Eigen::MatrixXd V_xx_reg = V_xx + regularization_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim);
-                    
+
                     // Recompute Q_ux and Q_uu with regularized V_xx
                     Q_ux_reg = l_ux + B.transpose() * V_xx_reg * A;
                     Q_uu_reg = l_uu + B.transpose() * V_xx_reg * B;
-                    
+
                     // Add hessian terms with regularized V_xx if not using iLQR
-                    if (!options_.is_ilqr) {
-                        for (int i = 0; i < state_dim; ++i) {
+                    if (!options_.is_ilqr)
+                    {
+                        for (int i = 0; i < state_dim; ++i)
+                        {
                             Q_ux_reg += timestep_ * V_x(i) * Fux[i];
                             Q_uu_reg += timestep_ * V_x(i) * Fuu[i];
                         }
