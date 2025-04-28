@@ -101,6 +101,13 @@ struct CDDPOptions {
     double boxqp_min_step = 1e-22;                  // Minimum step size for boxqp
     double boxqp_armijo = 0.1;                      // Armijo parameter for boxqp
     bool boxqp_verbose = false;                     // Print debug info for boxqp
+
+    // msipddp options
+    double defect_violation_penalty_initial = 1.0; // Initial defect penalty
+    double ms_defect_penalty_rho = 0.5;             // Rho parameter for defect penalty update (Eq. 16)
+    double ms_defect_penalty_kappa_d = 1e-4;        // Kappa_d threshold for defect penalty update (Eq. 16)
+    double ms_defect_penalty_mu0 = 10.0;            // Mu_0 safety margin for defect penalty update (Eq. 16)
+    int ms_segment_length = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
 };
 
 struct CDDPSolution {
@@ -125,6 +132,7 @@ struct CDDPSolution {
 struct ForwardPassResult {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
+    std::vector<Eigen::VectorXd> dynamics_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>>  constraint_sequence;
@@ -134,6 +142,7 @@ struct ForwardPassResult {
     double alpha = 1.0;
     bool success = false;
     double constraint_violation = 0.0;
+    double defect_norm = 0.0; // L1 norm of defects (f(x,u) - x_next)
 };
 
 struct FilterPoint {
@@ -335,6 +344,9 @@ private:
 
     // Helper methods
     double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
+    double calculate_defect_norm(const std::vector<Eigen::VectorXd>& X,
+                                   const std::vector<Eigen::VectorXd>& U,
+                                   const std::vector<Eigen::VectorXd>& F) const;
 
     bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
 
@@ -373,8 +385,13 @@ private:
     std::vector<Eigen::VectorXd> U_;                            // Control trajectory
     std::vector<Eigen::VectorXd> Lambda_;                       // Costate trajectory
     std::vector<Eigen::VectorXd> F_;                            // Dynamics trajectory
-    std::vector<Eigen::MatrixXd> Fx_;                          // Dynamics Jacobian trajectory
-    std::vector<Eigen::MatrixXd> Fu_;                          // Dynamics Jacobian trajectory
+    std::vector<Eigen::MatrixXd> Fx_;                           // Dynamics Jacobian trajectory (Fx)
+    std::vector<Eigen::MatrixXd> Fu_;                           // Dynamics Jacobian trajectory (Fu)
+    std::vector<Eigen::MatrixXd> A_;                            // Linearized state transition matrix trajectory
+    std::vector<Eigen::MatrixXd> B_;                            // Linearized control matrix trajectory
+    std::vector<std::vector<Eigen::MatrixXd>> Fxx_;            // Dynamics state Hessian trajectory (if not iLQR)
+    std::vector<std::vector<Eigen::MatrixXd>> Fuu_;            // Dynamics control Hessian trajectory (if not iLQR)
+    std::vector<std::vector<Eigen::MatrixXd>> Fux_;            // Dynamics cross Hessian trajectory (if not iLQR)
     std::map<std::string, std::vector<Eigen::VectorXd>> G_;    // Constraint trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> Y_;  // Dual trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> S_; // Slack trajectory 
@@ -389,6 +406,7 @@ private:
     // Line search
     double alpha_; // Line search step size
     std::vector<double> alphas_;
+    int ms_segment_length_ = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
 
     // Log-barrier
     double mu_; // Barrier coefficient

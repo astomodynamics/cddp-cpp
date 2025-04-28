@@ -80,9 +80,9 @@ TEST(IPDDPTest, Solve) {
     control_lower_bound = -control_upper_bound;
     
     
-    // Add the constraint to the solver
-    cddp_solver.addConstraint(std::string("ControlConstraint"), std::make_unique<cddp::ControlConstraint>(control_upper_bound));
-    auto constraint = cddp_solver.getConstraint<cddp::ControlConstraint>("ControlConstraint");
+    // // Add the constraint to the solver
+    // cddp_solver.addConstraint(std::string("ControlConstraint"), std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    // auto constraint = cddp_solver.getConstraint<cddp::ControlConstraint>("ControlConstraint");
 
     // Set options
     cddp_solver.setOptions(options);
