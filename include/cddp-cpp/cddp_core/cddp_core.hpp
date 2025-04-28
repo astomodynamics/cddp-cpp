@@ -371,7 +371,10 @@ private:
     // Intermediate trajectories
     std::vector<Eigen::VectorXd> X_;                            // State trajectory
     std::vector<Eigen::VectorXd> U_;                            // Control trajectory
-    std::vector<Eigen::VectorXd> Lambda_;
+    std::vector<Eigen::VectorXd> Lambda_;                       // Costate trajectory
+    std::vector<Eigen::VectorXd> F_;                            // Dynamics trajectory
+    std::vector<Eigen::MatrixXd> Fx_;                          // Dynamics Jacobian trajectory
+    std::vector<Eigen::MatrixXd> Fu_;                          // Dynamics Jacobian trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> G_;    // Constraint trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> Y_;  // Dual trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> S_; // Slack trajectory 
@@ -393,6 +396,11 @@ private:
     int ipddp_regularization_counter_ = 0; // Regularization counter for IPDDP
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
+
+    // Regularization parameters
+    double defect_violation_penalty_ = 1.0;
+    double equality_violation_penalty_ = 1.0;
+    double inequality_violation_penalty_ = 1.0;
     
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_u_;

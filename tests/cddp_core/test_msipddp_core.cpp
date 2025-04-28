@@ -88,13 +88,13 @@ TEST(MSIPDDPTest, Solve) {
     // Set options
     cddp_solver.setOptions(options);
 
-    // Set initial trajectory
+    // Set initial trajectory (X is interpolated from initial state and goal state)
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
     X[0] = initial_state;
     for (int i = 0; i < horizon; ++i) {
       U[i] << 0.01, 0.01;
-      X[i+1] = system->getDiscreteDynamics(X[i], U[i]);
+      X[i+1] = (goal_state - initial_state) / horizon * (i + 1) + initial_state;
     }
     cddp_solver.setInitialTrajectory(X, U);
 
