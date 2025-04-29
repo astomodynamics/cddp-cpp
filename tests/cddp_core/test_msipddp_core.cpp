@@ -101,8 +101,8 @@ TEST(MSIPDDPTest, Solve) {
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
     X[0] = initial_state;
     for (int i = 0; i < horizon; ++i) {
-      U[i] << 0.01, 0.01;
-      X[i+1] = system->getDiscreteDynamics(X[i], U[i]);
+      U[i] << 0.1, 0.01;
+      X[i+1] = X[0] + i * (X[horizon] - X[0]) / horizon;
     }
     cddp_solver.setInitialTrajectory(X, U);
 
