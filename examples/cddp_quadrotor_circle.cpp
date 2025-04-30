@@ -218,8 +218,8 @@ int main()
     double max_force = 4.0; // Maximum thrust per motor
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addConstraint("ControlConstraint",
-                               std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+    // cddp_solver.addConstraint("ControlConstraint",
+    //                            std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
 
     // Initial trajectory: allocate state and control trajectories
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -232,14 +232,17 @@ int main()
         u = hover_thrust * Eigen::VectorXd::Ones(control_dim);
     }
     // Propagate initial trajectory using discrete dynamics
-    for (size_t i = 0; i < static_cast<size_t>(horizon); ++i)
-    {
-        X[i + 1] = quadrotor.getDiscreteDynamics(X[i], U[i]);
-    }
+    // for (size_t i = 0; i < static_cast<size_t>(horizon); ++i)
+    // {
+    //     X[i + 1] = quadrotor.getDiscreteDynamics(X[i], U[i]);
+    // }
+
+    // Initialize state by the actual reference trajectory
+    X = circle_reference_states;
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the optimal control problem
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
     auto X_sol = solution.state_sequence;
     auto U_sol = solution.control_sequence;
     auto t_sol = solution.time_sequence;
