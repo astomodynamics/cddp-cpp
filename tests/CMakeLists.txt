@@ -103,6 +103,10 @@ add_executable(test_objective cddp_core/test_objective.cpp)
 target_link_libraries(test_objective gtest gmock gtest_main cddp)
 gtest_discover_tests(test_objective)
 
+add_executable(test_parameterized_objective cddp_core/test_parameterized_objective.cpp)
+target_link_libraries(test_parameterized_objective gtest gmock gtest_main cddp)
+gtest_discover_tests(test_parameterized_objective)
+
 add_executable(test_constraint cddp_core/test_constraint.cpp)
 target_link_libraries(test_constraint gtest gmock gtest_main cddp)
 gtest_discover_tests(test_constraint)

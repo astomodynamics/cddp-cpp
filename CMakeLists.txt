@@ -223,7 +223,9 @@ include_directories(
 # Add your library
 set(cddp_core_srcs
   src/cddp_core/dynamical_system.cpp
+  src/cddp_core/parameterized_dynamical_system.cpp
   src/cddp_core/objective.cpp
+  src/cddp_core/parameterized_objective.cpp
   src/cddp_core/constraint.cpp
   src/cddp_core/barrier.cpp
   src/cddp_core/helper.cpp
