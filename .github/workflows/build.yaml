@@ -44,3 +44,8 @@ jobs:
         mkdir -p build && cd build
         cmake .. 
         make -j4
+
+    - name: Run tests on macOS
+      if: runner.os == 'macOS'
+      run: |
+        make test
