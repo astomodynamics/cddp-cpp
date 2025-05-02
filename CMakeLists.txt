@@ -68,7 +68,19 @@ option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" OFF)
 set(LIBTORCH_DIR /usr/local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Find packages
-find_package(Eigen3 REQUIRED) 
+find_package(Eigen3 QUIET) 
+
+# If Eigen3 is not found, download it
+if(NOT Eigen3_FOUND)
+  message(STATUS "Eigen3 not found. Downloading...")
+  FetchContent_Declare(
+    eigen
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_TAG 3.4.0  # Use a stable version
+  )
+  FetchContent_MakeAvailable(eigen)
+  set(EIGEN3_INCLUDE_DIRS ${eigen_SOURCE_DIR})
+endif()
 
 if (CDDP_CPP_CASADI)
   # Assuming that CasADi is installed in /usr/local/include/casadi by:
@@ -289,11 +301,15 @@ add_library(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME} 
-  Eigen3::Eigen 
+  $<IF:$<BOOL:${Eigen3_FOUND}>,Eigen3::Eigen,>
   matplot
   autodiff
   osqp-cpp
 ) 
+
+if(NOT Eigen3_FOUND)
+  target_include_directories(${PROJECT_NAME} PUBLIC ${EIGEN3_INCLUDE_DIRS})
+endif()
 
 if (CDDP_CPP_TORCH)
 target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_TORCH_ENABLED=1)

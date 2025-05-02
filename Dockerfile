@@ -11,6 +11,7 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
         wget \
         libjpeg-dev \
         libpng-dev \
+        gnuplot \
         libeigen3-dev && \
     rm -rf /var/lib/apt/lists/*
 
