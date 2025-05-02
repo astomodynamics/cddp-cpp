@@ -25,6 +25,17 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Enforce C++17 as the minimum standard
 set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
 set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
 
+# Platform-specific settings
+if(APPLE)
+  # Add macOS-specific compiler and linker flags
+  set(CMAKE_MACOSX_RPATH ON)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+  # Use the new linker on macOS 11+
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12.0)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-ld_classic")
+  endif()
+endif()
+
 # Options
 option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
 
@@ -42,7 +53,11 @@ option(CDDP_CPP_ACADO "Whether to use Acado" OFF)
 # https://support.gurobi.com/hc/en-us/articles/4534161999889-How-do-I-install-Gurobi-Optimizer 
 option(CDDP_CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
-set(GUROBI_ROOT /usr/local/lib/gurobi1201/linux64)  # FIXME: Change this to your local gurobi installation directory
+if(APPLE)
+  set(GUROBI_ROOT /Library/gurobi1201/macos_universal2)  # macOS default path
+else()
+  set(GUROBI_ROOT /usr/local/lib/gurobi1201/linux64)  # Linux default path
+endif()
 
 # LibTorch Configuration
 # If you want to install LibTorch, please follow the instructions at:
@@ -120,10 +135,15 @@ endif()
 if (CDDP_CPP_TORCH)
   # Function to download and extract LibTorch
   function(download_libtorch cuda_support download_dir)
-    if(cuda_support) # FIXME: Chenge the version of LibTorch to your desired version
-        set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip")
+    if(APPLE)
+      # macOS has no CUDA support in PyTorch's pre-built binaries
+      set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-macos-2.5.1.zip")
     else()
+      if(cuda_support) 
+        set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip")
+      else()
         set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip")
+      endif()
     endif()
 
     set(DOWNLOAD_PATH "${download_dir}/libtorch-shared-with-deps-latest.zip")
@@ -321,8 +341,9 @@ if (CDDP_CPP_GUROBI)
     message(STATUS "Gurobi include directory: ${GUROBI_INCLUDE_DIR}")
     
     include_directories(${GUROBI_INCLUDE_DIR})
-    target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARIES}  gurobi_c++ 
-    gurobi120) # FIXME: Change this to your local gurobi installation 
+    target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARIES} gurobi_c++ 
+    # Platform-specific Gurobi library
+    $<IF:$<BOOL:APPLE>,gurobi120,gurobi120>) # Adjust version as needed
     message(STATUS "Successfully linked Gurobi version 120.") 
   else()
     message(FATAL_ERROR "Could not find Gurobi. Please set GUROBI_ROOT.")
