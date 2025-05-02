@@ -333,133 +333,133 @@ namespace cddp
                 qz_quat.push_back(quat(3));
             }
 
-            figure_handle fig = figure(true);   // Create a new figure window
-            fig->position({50, 50, 1600, 900}); // Adjusted size for more plots
+            // figure_handle fig = figure(true);   // Create a new figure window
+            // fig->position({50, 50, 1600, 900}); // Adjusted size for more plots
 
-            int current_subplot = 0;
+            // int current_subplot = 0;
 
-            // Plot Euler Angles
-            subplot(2, 3, current_subplot++);
-            plot(t_eval, yaw_mrp, "r--")->line_width(2);
-            hold(on);
-            plot(t_eval, yaw_quat_euler, "g-")->line_width(2);
-            plot(t_eval, yaw_euler, "b:")->line_width(2);
-            hold(off);
-            title("Yaw (psi) from Euler");
-            xlabel("Time (s)");
-            ylabel("Angle (rad)");
-            legend({"MRP->E", "Quat->E", "Euler"});
-            grid(on);
+            // // Plot Euler Angles
+            // subplot(2, 3, current_subplot++);
+            // plot(t_eval, yaw_mrp, "r--")->line_width(2);
+            // hold(on);
+            // plot(t_eval, yaw_quat_euler, "g-")->line_width(2);
+            // plot(t_eval, yaw_euler, "b:")->line_width(2);
+            // hold(off);
+            // title("Yaw (psi) from Euler");
+            // xlabel("Time (s)");
+            // ylabel("Angle (rad)");
+            // legend({"MRP->E", "Quat->E", "Euler"});
+            // grid(on);
 
-            subplot(2, 3, current_subplot++);
-            plot(t_eval, pitch_mrp, "r--")->line_width(2);
-            hold(on);
-            plot(t_eval, pitch_quat_euler, "g-")->line_width(2);
-            plot(t_eval, pitch_euler, "b:")->line_width(2);
-            hold(off);
-            title("Pitch (theta) from Euler");
-            xlabel("Time (s)");
-            ylabel("Angle (rad)");
-            legend({"MRP->E", "Quat->E", "Euler"});
-            grid(on);
+            // subplot(2, 3, current_subplot++);
+            // plot(t_eval, pitch_mrp, "r--")->line_width(2);
+            // hold(on);
+            // plot(t_eval, pitch_quat_euler, "g-")->line_width(2);
+            // plot(t_eval, pitch_euler, "b:")->line_width(2);
+            // hold(off);
+            // title("Pitch (theta) from Euler");
+            // xlabel("Time (s)");
+            // ylabel("Angle (rad)");
+            // legend({"MRP->E", "Quat->E", "Euler"});
+            // grid(on);
 
-            subplot(2, 3, current_subplot++);
-            plot(t_eval, roll_mrp, "r--")->line_width(2);
-            hold(on);
-            plot(t_eval, roll_quat_euler, "g-")->line_width(2);
-            plot(t_eval, roll_euler, "b:")->line_width(2);
-            hold(off);
-            title("Roll (phi) from Euler");
-            xlabel("Time (s)");
-            ylabel("Angle (rad)");
-            legend({"MRP->E", "Quat->E", "Euler"});
-            grid(on);
+            // subplot(2, 3, current_subplot++);
+            // plot(t_eval, roll_mrp, "r--")->line_width(2);
+            // hold(on);
+            // plot(t_eval, roll_quat_euler, "g-")->line_width(2);
+            // plot(t_eval, roll_euler, "b:")->line_width(2);
+            // hold(off);
+            // title("Roll (phi) from Euler");
+            // xlabel("Time (s)");
+            // ylabel("Angle (rad)");
+            // legend({"MRP->E", "Quat->E", "Euler"});
+            // grid(on);
 
-            // Plot Angular Velocities
-            subplot(2, 3, current_subplot++);
-            plot(t_eval, omx_mrp, "r--")->line_width(2);
-            hold(on);
-            plot(t_eval, omx_quat_sim, "g-")->line_width(2);
-            plot(t_eval, omx_euler, "b:")->line_width(2);
-            hold(off);
-            title("Omega X");
-            xlabel("Time (s)");
-            ylabel("Rate (rad/s)");
-            legend({"MRP", "Quaternion", "Euler"});
-            grid(on);
+            // // Plot Angular Velocities
+            // subplot(2, 3, current_subplot++);
+            // plot(t_eval, omx_mrp, "r--")->line_width(2);
+            // hold(on);
+            // plot(t_eval, omx_quat_sim, "g-")->line_width(2);
+            // plot(t_eval, omx_euler, "b:")->line_width(2);
+            // hold(off);
+            // title("Omega X");
+            // xlabel("Time (s)");
+            // ylabel("Rate (rad/s)");
+            // legend({"MRP", "Quaternion", "Euler"});
+            // grid(on);
 
-            subplot(2, 3, current_subplot++);
-            plot(t_eval, omy_mrp, "r--")->line_width(2);
-            hold(on);
-            plot(t_eval, omy_quat_sim, "g-")->line_width(2);
-            plot(t_eval, omy_euler, "b:")->line_width(2);
-            hold(off);
-            title("Omega Y");
-            xlabel("Time (s)");
-            ylabel("Rate (rad/s)");
-            legend({"MRP", "Quaternion", "Euler"});
-            grid(on);
+            // subplot(2, 3, current_subplot++);
+            // plot(t_eval, omy_mrp, "r--")->line_width(2);
+            // hold(on);
+            // plot(t_eval, omy_quat_sim, "g-")->line_width(2);
+            // plot(t_eval, omy_euler, "b:")->line_width(2);
+            // hold(off);
+            // title("Omega Y");
+            // xlabel("Time (s)");
+            // ylabel("Rate (rad/s)");
+            // legend({"MRP", "Quaternion", "Euler"});
+            // grid(on);
 
-            subplot(2, 3, current_subplot++);
-            plot(t_eval, omz_mrp, "r--")->line_width(2);
-            hold(on);
-            plot(t_eval, omz_quat_sim, "g-")->line_width(2);
-            plot(t_eval, omz_euler, "b:")->line_width(2);
-            hold(off);
-            title("Omega Z");
-            xlabel("Time (s)");
-            ylabel("Rate (rad/s)");
-            legend({"MRP", "Quaternion", "Euler"});
-            grid(on);
-            // show();
+            // subplot(2, 3, current_subplot++);
+            // plot(t_eval, omz_mrp, "r--")->line_width(2);
+            // hold(on);
+            // plot(t_eval, omz_quat_sim, "g-")->line_width(2);
+            // plot(t_eval, omz_euler, "b:")->line_width(2);
+            // hold(off);
+            // title("Omega Z");
+            // xlabel("Time (s)");
+            // ylabel("Rate (rad/s)");
+            // legend({"MRP", "Quaternion", "Euler"});
+            // grid(on);
+            // // show();
 
-            figure_handle fig_quat = figure(true);
-            fig_quat->position({50, 50, 1600, 900});
-            current_subplot = 0;
+            // figure_handle fig_quat = figure(true);
+            // fig_quat->position({50, 50, 1600, 900});
+            // current_subplot = 0;
 
-            subplot(2, 3, current_subplot++);
-            plot(t_eval, qw_mrp, "r--")->line_width(2);
-            hold(on);
-            plot(t_eval, qw_quat, "g-")->line_width(2);
-            hold(off);
-            title("Quaternion w");
-            xlabel("Time (s)");
-            ylabel("Quaternion");
-            legend({"MRP", "Quaternion"});
-            grid(on);
+            // subplot(2, 3, current_subplot++);
+            // plot(t_eval, qw_mrp, "r--")->line_width(2);
+            // hold(on);
+            // plot(t_eval, qw_quat, "g-")->line_width(2);
+            // hold(off);
+            // title("Quaternion w");
+            // xlabel("Time (s)");
+            // ylabel("Quaternion");
+            // legend({"MRP", "Quaternion"});
+            // grid(on);
 
-            subplot(2, 3, current_subplot++);
-            plot(t_eval, qx_mrp, "r--")->line_width(2);
-            hold(on);
-            plot(t_eval, qx_quat, "g-")->line_width(2);
-            hold(off);
-            title("Quaternion x");
-            xlabel("Time (s)");
-            ylabel("Quaternion");
-            legend({"MRP", "Quaternion"});
-            grid(on);
+            // subplot(2, 3, current_subplot++);
+            // plot(t_eval, qx_mrp, "r--")->line_width(2);
+            // hold(on);
+            // plot(t_eval, qx_quat, "g-")->line_width(2);
+            // hold(off);
+            // title("Quaternion x");
+            // xlabel("Time (s)");
+            // ylabel("Quaternion");
+            // legend({"MRP", "Quaternion"});
+            // grid(on);
 
-            subplot(2, 3, current_subplot++);
-            plot(t_eval, qy_mrp, "r--")->line_width(2);
-            hold(on);
-            plot(t_eval, qy_quat, "g-")->line_width(2);
-            hold(off);
-            title("Quaternion y");
-            xlabel("Time (s)");
-            ylabel("Quaternion");
-            legend({"MRP", "Quaternion"});
-            grid(on);
+            // subplot(2, 3, current_subplot++);
+            // plot(t_eval, qy_mrp, "r--")->line_width(2);
+            // hold(on);
+            // plot(t_eval, qy_quat, "g-")->line_width(2);
+            // hold(off);
+            // title("Quaternion y");
+            // xlabel("Time (s)");
+            // ylabel("Quaternion");
+            // legend({"MRP", "Quaternion"});
+            // grid(on);
 
-            subplot(2, 3, current_subplot++);
-            plot(t_eval, qz_mrp, "r--")->line_width(2);
-            hold(on);
-            plot(t_eval, qz_quat, "g-")->line_width(2);
-            hold(off);
-            title("Quaternion z");
-            xlabel("Time (s)");
-            ylabel("Quaternion");
-            legend({"MRP", "Quaternion"});
-            grid(on);
+            // subplot(2, 3, current_subplot++);
+            // plot(t_eval, qz_mrp, "r--")->line_width(2);
+            // hold(on);
+            // plot(t_eval, qz_quat, "g-")->line_width(2);
+            // hold(off);
+            // title("Quaternion z");
+            // xlabel("Time (s)");
+            // ylabel("Quaternion");
+            // legend({"MRP", "Quaternion"});
+            // grid(on);
 
             // show(); // Display plot window
         }

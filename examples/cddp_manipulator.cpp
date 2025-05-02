@@ -128,7 +128,7 @@ int main() {
     title("Joint Angles");
     xlabel("Time [s]");
     ylabel("Angle [rad]");
-    legend();
+    matplot::legend(ax1_fig1);
     grid(on);
 
     // Joint velocities subplot
@@ -141,7 +141,7 @@ int main() {
     title("Joint Velocities");
     xlabel("Time [s]");
     ylabel("Velocity [rad/s]");
-    legend();
+    matplot::legend(ax2_fig1);
     grid(on);
 
     // Joint torques subplot
@@ -154,7 +154,7 @@ int main() {
     title("Joint Torques");
     xlabel("Time [s]");
     ylabel("Torque [Nm]");
-    legend();
+    matplot::legend(ax3_fig1);
     grid(on);
 
     // Create a directory for plots if it doesn't exist

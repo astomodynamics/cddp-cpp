@@ -201,7 +201,7 @@ int main() {
     title("Position vs. Time");
     xlabel("Time [s]");
     ylabel("Position");
-    legend({"x", "y", "z"});
+    matplot::legend({"x", "y", "z"});
 
     // Velocity subplot
     subplot(2,1,2);
@@ -212,7 +212,7 @@ int main() {
     title("Velocity vs. Time");
     xlabel("Time [s]");
     ylabel("Velocity");
-    legend({"vx", "vy", "vz"});
+    matplot::legend({"vx", "vy", "vz"});
 
     // -------------------------------
     // Plot control history
@@ -225,7 +225,7 @@ int main() {
     title("Control Inputs vs. Time");
     xlabel("Time [s]");
     ylabel("Control Input");
-    legend({"u1", "u2", "u3"});
+    matplot::legend({"u1", "u2", "u3"});
 
     // Optionally save the figures
     save(fig1, plotDirectory + "/hcw_state_history.png");

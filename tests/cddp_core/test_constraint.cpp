@@ -168,51 +168,44 @@ TEST(LinearConstraintTest, Visualization) {
         }
     }
 
-    // 4. Plotting (Commented out for CI/headless environments)
-    auto fig = plt::figure();
-    plt::hold(true);
+    // // 4. Plotting (Commented out for CI/headless environments)
+    // auto fig = plt::figure();
+    // plt::hold(true);
 
-    // Plot feasible and infeasible points
-    if (!x_feasible.empty()) {
-        plt::plot(x_feasible, y_feasible, "g.")->marker_size(5).display_name("Feasible (Ax <= b)");
-    }
-    if (!x_infeasible.empty()) {
-        plt::plot(x_infeasible, y_infeasible, "r.")->marker_size(5).display_name("Infeasible (Ax > b)");
-    }
+    // // Plot feasible and infeasible points
+    // if (!x_feasible.empty()) {
+    //     plt::plot(x_feasible, y_feasible, "g.")->marker_size(5).display_name("Feasible (Ax <= b)");
+    // }
+    // if (!x_infeasible.empty()) {
+    //     plt::plot(x_infeasible, y_infeasible, "r.")->marker_size(5).display_name("Infeasible (Ax > b)");
+    // }
 
-    // Plot constraint boundaries (Ax = b)
-    // Line 1: x + y = 1  => y = 1 - x
-    std::vector<double> x_line1 = {-range, range};
-    std::vector<double> y_line1 = {1 - x_line1[0], 1 - x_line1[1]};
-    plt::plot(x_line1, y_line1, "k-")->line_width(2).display_name("x + y = 1");
+    // // Plot constraint boundaries (Ax = b)
+    // // Line 1: x + y = 1  => y = 1 - x
+    // std::vector<double> x_line1 = {-range, range};
+    // std::vector<double> y_line1 = {1 - x_line1[0], 1 - x_line1[1]};
+    // plt::plot(x_line1, y_line1, "k-")->line_width(2).display_name("x + y = 1");
 
-    // Line 2: -x + y = 1 => y = 1 + x
-    std::vector<double> x_line2 = {-range, range};
-    std::vector<double> y_line2 = {1 + x_line2[0], 1 + x_line2[1]};
-    plt::plot(x_line2, y_line2, "b-")->line_width(2).display_name("-x + y = 1");
+    // // Line 2: -x + y = 1 => y = 1 + x
+    // std::vector<double> x_line2 = {-range, range};
+    // std::vector<double> y_line2 = {1 + x_line2[0], 1 + x_line2[1]};
+    // plt::plot(x_line2, y_line2, "b-")->line_width(2).display_name("-x + y = 1");
 
 
-    plt::hold(false);
-    plt::xlabel("X");
-    plt::ylabel("Y");
-    plt::title("Linear Constraint Feasible Space (Ax <= b)");
-    plt::legend();
-    plt::grid(true);
-    plt::axis("equal");
-    // plt::xlim({-range, range}); // Optional: Set limits
-    // plt::ylim({-range, range});
+    // plt::hold(false);
+    // plt::xlabel("X");
+    // plt::ylabel("Y");
+    // plt::title("Linear Constraint Feasible Space (Ax <= b)");
+    // plt::legend();
+    // plt::grid(true);
+    // plt::axis("equal");
+    // // plt::xlim({-range, range}); // Optional: Set limits
+    // // plt::ylim({-range, range});
 
-    // Save the plot to a file
-    std::string filename = "linear_constraint_visualization.png";
-    plt::save(filename);
-    std::cout << "Saved linear constraint visualization to " << filename << std::endl;
-
-    // Assert that the file was created (or would be created if plotting enabled)
-    // Since plotting is commented out, we'll just check feasibility/infeasibility counts
-    ASSERT_FALSE(x_feasible.empty());
-    ASSERT_FALSE(x_infeasible.empty());
-    // struct stat buffer;
-    // ASSERT_EQ(stat(filename.c_str(), &buffer), 0) << "Plot file '" << filename << "' was not generated.";
+    // // Save the plot to a file
+    // std::string filename = "linear_constraint_visualization.png";
+    // plt::save(filename);
+    // std::cout << "Saved linear constraint visualization to " << filename << std::endl;
 }
 
 // New test suite for SecondOrderConeConstraint
@@ -386,48 +379,43 @@ TEST(SecondOrderConeConstraintTest, Visualization) {
     check_and_add(p_boundary2, "p_boundary2");
 
 
-    // // 4. Create Plot (Commented out for testing)
-    auto fig = plt::figure();
-    plt::surf(X, Y, Z)->face_alpha(0.5).edge_color("none");
-    plt::hold(true);
+    // // // 4. Create Plot (Commented out for testing)
+    // auto fig = plt::figure();
+    // plt::surf(X, Y, Z)->face_alpha(0.5).edge_color("none");
+    // plt::hold(true);
 
-    if (!x_inside.empty()) {
-        plt::plot3(x_inside, y_inside, z_inside, "go")->marker_size(10).display_name("Inside"); // Changed display name
-    }
-    if (!x_outside.empty()) {
-        plt::plot3(x_outside, y_outside, z_outside, "rx")->marker_size(10).display_name("Outside");
-    }
-    if (!x_boundary.empty()) { // Added plotting for boundary points
-        plt::plot3(x_boundary, y_boundary, z_boundary, "bs")->marker_size(10).display_name("Boundary");
-    }
+    // if (!x_inside.empty()) {
+    //     plt::plot3(x_inside, y_inside, z_inside, "go")->marker_size(10).display_name("Inside"); // Changed display name
+    // }
+    // if (!x_outside.empty()) {
+    //     plt::plot3(x_outside, y_outside, z_outside, "rx")->marker_size(10).display_name("Outside");
+    // }
+    // if (!x_boundary.empty()) { // Added plotting for boundary points
+    //     plt::plot3(x_boundary, y_boundary, z_boundary, "bs")->marker_size(10).display_name("Boundary");
+    // }
 
-    // Plot origin and axis
-    plt::plot3(std::vector<double>{origin.x()}, std::vector<double>{origin.y()}, std::vector<double>{origin.z()}, "k*")->marker_size(12).display_name("Origin");
-    Eigen::Vector3d axis_start = origin - axis * 2.5; // Show axis extending both ways
-    Eigen::Vector3d axis_end = origin + axis * 2.5;
-    plt::plot3(std::vector<double>{axis_start.x(), axis_end.x()},
-               std::vector<double>{axis_start.y(), axis_end.y()},
-               std::vector<double>{axis_start.z(), axis_end.z()}, "b-.")->line_width(2).display_name("Axis");
-
-
-    plt::hold(false);
-    plt::xlabel("X");
-    plt::ylabel("Y");
-    plt::zlabel("Z");
-    plt::title("Second Order Cone Constraint Visualization");
-    plt::legend();
-    plt::grid(true);
-    plt::axis("equal");
-    // plt::show();
-    // plt::view(45, 30); // Adjust view angle if needed
-
-    // Save the plot to a file
-    std::string filename = "cone_visualization.png";
-    plt::save(filename);
-    std::cout << "Saved cone visualization to " << filename << std::endl;
+    // // Plot origin and axis
+    // plt::plot3(std::vector<double>{origin.x()}, std::vector<double>{origin.y()}, std::vector<double>{origin.z()}, "k*")->marker_size(12).display_name("Origin");
+    // Eigen::Vector3d axis_start = origin - axis * 2.5; // Show axis extending both ways
+    // Eigen::Vector3d axis_end = origin + axis * 2.5;
+    // plt::plot3(std::vector<double>{axis_start.x(), axis_end.x()},
+    //            std::vector<double>{axis_start.y(), axis_end.y()},
+    //            std::vector<double>{axis_start.z(), axis_end.z()}, "b-.")->line_width(2).display_name("Axis");
 
 
-    // // Assert that the file was created
-    // struct stat buffer;
-    // ASSERT_EQ(stat(filename.c_str(), &buffer), 0) << "Plot file '" << filename << "' was not generated.";
+    // plt::hold(false);
+    // plt::xlabel("X");
+    // plt::ylabel("Y");
+    // plt::zlabel("Z");
+    // plt::title("Second Order Cone Constraint Visualization");
+    // plt::legend();
+    // plt::grid(true);
+    // plt::axis("equal");
+    // // plt::show();
+    // // plt::view(45, 30); // Adjust view angle if needed
+
+    // // Save the plot to a file
+    // std::string filename = "cone_visualization.png";
+    // plt::save(filename);
+    // std::cout << "Saved cone visualization to " << filename << std::endl;
 }

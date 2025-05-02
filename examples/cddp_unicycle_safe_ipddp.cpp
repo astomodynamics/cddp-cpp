@@ -267,7 +267,7 @@ int main() {
     title(ax1, "Position Trajectory (X-Y plane)");
     xlabel(ax1, "x [m]");
     ylabel(ax1, "y [m]");
-    legend(ax1);
+    matplot::legend(ax1);
 
     // Subplot 2: Heading Angle vs Time
     auto ax2 = subplot(3, 1, 1);
@@ -279,7 +279,7 @@ int main() {
     title(ax2, "Heading Angle vs Time");
     xlabel(ax2, "Time [s]");
     ylabel(ax2, "Theta [rad]");
-    legend(ax2);
+    matplot::legend(ax2);
 
     // Subplot 3: Control Inputs vs Step
     auto ax3 = subplot(3, 1, 2);
@@ -306,7 +306,7 @@ int main() {
     title(ax3, "Control Inputs vs. Step");
     xlabel(ax3, "Step");
     ylabel(ax3, "Control value");
-    legend(ax3);
+    matplot::legend(ax3);
 
     // Save the figure
     f1->draw();

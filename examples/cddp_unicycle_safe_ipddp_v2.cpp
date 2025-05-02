@@ -184,7 +184,7 @@ int main() {
     xlim(ax, {0.0, 4.0});
     ylim(ax, {0.0, 4.0});
     title(ax, "IPDDP Safe Trajectory with Two Ball Constraints");
-    legend(ax);
+    matplot::legend(ax);
 
     // -------------------------------------------------
     // 5. Save Plot

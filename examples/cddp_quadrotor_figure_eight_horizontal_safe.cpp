@@ -358,7 +358,7 @@ int main()
     title(ax1_f1, "Position Trajectories");
     xlabel(ax1_f1, "Time [s]");
     ylabel(ax1_f1, "Position [m]");
-    legend(ax1_f1);
+    matplot::legend(ax1_f1);
     grid(ax1_f1, true);
 
     // (2) Attitude (Euler angles)
@@ -377,7 +377,7 @@ int main()
     title(ax2_f1, "Attitude Angles");
     xlabel(ax2_f1, "Time [s]");
     ylabel(ax2_f1, "Angle [rad]");
-    legend(ax2_f1);
+    matplot::legend(ax2_f1);
     grid(ax2_f1, true);
 
     // (3) Motor forces
@@ -399,7 +399,7 @@ int main()
     title(ax3_f1, "Motor Forces");
     xlabel(ax3_f1, "Time [s]");
     ylabel(ax3_f1, "Force [N]");
-    legend(ax3_f1);
+    matplot::legend(ax3_f1);
     grid(ax3_f1, true);
 
     // (4) Quaternion trajectories and norm
@@ -429,7 +429,7 @@ int main()
     title(ax4_f1, "Quaternion Components and Norm");
     xlabel(ax4_f1, "Time [s]");
     ylabel(ax4_f1, "Value");
-    legend(ax4_f1);
+    matplot::legend(ax4_f1);
     grid(ax4_f1, true);
 
     // Save figure 1
