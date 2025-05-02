@@ -13,6 +13,11 @@
 #  limitations under the License.
 
 cmake_minimum_required(VERSION 3.14) 
+# Set policy to support older CMake code
+cmake_policy(SET CMP0048 NEW)
+# Allow policy version minimum flag to be passed to sub-projects
+set(CMAKE_POLICY_VERSION_MINIMUM "3.5" CACHE STRING "Minimum CMake version for policy compatibility")
+
 project(
   cddp
   VERSION 0.1.0
@@ -24,6 +29,17 @@ set(CMAKE_CXX_STANDARD 17) # Enforce C++17 as the minimum standard
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Enforce C++17 as the minimum standard
 set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
 set(CMAKE_BUILD_TYPE "Release") # Set the build type to Release by default
+
+# Platform-specific settings
+if(APPLE)
+  # Add macOS-specific compiler and linker flags
+  set(CMAKE_MACOSX_RPATH ON)
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra")
+  # Use the new linker on macOS 11+
+  if(CMAKE_CXX_COMPILER_ID MATCHES "Clang" AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 12.0)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-ld_classic")
+  endif()
+endif()
 
 # Options
 option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
@@ -42,7 +58,11 @@ option(CDDP_CPP_ACADO "Whether to use Acado" OFF)
 # https://support.gurobi.com/hc/en-us/articles/4534161999889-How-do-I-install-Gurobi-Optimizer 
 option(CDDP_CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
-set(GUROBI_ROOT /usr/local/lib/gurobi1201/linux64)  # FIXME: Change this to your local gurobi installation directory
+if(APPLE)
+  set(GUROBI_ROOT /Library/gurobi1201/macos_universal2)  # macOS default path
+else()
+  set(GUROBI_ROOT /usr/local/lib/gurobi1201/linux64)  # Linux default path
+endif()
 
 # LibTorch Configuration
 # If you want to install LibTorch, please follow the instructions at:
@@ -53,7 +73,19 @@ option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" OFF)
 set(LIBTORCH_DIR /usr/local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Find packages
-find_package(Eigen3 REQUIRED) 
+find_package(Eigen3 QUIET) 
+
+# If Eigen3 is not found, download it
+if(NOT Eigen3_FOUND)
+  message(STATUS "Eigen3 not found. Downloading...")
+  FetchContent_Declare(
+    eigen
+    GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
+    GIT_TAG 3.4.0  # Use a stable version
+  )
+  FetchContent_MakeAvailable(eigen)
+  set(EIGEN3_INCLUDE_DIRS ${eigen_SOURCE_DIR})
+endif()
 
 if (CDDP_CPP_CASADI)
   # Assuming that CasADi is installed in /usr/local/include/casadi by:
@@ -120,10 +152,15 @@ endif()
 if (CDDP_CPP_TORCH)
   # Function to download and extract LibTorch
   function(download_libtorch cuda_support download_dir)
-    if(cuda_support) # FIXME: Chenge the version of LibTorch to your desired version
-        set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip")
+    if(APPLE)
+      # macOS has no CUDA support in PyTorch's pre-built binaries
+      set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-macos-2.5.1.zip")
     else()
+      if(cuda_support) 
+        set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip")
+      else()
         set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip")
+      endif()
     endif()
 
     set(DOWNLOAD_PATH "${download_dir}/libtorch-shared-with-deps-latest.zip")
@@ -211,9 +248,30 @@ FetchContent_Declare(
   osqp-cpp
   GIT_REPOSITORY https://github.com/astomodynamics/osqp-cpp.git
   GIT_TAG master
+  CMAKE_ARGS 
+    -DCMAKE_POLICY_DEFAULT_CMP0048=NEW 
+    -DCMAKE_POLICY_DEFAULT_CMP0069=NEW
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
-FetchContent_MakeAvailable(osqp-cpp)
-FetchContent_GetProperties(osqp-cpp)
+
+# Custom processing before making osqp-cpp available
+if(NOT osqp-cpp_POPULATED)
+  FetchContent_Populate(osqp-cpp)
+  
+  # Add this to the top of the OSQP CMakeLists.txt
+  file(WRITE ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt.new 
+    "cmake_minimum_required(VERSION 3.5)\n\n")
+  
+  # Append the original content
+  file(READ ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt osqp_content)
+  file(APPEND ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt.new "${osqp_content}")
+  
+  # Replace the original file
+  file(RENAME ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt.new ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt)
+  
+  # Add the subdirectory
+  add_subdirectory(${osqp-cpp_SOURCE_DIR} ${osqp-cpp_BINARY_DIR})
+endif()
 
 # Include directories
 include_directories(
@@ -270,11 +328,15 @@ add_library(${PROJECT_NAME}
 )
 
 target_link_libraries(${PROJECT_NAME} 
-  Eigen3::Eigen 
+  $<IF:$<BOOL:${Eigen3_FOUND}>,Eigen3::Eigen,>
   matplot
   autodiff
   osqp-cpp
 ) 
+
+if(NOT Eigen3_FOUND)
+  target_include_directories(${PROJECT_NAME} PUBLIC ${EIGEN3_INCLUDE_DIRS})
+endif()
 
 if (CDDP_CPP_TORCH)
 target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_TORCH_ENABLED=1)
@@ -322,8 +384,9 @@ if (CDDP_CPP_GUROBI)
     message(STATUS "Gurobi include directory: ${GUROBI_INCLUDE_DIR}")
     
     include_directories(${GUROBI_INCLUDE_DIR})
-    target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARIES}  gurobi_c++ 
-    gurobi120) # FIXME: Change this to your local gurobi installation 
+    target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARIES} gurobi_c++ 
+    # Platform-specific Gurobi library
+    $<IF:$<BOOL:APPLE>,gurobi120,gurobi120>) # Adjust version as needed
     message(STATUS "Successfully linked Gurobi version 120.") 
   else()
     message(FATAL_ERROR "Could not find Gurobi. Please set GUROBI_ROOT.")

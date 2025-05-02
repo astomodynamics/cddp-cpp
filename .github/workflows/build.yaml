@@ -8,15 +8,39 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     steps:
     - uses: actions/checkout@v3
 
+    # Only run Docker steps on Linux
     - name: Login to Docker Hub
+      if: runner.os == 'Linux'
       run: docker login -u ${{ secrets.DOCKER_USERNAME }} -p ${{ secrets.DOCKER_PASSWORD }}
 
     - name: Build and Test the Docker image
+      if: runner.os == 'Linux'
       run: docker build -t astomodynamics/cddp-cpp .
 
     - name: Push the Docker image (optional)
+      if: runner.os == 'Linux'
       run: docker push astomodynamics/cddp-cpp
+      
+    # For macOS, build directly without Docker
+    - name: Install dependencies on macOS
+      if: runner.os == 'macOS'
+      run: |
+        # Basic dependencies
+        brew install eigen cmake
+        
+        # Dependencies for matplotplusplus
+        brew install gnuplot
+
+    - name: Build on macOS
+      if: runner.os == 'macOS'
+      run: |
+        mkdir -p build && cd build
+        cmake .. 
+        make -j4
