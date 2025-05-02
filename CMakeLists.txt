@@ -243,6 +243,7 @@ FetchContent_Declare(
   osqp-cpp
   GIT_REPOSITORY https://github.com/astomodynamics/osqp-cpp.git
   GIT_TAG master
+  CMAKE_ARGS -DCMAKE_POLICY_DEFAULT_CMP0048=NEW -DCMAKE_POLICY_DEFAULT_CMP0069=NEW
 )
 FetchContent_MakeAvailable(osqp-cpp)
 FetchContent_GetProperties(osqp-cpp)
