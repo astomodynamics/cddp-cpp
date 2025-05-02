@@ -241,9 +241,9 @@ TEST_F(MrpAttitudeTest, SimulationAndPlotting) {
     omega_y_data.push_back(current_state(MrpAttitude::STATE_OMEGA_Y));
     omega_z_data.push_back(current_state(MrpAttitude::STATE_OMEGA_Z));
 
-    // Plotting
-    auto fig = figure(true);
-    fig->size(1200, 800);
+    // // Plotting
+    // auto fig = figure(true);
+    // fig->size(1200, 800);
 
     // // Plot MRP components
     // auto ax1 = subplot(2, 1, 0);
