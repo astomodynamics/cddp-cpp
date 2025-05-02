@@ -245,31 +245,31 @@ TEST_F(MrpAttitudeTest, SimulationAndPlotting) {
     auto fig = figure(true);
     fig->size(1200, 800);
 
-    // Plot MRP components
-    auto ax1 = subplot(2, 1, 0);
-    hold(ax1, on);
-    plot(ax1, time_data, mrp_x_data, "-r")->line_width(2).display_name("MRP X");
-    plot(ax1, time_data, mrp_y_data, "-g")->line_width(2).display_name("MRP Y");
-    plot(ax1, time_data, mrp_z_data, "-b")->line_width(2).display_name("MRP Z");
-    title(ax1, "MRP Components vs Time");
-    xlabel(ax1, "Time [s]");
-    ylabel(ax1, "MRP Value");
-    legend(ax1);
-    grid(ax1, on);
-    hold(ax1, off);
+    // // Plot MRP components
+    // auto ax1 = subplot(2, 1, 0);
+    // hold(ax1, on);
+    // plot(ax1, time_data, mrp_x_data, "-r")->line_width(2).display_name("MRP X");
+    // plot(ax1, time_data, mrp_y_data, "-g")->line_width(2).display_name("MRP Y");
+    // plot(ax1, time_data, mrp_z_data, "-b")->line_width(2).display_name("MRP Z");
+    // title(ax1, "MRP Components vs Time");
+    // xlabel(ax1, "Time [s]");
+    // ylabel(ax1, "MRP Value");
+    // matplot::legend(ax1);
+    // grid(ax1, on);
+    // hold(ax1, off);
 
-    // Plot Angular Velocities
-    auto ax2 = subplot(2, 1, 1);
-    hold(ax2, on);
-    plot(ax2, time_data, omega_x_data, "-r")->line_width(2).display_name("Omega X");
-    plot(ax2, time_data, omega_y_data, "-g")->line_width(2).display_name("Omega Y");
-    plot(ax2, time_data, omega_z_data, "-b")->line_width(2).display_name("Omega Z");
-    title(ax2, "Angular Velocity vs Time");
-    xlabel(ax2, "Time [s]");
-    ylabel(ax2, "Angular Velocity [rad/s]");
-    legend(ax2);
-    grid(ax2, on);
-    hold(ax2, off);
+    // // Plot Angular Velocities
+    // auto ax2 = subplot(2, 1, 1);
+    // hold(ax2, on);
+    // plot(ax2, time_data, omega_x_data, "-r")->line_width(2).display_name("Omega X");
+    // plot(ax2, time_data, omega_y_data, "-g")->line_width(2).display_name("Omega Y");
+    // plot(ax2, time_data, omega_z_data, "-b")->line_width(2).display_name("Omega Z");
+    // title(ax2, "Angular Velocity vs Time");
+    // xlabel(ax2, "Time [s]");
+    // ylabel(ax2, "Angular Velocity [rad/s]");
+    // matplot::legend(ax2);
+    // grid(ax2, on);
+    // hold(ax2, off);
 
     // Show the plot (disable saving for tests unless specifically needed)
     // show(); 
