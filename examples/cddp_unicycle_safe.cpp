@@ -211,7 +211,7 @@ int main() {
     ylabel(ax, "y");
     xlim(ax, {-0.5, 2.5});
     ylim(ax, {-0.5, 2.5});
-    legend(ax);
+    matplot::legend(ax);
 
     // Create directory for saving (if not existing)
     std::string plotDirectory = "../results/tests";
