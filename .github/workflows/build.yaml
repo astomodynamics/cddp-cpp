@@ -29,6 +29,15 @@ jobs:
       run: docker push astomodynamics/cddp-cpp
       
     # For macOS, build directly without Docker
+    - name: Install dependencies on macOS
+      if: runner.os == 'macOS'
+      run: |
+        # Basic dependencies
+        brew install eigen cmake
+        
+        # Dependencies for matplotplusplus
+        brew install gnuplot pkg-config
+
     - name: Build on macOS
       if: runner.os == 'macOS'
       run: |
