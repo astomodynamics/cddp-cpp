@@ -211,7 +211,7 @@ int main() {
     xlim(ax, {-1.0, 4.0});
     ylim(ax, {-1.0, 4.0});
     title(ax, "IPDDP Safe Trajectory with Linear Constraint");
-    legend(ax);
+    matplot::legend(ax);
 
     // -------------------------------------------------
     // 5. Save Plot

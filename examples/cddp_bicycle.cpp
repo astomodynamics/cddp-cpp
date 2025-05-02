@@ -144,7 +144,7 @@ int main()
     title(ax4, "Control Inputs");
     xlabel(ax4, "Step");
     ylabel(ax4, "Control");
-    legend(ax4);
+    matplot::legend(ax4);
 
     f1->draw();
     f1->save(plotDirectory + "/bicycle_cddp_results.png");
