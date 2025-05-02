@@ -13,6 +13,11 @@
 #  limitations under the License.
 
 cmake_minimum_required(VERSION 3.14) 
+# Set policy to support older CMake code
+cmake_policy(SET CMP0048 NEW)
+# Allow policy version minimum flag to be passed to sub-projects
+set(CMAKE_POLICY_VERSION_MINIMUM "3.5" CACHE STRING "Minimum CMake version for policy compatibility")
+
 project(
   cddp
   VERSION 0.1.0
@@ -243,10 +248,30 @@ FetchContent_Declare(
   osqp-cpp
   GIT_REPOSITORY https://github.com/astomodynamics/osqp-cpp.git
   GIT_TAG master
-  CMAKE_ARGS -DCMAKE_POLICY_DEFAULT_CMP0048=NEW -DCMAKE_POLICY_DEFAULT_CMP0069=NEW
+  CMAKE_ARGS 
+    -DCMAKE_POLICY_DEFAULT_CMP0048=NEW 
+    -DCMAKE_POLICY_DEFAULT_CMP0069=NEW
+    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
 )
-FetchContent_MakeAvailable(osqp-cpp)
-FetchContent_GetProperties(osqp-cpp)
+
+# Custom processing before making osqp-cpp available
+if(NOT osqp-cpp_POPULATED)
+  FetchContent_Populate(osqp-cpp)
+  
+  # Add this to the top of the OSQP CMakeLists.txt
+  file(WRITE ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt.new 
+    "cmake_minimum_required(VERSION 3.5)\n\n")
+  
+  # Append the original content
+  file(READ ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt osqp_content)
+  file(APPEND ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt.new "${osqp_content}")
+  
+  # Replace the original file
+  file(RENAME ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt.new ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt)
+  
+  # Add the subdirectory
+  add_subdirectory(${osqp-cpp_SOURCE_DIR} ${osqp-cpp_BINARY_DIR})
+endif()
 
 # Include directories
 include_directories(
