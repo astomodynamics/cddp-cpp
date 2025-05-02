@@ -36,7 +36,7 @@ jobs:
         brew install eigen cmake
         
         # Dependencies for matplotplusplus
-        brew install gnuplot pkg-config
+        brew install gnuplot
 
     - name: Build on macOS
       if: runner.os == 'macOS'

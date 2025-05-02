@@ -361,7 +361,7 @@ int main() {
     ylabel(ax, "y [m]");
     xlim(ax, {-0.2, 2.5});
     ylim(ax, {-0.2, 2.5});
-    auto l = legend(ax);
+    auto l = matplot::legend(ax);
     l->location(legend::general_alignment::topleft);
     grid(ax, true);
 
