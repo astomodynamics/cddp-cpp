@@ -560,10 +560,10 @@ namespace cddp
                 K_u_[t] = K_u;
 
                 // Update value function
-                V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
-                V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
+                V_x = Q_x + Q_ux.transpose() * k_u;
+                V_xx = Q_xx + Q_ux.transpose() * K_u;
 
-                // Accumulate cost improvement (if desired)
+                // Accumulate cost improvement 
                 dV_[0] += k_u.dot(Q_u);
                 dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
 
@@ -804,8 +804,8 @@ namespace cddp
                 dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
 
                 // Update value function
-                V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
-                V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
+                V_x = Q_x + Q_ux.transpose() * k_u;
+                V_xx = Q_xx + Q_ux.transpose() * K_u;
 
                 // Error tracking
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());

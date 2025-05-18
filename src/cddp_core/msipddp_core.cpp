@@ -636,8 +636,8 @@ namespace cddp
                 K_u_[t] = K_u;
 
                 // Update Value function derivatives
-                V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
-                V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
+                V_x = Q_x + Q_ux.transpose() * k_u;
+                V_xx = Q_xx + Q_ux.transpose() * K_u;
                 V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize V_xx
 
                 // Accumulate cost improvement
