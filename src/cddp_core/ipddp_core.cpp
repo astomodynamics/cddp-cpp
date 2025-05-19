@@ -898,10 +898,7 @@ namespace cddp
         else
         {
             // Constrained forward pass
-            double alpha_s = alpha; // alpha (function parameter) is alpha_s for S, U, X updates
-
-            // X_new[0] is already set to initial_state_ from the start of the function.
-            // S_new, Y_new, U_new, G_new are copies of S_, Y_, U_, G_ respectively, made at function start.
+            double alpha_s = alpha;
 
             // --- Outer Pass: Update S, U, X with alpha_s and check S-feasibility ---
             bool s_trajectory_feasible = true;
@@ -947,15 +944,13 @@ namespace cddp
             }
 
             // --- Inner Line Search: Update Y with alpha_y and check Y-feasibility ---
-            // S_new, U_new, X_new are now fixed from the successful alpha_s pass.
             bool suitable_alpha_y_found = false;
-            // Y_new is currently a copy of Y_ (original duals). It will be updated if a good alpha_y is found.
             std::map<std::string, std::vector<Eigen::VectorXd>> Y_trial_for_candidate_alpha_y;
 
-            for (double alpha_y_candidate : alphas_) // alphas_ is the member std::vector of step sizes
+            for (double alpha_y_candidate : alphas_) 
             {
                 bool current_alpha_y_globally_feasible = true;
-                Y_trial_for_candidate_alpha_y = Y_; // Start with a fresh copy of original Y_ for this candidate
+                Y_trial_for_candidate_alpha_y = Y_;
 
                 for (int t = 0; t < horizon_; ++t)
                 {
@@ -999,11 +994,7 @@ namespace cddp
                 return result; // result.success is already false
             }
 
-            // --- Cost Computation and Filter Logic ---
-            // If we reach here, both S (with alpha_s) and Y (with chosen alpha_y) trajectories are feasible and stored in S_new, Y_new.
-            // X_new and U_new are also from the alpha_s pass.
-            // G_new needs to be recomputed based on the final X_new, U_new.
-            
+            // --- Cost Computation and filter line-search  ---
             cost_new = 0.0;
             log_cost_new = 0.0;
             rp_err = 0.0;
@@ -1030,7 +1021,7 @@ namespace cddp
 
             cost_new += objective_->terminal_cost(X_new.back());
             log_cost_new += cost_new;
-            rp_err = std::max(rp_err, options_.cost_tolerance); // As in original logic
+            rp_err = std::max(rp_err, options_.cost_tolerance); 
 
             FilterPoint candidate{log_cost_new, rp_err};
             bool candidateDominated = false;
@@ -1061,15 +1052,13 @@ namespace cddp
                 result.success = true;
                 result.state_sequence = X_new;
                 result.control_sequence = U_new;
-                result.dual_sequence = Y_new;     // From inner line search for alpha_y
-                result.slack_sequence = S_new;    // From outer line search for alpha_s
-                result.constraint_sequence = G_new; // Recomputed with X_new, U_new
+                result.dual_sequence = Y_new;    
+                result.slack_sequence = S_new;    
+                result.constraint_sequence = G_new;
                 result.cost = cost_new;
                 result.lagrangian = log_cost_new;
                 result.constraint_violation = rp_err;
-                // result.alpha is already alpha_s (the input parameter to this function)
             }
-            // If candidateDominated is true, result.success remains false (its default value).
             return result;
         }
     } // end solveIPDDPForwardPass
