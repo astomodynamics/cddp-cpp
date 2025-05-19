@@ -560,8 +560,8 @@ namespace cddp
                 K_u_[t] = K_u;
 
                 // Update value function
-                V_x = Q_x + Q_ux.transpose() * k_u;
-                V_xx = Q_xx + Q_ux.transpose() * K_u;
+                V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
+                V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
 
                 // Accumulate cost improvement 
                 dV_[0] += k_u.dot(Q_u);
@@ -804,8 +804,8 @@ namespace cddp
                 dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
 
                 // Update value function
-                V_x = Q_x + Q_ux.transpose() * k_u;
-                V_xx = Q_xx + Q_ux.transpose() * K_u;
+                V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
+                V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
 
                 // Error tracking
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
@@ -898,110 +898,157 @@ namespace cddp
         else
         {
             // Constrained forward pass
+            double alpha_s = alpha; // alpha (function parameter) is alpha_s for S, U, X updates
+
+            // X_new[0] is already set to initial_state_ from the start of the function.
+            // S_new, Y_new, U_new, G_new are copies of S_, Y_, U_, G_ respectively, made at function start.
+
+            // --- Outer Pass: Update S, U, X with alpha_s and check S-feasibility ---
+            bool s_trajectory_feasible = true;
             for (int t = 0; t < horizon_; ++t)
             {
-                // Dual and slack update.
-                // For each constraint, update the dual and slack variables.
-                //   y_new = y_old + alpha * k_y + K_y*(x_new - x_old)
-                //   s_new = s_old + alpha * k_s + K_s*(x_new - x_old)
+                Eigen::VectorXd delta_x_k = X_new[t] - X_[t];
+
+                // Slack update (using alpha_s) and feasibility check for S_new
                 for (auto &ckv : constraint_set_)
                 {
                     const std::string &cname = ckv.first;
                     int dual_dim = ckv.second->getDualDim();
+                    const Eigen::VectorXd &s_old_at_t = S_[cname][t];
 
-                    // Retrieve old dual/slack from previous solution.
-                    const Eigen::VectorXd &y_old = Y_[cname][t];
-                    const Eigen::VectorXd &s_old = S_[cname][t];
+                    Eigen::VectorXd s_new_val_at_t = s_old_at_t +
+                                                 alpha_s * k_s_[cname][t] + K_s_[cname][t] * delta_x_k;
 
-                    // Compute updated dual/slack variables.
-                    Eigen::VectorXd y_new = y_old +
-                                            alpha * k_y_[cname][t] + K_y_[cname][t] * (X_new[t] - X_[t]);
-
-                    Eigen::VectorXd s_new = s_old +
-                                            alpha * k_s_[cname][t] + K_s_[cname][t] * (X_new[t] - X_[t]);
-
-                    // Enforce minimal feasibility:
-                    Eigen::VectorXd y_min = (1.0 - tau) * y_old;
-                    Eigen::VectorXd s_min = (1.0 - tau) * s_old;
-                    for (int i = 0; i < dual_dim; i++)
+                    Eigen::VectorXd s_min_at_t = (1.0 - tau) * s_old_at_t;
+                    for (int i = 0; i < dual_dim; ++i)
                     {
-                        if (y_new[i] < y_min[i] || s_new[i] < s_min[i])
+                        if (s_new_val_at_t[i] < s_min_at_t[i])
                         {
-                            // Early exit: feasibility condition violated.
-                            return result;
+                            s_trajectory_feasible = false;
+                            break; // Exit i-loop (dual_dim)
                         }
                     }
-                    // Store the updated dual and slack.
-                    Y_new[cname][t] = y_new;
-                    S_new[cname][t] = s_new;
+                    if (!s_trajectory_feasible) break; // Exit cname-loop (constraints)
+                    S_new[cname][t] = s_new_val_at_t; // Store if feasible for this constraint
+                }
+                if (!s_trajectory_feasible) break; // Exit t-loop (horizon)
+
+                // Update control (using alpha_s)
+                U_new[t] = U_[t] + alpha_s * k_u_[t] + K_u_[t] * delta_x_k;
+
+                // Propagate dynamics
+                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+            }
+
+            if (!s_trajectory_feasible)
+            {
+                // alpha_s was not feasible for the S trajectory
+                return result; // result.success is already false by default
+            }
+
+            // --- Inner Line Search: Update Y with alpha_y and check Y-feasibility ---
+            // S_new, U_new, X_new are now fixed from the successful alpha_s pass.
+            bool suitable_alpha_y_found = false;
+            // Y_new is currently a copy of Y_ (original duals). It will be updated if a good alpha_y is found.
+            std::map<std::string, std::vector<Eigen::VectorXd>> Y_trial_for_candidate_alpha_y;
+
+            for (double alpha_y_candidate : alphas_) // alphas_ is the member std::vector of step sizes
+            {
+                bool current_alpha_y_globally_feasible = true;
+                Y_trial_for_candidate_alpha_y = Y_; // Start with a fresh copy of original Y_ for this candidate
+
+                for (int t = 0; t < horizon_; ++t)
+                {
+                    Eigen::VectorXd delta_x_k = X_new[t] - X_[t]; // X_new is from alpha_s pass
+
+                    for (auto &ckv : constraint_set_)
+                    {
+                        const std::string &cname = ckv.first;
+                        int dual_dim = ckv.second->getDualDim();
+                        const Eigen::VectorXd &y_old_at_t = Y_[cname][t]; // Original dual variable from Y_
+
+                        Eigen::VectorXd y_new_val_at_t = y_old_at_t +
+                                                     alpha_y_candidate * k_y_[cname][t] + K_y_[cname][t] * delta_x_k;
+
+                        Eigen::VectorXd y_min_at_t = (1.0 - tau) * y_old_at_t;
+                        for (int i = 0; i < dual_dim; ++i)
+                        {
+                            if (y_new_val_at_t[i] < y_min_at_t[i])
+                            {
+                                current_alpha_y_globally_feasible = false;
+                                break; // Exit i-loop
+                            }
+                        }
+                        if (!current_alpha_y_globally_feasible) break; // Exit cname-loop
+                        Y_trial_for_candidate_alpha_y[cname][t] = y_new_val_at_t; // Store trial Y for this constraint
+                    }
+                    if (!current_alpha_y_globally_feasible) break; // Exit t-loop
                 }
 
-                // Update control.
-                // The new control is computed as:
-                //   u_new = u_old + alpha * k_u + K_u*(x_new - x_old)
-                const Eigen::VectorXd &u_old = U_[t];
-                U_new[t] = u_old + alpha * k_u_[t] + K_u_[t] * (X_new[t] - X_[t]);
-
-                // Propagate the dynamics:
-                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
-            } // end for t
-
-            // Compute the cost metrics.
-            for (int t = 0; t < horizon_; ++t)
-            {
-                // Compute the stage cost.
-                double stage_cost = objective_->running_cost(X_new[t], U_new[t], t);
-                cost_new += stage_cost;
-
-                // For each constraint, evaluate and store the constraint value.
-                for (const auto &cKV : constraint_set_)
+                if (current_alpha_y_globally_feasible)
                 {
-                    const std::string &cname = cKV.first;
-                    // Evaluate constraint: g = constraint->evaluate(x, u)
-                    Eigen::VectorXd g_vec = cKV.second->evaluate(X_new[t], U_new[t]); // dimension = dual_dim
-
-                    // Store the constraint value.
-                    G_new[cname][t] = g_vec - cKV.second->getUpperBound();
-                    // Compute the slack and log-barrier term.
-                    const Eigen::VectorXd &s_vec = S_new[cname][t];
-                    log_cost_new -= mu_ * s_vec.array().log().sum();
-
-                    // Compute the residual for primal feasibility.
-                    Eigen::VectorXd r_p = G_new[cname][t] + S_new[cname][t];
-                    rp_err += r_p.lpNorm<1>();
+                    suitable_alpha_y_found = true;
+                    Y_new = Y_trial_for_candidate_alpha_y; // Commit the successful trial Y to Y_new
+                    break; // Found a good alpha_y, exit the inner line search loop (over alpha_y_candidate)
                 }
             }
 
-            // Add terminal cost.
+            if (!suitable_alpha_y_found)
+            {
+                // No feasible alpha_y found for the current alpha_s (even though S was feasible)
+                return result; // result.success is already false
+            }
+
+            // --- Cost Computation and Filter Logic ---
+            // If we reach here, both S (with alpha_s) and Y (with chosen alpha_y) trajectories are feasible and stored in S_new, Y_new.
+            // X_new and U_new are also from the alpha_s pass.
+            // G_new needs to be recomputed based on the final X_new, U_new.
+            
+            cost_new = 0.0;
+            log_cost_new = 0.0;
+            rp_err = 0.0;
+
+            for (int t = 0; t < horizon_; ++t)
+            {
+                cost_new += objective_->running_cost(X_new[t], U_new[t], t);
+
+                for (const auto &cKV : constraint_set_)
+                {
+                    const std::string &cname = cKV.first;
+                    // Evaluate constraint value g = h(x,u) - h_upper_bound
+                    G_new[cname][t] = cKV.second->evaluate(X_new[t], U_new[t]) - cKV.second->getUpperBound();
+                    
+                    // Log-barrier term using S_new from alpha_s pass
+                    const Eigen::VectorXd &s_vec_at_t = S_new[cname][t];
+                    log_cost_new -= mu_ * s_vec_at_t.array().log().sum();
+
+                    // Primal feasibility residual: g + s
+                    Eigen::VectorXd r_p_val_at_t = G_new[cname][t] + s_vec_at_t;
+                    rp_err += r_p_val_at_t.lpNorm<1>();
+                }
+            }
+
             cost_new += objective_->terminal_cost(X_new.back());
             log_cost_new += cost_new;
+            rp_err = std::max(rp_err, options_.cost_tolerance); // As in original logic
 
-            // Compute the primal residual.
-            rp_err = std::max(rp_err, options_.cost_tolerance);
-
-            // Build a candidate filter point from the computed cost metrics.
             FilterPoint candidate{log_cost_new, rp_err};
-
-            // Check if candidate is dominated by any existing filter point
             bool candidateDominated = false;
             for (const auto &fp : filter_)
             {
-                // If the candidate is dominated by an existing filter point, early exit.
                 if (candidate.log_cost >= fp.log_cost && candidate.violation >= fp.violation)
                 {
                     candidateDominated = true;
-                    return result;
+                    break;
                 }
             }
 
             if (!candidateDominated)
             {
-                // Remove any filter points that are dominated by the candidate.
                 for (auto it = filter_.begin(); it != filter_.end();)
                 {
                     if (candidate.log_cost <= it->log_cost && candidate.violation <= it->violation)
                     {
-                        // Candidate dominates this point, so erase it.
                         it = filter_.erase(it);
                     }
                     else
@@ -1009,28 +1056,20 @@ namespace cddp
                         ++it;
                     }
                 }
-
-                // Append the candidate to the filter set.
                 filter_.push_back(candidate);
 
-                // Update the filter with the candidate point.
-                double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
-                double reduction_ratio = expected > 0.0
-                                             ? (J_ - cost_new) / expected
-                                             : std::copysign(1.0, J_ - cost_new);
-
-                // Update the result with the new trajectories and metrics.
                 result.success = true;
                 result.state_sequence = X_new;
                 result.control_sequence = U_new;
-                result.dual_sequence = Y_new;
-                result.slack_sequence = S_new;
-                result.constraint_sequence = G_new;
+                result.dual_sequence = Y_new;     // From inner line search for alpha_y
+                result.slack_sequence = S_new;    // From outer line search for alpha_s
+                result.constraint_sequence = G_new; // Recomputed with X_new, U_new
                 result.cost = cost_new;
                 result.lagrangian = log_cost_new;
                 result.constraint_violation = rp_err;
+                // result.alpha is already alpha_s (the input parameter to this function)
             }
-
+            // If candidateDominated is true, result.success remains false (its default value).
             return result;
         }
     } // end solveIPDDPForwardPass
