@@ -337,7 +337,7 @@ namespace cddp
                     {
                         if (options_.debug)
                         {
-                            std::cerr << "CDDP: Forward pass thread failed: " << e.what() << std::endl;
+                            std::cerr << "IPDDP: Forward pass thread failed: " << e.what() << std::endl;
                         }
                         continue;
                     }
@@ -381,7 +381,7 @@ namespace cddp
                 {
                     if (options_.debug)
                     {
-                        std::cerr << "CDDP: Forward Pass regularization limit reached" << std::endl;
+                        std::cerr << "IPDDP: Forward Pass regularization limit reached" << std::endl;
                     }
 
                     // TODO: Treat as convergence
@@ -453,10 +453,14 @@ namespace cddp
         double rp_err = 0.0; // primal feasibility
         double rd_err = 0.0; // dual feasibility
 
+        bool llt_succeeded = false;
+
+        int t = horizon_ - 1;
+
         // If no constraints, use standard DDP recursion.
         if (constraint_set_.empty())
         {
-            for (int t = horizon_ - 1; t >= 0; --t)
+            while (t >= 0)
             {
                 const Eigen::VectorXd &x = X_[t];
                 const Eigen::VectorXd &u = U_[t];
@@ -499,19 +503,20 @@ namespace cddp
 
                 // Regularization
                 Eigen::MatrixXd Q_uu_reg = Q_uu;
-
-                if (options_.regularization_type == "control" ||
-                    options_.regularization_type == "both")
-                {
-                    Q_uu_reg.diagonal().array() += regularization_control_;
-                }
+                // Apply regularization 
+                Q_uu_reg.diagonal().array() += regularization_control_;
                 Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
                 Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg);
                 if (llt.info() != Eigen::Success)
                 {
+                    if (options_.debug)
+                    {
+                        std::cerr << "IPDDP: Backward pass failed at time " << t << std::endl;
+                    }
                     return false;
                 }
+                
                 Eigen::VectorXd k_u = -llt.solve(Q_u);
                 Eigen::MatrixXd K_u = -llt.solve(Q_ux);
                 k_u_[t] = k_u;
@@ -527,7 +532,9 @@ namespace cddp
 
                 // Error tracking
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
-            } // end for t
+
+                t--;
+            } // end while t
 
             optimality_gap_ = Qu_err;
             if (options_.debug)
@@ -541,7 +548,7 @@ namespace cddp
         else
         {
             // Backward Recursion
-            for (int t = horizon_ - 1; t >= 0; --t)
+            while (t >= 0)
             {
                 // Expand cost around (x[t], u[t])
                 const Eigen::VectorXd &x = X_[t];
@@ -636,12 +643,8 @@ namespace cddp
 
                 // Regularization
                 Eigen::MatrixXd Q_uu_reg = Q_uu;
-
-                if (options_.regularization_type == "control" ||
-                    options_.regularization_type == "both")
-                {
-                    Q_uu_reg.diagonal().array() += regularization_control_;
-                }
+                // Apply regularization 
+                Q_uu_reg.diagonal().array() += regularization_control_;
                 Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
                 Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg + Q_yu.transpose() * YSinv * Q_yu);
@@ -649,10 +652,11 @@ namespace cddp
                 {
                     if (options_.debug)
                     {
-                        std::cerr << "CDDP: Backward pass failed at time " << t << std::endl;
+                        std::cerr << "IPDDP: Backward pass failed at time " << t << std::endl;
                     }
                     return false;
                 }
+                    
 
                 Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
                 bigRHS.col(0) = Q_u + Q_yu.transpose() * S_inv * rhat;
@@ -720,7 +724,9 @@ namespace cddp
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
                 rp_err = std::max(rp_err, r_p.lpNorm<Eigen::Infinity>());
                 rd_err = std::max(rd_err, r_d.lpNorm<Eigen::Infinity>());
-            } // end for t
+
+                t--;
+            } // end while t
 
             // Compute optimality gap and print
             optimality_gap_ = std::max(Qu_err, std::max(rp_err, rd_err));
