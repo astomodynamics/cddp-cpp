@@ -298,10 +298,9 @@ void CDDP::decreaseRegularization()
             1.0 / options_.regularization_state_factor);
 
         // Decrease actual regularization
-        regularization_state_ *= regularization_state_step_;
-        if (regularization_state_ < options_.regularization_state_min) {
-            regularization_state_ = options_.regularization_state_min;
-        }
+        regularization_state_ = std::max(
+            regularization_state_ * regularization_state_step_,
+            options_.regularization_state_min);
     }
 
     // For “control” or “both”
@@ -314,10 +313,9 @@ void CDDP::decreaseRegularization()
             1.0 / options_.regularization_control_factor);
 
         // Decrease actual regularization
-        regularization_control_ *= regularization_control_step_;
-        if (regularization_control_ < options_.regularization_control_min) {
-            regularization_control_ = options_.regularization_control_min;
-        }
+        regularization_control_ = std::max(
+            regularization_control_ * regularization_control_step_,
+            options_.regularization_control_min);
     }
 }
 
