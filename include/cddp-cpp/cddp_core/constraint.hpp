@@ -79,6 +79,43 @@ namespace cddp
             throw std::logic_error("This constraint type does not have a center.");
         }
 
+        // Hessian of the constraint w.r.t the state: d^2g/dx^2
+        // Returns a vector of matrices, one for each output dimension of g(x,u)
+        virtual std::vector<Eigen::MatrixXd>
+        getStateHessian(const Eigen::VectorXd &state,
+                        const Eigen::VectorXd &control) const
+        {
+            throw std::logic_error("getStateHessian not implemented for this constraint type.");
+        }
+
+        // Hessian of the constraint w.r.t the control: d^2g/du^2
+        virtual std::vector<Eigen::MatrixXd>
+        getControlHessian(const Eigen::VectorXd &state,
+                          const Eigen::VectorXd &control) const
+        {
+            throw std::logic_error("getControlHessian not implemented for this constraint type.");
+        }
+
+        // Mixed Hessian of the constraint w.r.t state and control: d^2g/dudx
+        virtual std::vector<Eigen::MatrixXd>
+        getCrossHessian(const Eigen::VectorXd &state,
+                        const Eigen::VectorXd &control) const
+        {
+            throw std::logic_error("getCrossHessian not implemented for this constraint type.");
+        }
+
+        // Utility: Get all Hessians: d^2g/dx^2, d^2g/du^2, d^2g/dudx
+        virtual std::tuple<std::vector<Eigen::MatrixXd>,
+                           std::vector<Eigen::MatrixXd>,
+                           std::vector<Eigen::MatrixXd>>
+        getHessians(const Eigen::VectorXd &state,
+                    const Eigen::VectorXd &control) const
+        {
+            return {getStateHessian(state, control),
+                    getControlHessian(state, control),
+                    getCrossHessian(state, control)};
+        }
+
     private:
         std::string name_; // Name of the constraint
     };
@@ -144,6 +181,20 @@ namespace cddp
             // Sum of amounts by which g is above upper_bound or below lower_bound
             return (g - upper_bound_).cwiseMax(0.0).sum() +
                    (lower_bound_ - g).cwiseMax(0.0).sum();
+        }
+
+        // Hessians for ControlBoxConstraint are zero
+        std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            return {Eigen::MatrixXd::Zero(control.size(), control.size())};
+        }
+        std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            return {Eigen::MatrixXd::Zero(control.size(), control.size())};
+        }
+        std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            return {Eigen::MatrixXd::Zero(control.size(), control.size())};
         }
 
     private:
@@ -212,6 +263,20 @@ namespace cddp
                    (lower_bound_ - g).cwiseMax(0.0).sum();
         }
 
+        // Hessians for StateBoxConstraint are zero
+        std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            return {Eigen::MatrixXd::Zero(state.size(), state.size())};
+        }
+        std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            return {Eigen::MatrixXd::Zero(state.size(), control.size())};
+        }
+        std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            return {Eigen::MatrixXd::Zero(control.size(), state.size())};
+        }
+
     private:
         Eigen::VectorXd lower_bound_;
         Eigen::VectorXd upper_bound_;
@@ -271,6 +336,32 @@ namespace cddp
         double computeViolationFromValue(const Eigen::VectorXd &g) const override
         {
             return std::max(0.0, (b_ - g).maxCoeff());
+        }
+
+        // Hessians for LinearConstraint are zero
+        std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            std::vector<Eigen::MatrixXd> Hxx_list;
+            for (int i = 0; i < A_.rows(); ++i) {
+                Hxx_list.push_back(Eigen::MatrixXd::Zero(state.size(), state.size()));
+            }
+            return Hxx_list;
+        }
+        std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            std::vector<Eigen::MatrixXd> Huu_list;
+            for (int i = 0; i < A_.rows(); ++i) {
+                Huu_list.push_back(Eigen::MatrixXd::Zero(control.size(), control.size()));
+            }
+            return Huu_list;
+        }
+        std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            std::vector<Eigen::MatrixXd> Hux_list;
+            for (int i = 0; i < A_.rows(); ++i) {
+                Hux_list.push_back(Eigen::MatrixXd::Zero(control.size(), state.size()));
+            }
+            return Hux_list;
         }
 
     private:
@@ -354,6 +445,32 @@ namespace cddp
             return (g - upper_bound_).cwiseMax(0.0).sum();
         }
 
+        // Hessians for ControlConstraint are zero 
+        std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            std::vector<Eigen::MatrixXd> Hxx_list;
+            for(int i = 0; i < dim_; ++i) { // dim_ is 2 * control.size()
+                Hxx_list.push_back(Eigen::MatrixXd::Zero(state.size(), state.size()));
+            }
+            return Hxx_list;
+        }
+        std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            std::vector<Eigen::MatrixXd> Huu_list;
+             for(int i = 0; i < dim_; ++i) {
+                Huu_list.push_back(Eigen::MatrixXd::Zero(control.size(), control.size()));
+            }
+            return Huu_list;
+        }
+        std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            std::vector<Eigen::MatrixXd> Hux_list;
+            for(int i = 0; i < dim_; ++i) {
+                Hux_list.push_back(Eigen::MatrixXd::Zero(control.size(), state.size()));
+            }
+            return Hux_list;
+        }
+
     private:
         int dim_;
         Eigen::VectorXd upper_bound_;
@@ -432,6 +549,24 @@ namespace cddp
 
         Eigen::VectorXd getCenter() const { return center_; }
         double getRadius() const { return radius_; }
+
+        // Hessians for BallConstraint
+        std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            Eigen::MatrixXd Hxx = Eigen::MatrixXd::Zero(state.size(), state.size());
+            Hxx.topLeftCorner(dim_, dim_) = -2.0 * scale_factor_ * Eigen::MatrixXd::Identity(dim_, dim_);
+            return {Hxx}; 
+        }
+
+        std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            return {Eigen::MatrixXd::Zero(control.size(), control.size())};
+        }
+
+        std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            return {Eigen::MatrixXd::Zero(control.size(), state.size())};
+        }
 
     private:
         double radius_;
@@ -621,6 +756,25 @@ namespace cddp
             return std::max(0.0, g(0));
         }
 
+        // Hessians for PoleConstraint 
+        // TODO: Implement actual Hessians for PoleConstraint
+        std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            throw std::logic_error("getStateHessian for PoleConstraint not yet implemented.");
+            Eigen::MatrixXd Hxx = Eigen::MatrixXd::Zero(state.size(), state.size());
+            return {Hxx};
+        }
+        std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            throw std::logic_error("getControlHessian for PoleConstraint not yet implemented.");
+            return {Eigen::MatrixXd::Zero(control.size(), control.size())};
+        }
+        std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            throw std::logic_error("getCrossHessian for PoleConstraint not yet implemented.");
+            return {Eigen::MatrixXd::Zero(control.size(), state.size())};
+        }
+
     private:
         Eigen::Vector3d center_; // Center of the cylinder.
         Eigen::Vector3d axis_;   // Unit vector for the cylinder's axis.
@@ -730,13 +884,10 @@ namespace cddp
             return jacobian;
         }
 
-        Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd &state,
-                                          const Eigen::VectorXd &control) const override
+        // The constraint does not depend on the control input.
+        Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd & /* state */,
+                                           const Eigen::VectorXd &control) const override
         {
-            // Assumes constraint only depends on state
-            if (state.size() < 3) {
-                throw std::invalid_argument("SecondOrderConeConstraint: State dimension must be at least 3.");
-            }
             return Eigen::MatrixXd::Zero(1, control.size());
         }
 
@@ -755,6 +906,25 @@ namespace cddp
                 throw std::runtime_error("SecondOrderConeConstraint: Input vector g is empty in computeViolationFromValue.");
             }
             return std::max(0.0, g(0));
+        }
+
+        // Hessians for SecondOrderConeConstraint 
+        // TODO: Implement actual Hessians for SecondOrderConeConstraint
+        std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            throw std::logic_error("getStateHessian for SecondOrderConeConstraint not yet implemented.");
+            Eigen::MatrixXd Hxx = Eigen::MatrixXd::Zero(state.size(), state.size());
+            return {Hxx};
+        }
+        std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            throw std::logic_error("getControlHessian for SecondOrderConeConstraint not yet implemented.");
+            return {Eigen::MatrixXd::Zero(control.size(), control.size())};
+        }
+        std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            throw std::logic_error("getCrossHessian for SecondOrderConeConstraint not yet implemented.");
+            return {Eigen::MatrixXd::Zero(control.size(), state.size())};
         }
 
     private:
