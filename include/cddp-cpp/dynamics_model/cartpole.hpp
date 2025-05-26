@@ -119,6 +119,15 @@ public:
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
                                      const Eigen::VectorXd& control) const override;
 
+    /**
+     * @brief Computes cross Hessian tensor (∂²f/∂x∂u)
+     * @param state Current state vector
+     * @param control Current control input
+     * @return Vector of cross Hessian matrices, one per state dimension
+     */
+    std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd& state, 
+                                                const Eigen::VectorXd& control) const override;
+
     // Getters
     double getCartMass() const { return cart_mass_; }
     double getPoleMass() const { return pole_mass_; }

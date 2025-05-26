@@ -79,9 +79,10 @@ int main() {
 
     // Solver options.
     cddp::CDDPOptions options;
-    options.max_iterations = 500;
+    options.max_iterations = 1000;
     options.regularization_type = "control";
     options.regularization_control = 1e-3;
+    options.is_ilqr = true;
 
     options.debug = true;
     cddp_solver.setOptions(options);
