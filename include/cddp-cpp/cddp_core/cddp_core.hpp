@@ -37,7 +37,7 @@
 namespace cddp {
 
 struct CDDPOptions {
-    double cost_tolerance = 1e-6;                   // Tolerance for changes in cost function
+    double cost_tolerance = 1e-4;                   // Tolerance for changes in cost function
     double grad_tolerance = 1e-4;                   // Tolerance for cost gradient magnitude
     int max_iterations = 1;                         // Maximum number of iterations
     double max_cpu_time = 0.0;                      // Maximum CPU time for the solver in seconds
@@ -108,6 +108,7 @@ struct CDDPOptions {
     double ms_defect_penalty_kappa_d = 1e-4;        // Kappa_d threshold for defect penalty update (Eq. 16)
     double ms_defect_penalty_mu0 = 10.0;            // Mu_0 safety margin for defect penalty update (Eq. 16)
     int ms_segment_length = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
+    std::string ms_rollout_type = "hybrid"; // Rollout type: ["linear", "nonlinear", "hybrid"]
 };
 
 struct CDDPSolution {
