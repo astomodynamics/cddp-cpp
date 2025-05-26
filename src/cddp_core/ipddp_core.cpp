@@ -398,13 +398,26 @@ namespace cddp
             }
 
             // Check termination
-            if (std::max(optimality_gap_, mu_) <= options_.cost_tolerance)
+            if (std::max(optimality_gap_, mu_) <= options_.grad_tolerance)
+            {   
+                if (options_.debug)
+                {
+                    std::cout << "IPDDP: Converged due to small change in cost and Lagrangian." << std::endl;
+                }
+                solution.converged = true;
+                break;
+            }
+            if (abs(dJ_) < options_.cost_tolerance && abs(dL_) < options_.cost_tolerance)
             {
+                if (options_.debug)
+                {
+                    std::cout << "IPDDP: Converged due to small change in cost and Lagrangian." << std::endl;
+                }
                 solution.converged = true;
                 break;
             }
 
-            // From original IPDDP implementation
+            // Barrier update logic 
             if (optimality_gap_ <= 0.2 * mu_)
             {
                 if (constraint_set_.empty())
