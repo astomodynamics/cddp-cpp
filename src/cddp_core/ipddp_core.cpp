@@ -578,6 +578,11 @@ namespace cddp
                 Eigen::MatrixXd Q_yu = Eigen::MatrixXd::Zero(total_dual_dim, control_dim);
                 Eigen::MatrixXd Q_yx = Eigen::MatrixXd::Zero(total_dual_dim, state_dim);
 
+                // Variables to store summed constraint Hessians
+                Eigen::MatrixXd sum_g_xx_y = Eigen::MatrixXd::Zero(state_dim, state_dim);
+                Eigen::MatrixXd sum_g_uu_y = Eigen::MatrixXd::Zero(control_dim, control_dim);
+                Eigen::MatrixXd sum_g_ux_y = Eigen::MatrixXd::Zero(control_dim, state_dim);
+
                 int offset = 0; // offset in [0..total_dual_dim)
                 for (auto &cKV : constraint_set_)
                 {
@@ -598,6 +603,22 @@ namespace cddp
                     g.segment(offset, dual_dim) = g_vec;
                     Q_yx.block(offset, 0, dual_dim, state_dim) = g_x;
                     Q_yu.block(offset, 0, dual_dim, control_dim) = g_u;
+
+                    // Get constraint Hessians if not using iLQR 
+                    if (!options_.is_ilqr) // Or a new option specific to constraint Hessians
+                    {
+                        const auto constraint_hessians = constraint->getHessians(x, u);
+                        const auto& g_xx_list = std::get<0>(constraint_hessians); // std::vector<Eigen::MatrixXd>
+                        const auto& g_uu_list = std::get<1>(constraint_hessians); // std::vector<Eigen::MatrixXd>
+                        const auto& g_ux_list = std::get<2>(constraint_hessians); // std::vector<Eigen::MatrixXd>
+
+                        for (int i = 0; i < dual_dim; ++i)
+                        {
+                            if (g_xx_list.size() > i && !g_xx_list[i].hasNaN()) sum_g_xx_y += y_vec(i) * g_xx_list[i];
+                            if (g_uu_list.size() > i && !g_uu_list[i].hasNaN()) sum_g_uu_y += y_vec(i) * g_uu_list[i];
+                            if (g_ux_list.size() > i && !g_ux_list[i].hasNaN()) sum_g_ux_y += y_vec(i) * g_ux_list[i];
+                        }
+                    }
 
                     offset += dual_dim;
                 }
@@ -623,6 +644,10 @@ namespace cddp
                         Q_ux += timestep_ * V_x(i) * Fux[i];
                         Q_uu += timestep_ * V_x(i) * Fuu[i];
                     }
+                    // Add constraint Hessian terms
+                    Q_xx += sum_g_xx_y;
+                    Q_uu += sum_g_uu_y;
+                    Q_ux += sum_g_ux_y;
                 }
 
                 Eigen::MatrixXd Y = y.asDiagonal();  // Diagonal matrix with y as diagonal
