@@ -811,9 +811,6 @@ namespace cddp
         double log_cost_new = 0.0;
         double rp_err = 0.0;
 
-        // The current filter point is taken from the previous iteration.
-        FilterPoint current{L_, constraint_violation_};
-
         // --- Forward pass loop ---
         if (constraint_set_.empty())
         {
