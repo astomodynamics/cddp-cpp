@@ -384,6 +384,7 @@ TEST(SecondOrderConeConstraintTest, Visualization) {
     // plt::surf(X, Y, Z)->face_alpha(0.5).edge_color("none");
     // plt::hold(true);
 
+    // // Plot feasible and infeasible points
     // if (!x_inside.empty()) {
     //     plt::plot3(x_inside, y_inside, z_inside, "go")->marker_size(10).display_name("Inside"); // Changed display name
     // }
@@ -419,3 +420,97 @@ TEST(SecondOrderConeConstraintTest, Visualization) {
     // plt::save(filename);
     // std::cout << "Saved cone visualization to " << filename << std::endl;
 }
+
+TEST(BallConstraintTest, Hessians) {
+    // Create a ball constraint with a radius of 2.0 and scale_factor 1.0
+    cddp::BallConstraint constraint(2.0, Eigen::Vector2d(0.0, 0.0), 1.0);
+
+    Eigen::VectorXd state(2);
+    state << 1.0, 1.0;
+    Eigen::VectorXd control(1); 
+    control << 0.0;
+
+    auto hessians = constraint.getHessians(state, control);
+    std::vector<Eigen::MatrixXd> Hxx_list = std::get<0>(hessians);
+    std::vector<Eigen::MatrixXd> Huu_list = std::get<1>(hessians);
+    std::vector<Eigen::MatrixXd> Hux_list = std::get<2>(hessians);
+
+    // Expected Hxx for g(x) = -1.0 * ||x - c||^2 is -2.0 * I
+    Eigen::MatrixXd expected_Hxx(2, 2);
+    expected_Hxx << -2.0,  0.0,
+                     0.0, -2.0;
+    
+    ASSERT_EQ(Hxx_list.size(), 1);
+    ASSERT_TRUE(Hxx_list[0].isApprox(expected_Hxx));
+
+    ASSERT_EQ(Huu_list.size(), 1);
+    ASSERT_TRUE(Huu_list[0].isApprox(Eigen::MatrixXd::Zero(control.size(), control.size())));
+
+    ASSERT_EQ(Hux_list.size(), 1);
+    ASSERT_TRUE(Hux_list[0].isApprox(Eigen::MatrixXd::Zero(control.size(), state.size())));
+
+    // Test with a different scale_factor
+    cddp::BallConstraint constraint_scaled(2.0, Eigen::Vector2d(0.0, 0.0), 3.0);
+    auto hessians_scaled = constraint_scaled.getHessians(state, control);
+    std::vector<Eigen::MatrixXd> Hxx_list_scaled = std::get<0>(hessians_scaled);
+    Eigen::MatrixXd expected_Hxx_scaled(2, 2);
+    expected_Hxx_scaled << -6.0,  0.0, // -2.0 * 3.0
+                            0.0, -6.0;
+    ASSERT_EQ(Hxx_list_scaled.size(), 1);
+    ASSERT_TRUE(Hxx_list_scaled[0].isApprox(expected_Hxx_scaled));
+}
+
+// TEST(LinearConstraintTest, Hessians) {
+//     Eigen::MatrixXd A(2, 2);
+//     A <<  1.0,  1.0,
+//          -1.0,  1.0;
+//     Eigen::VectorXd b(2);
+//     b << 1.0, 1.0;
+//     cddp::LinearConstraint constraint(A, b);
+
+//     Eigen::VectorXd state(2); state << 0.1, 0.2;
+//     Eigen::VectorXd control(1); control << 0.0;
+
+//     auto hessians = constraint.getHessians(state, control);
+//     std::vector<Eigen::MatrixXd> Hxx_list = std::get<0>(hessians);
+//     std::vector<Eigen::MatrixXd> Huu_list = std::get<1>(hessians);
+//     std::vector<Eigen::MatrixXd> Hux_list = std::get<2>(hessians);
+
+//     ASSERT_EQ(Hxx_list.size(), A.rows());
+//     for (const auto& Hxx : Hxx_list) {
+//         ASSERT_TRUE(Hxx.isApprox(Eigen::MatrixXd::Zero(state.size(), state.size())));
+//     }
+//     ASSERT_EQ(Huu_list.size(), A.rows());
+//     for (const auto& Huu : Huu_list) {
+//         ASSERT_TRUE(Huu.isApprox(Eigen::MatrixXd::Zero(control.size(), control.size())));
+//     }
+//     ASSERT_EQ(Hux_list.size(), A.rows());
+//     for (const auto& Hux : Hux_list) {
+//         ASSERT_TRUE(Hux.isApprox(Eigen::MatrixXd::Zero(control.size(), state.size())));
+//     }
+// }
+
+// // New test suite for SecondOrderConeConstraint
+// TEST(SecondOrderConeConstraintTest, Hessians) {
+//     Eigen::Vector3d origin(0.0, 0.0, 0.0);
+//     Eigen::Vector3d axis(0.0, 1.0, 0.0); 
+//     double fov = M_PI / 4.0; 
+//     double epsilon = 1e-8;
+//     cddp::SecondOrderConeConstraint constraint(origin, axis, fov, epsilon);
+
+//     Eigen::VectorXd state(3); state << 0.1, 0.5, 0.1; 
+//     Eigen::VectorXd control(1); control << 0.0;
+
+//     // Placeholder test: Expect zero Hessians for now as per implementation
+//     auto hessians = constraint.getHessians(state, control);
+//     std::vector<Eigen::MatrixXd> Hxx_list = std::get<0>(hessians);
+//     std::vector<Eigen::MatrixXd> Huu_list = std::get<1>(hessians);
+//     std::vector<Eigen::MatrixXd> Hux_list = std::get<2>(hessians);
+
+//     ASSERT_EQ(Hxx_list.size(), 1);
+//     ASSERT_TRUE(Hxx_list[0].isApprox(Eigen::MatrixXd::Zero(state.size(), state.size())));
+//     ASSERT_EQ(Huu_list.size(), 1);
+//     ASSERT_TRUE(Huu_list[0].isApprox(Eigen::MatrixXd::Zero(control.size(), control.size())));
+//     ASSERT_EQ(Hux_list.size(), 1);
+//     ASSERT_TRUE(Hux_list[0].isApprox(Eigen::MatrixXd::Zero(control.size(), state.size())));
+// }
