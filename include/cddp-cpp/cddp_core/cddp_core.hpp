@@ -104,9 +104,9 @@ struct CDDPOptions {
 
     // msipddp options
     double defect_violation_penalty_initial = 1.0; // Initial defect penalty
-    double ms_defect_penalty_rho = 0.5;             // Rho parameter for defect penalty update (Eq. 16)
-    double ms_defect_penalty_kappa_d = 1e-4;        // Kappa_d threshold for defect penalty update (Eq. 16)
-    double ms_defect_penalty_mu0 = 10.0;            // Mu_0 safety margin for defect penalty update (Eq. 16)
+    double ms_defect_penalty_rho = 0.5;             // Rho parameter for defect penalty update
+    double ms_defect_penalty_kappa_d = 1e-4;        // Kappa_d threshold for defect penalty update
+    double ms_defect_penalty_mu0 = 10.0;            // Mu_0 safety margin for defect penalty update
     int ms_segment_length = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
     std::string ms_rollout_type = "hybrid"; // Rollout type: ["linear", "nonlinear", "hybrid"]
 };
