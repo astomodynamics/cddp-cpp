@@ -21,6 +21,7 @@
 #include <Eigen/Dense>
 #include <matplot/matplot.h>
 #include <stdexcept>
+#include <cmath> // For std::sqrt
 
 #include "cddp.hpp"
 #include "cddp_core/cddp_core.hpp"
@@ -159,8 +160,8 @@ using namespace cddp;
 int main()
 {
     // Optimization horizon info
-    int horizon = 400;                  // Optimization horizon length
-    double time_horizon = 400.0;        // Time horizon for optimization [s]
+    int horizon = 200;                  // Optimization horizon length
+    double time_horizon = 200.0;        // Time horizon for optimization [s]
     double dt = time_horizon / horizon; // Time step for optimization
     int state_dim = 8;
     int control_dim = 3;
@@ -181,14 +182,14 @@ int main()
     goal_state << 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, mass, 0.0; // Goal is the origin
 
     // Input constraints
-    double u_max = 10.0;  // for each dimension
-    double u_min = -10.0; // for each dimension
+    double u_max = 1.0;  // for each dimension
+    double u_min = -1.0; // for each dimension
     double u_min_norm = 0.0; // Minimum thrust magnitude
-    double u_max_norm = 10.0; // Maximum thrust magnitude, consistent with previous u_max
+    double u_max_norm = 1.0; // Maximum thrust magnitude, consistent with previous u_max
 
     // Create the HCW system for optimization
     std::unique_ptr<cddp::DynamicalSystem> hcw_system =
-        std::make_unique<SpacecraftLinearFuel>(dt, mean_motion, isp, g0, "rk4");
+        std::make_unique<SpacecraftLinearFuel>(dt, mean_motion, isp, g0, "euler");
 
     // Cost weighting
     double weight_terminal_fuel = 1.0;
@@ -214,20 +215,22 @@ int main()
     options.num_threads = 1;
     options.regularization_type = "control";
     options.regularization_control = 1e-3;
-    options.barrier_coeff = 1e-2; // Starting barrier coefficient
+    options.barrier_coeff = 1e-1; // Starting barrier coefficient
     options.is_ilqr = true;
     options.debug = true;
     options.defect_violation_penalty_initial = 1e-0;
-    options.ms_segment_length = horizon;
+    options.ms_segment_length = horizon / 10;
     options.ms_rollout_type = "nonlinear";
 
     // Initial trajectory.
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    X[0] = initial_state;
     // Generate initial trajectory by constant initial state
     for (int i = 0; i < horizon; ++i)
     {
         X[i + 1] = hcw_system->getDiscreteDynamics(X[i], U[i]);
+        // X[i] = initial_state;
     }
 
     // Create CDDP solver.
@@ -256,62 +259,145 @@ int main()
     std::vector<Eigen::VectorXd> X_solution = solution.state_sequence;
     std::vector<Eigen::VectorXd> U_solution = solution.control_sequence;
 
-    if (!X_solution.empty())
+    if (!X_solution.empty() && !U_solution.empty())
     {
         namespace plt = matplot;
 
-        std::vector<double> x_traj, y_traj, z_traj;
-        std::vector<double> ux_traj, uy_traj, uz_traj;
-        std::vector<double> thrust_mag_traj;
-        for (const auto &state : solution.state_sequence)
-        {
-            if (state.size() >= 3)
-            { // Ensure state has at least 3 dimensions (x, y, z)
-                x_traj.push_back(state(0));
-                y_traj.push_back(state(1));
-                z_traj.push_back(state(2));
+        // Create time vectors
+        std::vector<double> t_states(horizon + 1);
+        for(int i = 0; i <= horizon; ++i) t_states[i] = i * dt;
+
+        std::vector<double> t_controls(horizon);
+        for(int i = 0; i < horizon; ++i) t_controls[i] = i * dt;
+
+        // Extract individual state and control trajectories
+        std::vector<double> x_pos(horizon + 1), y_pos(horizon + 1), z_pos(horizon + 1);
+        std::vector<double> vx(horizon + 1), vy(horizon + 1), vz(horizon + 1);
+        std::vector<double> mass_traj(horizon + 1), acc_effort_traj(horizon + 1);
+
+        for (size_t i = 0; i < X_solution.size(); ++i) {
+            const auto& state = X_solution[i];
+            if (state.size() >= 8) { // Ensure state has at least 8 dimensions
+                x_pos[i] = state(0);
+                y_pos[i] = state(1);
+                z_pos[i] = state(2);
+                vx[i] = state(3);
+                vy[i] = state(4);
+                vz[i] = state(5);
+                mass_traj[i] = state(6);
+                acc_effort_traj[i] = state(7);
             }
         }
-        for (const auto &control : solution.control_sequence)
-        {
-            if (control.size() >= 3)
-            {
-                ux_traj.push_back(control(0));
-                uy_traj.push_back(control(1));
-                uz_traj.push_back(control(2));
-                thrust_mag_traj.push_back(control.norm());
+
+        std::vector<double> ux(horizon), uy(horizon), uz(horizon);
+        std::vector<double> thrust_magnitude(horizon);
+
+        for (size_t i = 0; i < U_solution.size(); ++i) {
+            const auto& control = U_solution[i];
+            if (control.size() >= 3) { // Ensure control has at least 3 dimensions
+                ux[i] = control(0);
+                uy[i] = control(1);
+                uz[i] = control(2);
+                thrust_magnitude[i] = control.norm();
             }
         }
-        // Plot 3d trajectory
-        auto fig = plt::figure();
-        plt::plot3(x_traj, y_traj, z_traj, "-o")->line_width(2).marker_size(4);
-        plt::hold(true);
 
-        // Plot 2d trajectory
-        auto fig_xy = plt::figure();
-        plt::plot(x_traj, y_traj, "-o")->line_width(2).marker_size(4);
-        plt::hold(true);
-        // Plot start and end points
-        plt::plot({initial_state(0)}, {initial_state(1)}, "go")->marker_size(10).display_name("Start");
+        // --- Generate Plots ---
+        // plt::figure_size(1200, 800); // Removed due to compilation error
 
-        // Plot control as subplot
-        auto fig_control = plt::figure();
-        plt::subplot(2, 1, 1);
-        plt::plot(ux_traj, "-o")->line_width(2).marker_size(4);
+        // 1. Position Trajectories
+        plt::figure();
+        plt::plot(t_states, x_pos)->line_width(2).display_name("x (pos)");
         plt::hold(true);
-        plt::subplot(2, 1, 2);
-        plt::plot(uy_traj, "-o")->line_width(2).marker_size(4);
-        plt::hold(true);
-        plt::subplot(2, 1, 3);
-        plt::plot(uz_traj, "-o")->line_width(2).marker_size(4);
-        plt::hold(true);
-        
-        // Plot thrust magnitude
-        auto fig_thrust = plt::figure();
-        plt::plot(thrust_mag_traj, "-o")->line_width(2).marker_size(4);
-        plt::hold(true);
+        plt::plot(t_states, y_pos)->line_width(2).display_name("y (pos)");
+        plt::plot(t_states, z_pos)->line_width(2).display_name("z (pos)");
+        plt::hold(false);
+        plt::xlabel("Time (s)");
+        plt::ylabel("Position (m)");
+        plt::legend();
+        plt::title("Position vs. Time");
 
+        // 2. Velocity Trajectories
+        plt::figure();
+        plt::plot(t_states, vx)->line_width(2).display_name("vx");
+        plt::hold(true);
+        plt::plot(t_states, vy)->line_width(2).display_name("vy");
+        plt::plot(t_states, vz)->line_width(2).display_name("vz");
+        plt::hold(false);
+        plt::xlabel("Time (s)");
+        plt::ylabel("Velocity (m/s)");
+        plt::legend();
+        plt::title("Velocity vs. Time");
+
+        // 3. Mass Trajectory
+        plt::figure();
+        plt::plot(t_states, mass_traj)->line_width(2).display_name("Mass (kg)");
+        plt::xlabel("Time (s)");
+        plt::ylabel("Mass (kg)");
+        plt::legend();
+        plt::title("Mass vs. Time");
+
+        // 4. Accumulated Control Effort
+        plt::figure();
+        plt::plot(t_states, acc_effort_traj)->line_width(2).display_name("Accum. Effort");
+        plt::xlabel("Time (s)");
+        plt::ylabel("Effort");
+        plt::legend();
+        plt::title("Accumulated Control Effort vs. Time");
+
+        // 5. Control Inputs (Zeroth-Order Hold)
+        plt::figure();
+        plt::stairs(t_controls, ux)->line_width(2).display_name("ux");
+        plt::hold(true);
+        plt::stairs(t_controls, uy)->line_width(2).display_name("uy");
+        plt::stairs(t_controls, uz)->line_width(2).display_name("uz");
+        plt::hold(false);
+        plt::xlabel("Time (s)");
+        plt::ylabel("Control Input");
+        plt::legend();
+        plt::title("Control Inputs (ZOH) vs. Time");
+
+        // 6. Thrust Magnitude (Zeroth-Order Hold)
+        plt::figure();
+        plt::stairs(t_controls, thrust_magnitude)->line_width(2).display_name("||Thrust|| (ZOH)");
+        // Add norm constraint lines if available
+        // plt::hold(true);
+        // plt::plot(t_controls, std::vector<double>(horizon, u_max_norm), "--r")->display_name("Max Norm");
+        // if (u_min_norm > 0) plt::plot(t_controls, std::vector<double>(horizon, u_min_norm), "--y")->display_name("Min Norm");
+        // plt::hold(false);
+        plt::xlabel("Time (s)");
+        plt::ylabel("Thrust Magnitude");
+        plt::legend();
+        plt::title("Thrust Magnitude (ZOH) vs. Time");
+
+        // 7. 3D Trajectory
+        plt::figure();
+        plt::plot3(x_pos, y_pos, z_pos, "-o")->line_width(2).marker_size(4).display_name("Trajectory");
+        plt::hold(true);
+        // Plot Start and End points
+        if (!x_pos.empty()){ // Check if trajectories are not empty
+             plt::scatter3(std::vector<double>{x_pos.front()}, std::vector<double>{y_pos.front()}, std::vector<double>{z_pos.front()})
+                ->marker_color("g").marker_style("o").marker_size(10).display_name("Start");
+             plt::scatter3(std::vector<double>{x_pos.back()}, std::vector<double>{y_pos.back()}, std::vector<double>{z_pos.back()})
+                ->marker_color("r").marker_style("x").marker_size(10).display_name("End");
+        }
+        plt::hold(false);
+        plt::xlabel("x (m)");
+        plt::ylabel("y (m)");
+        plt::zlabel("z (m)");
+        plt::legend();
+        plt::title("3D Trajectory");
+        plt::axis(plt::equal); // For aspect_ratio=:equal
+
+
+        // Show all plots
         plt::show();
+        std::cout << "Final mass: " << mass_traj.back() << std::endl;
+        std::cout << "Plotting complete." << std::endl;
+    }
+    else
+    {
+        std::cout << "Solver did not find a solution, or solution variables are not available. Skipping plots." << std::endl;
     }
 
     return 0;
