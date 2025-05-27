@@ -184,7 +184,7 @@ int main()
     double u_max = 10.0;  // for each dimension
     double u_min = -10.0; // for each dimension
     double u_min_norm = 0.0; // Minimum thrust magnitude
-    double u_max_norm = 100.0; // Maximum thrust magnitude, consistent with previous u_max
+    double u_max_norm = 10.0; // Maximum thrust magnitude, consistent with previous u_max
 
     // Create the HCW system for optimization
     std::unique_ptr<cddp::DynamicalSystem> hcw_system =
@@ -245,9 +245,9 @@ int main()
     Eigen::VectorXd u_upper = Eigen::VectorXd::Constant(3, u_max);
     cddp_solver.addConstraint("ControlConstraint",
         std::make_unique<cddp::ControlConstraint>(u_upper));
-    // // Add Thrust Magnitude Constraint
-    // cddp_solver.addConstraint("ThrustMagnitudeConstraint",
-    //     std::make_unique<cddp::ThrustMagnitudeConstraint>(u_min_norm, u_max_norm));
+    // Add Thrust Magnitude Constraint
+    cddp_solver.addConstraint("ThrustMagnitudeConstraint",
+        std::make_unique<cddp::ThrustMagnitudeConstraint>(u_min_norm, u_max_norm));
 
     // Solve the Trajectory Optimization Problem
     cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
@@ -262,6 +262,7 @@ int main()
 
         std::vector<double> x_traj, y_traj, z_traj;
         std::vector<double> ux_traj, uy_traj, uz_traj;
+        std::vector<double> thrust_mag_traj;
         for (const auto &state : solution.state_sequence)
         {
             if (state.size() >= 3)
@@ -278,6 +279,7 @@ int main()
                 ux_traj.push_back(control(0));
                 uy_traj.push_back(control(1));
                 uz_traj.push_back(control(2));
+                thrust_mag_traj.push_back(control.norm());
             }
         }
         // Plot 3d trajectory
@@ -302,6 +304,11 @@ int main()
         plt::hold(true);
         plt::subplot(2, 1, 3);
         plt::plot(uz_traj, "-o")->line_width(2).marker_size(4);
+        plt::hold(true);
+        
+        // Plot thrust magnitude
+        auto fig_thrust = plt::figure();
+        plt::plot(thrust_mag_traj, "-o")->line_width(2).marker_size(4);
         plt::hold(true);
 
         plt::show();
