@@ -117,8 +117,8 @@ int main()
     casadi::MX g;
 
     // Initial condition (general)
-    g = casadi::MX::vertcat({g, X(casadi::Slice(0, state_dim)) -
-                                    casadi::DM(std::vector<double>(initial_state.data(), initial_state.data() + state_dim))});
+    g = X(casadi::Slice(0, state_dim)) -
+        casadi::DM(std::vector<double>(initial_state.data(), initial_state.data() + state_dim));
 
     // Dynamics constraints (general)
     for (int t = 0; t < horizon; t++)
@@ -146,8 +146,8 @@ int main()
     for (int t = 0; t < horizon; t++)
     {
         casadi::MX u_t = U(casadi::Slice(t * control_dim, (t + 1) * control_dim));
-        g = casadi::MX::vertcat({g, u_t.norm_2() - u_max_norm});
-        g = casadi::MX::vertcat({g, u_t.norm_2() - u_min_norm});
+        g = casadi::MX::vertcat({g, casadi::MX::norm_2(u_t) - u_max_norm});
+        g = casadi::MX::vertcat({g, casadi::MX::norm_2(u_t) - u_min_norm});
     }
 
     // NLP
