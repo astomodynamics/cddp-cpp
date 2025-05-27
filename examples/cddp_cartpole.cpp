@@ -85,7 +85,7 @@ int main() {
     options.is_ilqr = true;
     options.debug = false;
     options.defect_violation_penalty_initial = 1e-0;
-    options.ms_segment_length = horizon / 10;
+    options.ms_segment_length = horizon / 20;
     options.ms_rollout_type = "nonlinear";
     cddp_solver.setOptions(options);
 
