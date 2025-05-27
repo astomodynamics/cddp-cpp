@@ -86,7 +86,7 @@ namespace cddp
         Lambda_.resize(horizon_, Eigen::VectorXd::Zero(state_dim));
         for (int t = 0; t < horizon_; ++t)
         {
-            Lambda_[t] = 0.1 * Eigen::VectorXd::Ones(state_dim);
+            Lambda_[t] = options_.lambda_scale * Eigen::VectorXd::Ones(state_dim);
         }
 
         // Resize linearized dynamics storage
@@ -579,9 +579,9 @@ namespace cddp
                 {
                     for (int i = 0; i < state_dim; ++i)
                     {
-                        Q_xx += timestep_ * V_x(i) * Fxx_[t][i];
-                        Q_ux += timestep_ * V_x(i) * Fux_[t][i];
-                        Q_uu += timestep_ * V_x(i) * Fuu_[t][i];
+                        Q_xx += timestep_ * lambda(i) * Fxx_[t][i];
+                        Q_ux += timestep_ * lambda(i) * Fux_[t][i];
+                        Q_uu += timestep_ * lambda(i) * Fuu_[t][i];
                     }
                 }
 
@@ -609,6 +609,11 @@ namespace cddp
                 Eigen::MatrixXd K_u = -llt.solve(Q_ux);
                 k_u_[t] = k_u;
                 K_u_[t] = K_u;
+
+                // Solve for gains k_lambda, K_lambda   
+                k_lambda_[t] = -lambda + V_x + V_xx * d;
+                K_lambda_[t] = V_xx;
+                K_lambda_[t] = 0.5 * (K_lambda_[t] + K_lambda_[t].transpose()); // Symmetrize K_lambda
 
                 // Update Value function derivatives
                 V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
@@ -718,9 +723,9 @@ namespace cddp
                 {
                     for (int i = 0; i < state_dim; ++i)
                     {
-                        Q_xx += timestep_ * V_x(i) * Fxx_[t][i];
-                        Q_ux += timestep_ * V_x(i) * Fux_[t][i];
-                        Q_uu += timestep_ * V_x(i) * Fuu_[t][i];
+                        Q_xx += timestep_ * lambda(i) * Fxx_[t][i];
+                        Q_ux += timestep_ * lambda(i) * Fux_[t][i];
+                        Q_uu += timestep_ * lambda(i) * Fuu_[t][i];
                     }
                     // Add constraint Hessian terms
                     // Q_xx += sum_g_xx_y;
@@ -869,6 +874,7 @@ namespace cddp
         std::vector<Eigen::VectorXd> X_new = X_;
         std::vector<Eigen::VectorXd> U_new = U_;
         std::vector<Eigen::VectorXd> F_new = F_;
+        std::vector<Eigen::VectorXd> Lambda_new = Lambda_;
         std::map<std::string, std::vector<Eigen::VectorXd>> Y_new = Y_;
         std::map<std::string, std::vector<Eigen::VectorXd>> S_new = S_;
         std::map<std::string, std::vector<Eigen::VectorXd>> G_new = G_;
@@ -894,9 +900,12 @@ namespace cddp
                 const Eigen::VectorXd du = alpha * k_u_[t] + K_u_[t] * dx;
                 U_new[t] = U_[t] + du;
 
+                // Update lambda
+                Lambda_new[t] = alpha * Lambda_[t] + K_lambda_[t] * dx;
+
                 // --- Rollout based on options_.ms_rollout_type ---
                 Eigen::VectorXd f_new_t;
-                if (options_.ms_rollout_type == "nonlinear")
+                if (options_.ms_rollout_type == "nonlinear" || options_.ms_rollout_type == "hybrid")
                 {
                     f_new_t = system_->getDiscreteDynamics(X_new[t], U_new[t]);
                     X_new[t + 1] = f_new_t;
@@ -906,11 +915,6 @@ namespace cddp
 
                     f_new_t = F_[t] + A_[t] * dx + B_[t] * du;
                     X_new[t + 1] = X_[t] + A_[t] * dx + B_[t] * du;
-                }
-                else // Hybrid (default)
-                {
-                    f_new_t = system_->getDiscreteDynamics(X_new[t], U_new[t]);
-                    X_new[t + 1] = f_new_t;
                 }
                 F_new[t] = f_new_t;
 
@@ -927,11 +931,7 @@ namespace cddp
                     {
                         X_new[t + 1] = f_new_t + alpha * defect_at_segment_end;
                     }
-                    else if (options_.ms_rollout_type == "linear")
-                    {
-                        X_new[t + 1] = X_[t] + A_[t] * dx + alpha * B_[t] * k_u_[t] + alpha * defect_at_segment_end;
-                    }
-                    else // Hybrid (default)
+                    else if (options_.ms_rollout_type == "linear" || options_.ms_rollout_type == "hybrid")
                     {
                         X_new[t + 1] = X_[t] + A_[t] * dx + alpha * B_[t] * k_u_[t] + alpha * defect_at_segment_end;
                     }
@@ -1006,6 +1006,7 @@ namespace cddp
                 result.state_sequence = X_new;
                 result.control_sequence = U_new;
                 result.dynamics_sequence = F_new;
+                result.lambda_sequence = Lambda_new;
                 result.dual_sequence = Y_new;
                 result.slack_sequence = S_new;
                 result.constraint_sequence = G_new;
@@ -1150,8 +1151,12 @@ namespace cddp
                             break;                 // Exit cname-loop
                         Y_trial[cname][t] = y_new; // Store trial Y for this constraint
                     }
-                    if (!current_alpha_y_globally_feasible)
+                    if (!current_alpha_y_globally_feasible) {
                         break; // Exit t-loop
+                    }
+
+                    // Update lambda
+                    Lambda_new[t] = alpha_y_candidate * Lambda_[t] + K_lambda_[t] * delta_x_k;
                 }
 
                 if (current_alpha_y_globally_feasible)
@@ -1234,6 +1239,7 @@ namespace cddp
                 result.state_sequence = X_new;
                 result.control_sequence = U_new;
                 result.dynamics_sequence = F_new;
+                result.lambda_sequence = Lambda_new;
                 result.dual_sequence = Y_new;    
                 result.slack_sequence = S_new;
                 result.constraint_sequence = G_new;

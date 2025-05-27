@@ -67,6 +67,7 @@ struct CDDPOptions {
     // ipddp options
     double dual_scale = 1e-1;                       // Initial scale for dual variables
     double slack_scale = 1e-2;                      // Initial scale for slack variables
+    double lambda_scale = 1e-6;                     // Initial scale for lambda variables
 
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
@@ -134,10 +135,10 @@ struct ForwardPassResult {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
     std::vector<Eigen::VectorXd> dynamics_sequence;
+    std::vector<Eigen::VectorXd>  lambda_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>>  constraint_sequence;
-    std::map<std::string, std::vector<Eigen::VectorXd>>  lambda_sequence;
     double cost;
     double lagrangian;
     double alpha = 1.0;
