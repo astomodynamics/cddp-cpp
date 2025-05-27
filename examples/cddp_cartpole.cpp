@@ -82,20 +82,24 @@ int main() {
     options.max_iterations = 500;
     options.regularization_type = "control";
     options.regularization_control = 1e-3;
-
-    options.debug = true;
+    options.is_ilqr = true;
+    options.debug = false;
+    options.defect_violation_penalty_initial = 1e-0;
+    options.ms_segment_length = horizon / 20;
+    options.ms_rollout_type = "nonlinear";
     cddp_solver.setOptions(options);
 
     // Initial trajectory.
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    // Generate initial trajectory by constant initial state
     for (int i = 0; i < horizon + 1; ++i) {
         X[i] = initial_state;
     }
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve.
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
     auto X_sol = solution.state_sequence;
     auto U_sol = solution.control_sequence;
     auto t_sol = solution.time_sequence;

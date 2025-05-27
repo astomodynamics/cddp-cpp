@@ -1,5 +1,5 @@
 /*
- Copyright 2024 Tomo Sasaki
+ Copyright 2025 Tomo Sasaki
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -27,19 +27,17 @@
 
 #include "cddp_core/cddp_core.hpp"
 #include "cddp_core/helper.hpp"
-#include "cddp_core/boxqp.hpp"
 
 namespace cddp
 {
-
-    void CDDP::initializeIPDDP()
+    void CDDP::initializeMSIPDDP()
     {
         if (!system_)
         {
             initialized_ = false;
             if (options_.verbose)
             {
-                std::cerr << "IPDDP::initializeIPDDP: No dynamical system provided." << std::endl;
+                std::cerr << "MSIPDDP::initializeMSIPDDP: No dynamical system provided." << std::endl; // Updated message
             }
             return;
         }
@@ -49,7 +47,7 @@ namespace cddp
             initialized_ = false;
             if (options_.verbose)
             {
-                std::cerr << "IPDDP::initializeIPDDP: No objective function provided." << std::endl;
+                std::cerr << "MSIPDDP::initializeMSIPDDP: No objective function provided." << std::endl; // Updated message
             }
             return;
         }
@@ -60,7 +58,7 @@ namespace cddp
         // Check if reference_state in objective and reference_state in IPDDP are the same
         if ((reference_state_ - objective_->getReferenceState()).norm() > 1e-6)
         {
-            std::cerr << "IPDDP: Initial state and goal state in the objective function do not match" << std::endl;
+            std::cerr << "MSIPDDP: Initial state and goal state in the objective function do not match" << std::endl;
             throw std::runtime_error("Initial state and goal state in the objective function do not match");
         }
 
@@ -69,6 +67,12 @@ namespace cddp
         {
             X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(state_dim));
             U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
+
+            // Create X_ initial guess using initial_state and reference_state by interpolating between them
+            for (int t = 0; t < horizon_ + 1; ++t)
+            {
+                X_[t] = initial_state_ + t * (reference_state_ - initial_state_) / horizon_;
+            }
         }
         else if (X_.size() != horizon_ + 1)
         {
@@ -79,12 +83,35 @@ namespace cddp
             U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
         }
 
+        Lambda_.resize(horizon_, Eigen::VectorXd::Zero(state_dim));
+        for (int t = 0; t < horizon_; ++t)
+        {
+            Lambda_[t] = options_.lambda_scale * Eigen::VectorXd::Ones(state_dim);
+        }
+
+        // Resize linearized dynamics storage
+        F_.resize(horizon_, Eigen::VectorXd::Zero(state_dim));
+        Fx_.resize(horizon_, Eigen::MatrixXd::Zero(state_dim, state_dim));
+        Fu_.resize(horizon_, Eigen::MatrixXd::Zero(state_dim, control_dim));
+        A_.resize(horizon_, Eigen::MatrixXd::Zero(state_dim, state_dim));
+        B_.resize(horizon_, Eigen::MatrixXd::Zero(state_dim, control_dim));
+        if (!options_.is_ilqr)
+        {
+            Fxx_.resize(horizon_, std::vector<Eigen::MatrixXd>(state_dim, Eigen::MatrixXd::Zero(state_dim, state_dim)));
+            Fuu_.resize(horizon_, std::vector<Eigen::MatrixXd>(state_dim, Eigen::MatrixXd::Zero(control_dim, control_dim)));
+            Fux_.resize(horizon_, std::vector<Eigen::MatrixXd>(state_dim, Eigen::MatrixXd::Zero(control_dim, state_dim)));
+        }
+
         k_u_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
         K_u_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, state_dim));
+        k_x_.resize(horizon_, Eigen::VectorXd::Zero(state_dim));
+        K_x_.resize(horizon_, Eigen::MatrixXd::Zero(state_dim, state_dim));
+        k_lambda_.resize(horizon_, Eigen::VectorXd::Zero(state_dim));
+        K_lambda_.resize(horizon_, Eigen::MatrixXd::Zero(state_dim, state_dim));
 
         G_.clear(); // Constraint value
-        Y_.clear(); // Dual variable
-        S_.clear(); // Slack variable
+        Y_.clear(); // Dual variable for path constraints
+        S_.clear(); // Slack variable for path constraints
         k_y_.clear();
         K_y_.clear();
         k_s_.clear();
@@ -137,7 +164,7 @@ namespace cddp
             regularization_state_ = 0.0;
             regularization_state_step_ = 1.0;
 
-            if (options_.verbose)
+            if (options_.debug)
             {
                 std::cout << "IPDDP: State regularization is not enabled for IPDDP" << std::endl;
             }
@@ -148,7 +175,7 @@ namespace cddp
             regularization_control_ = options_.regularization_control;
             regularization_control_step_ = options_.regularization_control_step;
 
-            if (options_.verbose)
+            if (options_.debug)
             {
                 std::cout << "IPDDP: Control regularization is enabled for IPDDP" << std::endl;
             }
@@ -159,31 +186,42 @@ namespace cddp
             regularization_control_step_ = 1.0;
         }
 
-        if (constraint_set_.empty())
+        mu_ = options_.barrier_coeff;
+
+        // Initialize defect penalty
+        defect_violation_penalty_ = options_.defect_violation_penalty_initial;
+        ms_segment_length_ = options_.ms_segment_length;
+
+        // Check if ms_segment_length_ is valid
+        if (ms_segment_length_ < 0)
         {
-            mu_ = 1e-8;
+            std::cerr << "MSIPDDP: ms_segment_length_ must be non-negative" << std::endl;
+            throw std::runtime_error("MSIPDDP: ms_segment_length_ must be non-negative");
         }
-        else
+
+        if (options_.ms_rollout_type != "linear" && options_.ms_rollout_type != "nonlinear" && options_.ms_rollout_type != "hybrid")
         {
-            mu_ = options_.barrier_coeff;
+            std::cerr << "MSIPDDP: Invalid ms_rollout_type: " << options_.ms_rollout_type << std::endl;
+            throw std::runtime_error("MSIPDDP: Invalid ms_rollout_type");
         }
 
         // Now initialized
         initialized_ = true;
     }
 
-    CDDPSolution CDDP::solveIPDDP()
+    CDDPSolution CDDP::solveMSIPDDP()
     {
-        // Initialize if not done or if S_ is not defined
-        if (!initialized_ || S_.empty())
+        // Initialize if not done or if Lambda_ is not defined
+        if (!initialized_ || Lambda_.empty() || S_.empty())
         {
-            initializeIPDDP();
+            initializeMSIPDDP();
         }
 
         if (!initialized_)
         {
-            std::cerr << "IPDDP: Initialization failed" << std::endl;
-            throw std::runtime_error("IPDDP: Initialization failed");
+            // Updated message
+            std::cerr << "MSIPDDP: Initialization failed" << std::endl;
+            throw std::runtime_error("MSIPDDP: Initialization failed");
         }
 
         // Prepare solution struct
@@ -202,19 +240,20 @@ namespace cddp
         solution.cost_sequence.reserve(options_.max_iterations);
         solution.lagrangian_sequence.reserve(options_.max_iterations);
 
-        // Initialize trajectories
-        initialIPDDPRollout(); // J_ is computed inside this function
+        // Initialize trajectories and gaps
+        initialMSIPDDPRollout(); // J_ is computed inside this function
         solution.cost_sequence.push_back(J_);
 
-        // Reset IPDDP filter
-        resetIPDDPFilter(); // L_ is computed inside this function
+        // Reset MSIPDDP filter
+        resetMSIPDDPFilter(); // L_ is computed inside this function
         solution.lagrangian_sequence.push_back(L_);
 
         // Reset regularization
-        resetIPDDPRegularization();
+        resetMSIPDDPRegularization();
 
         if (options_.verbose)
         {
+            // TODO: Update printIteration to include gap violation norm
             printIteration(0, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_); // Initial iteration information
         }
 
@@ -224,7 +263,7 @@ namespace cddp
         ForwardPassResult best_result;
         ipddp_regularization_counter_ = 0; // Reset regularization counter
 
-        // Main loop of CDDP
+        // Main loop of MSIPDDP
         while (iter < options_.max_iterations)
         {
             ++iter;
@@ -239,7 +278,7 @@ namespace cddp
                 {
                     if (options_.debug)
                     {
-                        std::cerr << "CDDP: Maximum CPU time reached. Returning current solution" << std::endl;
+                        std::cerr << "MSCDDP: Maximum CPU time reached. Returning current solution" << std::endl; // Updated message
                     }
                     // TODO: Treat as convergence
                     solution.converged = true;
@@ -247,17 +286,17 @@ namespace cddp
                 }
             }
 
-            // 1. Backward pass: Solve Riccati recursion to compute optimal control law
+            // 1. Backward pass: Solve Riccati recursion for MSIPDDP
             bool backward_pass_success = false;
             while (!backward_pass_success)
             {
-                backward_pass_success = solveIPDDPBackwardPass();
+                backward_pass_success = solveMSIPDDPBackwardPass();
 
                 if (!backward_pass_success)
                 {
                     if (options_.debug)
                     {
-                        std::cerr << "IPDDP: Backward pass failed" << std::endl;
+                        std::cerr << "MSIPDDP: Backward pass failed" << std::endl;
                     }
 
                     // Increase regularization
@@ -267,7 +306,7 @@ namespace cddp
                     {
                         if (options_.verbose)
                         {
-                            std::cerr << "IPDDP: Backward pass regularization limit reached!" << std::endl;
+                            std::cerr << "MSIPDDP: Backward pass regularization limit reached!" << std::endl;
                         }
                         // TODO: Treat as convergence
                         solution.converged = true;
@@ -277,11 +316,19 @@ namespace cddp
                 }
             }
 
-            // 2. Forward pass (either single-threaded or multi-threaded)
+            // Check if already converged due to regularization limit in backward pass
+            if (solution.converged)
+            {
+                break;
+            }
+
+            // 2. Forward pass (either single-threaded or multi-threaded) for MSIPDDP
             best_result.success = false;
             best_result.cost = std::numeric_limits<double>::infinity();
             best_result.lagrangian = std::numeric_limits<double>::infinity();
-            best_result.constraint_violation = 0.0;
+            // TODO: Add gap violation to result struct
+            best_result.constraint_violation = 0.0; // Path constraint violation
+
             bool forward_pass_success = false;
 
             if (!options_.use_parallel)
@@ -289,9 +336,9 @@ namespace cddp
                 // Single-threaded execution with early termination
                 for (double alpha : alphas_)
                 {
-                    ForwardPassResult result = solveIPDDPForwardPass(alpha);
+                    ForwardPassResult result = solveMSIPDDPForwardPass(alpha);
 
-                    if (result.success)
+                    if (result.success) // Success criteria might differ for MS
                     {
                         best_result = result;
                         forward_pass_success = true;
@@ -315,7 +362,9 @@ namespace cddp
                 {
                     futures.push_back(std::async(std::launch::async,
                                                  [this, alpha]()
-                                                 { return solveIPDDPForwardPass(alpha); }));
+                                                 {
+                                                     return solveMSIPDDPForwardPass(alpha);
+                                                 }));
                 }
 
                 // Collect results from all threads
@@ -337,7 +386,8 @@ namespace cddp
                     {
                         if (options_.debug)
                         {
-                            std::cerr << "IPDDP: Forward pass thread failed: " << e.what() << std::endl;
+                            // Updated message
+                            std::cerr << "MSCDDP: Forward pass thread failed: " << e.what() << std::endl;
                         }
                         continue;
                     }
@@ -349,22 +399,29 @@ namespace cddp
             {
                 if (options_.debug)
                 {
-                    std::cout << "[IPDDP: Forward pass] " << std::endl;
+                    // TODO: Update debug output for MSIPDDP
+                    std::cout << "[MSIPDDP: Forward pass] " << std::endl; // Updated message
                     std::cout << "    cost: " << best_result.cost << std::endl;
                     std::cout << "    logcost: " << best_result.lagrangian << std::endl;
                     std::cout << "    alpha: " << best_result.alpha << std::endl;
-                    std::cout << "    rp_err: " << best_result.constraint_violation << std::endl;
+                    std::cout << "    rp_err: " << best_result.constraint_violation << std::endl; // Path constraints
                 }
-                X_ = best_result.state_sequence;
+                X_ = best_result.state_sequence; // Initial states of intervals
                 U_ = best_result.control_sequence;
-                Y_ = best_result.dual_sequence;
-                S_ = best_result.slack_sequence;
-                G_ = best_result.constraint_sequence;
+                Y_ = best_result.dual_sequence;       // Path constraint duals
+                S_ = best_result.slack_sequence;      // Path constraint slacks
+                G_ = best_result.constraint_sequence; // Path constraint values
+                F_ = best_result.dynamics_sequence;   // Dynamics
+                // TODO: Update gaps_ and gap_multipliers_ from best_result
+                // gaps_ = best_result.gap_sequence;
+                // gap_multipliers_ = best_result.gap_multiplier_sequence;
+
                 dJ_ = J_ - best_result.cost;
                 J_ = best_result.cost;
-                dL_ = L_ - best_result.lagrangian;
+                dL_ = L_ - best_result.lagrangian; // Lagrangian includes path & gap terms
                 L_ = best_result.lagrangian;
                 alpha_ = best_result.alpha;
+                constraint_violation_ = best_result.constraint_violation; // Path constraint violation
 
                 solution.cost_sequence.push_back(J_);
                 solution.lagrangian_sequence.push_back(L_);
@@ -381,7 +438,8 @@ namespace cddp
                 {
                     if (options_.debug)
                     {
-                        std::cerr << "IPDDP: Forward Pass regularization limit reached" << std::endl;
+                        // Updated message
+                        std::cerr << "MSIPDDP: Forward Pass regularization limit reached" << std::endl;
                     }
 
                     // TODO: Treat as convergence
@@ -394,15 +452,16 @@ namespace cddp
             // Print iteration information
             if (options_.verbose)
             {
+                // TODO: Update printIteration call
                 printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_);
             }
 
             // Check termination
             if (std::max(optimality_gap_, mu_) <= options_.grad_tolerance)
-            {   
+            {
                 if (options_.debug)
                 {
-                    std::cout << "IPDDP: Converged due to small change in cost and Lagrangian." << std::endl;
+                    std::cout << "MSIPDDP: Converged due to optimality gap and mu." << std::endl;
                 }
                 solution.converged = true;
                 break;
@@ -411,22 +470,18 @@ namespace cddp
             {
                 if (options_.debug)
                 {
-                    std::cout << "IPDDP: Converged due to small change in cost and Lagrangian." << std::endl;
+                    std::cout << "MSIPDDP: Converged due to small change in cost and Lagrangian." << std::endl;
                 }
                 solution.converged = true;
                 break;
             }
 
-            // Barrier update logic 
+            // Barrier update logic
+            // TODO: This logic should be updated for MSIPDDP
             if (optimality_gap_ <= 0.2 * mu_)
             {
-                if (constraint_set_.empty())
-                {
-                }
-                else
-                {
-                    mu_ = std::max(options_.cost_tolerance / 10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
-                }
+                mu_ = std::max(options_.cost_tolerance / 10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
+
                 resetIPDDPFilter();
                 resetIPDDPRegularization();
             }
@@ -435,70 +490,86 @@ namespace cddp
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
 
         // Finalize solution
-        solution.state_sequence = X_;
+        solution.state_sequence = X_; // Initial states of intervals
         solution.control_sequence = U_;
         solution.alpha = alpha_;
         solution.solve_time = duration.count(); // Time in microseconds
 
         if (options_.header_and_footer)
         {
-            printSolution(solution);
+            printSolution(solution); // TODO: Update printSolution if needed
         }
 
         return solution;
     }
 
-    bool CDDP::solveIPDDPBackwardPass()
+    bool CDDP::solveMSIPDDPBackwardPass()
     {
         // Setup
         // Initialize variables
         const int state_dim = getStateDim();
         const int control_dim = getControlDim();
-        const int total_dual_dim = getTotalDualDim(); // Number of dual variables across all constraints
+        const int total_dual_dim = getTotalDualDim(); // Dual dim for path constraints
 
-        // Terminal cost and derivatives
+        // Terminal cost and derivatives (V_x, V_xx at t=N)
         Eigen::VectorXd V_x = objective_->getFinalCostGradient(X_.back());
         Eigen::MatrixXd V_xx = objective_->getFinalCostHessian(X_.back());
         V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
 
         dV_ = Eigen::Vector2d::Zero();
         double Qu_err = 0.0;
-        double rp_err = 0.0; // primal feasibility
-        double rd_err = 0.0; // dual feasibility
+        double rp_err = 0.0; // primal feasibility for path constraints
+        double rd_err = 0.0; // dual feasibility for path constraints
+        double rf_err = 0.0; // gap feasibility for defect constraints
 
-        bool llt_succeeded = false;
+        // --- Pre-computation Phase: Compute and store linearized dynamics ---
+        for (int t = 0; t < horizon_; ++t)
+        {
+            const Eigen::VectorXd &x = X_[t];
+            const Eigen::VectorXd &u = U_[t];
 
+            // Dynamics Jacobians
+            const auto [Fx, Fu] = system_->getJacobians(x, u);
+            Fx_[t] = Fx;
+            Fu_[t] = Fu;
+
+            // Linearized dynamics matrices
+            A_[t] = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx_[t];
+            B_[t] = timestep_ * Fu_[t];
+
+            // Dynamics Hessians
+            if (!options_.is_ilqr)
+            {
+                const auto hessians = system_->getHessians(x, u);
+                Fxx_[t] = std::get<0>(hessians);
+                Fuu_[t] = std::get<1>(hessians);
+                Fux_[t] = std::get<2>(hessians);
+            }
+        }
+        // --- End Pre-computation Phase ---
+
+        // DDP Backward Pass
         int t = horizon_ - 1;
-
-        // If no constraints, use standard DDP recursion.
         if (constraint_set_.empty())
         {
+            // Unconstrained case
             while (t >= 0)
             {
-                const Eigen::VectorXd &x = X_[t];
-                const Eigen::VectorXd &u = U_[t];
-                const auto [Fx, Fu] = system_->getJacobians(x, u);
-                Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx;
-                Eigen::MatrixXd B = timestep_ * Fu;
+                const Eigen::VectorXd &x = X_[t];           // Initial state of interval t
+                const Eigen::VectorXd &u = U_[t];           // Control for interval t
+                const Eigen::VectorXd &lambda = Lambda_[t]; // Costate for interval t
+                const Eigen::VectorXd &f = F_[t];           // Dynamics at interval t
+                const Eigen::VectorXd &d = f - X_[t + 1];   // Defect
+                const Eigen::MatrixXd &A = A_[t];
+                const Eigen::MatrixXd &B = B_[t];
 
-                // Get dynamics hessians if not using iLQR
-                std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
-                if (!options_.is_ilqr)
-                {
-                    const auto hessians = system_->getHessians(x, u);
-                    Fxx = std::get<0>(hessians);
-                    Fuu = std::get<1>(hessians);
-                    Fux = std::get<2>(hessians);
-                }
-
-                // Cost & derivatives
+                // Cost derivatives at (x_t, u_t)
                 double l = objective_->running_cost(x, u, t);
                 auto [l_x, l_u] = objective_->getRunningCostGradients(x, u, t);
                 auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
 
-                // Q expansions from cost
-                Eigen::VectorXd Q_x = l_x + A.transpose() * V_x;
-                Eigen::VectorXd Q_u = l_u + B.transpose() * V_x;
+                Eigen::VectorXd Q_x = l_x + A.transpose() * (V_x + V_xx * d);
+                Eigen::VectorXd Q_u = l_u + B.transpose() * (V_x + V_xx * d);
                 Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
                 Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
                 Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
@@ -508,15 +579,18 @@ namespace cddp
                 {
                     for (int i = 0; i < state_dim; ++i)
                     {
-                        Q_xx += timestep_ * V_x(i) * Fxx[i];
-                        Q_ux += timestep_ * V_x(i) * Fux[i];
-                        Q_uu += timestep_ * V_x(i) * Fuu[i];
+                        Q_xx += timestep_ * lambda(i) * Fxx_[t][i];
+                        Q_ux += timestep_ * lambda(i) * Fux_[t][i];
+                        Q_uu += timestep_ * lambda(i) * Fuu_[t][i];
                     }
                 }
 
+                // Eigen::Matrix Q_w = - lambda + V_x;
+                // Eigen::Matrix Q_ww = V_xx;
+
                 // Regularization
                 Eigen::MatrixXd Q_uu_reg = Q_uu;
-                // Apply regularization 
+                // Apply regularization
                 Q_uu_reg.diagonal().array() += regularization_control_;
                 Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
@@ -525,19 +599,26 @@ namespace cddp
                 {
                     if (options_.debug)
                     {
-                        std::cerr << "IPDDP: Backward pass failed at time " << t << std::endl;
+                        std::cerr << "MSIPDDP: Backward pass failed at time " << t << std::endl;
                     }
                     return false;
                 }
-                
+
+                // Solve for gains k_u, K_u
                 Eigen::VectorXd k_u = -llt.solve(Q_u);
                 Eigen::MatrixXd K_u = -llt.solve(Q_ux);
                 k_u_[t] = k_u;
                 K_u_[t] = K_u;
 
-                // Update value function
+                // Solve for gains k_lambda, K_lambda   
+                k_lambda_[t] = -lambda + V_x + V_xx * d;
+                K_lambda_[t] = V_xx;
+                K_lambda_[t] = 0.5 * (K_lambda_[t] + K_lambda_[t].transpose()); // Symmetrize K_lambda
+
+                // Update Value function derivatives
                 V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
                 V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
+                V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize V_xx
 
                 // Accumulate cost improvement
                 dV_[0] += k_u.dot(Q_u);
@@ -545,44 +626,33 @@ namespace cddp
 
                 // Error tracking
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
+                rf_err += d.lpNorm<Eigen::Infinity>();
 
                 t--;
-            } // end while t
+            } // end while t (unconstrained)
 
-            optimality_gap_ = Qu_err;
+            optimality_gap_ = std::max(Qu_err, rf_err);
             if (options_.debug)
             {
-                std::cout << "[IPDDP Backward Pass]\n"
+                std::cout << "[MSIPDDP Backward Pass]\n"
                           << "    Qu_err:  " << Qu_err << "\n"
+                          << "    rf_err:  " << rf_err << "\n"
                           << "    dV:      " << dV_.transpose() << std::endl;
             }
             return true;
         }
         else
         {
-            // Backward Recursion
+            // Constrained case
             while (t >= 0)
             {
-                // Expand cost around (x[t], u[t])
-                const Eigen::VectorXd &x = X_[t];
-                const Eigen::VectorXd &u = U_[t];
-
-                // Continuous dynamics
-                const auto [Fx, Fu] = system_->getJacobians(x, u);
-
-                // Get dynamics hessians if not using iLQR
-                std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
-                if (!options_.is_ilqr)
-                {
-                    const auto hessians = system_->getHessians(x, u);
-                    Fxx = std::get<0>(hessians);
-                    Fuu = std::get<1>(hessians);
-                    Fux = std::get<2>(hessians);
-                }
-
-                // Discretize
-                Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx;
-                Eigen::MatrixXd B = timestep_ * Fu;
+                const Eigen::VectorXd &x = X_[t];           // Initial state of interval t
+                const Eigen::VectorXd &u = U_[t];           // Control for interval t
+                const Eigen::VectorXd &lambda = Lambda_[t]; // Costate for interval t
+                const Eigen::VectorXd &f = F_[t];           // Dynamics at interval t
+                const Eigen::VectorXd &d = f - X_[t + 1];   // Defect
+                const Eigen::MatrixXd &A = A_[t];
+                const Eigen::MatrixXd &B = B_[t];
 
                 // Gather dual and slack variables, and constraint values across all constraints
                 Eigen::VectorXd y = Eigen::VectorXd::Zero(total_dual_dim);
@@ -617,21 +687,21 @@ namespace cddp
                     Q_yx.block(offset, 0, dual_dim, state_dim) = g_x;
                     Q_yu.block(offset, 0, dual_dim, control_dim) = g_u;
 
-                    // Get constraint Hessians if not using iLQR 
-                    if (!options_.is_ilqr) // Or a new option specific to constraint Hessians
-                    {
-                        const auto constraint_hessians = constraint->getHessians(x, u);
-                        const auto& g_xx_list = std::get<0>(constraint_hessians); // std::vector<Eigen::MatrixXd>
-                        const auto& g_uu_list = std::get<1>(constraint_hessians); // std::vector<Eigen::MatrixXd>
-                        const auto& g_ux_list = std::get<2>(constraint_hessians); // std::vector<Eigen::MatrixXd>
+                    // // Get constraint Hessians if not using iLQR 
+                    // if (!options_.is_ilqr) // Or a new option specific to constraint Hessians
+                    // {
+                    //     const auto constraint_hessians = constraint->getHessians(x, u);
+                    //     const auto& g_xx_list = std::get<0>(constraint_hessians); // std::vector<Eigen::MatrixXd>
+                    //     const auto& g_uu_list = std::get<1>(constraint_hessians); // std::vector<Eigen::MatrixXd>
+                    //     const auto& g_ux_list = std::get<2>(constraint_hessians); // std::vector<Eigen::MatrixXd>
 
-                        for (int i = 0; i < dual_dim; ++i)
-                        {
-                            if (g_xx_list.size() > i && !g_xx_list[i].hasNaN()) sum_g_xx_y += y_vec(i) * g_xx_list[i];
-                            if (g_uu_list.size() > i && !g_uu_list[i].hasNaN()) sum_g_uu_y += y_vec(i) * g_uu_list[i];
-                            if (g_ux_list.size() > i && !g_ux_list[i].hasNaN()) sum_g_ux_y += y_vec(i) * g_ux_list[i];
-                        }
-                    }
+                    //     for (int i = 0; i < dual_dim; ++i)
+                    //     {
+                    //         if (g_xx_list.size() > i && !g_xx_list[i].hasNaN()) sum_g_xx_y += y_vec(i) * g_xx_list[i];
+                    //         if (g_uu_list.size() > i && !g_uu_list[i].hasNaN()) sum_g_uu_y += y_vec(i) * g_uu_list[i];
+                    //         if (g_ux_list.size() > i && !g_ux_list[i].hasNaN()) sum_g_ux_y += y_vec(i) * g_ux_list[i];
+                    //     }
+                    // }
 
                     offset += dual_dim;
                 }
@@ -642,8 +712,8 @@ namespace cddp
                 auto [l_xx, l_uu, l_ux] = objective_->getRunningCostHessians(x, u, t);
 
                 // Q expansions from cost
-                Eigen::VectorXd Q_x = l_x + Q_yx.transpose() * y + A.transpose() * V_x;
-                Eigen::VectorXd Q_u = l_u + Q_yu.transpose() * y + B.transpose() * V_x;
+                Eigen::VectorXd Q_x = l_x + Q_yx.transpose() * y + A.transpose() * (V_x + V_xx * d);
+                Eigen::VectorXd Q_u = l_u + Q_yu.transpose() * y + B.transpose() * (V_x + V_xx * d);
                 Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
                 Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
                 Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
@@ -653,14 +723,14 @@ namespace cddp
                 {
                     for (int i = 0; i < state_dim; ++i)
                     {
-                        Q_xx += timestep_ * V_x(i) * Fxx[i];
-                        Q_ux += timestep_ * V_x(i) * Fux[i];
-                        Q_uu += timestep_ * V_x(i) * Fuu[i];
+                        Q_xx += timestep_ * lambda(i) * Fxx_[t][i];
+                        Q_ux += timestep_ * lambda(i) * Fux_[t][i];
+                        Q_uu += timestep_ * lambda(i) * Fuu_[t][i];
                     }
                     // Add constraint Hessian terms
-                    Q_xx += sum_g_xx_y;
-                    Q_uu += sum_g_uu_y;
-                    Q_ux += sum_g_ux_y;
+                    // Q_xx += sum_g_xx_y;
+                //     Q_uu += sum_g_uu_y;
+                //     Q_ux += sum_g_ux_y;
                 }
 
                 Eigen::MatrixXd Y = y.asDiagonal();  // Diagonal matrix with y as diagonal
@@ -762,6 +832,7 @@ namespace cddp
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
                 rp_err = std::max(rp_err, r_p.lpNorm<Eigen::Infinity>());
                 rd_err = std::max(rd_err, r_d.lpNorm<Eigen::Infinity>());
+                rf_err = std::max(rf_err, d.lpNorm<Eigen::Infinity>());
 
                 t--;
             } // end while t
@@ -775,16 +846,18 @@ namespace cddp
                           << "    Qu_err:  " << Qu_err << "\n"
                           << "    rp_err:  " << rp_err << "\n"
                           << "    rd_err:  " << rd_err << "\n"
+                          << "    rf_err:  " << rf_err << "\n"
                           << "    dV:      " << dV_.transpose() << std::endl;
             }
             return true;
         }
         return false;
-    } // end solveIPDDPBackwardPass
+    } // end solveMSIPDDPBackwardPass
 
-    ForwardPassResult CDDP::solveIPDDPForwardPass(double alpha)
+    // TODO: Rename solveIPDDPForwardPass -> solveMSIPDDPForwardPass
+    ForwardPassResult CDDP::solveMSIPDDPForwardPass(double alpha)
     {
-        // Prepare result structure with default values.
+        // Prepare result structure
         ForwardPassResult result;
         result.success = false;
         result.cost = std::numeric_limits<double>::infinity();
@@ -795,10 +868,13 @@ namespace cddp
         const int control_dim = getControlDim();
         const int dual_dim = getTotalDualDim();
 
+        // Define tau for feasibility check
         double tau = std::max(0.99, 1.0 - mu_);
 
         std::vector<Eigen::VectorXd> X_new = X_;
         std::vector<Eigen::VectorXd> U_new = U_;
+        std::vector<Eigen::VectorXd> F_new = F_;
+        std::vector<Eigen::VectorXd> Lambda_new = Lambda_;
         std::map<std::string, std::vector<Eigen::VectorXd>> Y_new = Y_;
         std::map<std::string, std::vector<Eigen::VectorXd>> S_new = S_;
         std::map<std::string, std::vector<Eigen::VectorXd>> G_new = G_;
@@ -806,37 +882,139 @@ namespace cddp
         // Set the initial state
         X_new[0] = initial_state_;
 
-        // Initialize cost accumulators and measures.
+        // Initialize cost_new for this alpha trial
         double cost_new = 0.0;
         double log_cost_new = 0.0;
         double rp_err = 0.0;
+        double rf_err = 0.0;
 
-        // --- Forward pass loop ---
+        // Rollout loop
         if (constraint_set_.empty())
         {
-            // Unconstrained forward pass
+            // Unconstrained case
             for (int t = 0; t < horizon_; ++t)
             {
+                const Eigen::VectorXd dx = X_new[t] - X_[t];
+
                 // Update control
-                U_new[t] = U_[t] + alpha * k_u_[t] + K_u_[t] * (X_new[t] - X_[t]);
+                const Eigen::VectorXd du = alpha * k_u_[t] + K_u_[t] * dx;
+                U_new[t] = U_[t] + du;
 
-                // Propagate dynamics
-                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                // Update lambda
+                Lambda_new[t] = alpha * Lambda_[t] + K_lambda_[t] * dx;
 
-                // Accumulate stage cost
+                // --- Rollout based on options_.ms_rollout_type ---
+                Eigen::VectorXd f_new_t;
+                if (options_.ms_rollout_type == "nonlinear" || options_.ms_rollout_type == "hybrid")
+                {
+                    f_new_t = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                    X_new[t + 1] = f_new_t;
+                }
+                else if (options_.ms_rollout_type == "linear")
+                {
+
+                    f_new_t = F_[t] + A_[t] * dx + B_[t] * du;
+                    X_new[t + 1] = X_[t] + A_[t] * dx + B_[t] * du;
+                }
+                F_new[t] = f_new_t;
+
+                // Determine if the *next* step (t+1) starts a new segment boundary
+                bool apply_gap_closing_strategy = (ms_segment_length_ > 0) &&
+                                                  ((t + 1) % ms_segment_length_ == 0) &&
+                                                  (t + 1 < horizon_);
+
+                if (apply_gap_closing_strategy)
+                {
+                    const Eigen::VectorXd defect_at_segment_end = F_[t] - X_[t + 1]; // Defect from the *previous* iteration's plan
+
+                    if (options_.ms_rollout_type == "nonlinear")
+                    {
+                        X_new[t + 1] = f_new_t + alpha * defect_at_segment_end;
+                    }
+                    else if (options_.ms_rollout_type == "linear" || options_.ms_rollout_type == "hybrid")
+                    {
+                        X_new[t + 1] = X_[t] + A_[t] * dx + alpha * B_[t] * k_u_[t] + alpha * defect_at_segment_end;
+                    }
+                }
+                else // Not a segment boundary
+                {
+                    X_new[t + 1] = f_new_t;
+                }
+
+                // --- Robustness Check during Rollout ---
+                if (!X_new[t + 1].allFinite() || !U_new[t].allFinite())
+                {
+                    if (options_.debug)
+                    {
+                        std::cerr << "[MSIPDDP Forward Pass] NaN/Inf detected during HYBRID rollout (nonlinear within, linear between) at t=" << t
+                                  << " for alpha=" << alpha << std::endl; // Updated debug message
+                    }
+                    result.success = false;
+                    cost_new = std::numeric_limits<double>::infinity();
+                    return result;
+                }
+            } // End of rollout loop
+
+            // --- Cost and Defect Evaluation for New Trajectory ---
+            cost_new = 0.0;
+            for (int t = 0; t < horizon_; ++t)
+            {
                 cost_new += objective_->running_cost(X_new[t], U_new[t], t);
-            }
+                Eigen::VectorXd d = F_new[t] - X_new[t + 1];
+                log_cost_new += defect_violation_penalty_ * d.lpNorm<Eigen::Infinity>();
+                rf_err += d.lpNorm<1>();
+            } // End of cost and defect evaluation loop
             cost_new += objective_->terminal_cost(X_new.back());
-            double dJ = J_ - cost_new;
-            double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
-            double reduction_ratio = expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
+            log_cost_new += cost_new;
 
-            result.success = reduction_ratio > options_.minimum_reduction_ratio;
-            result.state_sequence = X_new;
-            result.control_sequence = U_new;
-            result.cost = cost_new;
-            result.lagrangian = cost_new;
-            result.constraint_violation = 0.0;
+            // Build a candidate filter point from the computed cost metrics.
+            FilterPoint candidate{log_cost_new, rf_err};
+
+            // Check if candidate is dominated by any existing filter point
+            bool candidateDominated = false;
+            for (const auto &fp : filter_)
+            {
+                // If the candidate is dominated by an existing filter point, early exit.
+                if (candidate.log_cost >= fp.log_cost && candidate.violation >= fp.violation)
+                {
+                    candidateDominated = true;
+                    return result;
+                }
+            }
+
+            if (!candidateDominated)
+            {
+                // Remove any filter points that are dominated by the candidate.
+                for (auto it = filter_.begin(); it != filter_.end();)
+                {
+                    if (candidate.log_cost <= it->log_cost && candidate.violation <= it->violation)
+                    {
+                        // Candidate dominates this point, so erase it.
+                        it = filter_.erase(it);
+                    }
+                    else
+                    {
+                        ++it;
+                    }
+                }
+
+                // Append the candidate to the filter set.
+                filter_.push_back(candidate);
+
+                // Update the result with the new trajectories and metrics.
+                result.success = true;
+                result.state_sequence = X_new;
+                result.control_sequence = U_new;
+                result.dynamics_sequence = F_new;
+                result.lambda_sequence = Lambda_new;
+                result.dual_sequence = Y_new;
+                result.slack_sequence = S_new;
+                result.constraint_sequence = G_new;
+                result.cost = cost_new;
+                result.lagrangian = log_cost_new;
+                result.constraint_violation = rf_err;
+            }
+
             return result;
         }
         else
@@ -877,10 +1055,59 @@ namespace cddp
                     break; // Exit t-loop (horizon)
 
                 // Update control
-                U_new[t] = U_[t] + alpha_s * k_u_[t] + K_u_[t] * delta_x_k;
+                const Eigen::VectorXd delta_u_k = alpha * k_u_[t] + K_u_[t] * delta_x_k;
+                U_new[t] = U_[t] + delta_u_k;
 
-                // Propagate dynamics
-                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                // --- Rollout based on options_.ms_rollout_type ---
+                Eigen::VectorXd f_new_t;
+                if (options_.ms_rollout_type == "nonlinear" || options_.ms_rollout_type == "hybrid")
+                {
+                    f_new_t = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                    X_new[t + 1] = f_new_t;
+                }
+                else if (options_.ms_rollout_type == "linear")
+                {
+
+                    f_new_t = F_[t] + A_[t] * delta_x_k + B_[t] * delta_u_k;
+                    X_new[t + 1] = X_[t] + A_[t] * delta_x_k + B_[t] * delta_u_k;
+                }
+                F_new[t] = f_new_t;
+
+                // Determine if the *next* step (t+1) starts a new segment boundary
+                bool apply_gap_closing_strategy = (ms_segment_length_ > 0) &&
+                                                  ((t + 1) % ms_segment_length_ == 0) &&
+                                                  (t + 1 < horizon_);
+
+                if (apply_gap_closing_strategy)
+                {
+                    const Eigen::VectorXd defect_at_segment_end = F_[t] - X_[t + 1]; // Defect from the *previous* iteration's plan
+
+                    if (options_.ms_rollout_type == "nonlinear")
+                    {
+                        X_new[t + 1] = f_new_t + alpha * defect_at_segment_end;
+                    }
+                    else if (options_.ms_rollout_type == "linear" || options_.ms_rollout_type == "hybrid")
+                    {
+                        X_new[t + 1] = X_[t] + A_[t] * delta_x_k + alpha * B_[t] * k_u_[t] + alpha * defect_at_segment_end;
+                    }
+                }
+                else // Not a segment boundary
+                {
+                    X_new[t + 1] = f_new_t;
+                }
+
+                // --- Robustness Check during Rollout ---
+                if (!X_new[t + 1].allFinite() || !U_new[t].allFinite())
+                {
+                    if (options_.debug)
+                    {
+                        std::cerr << "[MSIPDDP Forward Pass] NaN/Inf detected during HYBRID rollout (nonlinear within, linear between) at t=" << t
+                                  << " for alpha=" << alpha << std::endl; // Updated debug message
+                    }
+                    result.success = false;
+                    cost_new = std::numeric_limits<double>::infinity();
+                    return result;
+                }
             }
 
             if (!s_trajectory_feasible)
@@ -924,8 +1151,12 @@ namespace cddp
                             break;                 // Exit cname-loop
                         Y_trial[cname][t] = y_new; // Store trial Y for this constraint
                     }
-                    if (!current_alpha_y_globally_feasible)
+                    if (!current_alpha_y_globally_feasible) {
                         break; // Exit t-loop
+                    }
+
+                    // Update lambda
+                    Lambda_new[t] = alpha_y_candidate * Lambda_[t] + K_lambda_[t] * delta_x_k;
                 }
 
                 if (current_alpha_y_globally_feasible)
@@ -965,13 +1196,20 @@ namespace cddp
                     Eigen::VectorXd r_p = G_new[cname][t] + s_vec;
                     rp_err += r_p.lpNorm<1>();
                 }
+
+                Eigen::VectorXd d = F_new[t] - X_new[t + 1];
+                log_cost_new += defect_violation_penalty_ * d.lpNorm<Eigen::Infinity>();
+                rf_err += d.lpNorm<1>();
             }
 
             cost_new += objective_->terminal_cost(X_new.back());
             log_cost_new += cost_new;
-            rp_err = std::max(rp_err, options_.cost_tolerance);
 
-            FilterPoint candidate{log_cost_new, rp_err};
+
+            double constraint_violation = std::max(rp_err, rf_err);
+            constraint_violation = std::max(constraint_violation, options_.cost_tolerance);
+
+            FilterPoint candidate{log_cost_new, constraint_violation};
             bool candidateDominated = false;
             for (const auto &fp : filter_)
             {
@@ -1000,97 +1238,129 @@ namespace cddp
                 result.success = true;
                 result.state_sequence = X_new;
                 result.control_sequence = U_new;
+                result.dynamics_sequence = F_new;
+                result.lambda_sequence = Lambda_new;
                 result.dual_sequence = Y_new;    
-                result.slack_sequence = S_new;    
+                result.slack_sequence = S_new;
                 result.constraint_sequence = G_new;
                 result.cost = cost_new;
                 result.lagrangian = log_cost_new;
-                result.constraint_violation = rp_err;
+                result.constraint_violation = constraint_violation;
             }
             return result;
         }
-    } // end solveIPDDPForwardPass
+    } // end solveMSIPDDPForwardPass
 
-    void CDDP::resetIPDDPFilter()
+    // TODO: Rename resetIPDDPFilter -> resetMSIPDDPFilter
+    void CDDP::resetMSIPDDPFilter()
     {
-        // Evaluate log-barrier cost
-        L_ = J_; // Assume J_ is already computed
-        double rp_err = 0.0;
-        filter_ = {};
-        // # TODO: accelerate this process
+        // Evaluate log-barrier cost (includes path constraints)
+        L_ = J_;             // Assume J_ (total cost) is computed from a rollout
+        double rp_err = 0.0; // Path constraint violation
+        double rf_err = 0.0; // Gap violation
+        filter_ = {};        // TODO: Use ms_filter_
+
+        // Calculate path constraint terms and violation
         for (int t = 0; t < horizon_; ++t)
         {
-            for (const auto &cKV : constraint_set_)
+            for (const auto &cKV : constraint_set_) // Loop over path constraints
             {
                 const std::string &cname = cKV.first;
-
-                // Get slack vector for this constraint at time t.
                 const Eigen::VectorXd &s_vec = S_[cname][t];
-                const Eigen::VectorXd &g_vec = G_[cname][t];
+                const Eigen::VectorXd &g_vec = G_[cname][t]; // Assumes G_ is updated
 
-                L_ -= mu_ * s_vec.array().log().sum();
-                rp_err += (s_vec + g_vec).lpNorm<1>();
+                L_ -= mu_ * s_vec.array().log().sum(); 
+                rp_err += (s_vec + g_vec).lpNorm<1>(); 
             }
+
+            // Add defect violation penalty
+            Eigen::VectorXd d = F_[t] - X_[t + 1];
+            L_ += defect_violation_penalty_ * d.lpNorm<1>();
+            rf_err += d.lpNorm<1>();
         }
 
-        // If total violation is below the tolerance, set it to zero.
+        // Apply tolerances
         if (rp_err < options_.cost_tolerance)
         {
-            rp_err = 0.0;
+            rp_err = options_.cost_tolerance;
         }
-        constraint_violation_ = rp_err;
+        if (rf_err < options_.grad_tolerance)
+        {
+            rf_err = options_.grad_tolerance;
+        }
 
-        // Update the filter vector
-        filter_.push_back(FilterPoint(L_, rp_err));
+        constraint_violation_ = std::max(rp_err, 0.0);
+
+        // Update filter
+        filter_.push_back(cddp::FilterPoint(L_, rp_err)); 
         return;
     }
 
-    void CDDP::initialIPDDPRollout()
+    // TODO: Rename initialIPDDPRollout -> initialMSIPDDPRollout
+    void CDDP::initialMSIPDDPRollout()
     {
-        // Initialize the state trajectory with the initial state.
-        X_[0] = initial_state_;
-
         double cost = 0.0;
 
-        // Rollout the system dynamics using the current control sequence.
+        // Rollout dynamics and calculate cost and gaps
         for (int t = 0; t < horizon_; ++t)
         {
-            // Get the current state and control.
-            const Eigen::VectorXd &x = X_[t];
-            const Eigen::VectorXd &u = U_[t];
+            // State and control for interval t
+            const Eigen::VectorXd &x_t = X_[t]; // Initial state guess for interval t
+            const Eigen::VectorXd &u_t = U_[t]; // Control guess for interval t
 
-            // Compute and accumulate the stage cost.
-            double stage_cost = objective_->running_cost(x, u, t);
-            cost += stage_cost;
+            // Compute stage cost using the guessed state/control
+            cost += objective_->running_cost(x_t, u_t, t);
 
-            // For each constraint, evaluate and store the constraint value.
+            // Evaluate path constraints at guessed state/control
             for (const auto &cKV : constraint_set_)
             {
                 const std::string &cname = cKV.first;
-                // Evaluate constraint: g = constraint->evaluate(x, u)
-                Eigen::VectorXd g_vec = cKV.second->evaluate(x, u); // dimension = dual_dim
-
-                // Store the constraint value.
+                Eigen::VectorXd g_vec = cKV.second->evaluate(x_t, u_t);
                 G_[cname][t] = g_vec - cKV.second->getUpperBound();
             }
 
-            // Compute the next state using the system dynamics.
-            X_[t + 1] = system_->getDiscreteDynamics(x, u);
+            // Compute defect
+            Eigen::VectorXd f = system_->getDiscreteDynamics(x_t, u_t);
+            F_[t] = f;
         }
 
-        // Add terminal cost.
+        // Add terminal cost based on the final *guessed* state X_[N]
         cost += objective_->terminal_cost(X_.back());
 
-        // Store the total cost.
+        // Store the initial total cost.
         J_ = cost;
 
         return;
     }
 
-    void CDDP::resetIPDDPRegularization()
+    // TODO: Rename resetIPDDPRegularization -> resetMSIPDDPRegularization if needed
+    void CDDP::resetMSIPDDPRegularization()
     {
         ipddp_regularization_counter_ = 0;
+        // TODO: Reset any MS-specific regularization parameters?
         return;
+    }
+
+    double CDDP::calculate_defect_norm(const std::vector<Eigen::VectorXd> &X,
+                                       const std::vector<Eigen::VectorXd> &U,
+                                       const std::vector<Eigen::VectorXd> &F) const
+    {
+        double total_defect_norm_l1 = 0.0;
+        // Add basic size checks for safety
+        if (X.size() != horizon_ + 1 || F.size() != horizon_ || U.size() != horizon_)
+        {
+            std::cerr << "ERROR: Inconsistent sizes provided to calculate_defect_norm. X: " << X.size()
+                      << ", U: " << U.size() << ", F: " << F.size() << ", Horizon: " << horizon_ << std::endl;
+            // Returning infinity might be too harsh, consider alternatives or exceptions
+            return std::numeric_limits<double>::infinity();
+        }
+
+        for (int t = 0; t < horizon_; ++t)
+        {
+            Eigen::VectorXd defect = F[t] - X[t + 1];
+            total_defect_norm_l1 += defect.lpNorm<1>(); // Sum of L1 norms
+        }
+        return total_defect_norm_l1;
     }
 
 } // namespace cddp

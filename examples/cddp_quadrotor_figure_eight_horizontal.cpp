@@ -190,16 +190,20 @@ int main()
     // Create CDDP solver options
     cddp::CDDPOptions options;
     options.max_iterations = 10000;
+    options.cost_tolerance = 1e-6;
+    options.grad_tolerance = 1e-6;
     options.verbose = true;
     options.debug = false;
     options.use_parallel = true;
     options.num_threads = 10;
-    options.cost_tolerance = 1e-3;
-    options.grad_tolerance = 1e-2;
     options.regularization_type = "control";
     options.regularization_control = 1e-4;
     options.regularization_state = 0.0;
-    options.barrier_coeff = 1e-3;
+    options.barrier_coeff = 1e-1;
+    options.is_ilqr = true;
+    options.defect_violation_penalty_initial = 1e+2;
+    options.ms_segment_length = horizon / 10;
+    options.ms_rollout_type = "nonlinear";
 
     // Instantiate CDDP solver
     cddp::CDDP cddp_solver(
@@ -216,7 +220,7 @@ int main()
     double max_force = 4.0;
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+    // cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
 
     // Initial trajectory guess
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -228,15 +232,16 @@ int main()
         u = hover_thrust * Eigen::VectorXd::Ones(control_dim);
     }
 
-    X[0] = initial_state;
-    for (int i = 0; i < horizon; ++i)
-    {
-        X[i + 1] = quadrotor.getDiscreteDynamics(X[i], U[i]);
-    }
+    // X[0] = initial_state;
+    // for (int i = 0; i < horizon; ++i)
+    // {
+    //     X[i + 1] = quadrotor.getDiscreteDynamics(X[i], U[i]);
+    // }
+    X = figure8_reference_states;
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
     auto X_sol = solution.state_sequence;
     auto U_sol = solution.control_sequence;
     auto t_sol = solution.time_sequence;
