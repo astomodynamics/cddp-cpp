@@ -79,6 +79,14 @@ public:
                                       const Eigen::VectorXd& control) const override;
 
     /**
+     * Computes the Hessian of the dynamics with respect to the state and control input
+     * @param state Current state vector [x, y, z, vx, vy, vz, mass, accumulated_control_effort]
+     * @param control Current control input
+     * @return Vector of state Hessian matrices, one per state dimension
+     */
+    std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd& state, 
+                                                const Eigen::VectorXd& control) const override;
+    /**
      * Computes the Hessian of the dynamics with respect to the state
      * Note: For this non-linear system, Hessians are generally non-zero.
      * @param state Current state vector
