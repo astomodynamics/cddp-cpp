@@ -190,14 +190,12 @@ int main()
     // Create CDDP solver options
     cddp::CDDPOptions options;
     options.max_iterations = 10000;
-    options.cost_tolerance = 1e-8;
-    options.grad_tolerance = 1e-8;
+    options.cost_tolerance = 1e-6;
+    options.grad_tolerance = 1e-6;
     options.verbose = true;
     options.debug = false;
     options.use_parallel = true;
     options.num_threads = 10;
-    options.cost_tolerance = 1e-3;
-    options.grad_tolerance = 1e-2;
     options.regularization_type = "control";
     options.regularization_control = 1e-4;
     options.regularization_state = 0.0;
