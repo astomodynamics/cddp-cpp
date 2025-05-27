@@ -37,7 +37,7 @@
 namespace cddp {
 
 struct CDDPOptions {
-    double cost_tolerance = 1e-6;                   // Tolerance for changes in cost function
+    double cost_tolerance = 1e-4;                   // Tolerance for changes in cost function
     double grad_tolerance = 1e-4;                   // Tolerance for cost gradient magnitude
     int max_iterations = 1;                         // Maximum number of iterations
     double max_cpu_time = 0.0;                      // Maximum CPU time for the solver in seconds
@@ -67,6 +67,7 @@ struct CDDPOptions {
     // ipddp options
     double dual_scale = 1e-1;                       // Initial scale for dual variables
     double slack_scale = 1e-2;                      // Initial scale for slack variables
+    double lambda_scale = 1e-6;                     // Initial scale for lambda variables
 
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
@@ -101,6 +102,14 @@ struct CDDPOptions {
     double boxqp_min_step = 1e-22;                  // Minimum step size for boxqp
     double boxqp_armijo = 0.1;                      // Armijo parameter for boxqp
     bool boxqp_verbose = false;                     // Print debug info for boxqp
+
+    // msipddp options
+    double defect_violation_penalty_initial = 1.0; // Initial defect penalty
+    double ms_defect_penalty_rho = 0.5;             // Rho parameter for defect penalty update
+    double ms_defect_penalty_kappa_d = 1e-4;        // Kappa_d threshold for defect penalty update
+    double ms_defect_penalty_mu0 = 10.0;            // Mu_0 safety margin for defect penalty update
+    int ms_segment_length = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
+    std::string ms_rollout_type = "hybrid"; // Rollout type: ["linear", "nonlinear", "hybrid"]
 };
 
 struct CDDPSolution {
@@ -109,11 +118,13 @@ struct CDDPSolution {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> dual_sequence;
     std::vector<Eigen::VectorXd> slack_sequence;
+    std::vector<Eigen::VectorXd> lambda_sequence;
     std::vector<double> cost_sequence;
     std::vector<double> lagrangian_sequence;
     std::vector<Eigen::MatrixXd> control_gain;
     std::vector<Eigen::MatrixXd> dual_gain;
     std::vector<Eigen::MatrixXd> slack_gain;
+    std::vector<Eigen::MatrixXd> lambda_gain;
     int iterations;
     double alpha;
     bool converged;
@@ -123,6 +134,8 @@ struct CDDPSolution {
 struct ForwardPassResult {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
+    std::vector<Eigen::VectorXd> dynamics_sequence;
+    std::vector<Eigen::VectorXd>  lambda_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>>  constraint_sequence;
@@ -131,6 +144,7 @@ struct ForwardPassResult {
     double alpha = 1.0;
     bool success = false;
     double constraint_violation = 0.0;
+    double defect_norm = 0.0; // L1 norm of defects (f(x,u) - x_next)
 };
 
 struct FilterPoint {
@@ -310,18 +324,31 @@ private:
     CDDPSolution solveIPDDP();
     ForwardPassResult solveIPDDPForwardPass(double alpha);
     bool solveIPDDPBackwardPass();
+    void resetIPDDPFilter();
+    void initialIPDDPRollout();
+    void resetIPDDPRegularization();
+
+    // MSIPDDP methods
+    void initializeMSIPDDP();
+    CDDPSolution solveMSIPDDP();
+    ForwardPassResult solveMSIPDDPForwardPass(double alpha);
+    bool solveMSIPDDPBackwardPass();
+    void resetMSIPDDPFilter();
+    void initialMSIPDDPRollout();
+    void resetMSIPDDPRegularization();
 
     // Feasible IPDDP methods
     void initializeFeasibleIPDDP();
     CDDPSolution solveFeasibleIPDDP();
     ForwardPassResult solveFeasibleIPDDPForwardPass(double alpha);
     bool solveFeasibleIPDDPBackwardPass();
-    void resetIPDDPFilter();
-    void initialIPDDPRollout();
-    void resetIPDDPRegularization();
+    
 
     // Helper methods
     double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
+    double calculate_defect_norm(const std::vector<Eigen::VectorXd>& X,
+                                   const std::vector<Eigen::VectorXd>& U,
+                                   const std::vector<Eigen::VectorXd>& F) const;
 
     bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
 
@@ -358,6 +385,15 @@ private:
     // Intermediate trajectories
     std::vector<Eigen::VectorXd> X_;                            // State trajectory
     std::vector<Eigen::VectorXd> U_;                            // Control trajectory
+    std::vector<Eigen::VectorXd> Lambda_;                       // Costate trajectory
+    std::vector<Eigen::VectorXd> F_;                            // Dynamics trajectory
+    std::vector<Eigen::MatrixXd> Fx_;                           // Dynamics Jacobian trajectory (Fx)
+    std::vector<Eigen::MatrixXd> Fu_;                           // Dynamics Jacobian trajectory (Fu)
+    std::vector<Eigen::MatrixXd> A_;                            // Linearized state transition matrix trajectory
+    std::vector<Eigen::MatrixXd> B_;                            // Linearized control matrix trajectory
+    std::vector<std::vector<Eigen::MatrixXd>> Fxx_;            // Dynamics state Hessian trajectory (if not iLQR)
+    std::vector<std::vector<Eigen::MatrixXd>> Fuu_;            // Dynamics control Hessian trajectory (if not iLQR)
+    std::vector<std::vector<Eigen::MatrixXd>> Fux_;            // Dynamics cross Hessian trajectory (if not iLQR)
     std::map<std::string, std::vector<Eigen::VectorXd>> G_;    // Constraint trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> Y_;  // Dual trajectory
     std::map<std::string, std::vector<Eigen::VectorXd>> S_; // Slack trajectory 
@@ -372,6 +408,7 @@ private:
     // Line search
     double alpha_; // Line search step size
     std::vector<double> alphas_;
+    int ms_segment_length_ = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
 
     // Log-barrier
     double mu_; // Barrier coefficient
@@ -379,10 +416,19 @@ private:
     int ipddp_regularization_counter_ = 0; // Regularization counter for IPDDP
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
+
+    // Regularization parameters
+    double defect_violation_penalty_ = 1.0;
+    double equality_violation_penalty_ = 1.0;
+    double inequality_violation_penalty_ = 1.0;
     
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_u_;
     std::vector<Eigen::MatrixXd> K_u_;
+    std::vector<Eigen::VectorXd> k_x_;
+    std::vector<Eigen::MatrixXd> K_x_;
+    std::vector<Eigen::VectorXd> k_lambda_;
+    std::vector<Eigen::MatrixXd> K_lambda_;
     std::map<std::string, std::vector<Eigen::VectorXd>> k_y_;
     std::map<std::string, std::vector<Eigen::MatrixXd>> K_y_;
     std::map<std::string, std::vector<Eigen::VectorXd>> k_s_;

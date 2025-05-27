@@ -86,6 +86,13 @@ cddp::CDDPSolution CDDP::solve(std::string solver_type) {
             std::cout << "--------------------" << std::endl;
         }
         return solveFeasibleIPDDP();
+    } else if (solver_type == "MSIPDDP") {
+        if (options_.verbose) {
+            std::cout << "--------------------" << std::endl;
+            std::cout << "Solving with MSIPDDP" << std::endl;
+            std::cout << "--------------------" << std::endl;
+        }
+        return solveMSIPDDP();
     } else
     {
         std::cerr << "CDDP::solve: Unknown solver type" << std::endl;
@@ -254,7 +261,7 @@ double CDDP::computeConstraintViolation(const std::vector<Eigen::VectorXd>& X,
 
 void CDDP::increaseRegularization()
 {
-    // For “state” or “both”
+    // For "state" or "both"
     if (options_.regularization_type == "state" ||
         options_.regularization_type == "both")
     {
@@ -269,7 +276,7 @@ void CDDP::increaseRegularization()
             options_.regularization_state_min);
     }
 
-    // For “control” or “both”
+    // For "control" or "both"
     if (options_.regularization_type == "control" ||
         options_.regularization_type == "both")
     {
@@ -288,7 +295,7 @@ void CDDP::increaseRegularization()
 
 void CDDP::decreaseRegularization()
 {
-    // For “state” or “both”
+    // For "state" or "both"
     if (options_.regularization_type == "state" ||
         options_.regularization_type == "both")
     {
@@ -303,7 +310,7 @@ void CDDP::decreaseRegularization()
             options_.regularization_state_min);
     }
 
-    // For “control” or “both”
+    // For "control" or "both"
     if (options_.regularization_type == "control" ||
         options_.regularization_type == "both")
     {
@@ -332,7 +339,7 @@ bool CDDP::isRegularizationLimitReached() const
     else if (options_.regularization_type == "both")
         return (state_limit || control_limit);
 
-    // For “none” or unknown, no limit in practice
+    // For "none" or unknown, no limit in practice
     return false;
 }
 
@@ -411,6 +418,12 @@ void CDDP::printOptions(const CDDPOptions &options)
     std::cout << "  BoxQP Min Step: " << options.boxqp_min_step << "\n";
     std::cout << "  BoxQP Armijo: " << options.boxqp_armijo << "\n";
     std::cout << "  BoxQP Verbose: " << (options.boxqp_verbose ? "Yes" : "No") << "\n";
+
+    std::cout << "\nMSIPDDP:\n";
+    std::cout << "  Defect Penalty Initial: " << options.defect_violation_penalty_initial << "\n";
+    std::cout << "  Defect Penalty Rho: " << options.ms_defect_penalty_rho << "\n";
+    std::cout << "  Defect Penalty Kappa_d: " << options.ms_defect_penalty_kappa_d << "\n";
+    std::cout << "  Defect Penalty Mu0: " << options.ms_defect_penalty_mu0 << "\n";
 
     std::cout << "========================================\n\n";
 }
