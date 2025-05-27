@@ -66,9 +66,11 @@ TEST(MSIPDDPTest, Solve) {
     options.num_threads = 1;
     options.verbose = true;
     options.debug = false;
-    options.is_ilqr = true;
     options.barrier_coeff = 1e-1;
-    // options.
+    options.is_ilqr = true;
+    options.defect_violation_penalty_initial = 1e-1;
+    options.ms_segment_length = horizon / 20;
+    options.ms_rollout_type = "nonlinear";
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(
@@ -89,9 +91,9 @@ TEST(MSIPDDPTest, Solve) {
     control_lower_bound = -control_upper_bound;
     
     
-    // // Add the constraint to the solver
-    // cddp_solver.addConstraint(std::string("ControlConstraint"), std::make_unique<cddp::ControlConstraint>(control_upper_bound));
-    // auto constraint = cddp_solver.getConstraint<cddp::ControlConstraint>("ControlConstraint");
+    // Add the constraint to the solver
+    cddp_solver.addConstraint(std::string("ControlConstraint"), std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    auto constraint = cddp_solver.getConstraint<cddp::ControlConstraint>("ControlConstraint");
 
     // Set options
     cddp_solver.setOptions(options);
@@ -101,8 +103,8 @@ TEST(MSIPDDPTest, Solve) {
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
     X[0] = initial_state;
     for (int i = 0; i < horizon; ++i) {
-      U[i] << 0.1, 0.01;
-      X[i+1] = X[0] + i * (X[horizon] - X[0]) / horizon;
+      U[i] << 0.01, 0.01;
+      X[i+1] = system->getDiscreteDynamics(X[i], U[i]);
     }
     cddp_solver.setInitialTrajectory(X, U);
 
