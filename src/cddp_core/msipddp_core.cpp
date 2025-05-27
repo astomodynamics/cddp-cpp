@@ -164,7 +164,7 @@ namespace cddp
             regularization_state_ = 0.0;
             regularization_state_step_ = 1.0;
 
-            if (options_.verbose)
+            if (options_.debug)
             {
                 std::cout << "IPDDP: State regularization is not enabled for IPDDP" << std::endl;
             }
@@ -175,7 +175,7 @@ namespace cddp
             regularization_control_ = options_.regularization_control;
             regularization_control_step_ = options_.regularization_control_step;
 
-            if (options_.verbose)
+            if (options_.debug)
             {
                 std::cout << "IPDDP: Control regularization is enabled for IPDDP" << std::endl;
             }
@@ -186,14 +186,7 @@ namespace cddp
             regularization_control_step_ = 1.0;
         }
 
-        if (constraint_set_.empty()) // Check if *path* constraints are empty
-        {
-            mu_ = 1e-8;
-        }
-        else
-        {
-            mu_ = options_.barrier_coeff;
-        }
+        mu_ = options_.barrier_coeff;
 
         // Initialize defect penalty
         defect_violation_penalty_ = options_.defect_violation_penalty_initial;
@@ -448,7 +441,7 @@ namespace cddp
                     if (options_.debug)
                     {
                         // Updated message
-                        std::cerr << "MSCDDP: Forward Pass regularization limit reached" << std::endl;
+                        std::cerr << "MSIPDDP: Forward Pass regularization limit reached" << std::endl;
                     }
 
                     // TODO: Treat as convergence
@@ -470,7 +463,7 @@ namespace cddp
             {   
                 if (options_.debug)
                 {
-                    std::cout << "IPDDP: Converged due to small change in cost and Lagrangian." << std::endl;
+                    std::cout << "MSIPDDP: Converged due to optimality gap and mu." << std::endl;
                 }
                 solution.converged = true;
                 break;
@@ -479,22 +472,18 @@ namespace cddp
             {
                 if (options_.debug)
                 {
-                    std::cout << "IPDDP: Converged due to small change in cost and Lagrangian." << std::endl;
+                    std::cout << "MSIPDDP: Converged due to small change in cost and Lagrangian." << std::endl;
                 }
                 solution.converged = true;
                 break;
             }
 
             // Barrier update logic 
+            // TODO: This logic should be updated for MSIPDDP
             if (optimality_gap_ <= 0.2 * mu_)
             {
-                if (constraint_set_.empty())
-                {
-                }
-                else
-                {
-                    mu_ = std::max(options_.cost_tolerance / 10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
-                }
+                mu_ = std::max(options_.cost_tolerance / 10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
+                
                 resetIPDDPFilter();
                 resetIPDDPRegularization();
             }
@@ -634,7 +623,7 @@ namespace cddp
 
                 // Error tracking 
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
-                rf_err = std::max(rf_err, d.lpNorm<Eigen::Infinity>());
+                rf_err += d.lpNorm<Eigen::Infinity>();
 
                 t--;
             } // end while t (unconstrained)
@@ -765,7 +754,7 @@ namespace cddp
             cost_new += objective_->running_cost(X_new[t], U_new[t], t);
             Eigen::VectorXd d = F_new[t] - X_new[t + 1];
             logcost_new += defect_violation_penalty_ * d.lpNorm<Eigen::Infinity>();
-            rf_err += std::max(rf_err, d.lpNorm<Eigen::Infinity>());
+            rf_err += d.lpNorm<1>();
         } // End of cost and defect evaluation loop
         cost_new += objective_->terminal_cost(X_new.back());
         logcost_new += cost_new;
@@ -846,14 +835,18 @@ namespace cddp
             // Add defect violation penalty
             Eigen::VectorXd d = F_[t] - X_[t + 1];
             L_ += defect_violation_penalty_ * d.lpNorm<1>();
-            rf_err = std::max(rf_err, d.lpNorm<Eigen::Infinity>());
+            rf_err += d.lpNorm<1>();
         }
 
         // Apply tolerances
         if (rp_err < options_.cost_tolerance)
-            rp_err = 0.0;
+        {
+            rp_err = options_.cost_tolerance;
+        }
         if (rf_err < options_.grad_tolerance)
-            rf_err = 0.0;
+        {
+            rf_err = options_.grad_tolerance;
+        }
 
         constraint_violation_ = std::max(rp_err, rf_err);
 
