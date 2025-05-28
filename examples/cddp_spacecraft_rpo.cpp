@@ -43,8 +43,8 @@ namespace cddp
                             const Eigen::VectorXd &control,
                             int /*index*/) const override
         {
-            double control_norm = (control + epsilon_ * Eigen::VectorXd::Ones(control.size())).norm();
-
+            double control_squared = control.squaredNorm();
+            double control_norm = std::sqrt(control_squared + epsilon_);
             return weight_running_control_ * control_norm;
         }
 
@@ -62,12 +62,12 @@ namespace cddp
 
         Eigen::VectorXd getRunningCostControlGradient(const Eigen::VectorXd & /*state*/, const Eigen::VectorXd &control, int /*index*/) const override
         {
-            double norm_u = (control + epsilon_ * Eigen::VectorXd::Ones(control.size())).norm();
+            double norm_u = std::sqrt(control.squaredNorm() + epsilon_);
             if (norm_u < 1e-8)
             {
                 return Eigen::VectorXd::Zero(control.size());
             }
-            return weight_running_control_ * (control + epsilon_ * Eigen::VectorXd::Ones(control.size())) / norm_u;
+            return weight_running_control_ * control / norm_u;
         }
 
         Eigen::VectorXd getFinalCostGradient(const Eigen::VectorXd &final_state) const override
@@ -83,8 +83,8 @@ namespace cddp
         }
 
         Eigen::MatrixXd getRunningCostControlHessian(const Eigen::VectorXd & /*state*/, const Eigen::VectorXd &control, int /*index*/) const override
-        {
-            double norm_u = (control + epsilon_ * Eigen::VectorXd::Ones(control.size())).norm();
+        {   
+            double norm_u = std::sqrt(control.squaredNorm() + epsilon_);
             int control_dim = control.size();
             if (norm_u < 1e-8)
             {
@@ -110,7 +110,7 @@ namespace cddp
         Eigen::VectorXd goal_state_;
         double weight_running_control_;
         double weight_terminal_state_;
-        double epsilon_ = 1e-8;
+        double epsilon_ = 1e-5;
     };
 } // namespace cddp
 
@@ -146,8 +146,8 @@ int main()
     double u_max_norm = 1.0; // Maximum thrust magnitude, consistent with previous u_max
 
     // Cost weighting for SumOfTwoNormObjective
-    double weight_running_control = 0.1;  // Example value
-    double weight_terminal_state = 100.0; // Example value
+    double weight_running_control = 1.0;  // Example value
+    double weight_terminal_state = 1000.0; // Example value
 
     // Create the HCW system for optimization
     std::unique_ptr<cddp::DynamicalSystem> hcw_system =
@@ -162,16 +162,16 @@ int main()
 
     // Setup IPDDP solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 500; // May need more iterations for one-shot solve
+    options.max_iterations = 1000; // May need more iterations for one-shot solve
     options.max_line_search_iterations = 21;
-    options.cost_tolerance = 1e-5; // Tighter tolerance for final solve
-    options.grad_tolerance = 1e-5; // Tighter tolerance for final solve
+    options.cost_tolerance = 1e-7; // Tighter tolerance for final solve
+    options.grad_tolerance = 1e-7; // Tighter tolerance for final solve
     options.verbose = true;        // Show solver progress
     options.use_parallel = false;
     options.num_threads = 8;
     options.regularization_type = "control";
     options.regularization_control = 1e-3;
-    options.barrier_coeff = 1e-1; // Starting barrier coefficient
+    options.barrier_coeff = 1e-0; // Starting barrier coefficient
     options.is_ilqr = true;
     options.debug = false;
     options.defect_violation_penalty_initial = 1e-0;
@@ -201,16 +201,16 @@ int main()
     cddp_solver.setInitialTrajectory(X, U);
 
     // Add Control Constraint
-    // Eigen::VectorXd u_upper = Eigen::VectorXd::Constant(3, u_max);
-    // cddp_solver.addConstraint("ControlConstraint",
-    //     std::make_unique<cddp::ControlConstraint>(u_upper));
+    Eigen::VectorXd u_upper = Eigen::VectorXd::Constant(3, u_max);
+    cddp_solver.addConstraint("ControlConstraint",
+        std::make_unique<cddp::ControlConstraint>(u_upper));
 
     // // Add Thrust Magnitude Constraint
     // cddp_solver.addConstraint("ThrustMagnitudeConstraint",
     //     std::make_unique<cddp::ThrustMagnitudeConstraint>(u_min_norm, u_max_norm));
 
     // Solve the Trajectory Optimization Problem
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
 
     // Extract the solution
     std::vector<Eigen::VectorXd> X_solution = solution.state_sequence;
@@ -230,19 +230,16 @@ int main()
         // Extract individual state and control trajectories
         std::vector<double> x_pos(horizon + 1), y_pos(horizon + 1), z_pos(horizon + 1);
         std::vector<double> vx(horizon + 1), vy(horizon + 1), vz(horizon + 1);
-        std::vector<double> mass_traj(horizon + 1), acc_effort_traj(horizon + 1);
 
         for (size_t i = 0; i < X_solution.size(); ++i) {
             const auto& state = X_solution[i];
-            if (state.size() >= 8) { // Ensure state has at least 8 dimensions
+            if (state.size() >= state_dim) { // Ensure state has at least 8 dimensions
                 x_pos[i] = state(0);
                 y_pos[i] = state(1);
                 z_pos[i] = state(2);
                 vx[i] = state(3);
                 vy[i] = state(4);
                 vz[i] = state(5);
-                mass_traj[i] = state(6);
-                acc_effort_traj[i] = state(7);
             }
         }
 
@@ -251,7 +248,7 @@ int main()
 
         for (size_t i = 0; i < U_solution.size(); ++i) {
             const auto& control = U_solution[i];
-            if (control.size() >= 3) { // Ensure control has at least 3 dimensions
+            if (control.size() >= control_dim) { // Ensure control has at least 3 dimensions
                 ux[i] = control(0);
                 uy[i] = control(1);
                 uz[i] = control(2);
@@ -285,22 +282,6 @@ int main()
         plt::ylabel("Velocity (m/s)");
         plt::legend();
         plt::title("Velocity vs. Time");
-
-        // 3. Mass Trajectory
-        plt::figure();
-        plt::plot(t_states, mass_traj)->line_width(2).display_name("Mass (kg)");
-        plt::xlabel("Time (s)");
-        plt::ylabel("Mass (kg)");
-        plt::legend();
-        plt::title("Mass vs. Time");
-
-        // 4. Accumulated Control Effort
-        plt::figure();
-        plt::plot(t_states, acc_effort_traj)->line_width(2).display_name("Accum. Effort");
-        plt::xlabel("Time (s)");
-        plt::ylabel("Effort");
-        plt::legend();
-        plt::title("Accumulated Control Effort vs. Time");
 
         // 5. Control Inputs (Zeroth-Order Hold)
         plt::figure();
@@ -349,7 +330,6 @@ int main()
 
         // Show all plots
         plt::show();
-        std::cout << "Final mass: " << mass_traj.back() << std::endl;
         std::cout << "Plotting complete." << std::endl;
     }
     else
