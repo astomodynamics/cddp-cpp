@@ -27,7 +27,7 @@
 #include "matplot/matplot.h"
 
 using namespace matplot;
-namespace fs = std::filesystem;
+// namespace fs = std::filesystem;
 
 TEST(MSIPDDPTest, Solve) {
     // Problem parameters
@@ -113,85 +113,85 @@ TEST(MSIPDDPTest, Solve) {
 
     ASSERT_TRUE(solution.converged);
 
-    // --- Plotting Setup ---
-    const std::string plotDirectory = "../results/tests/msipddp_unicycle";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    // // --- Plotting Setup ---
+    // const std::string plotDirectory = "../results/tests/msipddp_unicycle";
+    // if (!fs::exists(plotDirectory)) {
+    //     fs::create_directories(plotDirectory);
+    // }
 
-    // Extract solution data for plotting
-    auto X_sol = solution.state_sequence; // size: horizon + 1
-    auto U_sol = solution.control_sequence; // size: horizon
-    auto t_sol = solution.time_sequence; // size: horizon + 1
+    // // Extract solution data for plotting
+    // auto X_sol = solution.state_sequence; // size: horizon + 1
+    // auto U_sol = solution.control_sequence; // size: horizon
+    // auto t_sol = solution.time_sequence; // size: horizon + 1
 
-    std::vector<double> time_state, time_control;
-    std::vector<double> x_arr, y_arr, theta_arr;
-    std::vector<double> v_arr, omega_arr;
+    // std::vector<double> time_state, time_control;
+    // std::vector<double> x_arr, y_arr, theta_arr;
+    // std::vector<double> v_arr, omega_arr;
 
-    for (int i = 0; i < X_sol.size(); ++i) {
-        time_state.push_back(t_sol[i]);
-        x_arr.push_back(X_sol[i](0));
-        y_arr.push_back(X_sol[i](1));
-        theta_arr.push_back(X_sol[i](2));
-    }
-    for (int i = 0; i < U_sol.size(); ++i) {
-        time_control.push_back(t_sol[i]); // Use t_sol[i] which matches U_sol index
-        v_arr.push_back(U_sol[i](0));
-        omega_arr.push_back(U_sol[i](1));
-    }
+    // for (int i = 0; i < X_sol.size(); ++i) {
+    //     time_state.push_back(t_sol[i]);
+    //     x_arr.push_back(X_sol[i](0));
+    //     y_arr.push_back(X_sol[i](1));
+    //     theta_arr.push_back(X_sol[i](2));
+    // }
+    // for (int i = 0; i < U_sol.size(); ++i) {
+    //     time_control.push_back(t_sol[i]); // Use t_sol[i] which matches U_sol index
+    //     v_arr.push_back(U_sol[i](0));
+    //     omega_arr.push_back(U_sol[i](1));
+    // }
 
-    // --- Static Plot --- 
-    auto fig1 = figure(true);
-    fig1->size(1200, 800);
-    fig1->name("MSIPDDP Unicycle Solution");
+    // // --- Static Plot --- 
+    // auto fig1 = figure(true);
+    // fig1->size(1200, 800);
+    // fig1->name("MSIPDDP Unicycle Solution");
 
-    // Subplot for state trajectory (x, y, theta)
-    auto ax1 = subplot(2, 1, 0);
-    hold(ax1, true);
-    plot(ax1, time_state, x_arr, "-b")->line_width(2).display_name("x");
-    plot(ax1, time_state, y_arr, "-r")->line_width(2).display_name("y");
-    plot(ax1, time_state, theta_arr, "-g")->line_width(2).display_name("theta");
-    title(ax1, "Unicycle State Trajectory");
-    xlabel(ax1, "Time [s]");
-    ylabel(ax1, "Value");
-    legend(ax1);
-    grid(ax1, true);
-    hold(ax1, false);
+    // // Subplot for state trajectory (x, y, theta)
+    // auto ax1 = subplot(2, 1, 0);
+    // hold(ax1, true);
+    // plot(ax1, time_state, x_arr, "-b")->line_width(2).display_name("x");
+    // plot(ax1, time_state, y_arr, "-r")->line_width(2).display_name("y");
+    // plot(ax1, time_state, theta_arr, "-g")->line_width(2).display_name("theta");
+    // title(ax1, "Unicycle State Trajectory");
+    // xlabel(ax1, "Time [s]");
+    // ylabel(ax1, "Value");
+    // legend(ax1);
+    // grid(ax1, true);
+    // hold(ax1, false);
 
-    // Subplot for control input (v, omega)
-    auto ax2 = subplot(2, 1, 1);
-    hold(ax2, true);
-    plot(ax2, time_control, v_arr, "-c")->line_width(2).display_name("v");
-    plot(ax2, time_control, omega_arr, "-m")->line_width(2).display_name("omega");
-    title(ax2, "Control Input");
-    xlabel(ax2, "Time [s]");
-    ylabel(ax2, "Value");
-    legend(ax2);
-    grid(ax2, true);
-    hold(ax2, false);
+    // // Subplot for control input (v, omega)
+    // auto ax2 = subplot(2, 1, 1);
+    // hold(ax2, true);
+    // plot(ax2, time_control, v_arr, "-c")->line_width(2).display_name("v");
+    // plot(ax2, time_control, omega_arr, "-m")->line_width(2).display_name("omega");
+    // title(ax2, "Control Input");
+    // xlabel(ax2, "Time [s]");
+    // ylabel(ax2, "Value");
+    // legend(ax2);
+    // grid(ax2, true);
+    // hold(ax2, false);
     
 
-    save(fig1, plotDirectory + "/unicycle_msipddp_test.png");
-    std::cout << "Static plot saved to " << plotDirectory << "/unicycle_msipddp_test.png" << std::endl;
+    // save(fig1, plotDirectory + "/unicycle_msipddp_test.png");
+    // std::cout << "Static plot saved to " << plotDirectory << "/unicycle_msipddp_test.png" << std::endl;
 
-    // Plot x-y trajectory
-    auto fig2 = figure(true);
-    fig2->size(1200, 800);
-    fig2->name("MSIPDDP Unicycle Solution");
+    // // Plot x-y trajectory
+    // auto fig2 = figure(true);
+    // fig2->size(1200, 800);
+    // fig2->name("MSIPDDP Unicycle Solution");
 
-    // Subplot for state trajectory (x, y, theta)
-    auto ax3 = subplot(2, 1, 0);
-    hold(ax3, true);
-    plot(ax3, x_arr, y_arr, "-b")->line_width(2).display_name("x-y trajectory");
-    title(ax3, "Unicycle State Trajectory");
-    xlabel(ax3, "x [m]");
-    ylabel(ax3, "y [m]");
-    legend(ax3);
-    grid(ax3, true);
-    hold(ax3, false);   
+    // // Subplot for state trajectory (x, y, theta)
+    // auto ax3 = subplot(2, 1, 0);
+    // hold(ax3, true);
+    // plot(ax3, x_arr, y_arr, "-b")->line_width(2).display_name("x-y trajectory");
+    // title(ax3, "Unicycle State Trajectory");
+    // xlabel(ax3, "x [m]");
+    // ylabel(ax3, "y [m]");
+    // legend(ax3);
+    // grid(ax3, true);
+    // hold(ax3, false);   
 
-    save(fig2, plotDirectory + "/unicycle_msipddp_test_xy.png");
-    std::cout << "Static plot saved to " << plotDirectory << "/unicycle_msipddp_test_xy.png" << std::endl;
+    // save(fig2, plotDirectory + "/unicycle_msipddp_test_xy.png");
+    // std::cout << "Static plot saved to " << plotDirectory << "/unicycle_msipddp_test_xy.png" << std::endl;
 }
 
 
