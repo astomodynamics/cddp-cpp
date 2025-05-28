@@ -187,7 +187,7 @@ int main()
     options.cost_tolerance = 1e-7;
     options.grad_tolerance = 1e-4;
     options.regularization_type = "control";
-    options.regularization_state = 1e-3;
+    options.regularization_state = 0.0;
     options.regularization_control = 1e-7;
     options.debug = false;
     options.use_parallel = true;

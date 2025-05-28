@@ -138,6 +138,10 @@ add_executable(test_ipddp_car test_ipddp_car.cpp)
 target_link_libraries(test_ipddp_car cddp gtest gmock gtest_main)
 gtest_discover_tests(test_ipddp_car)
 
+add_executable(test_msipddp_car test_msipddp_car.cpp)
+target_link_libraries(test_msipddp_car gtest gmock gtest_main cddp)
+gtest_discover_tests(test_msipddp_car)
+
 add_executable(test_ipddp_pendulum test_ipddp_pendulum.cpp)
 target_link_libraries(test_ipddp_pendulum gtest gmock gtest_main cddp)
 gtest_discover_tests(test_ipddp_pendulum)

@@ -83,11 +83,12 @@ namespace cddp
             U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
         }
 
-        Lambda_.resize(horizon_, Eigen::VectorXd::Zero(state_dim));
-        for (int t = 0; t < horizon_; ++t)
-        {
-            Lambda_[t] = options_.lambda_scale * Eigen::VectorXd::Ones(state_dim);
-        }
+        Lambda_.resize(horizon_, Eigen::VectorXd::Zero(state_dim)); // Resize, will be filled in 1st backward pass
+        ms_lambda_initialization_ = true;
+        // for (int t = 0; t < horizon_; ++t)
+        // {
+        //     Lambda_[t] = options_.lambda_scale * Eigen::VectorXd::Ones(state_dim);
+        // }
 
         // Resize linearized dynamics storage
         F_.resize(horizon_, Eigen::VectorXd::Zero(state_dim));
@@ -117,6 +118,10 @@ namespace cddp
         k_s_.clear();
         K_s_.clear();
 
+        // Determine initial mu for the heuristic s*y = mu
+        double heuristic_initial_mu = options_.barrier_coeff; // Default: 1.0
+        mu_ = heuristic_initial_mu; // Set initial mu
+
         for (const auto &constraint : constraint_set_)
         {
             std::string constraint_name = constraint.first;
@@ -132,9 +137,28 @@ namespace cddp
 
             for (int t = 0; t < horizon_; ++t)
             {
-                G_[constraint_name][t] = constraint.second->evaluate(X_[t], U_[t]);
-                Y_[constraint_name][t] = options_.dual_scale * Eigen::VectorXd::Ones(dual_dim);
-                S_[constraint_name][t] = options_.slack_scale * Eigen::VectorXd::Ones(dual_dim);
+                // Evaluate g(x,u) = evaluate(x,u) - getUpperBound()
+                Eigen::VectorXd g_at_xt_ut = constraint.second->evaluate(X_[t], U_[t]) - constraint.second->getUpperBound();
+                G_[constraint_name][t] = g_at_xt_ut;
+
+                Eigen::VectorXd s_init_t = Eigen::VectorXd::Zero(dual_dim);
+                Eigen::VectorXd y_init_t = Eigen::VectorXd::Zero(dual_dim);
+
+                for (int i = 0; i < dual_dim; ++i) {
+                    // Initialize s_i = max(options.slack_scale, -g_i) to ensure s_i > 0
+                    s_init_t(i) = std::max(options_.slack_scale, -g_at_xt_ut(i));
+
+                    // Initialize y_i = heuristic_initial_mu / s_i to satisfy s_i * y_i = heuristic_initial_mu
+                    if (s_init_t(i) < 1e-12) { // Safeguard
+                        y_init_t(i) = heuristic_initial_mu / 1e-12;
+                    } else {
+                        y_init_t(i) = heuristic_initial_mu / s_init_t(i);
+                    }
+                    // Ensure y_i is also not too small
+                    y_init_t(i) = std::max(options_.dual_scale * 0.1, y_init_t(i)); // 10% of dual_scale as minimum
+                }
+                Y_[constraint_name][t] = y_init_t;
+                S_[constraint_name][t] = s_init_t;
 
                 // Gains set to zero.
                 k_y_[constraint_name][t].setZero(dual_dim);
@@ -185,8 +209,6 @@ namespace cddp
             regularization_control_ = 0.0;
             regularization_control_step_ = 1.0;
         }
-
-        mu_ = options_.barrier_coeff;
 
         // Initialize defect penalty
         defect_violation_penalty_ = options_.defect_violation_penalty_initial;
@@ -522,6 +544,8 @@ namespace cddp
         double rd_err = 0.0; // dual feasibility for path constraints
         double rf_err = 0.0; // gap feasibility for defect constraints
 
+        bool first_pass_flag_at_start = ms_lambda_initialization_;
+
         // --- Pre-computation Phase: Compute and store linearized dynamics ---
         for (int t = 0; t < horizon_; ++t)
         {
@@ -555,6 +579,10 @@ namespace cddp
             // Unconstrained case
             while (t >= 0)
             {
+                if (ms_lambda_initialization_) {
+                    Lambda_[t] = V_x; // V_x here is dV/dX_[t+1]
+                }
+
                 const Eigen::VectorXd &x = X_[t];           // Initial state of interval t
                 const Eigen::VectorXd &u = U_[t];           // Control for interval t
                 const Eigen::VectorXd &lambda = Lambda_[t]; // Costate for interval t
@@ -639,6 +667,9 @@ namespace cddp
                           << "    rf_err:  " << rf_err << "\n"
                           << "    dV:      " << dV_.transpose() << std::endl;
             }
+            if (first_pass_flag_at_start) {
+                ms_lambda_initialization_ = false;
+            }
             return true;
         }
         else
@@ -646,6 +677,10 @@ namespace cddp
             // Constrained case
             while (t >= 0)
             {
+                if (ms_lambda_initialization_) {
+                    Lambda_[t] = V_x; // V_x here is dV/dX_[t+1]
+                }
+
                 const Eigen::VectorXd &x = X_[t];           // Initial state of interval t
                 const Eigen::VectorXd &u = U_[t];           // Control for interval t
                 const Eigen::VectorXd &lambda = Lambda_[t]; // Costate for interval t
@@ -848,6 +883,9 @@ namespace cddp
                           << "    rd_err:  " << rd_err << "\n"
                           << "    rf_err:  " << rf_err << "\n"
                           << "    dV:      " << dV_.transpose() << std::endl;
+            }
+            if (first_pass_flag_at_start) {
+                ms_lambda_initialization_ = false;
             }
             return true;
         }
