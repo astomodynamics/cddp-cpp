@@ -119,6 +119,7 @@ private:
     double mean_motion_;  // Mean motion of reference orbit
     double isp_;          // Specific impulse (s)
     double g0_;           // Standard gravity (m/s^2)
+    double epsilon_;      // Small value to avoid division by zero
 
     // State indices
     static constexpr int STATE_X = 0;   // x position (radial)

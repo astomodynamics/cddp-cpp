@@ -45,18 +45,6 @@ namespace cddp
               weight_terminal_pos_(weight_terminal_pos),
               weight_terminal_vel_(weight_terminal_vel)
         {
-            if (weight_terminal_fuel_ < 0.0) {
-                 throw std::invalid_argument("MinimizeFuelObjective: weight_terminal_fuel must be non-negative.");
-            }
-            if (weight_terminal_pos_ < 0.0) {
-                 throw std::invalid_argument("MinimizeFuelObjective: weight_terminal_pos must be non-negative.");
-            }
-            if (weight_terminal_vel_ < 0.0) {
-                 throw std::invalid_argument("MinimizeFuelObjective: weight_terminal_vel must be non-negative.");
-            }
-            if (goal_state_pos_vel_.size() != 8) {
-                throw std::invalid_argument("MinimizeFuelObjective: goal_state_pos_vel must be of size 8.");
-            }
         }
 
         double running_cost(const Eigen::VectorXd& /*state*/,
@@ -69,7 +57,7 @@ namespace cddp
         double terminal_cost(const Eigen::VectorXd& final_state) const override
         {
             
-            double cost = weight_terminal_fuel_ * final_state(7) * final_state(7);
+            double cost = -weight_terminal_fuel_ * final_state(7) * final_state(7);
 
             // Position cost
             for (int i = 0; i < 3; ++i) {
@@ -132,7 +120,7 @@ namespace cddp
             Eigen::MatrixXd hess = Eigen::MatrixXd::Zero(final_state.size(), final_state.size());
             // Hessian for fuel term is zero
 
-            hess(7, 7) = weight_terminal_fuel_;
+            hess(7, 7) = -weight_terminal_fuel_;
 
             // Position Hessian
             for (int i = 0; i < 3; ++i) {
@@ -193,8 +181,8 @@ int main()
 
     // Cost weighting
     double weight_terminal_fuel = 1.0;
-    double weight_terminal_pos = 100.0;
-    double weight_terminal_vel = 100.0;
+    double weight_terminal_pos = 1000.0;
+    double weight_terminal_vel = 1000.0;
 
     // Build cost objective
     auto objective = std::make_unique<cddp::MinimizeFuelObjective>(
@@ -253,7 +241,7 @@ int main()
         std::make_unique<cddp::ThrustMagnitudeConstraint>(u_min_norm, u_max_norm));
 
     // Solve the Trajectory Optimization Problem
-    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
     // Extract the solution
     std::vector<Eigen::VectorXd> X_solution = solution.state_sequence;
