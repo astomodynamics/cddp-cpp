@@ -56,7 +56,7 @@ struct CDDPOptions {
     double mu_reduction_ratio = 0.1;                         // Factor for barrier coefficient
 
     // log-barrier method
-    double barrier_coeff = 1e-1;                    // Coefficient for log-barrier method
+    double barrier_coeff = 1e-0;                    // Coefficient for log-barrier method
     double barrier_factor = 0.10;                   // Factor for log-barrier method
     double barrier_tolerance = 1e-8;                // Tolerance for log-barrier method
     double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
@@ -409,6 +409,7 @@ private:
     double alpha_; // Line search step size
     std::vector<double> alphas_;
     int ms_segment_length_ = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
+    bool ms_lambda_initialization_ = false; // Initialize Lambda at the first backward pass
 
     // Log-barrier
     double mu_; // Barrier coefficient

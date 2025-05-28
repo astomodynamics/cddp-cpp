@@ -177,17 +177,21 @@ int main() {
     cddp::CDDPOptions options;
     options.max_iterations = 600;
     options.verbose = true;  
-    options.cost_tolerance = 1e-4;
-    options.grad_tolerance = 1e-3;
+    options.cost_tolerance = 1e-7;
+    options.grad_tolerance = 1e-4;
     options.regularization_type = "control";
-    // options.regularization_state = 1e-1;
-    options.regularization_control = 1e-5;
+    options.regularization_state = 0.0;
+    options.regularization_control = 1e-7;
     options.debug = false;
+    options.is_ilqr = true;
     options.use_parallel = false;
     options.num_threads = 1;
-    options.barrier_coeff = 1e-1;
-    options.dual_scale = 1e-2;
-    options.slack_scale = 1e-3;
+    options.barrier_coeff = 1e-0;
+    options.dual_scale = 1e-1;
+    options.slack_scale = 1e-2;
+    options.defect_violation_penalty_initial = 1e-0;
+    options.ms_segment_length = horizon / 100;
+    options.ms_rollout_type = "nonlinear";
     cddp_solver.setOptions(options);
 
     // Initialize the trajectory with zero controls
@@ -202,7 +206,7 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem using IPDDP
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
 
     // Extract solution trajectories
     auto X_sol = solution.state_sequence;

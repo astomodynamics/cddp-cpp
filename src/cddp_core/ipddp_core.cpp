@@ -90,6 +90,16 @@ namespace cddp
         k_s_.clear();
         K_s_.clear();
 
+        // Determine initial mu for the heuristic s*y = mu
+        double heuristic_initial_mu;
+        if (constraint_set_.empty()) {
+            heuristic_initial_mu = 1e-8; // A small value if no constraints
+            mu_ = heuristic_initial_mu;
+        } else {
+            heuristic_initial_mu = options_.barrier_coeff; // Default: 1.0
+            mu_ = heuristic_initial_mu;
+        }
+
         for (const auto &constraint : constraint_set_)
         {
             std::string constraint_name = constraint.first;
@@ -105,9 +115,28 @@ namespace cddp
 
             for (int t = 0; t < horizon_; ++t)
             {
-                G_[constraint_name][t] = constraint.second->evaluate(X_[t], U_[t]);
-                Y_[constraint_name][t] = options_.dual_scale * Eigen::VectorXd::Ones(dual_dim);
-                S_[constraint_name][t] = options_.slack_scale * Eigen::VectorXd::Ones(dual_dim);
+                // Evaluate g(x,u) = evaluate(x,u) - getUpperBound()
+                Eigen::VectorXd g_at_xt_ut = constraint.second->evaluate(X_[t], U_[t]) - constraint.second->getUpperBound();
+                G_[constraint_name][t] = g_at_xt_ut;
+
+                Eigen::VectorXd s_init_t = Eigen::VectorXd::Zero(dual_dim);
+                Eigen::VectorXd y_init_t = Eigen::VectorXd::Zero(dual_dim);
+
+                for (int i = 0; i < dual_dim; ++i) {
+                    // Initialize s_i = max(options.slack_scale, -g_i) to ensure s_i > 0
+                    s_init_t(i) = std::max(options_.slack_scale, -g_at_xt_ut(i));
+
+                    // Initialize y_i = heuristic_initial_mu / s_i to satisfy s_i * y_i = heuristic_initial_mu
+                    if (s_init_t(i) < 1e-12) { // Safeguard
+                        y_init_t(i) = heuristic_initial_mu / 1e-12;
+                    } else {
+                        y_init_t(i) = heuristic_initial_mu / s_init_t(i);
+                    }
+                    // Ensure y_i is also not too small
+                    y_init_t(i) = std::max(options_.dual_scale * 0.1, y_init_t(i)); // 10% of dual_scale as minimum
+                }
+                Y_[constraint_name][t] = y_init_t;
+                S_[constraint_name][t] = s_init_t;
 
                 // Gains set to zero.
                 k_y_[constraint_name][t].setZero(dual_dim);
@@ -157,15 +186,6 @@ namespace cddp
         {
             regularization_control_ = 0.0;
             regularization_control_step_ = 1.0;
-        }
-
-        if (constraint_set_.empty())
-        {
-            mu_ = 1e-8;
-        }
-        else
-        {
-            mu_ = options_.barrier_coeff;
         }
 
         // Now initialized
