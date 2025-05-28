@@ -214,9 +214,21 @@ If you use this work in an academic context, please cite this repository.
 ## License
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
+## Collaboration
+Contributions to this CDDP solver library are welcome! Whether you're interested in fixing bugs, adding new features, improving documentation, or suggesting new example applications, your input is valuable.
+
+If you'd like to contribute:
+1.  **Fork the repository.**
+2.  **Create a new branch** for your feature or bug fix: `git checkout -b feature/your-feature-name` or `git checkout -b fix/your-bug-fix`.
+3.  **Make your changes** and ensure they are well-tested.
+4.  **Commit your changes:** `git commit -m 'Add some amazing feature'`.
+5.  **Push to the branch:** `git push origin feature/your-feature-name`.
+6.  **Open a Pull Request** against the `main` (or `master`) branch.
+
+If you have ideas for collaboration, want to discuss potential research applications, or have any questions, please feel free to open an issue on GitHub or reach out to the @astomodynamics. We are particularly interested in exploring its use in novel robotic systems and complex motion planning scenarios.
+
 ## TODO
 * add **python binding**
-* add initial guess functionality based on path planner solution
 * improve parallelization
 * add simulation and its plots
   * Quadruped robot
