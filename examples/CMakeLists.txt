@@ -76,6 +76,12 @@ target_link_libraries(cddp_unicycle_safe_comparison cddp)
 add_executable(cddp_spacecraft_linear_docking cddp_spacecraft_linear_docking.cpp)
 target_link_libraries(cddp_spacecraft_linear_docking cddp)
 
+add_executable(cddp_spacecraft_rpo cddp_spacecraft_rpo.cpp)
+target_link_libraries(cddp_spacecraft_rpo cddp)
+
+add_executable(cddp_spacecraft_rpo_fuel cddp_spacecraft_rpo_fuel.cpp)
+target_link_libraries(cddp_spacecraft_rpo_fuel cddp)
+
 # add_executable(mpc_hcw mpc_hcw.cpp)
 # target_link_libraries(mpc_hcw cddp)
 
@@ -89,6 +95,9 @@ if (CDDP_CPP_CASADI)
 
     add_executable(ipopt_cartpole ipopt_cartpole.cpp)
     target_link_libraries(ipopt_cartpole cddp)
+
+    add_executable(ipopt_spacecrat_linear_fuel ipopt_spacecrat_linear_fuel.cpp)
+    target_link_libraries(ipopt_spacecrat_linear_fuel cddp)
 endif()
 
 if (CDDP_CPP_CASADI AND CDDP_CPP_SQP)

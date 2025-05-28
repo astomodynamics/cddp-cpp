@@ -62,6 +62,10 @@ add_executable(test_spacecraft_linear dynamics_model/test_spacecraft_linear.cpp)
 target_link_libraries(test_spacecraft_linear gtest gmock gtest_main cddp)
 gtest_discover_tests(test_spacecraft_linear)
 
+add_executable(test_spacecraft_linear_fuel dynamics_model/test_spacecraft_linear_fuel.cpp)
+target_link_libraries(test_spacecraft_linear_fuel gtest gmock gtest_main cddp)
+gtest_discover_tests(test_spacecraft_linear_fuel)
+
 add_executable(test_spacecraft_nonlinear dynamics_model/test_spacecraft_nonlinear.cpp)
 target_link_libraries(test_spacecraft_nonlinear gtest gmock gtest_main cddp)
 gtest_discover_tests(test_spacecraft_nonlinear)
