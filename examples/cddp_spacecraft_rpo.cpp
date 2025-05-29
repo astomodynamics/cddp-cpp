@@ -120,8 +120,8 @@ using namespace cddp;
 int main()
 {
     // Optimization horizon info
-    int horizon = 200;                  // Optimization horizon length
-    double time_horizon = 200.0;        // Time horizon for optimization [s]
+    int horizon = 500;                  // Optimization horizon length
+    double time_horizon = 10000.0;        // Time horizon for optimization [s]
     double dt = time_horizon / horizon; // Time step for optimization
     int state_dim = 6;
     int control_dim = 3;
@@ -129,25 +129,24 @@ int main()
     // HCW parameters
     double mean_motion = 0.001107;
     double mass = 100.0;
-    double nominal_radius = 50.0;
 
-    // Initial state
+    // Initial state (v-bar hold at 1km)
     Eigen::VectorXd initial_state(state_dim);
-    initial_state << nominal_radius, 0.0, 0.0, 0.0, -2.0*mean_motion*nominal_radius, 0.0;
+    initial_state << 0.0, -1000.0, 0.0, 0.0, 0.0, 0.0;
 
-    // Final (reference/goal) state
+    // Final (reference/goal) state (r-bar )
     Eigen::VectorXd goal_state(state_dim);
-    goal_state.setZero(); // Goal is the origin
+    goal_state << -100.0, 0.0, 0.0, 0.0, 2*mean_motion*100.0, 0.0;
 
     // Input constraints
-    double u_max = 1.0;  // for each dimension
-    double u_min = -1.0; // for each dimension
+    double u_max = 0.05;  // for each dimension
+    double u_min = -0.05; // for each dimension
     double u_min_norm = 0.0; // Minimum thrust magnitude
-    double u_max_norm = 1.0; // Maximum thrust magnitude, consistent with previous u_max
+    double u_max_norm = 0.05; // Maximum thrust magnitude, consistent with previous u_max
 
     // Cost weighting for SumOfTwoNormObjective
     double weight_running_control = 1.0;  // Example value
-    double weight_terminal_state = 1000.0; // Example value
+    double weight_terminal_state = 2000.0; // Example value
 
     // Create the HCW system for optimization
     std::unique_ptr<cddp::DynamicalSystem> hcw_system =
@@ -206,11 +205,17 @@ int main()
         std::make_unique<cddp::ControlConstraint>(u_upper));
 
     // // Add Thrust Magnitude Constraint
-    // cddp_solver.addConstraint("ThrustMagnitudeConstraint",
-    //     std::make_unique<cddp::ThrustMagnitudeConstraint>(u_min_norm, u_max_norm));
+    // cddp_solver.addConstraint("MaxThrustMagnitudeConstraint",
+    //     std::make_unique<cddp::MaxThrustMagnitudeConstraint>(u_max_norm));
+
+    // Add Ball Constraint (for keep-out zone)
+    double radius = 90.0;
+    Eigen::Vector2d center(0.0, 0.0);
+    cddp_solver.addConstraint("BallConstraint",
+        std::make_unique<cddp::BallConstraint>(radius, center, 0.1));
 
     // Solve the Trajectory Optimization Problem
-    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
     // Extract the solution
     std::vector<Eigen::VectorXd> X_solution = solution.state_sequence;
@@ -254,6 +259,13 @@ int main()
                 uz[i] = control(2);
                 thrust_magnitude[i] = control.norm();
             }
+        }
+
+        // Circle data for plotting
+        std::vector<double> circle_x, circle_y;
+        for (double theta = 0; theta <= 2*M_PI; theta += 0.01) {
+            circle_x.push_back(radius * std::cos(theta));
+            circle_y.push_back(radius * std::sin(theta));
         }
 
         // --- Generate Plots ---
@@ -308,7 +320,29 @@ int main()
         plt::legend();
         plt::title("Thrust Magnitude (ZOH) vs. Time");
 
-        // 7. 3D Trajectory
+        // 7. X-Y plane trajectory (x-axis vertical to the top, y-axis horizontal to the left)
+        plt::figure();
+        plt::plot(y_pos, x_pos)->line_width(2).display_name("Trajectory");
+        plt::hold(true);
+        // Plot Start and End points
+        if (!x_pos.empty() && !y_pos.empty()){ // Check if trajectories are not empty
+             plt::scatter(std::vector<double>{y_pos.front()}, std::vector<double>{x_pos.front()})
+                ->marker_color("g").marker_style("o").marker_size(10).display_name("Start");
+             plt::scatter(std::vector<double>{y_pos.back()}, std::vector<double>{x_pos.back()})
+                ->marker_color("r").marker_style("x").marker_size(10).display_name("End");
+        }
+        // Plot Ball Constraint
+        plt::hold(true);
+        plt::plot(circle_x, circle_y)->line_width(2).display_name("Ball Constraint");
+        plt::hold(false);
+        plt::xlabel("y (m)");
+        plt::ylabel("x (m)");
+        plt::legend();
+        plt::title("X-Y Plane Trajectory");
+        plt::axis(plt::equal); // For aspect_ratio=:equal
+        plt::gca()->x_axis().reverse(true); // Make y-axis (horizontal on plot) increase to the left
+
+        // 8. 3D Trajectory
         plt::figure();
         plt::plot3(x_pos, y_pos, z_pos, "-o")->line_width(2).marker_size(4).display_name("Trajectory");
         plt::hold(true);
@@ -326,7 +360,6 @@ int main()
         plt::legend();
         plt::title("3D Trajectory");
         plt::axis(plt::equal); // For aspect_ratio=:equal
-
 
         // Show all plots
         plt::show();
