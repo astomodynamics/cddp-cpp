@@ -939,7 +939,7 @@ namespace cddp
     public:
         ThrustMagnitudeConstraint(double min_thrust_norm,
                                   double max_thrust_norm,
-                                  double epsilon = 1e-8)
+                                  double epsilon = 1e-6)
             : Constraint("ThrustMagnitudeConstraint"),
               min_thrust_norm_(min_thrust_norm),
               max_thrust_norm_(max_thrust_norm),
@@ -997,7 +997,7 @@ namespace cddp
             double u_sq_norm = control.squaredNorm();
             double u_reg_norm = std::sqrt(u_sq_norm + epsilon_);
 
-            if (u_reg_norm < 1e-12) { // safeguard,
+            if (u_reg_norm < epsilon_) { // safeguard,
                  jac.setZero(); // Already zero, but explicit.
             } else {
                 Eigen::RowVectorXd du_norm_reg_du = control.transpose() / u_reg_norm;
@@ -1038,7 +1038,7 @@ namespace cddp
 
             double denominator = std::pow(term_in_sqrt, 1.5);
 
-            if (std::abs(denominator) > 1e-12) // Safeguard
+            if (denominator > std::numeric_limits<double>::min()) // Avoid division by zero if denominator underflows, though epsilon should prevent this for reasonable values
             {
                  H_norm_reg = (term_in_sqrt * Eigen::MatrixXd::Identity(control.size(), control.size()) - control * control.transpose()) / denominator;
             }
@@ -1056,6 +1056,114 @@ namespace cddp
 
     private:
         double min_thrust_norm_;
+        double max_thrust_norm_;
+        double epsilon_;
+    };
+
+    class MaxThrustMagnitudeConstraint : public Constraint
+    {
+    public:
+        MaxThrustMagnitudeConstraint(double max_thrust_norm,
+                                     double epsilon = 1e-6)
+            : Constraint("MaxThrustMagnitudeConstraint"),
+              max_thrust_norm_(max_thrust_norm),
+              epsilon_(epsilon)
+        {
+            if (max_thrust_norm_ < 0.0)
+            {
+                throw std::invalid_argument("MaxThrustMagnitudeConstraint: max_thrust_norm must be non-negative.");
+            }
+            if (epsilon_ <= 0.0)
+            {
+                throw std::invalid_argument("MaxThrustMagnitudeConstraint: epsilon must be positive.");
+            }
+        }
+
+        int getDualDim() const override
+        {
+            return 1; 
+        }
+
+        // Constraint is ||u|| - max_thrust_norm <= 0
+        Eigen::VectorXd evaluate(const Eigen::VectorXd & /*state*/,
+                                 const Eigen::VectorXd &control) const override
+        {
+            double u_norm = control.norm();
+            Eigen::VectorXd g(1);
+            g(0) = u_norm - max_thrust_norm_;
+            return g;
+        }
+
+        Eigen::VectorXd getLowerBound() const override
+        {
+            return Eigen::VectorXd::Constant(1, -std::numeric_limits<double>::infinity());
+        }
+
+        Eigen::VectorXd getUpperBound() const override
+        {
+            return Eigen::VectorXd::Zero(1);
+        }
+
+        Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state,
+                                         const Eigen::VectorXd & /*control*/) const override
+        {
+            return Eigen::MatrixXd::Zero(1, state.size());
+        }
+
+        Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd & /*state*/,
+                                           const Eigen::VectorXd &control) const override
+        {
+            Eigen::MatrixXd jac = Eigen::MatrixXd::Zero(1, control.size());
+            double u_sq_norm = control.squaredNorm();
+            double u_reg_norm = std::sqrt(u_sq_norm + epsilon_);
+
+            if (u_reg_norm > std::numeric_limits<double>::min()) { 
+                jac.row(0) = control.transpose() / u_reg_norm;
+            }
+            // else jac remains zero, if u_reg_norm is zero or too small (should be prevented by epsilon > 0)
+            return jac;
+        }
+
+        double computeViolation(const Eigen::VectorXd &state,
+                                const Eigen::VectorXd &control) const override
+        {
+            Eigen::VectorXd g = evaluate(state, control);
+            return computeViolationFromValue(g);
+        }
+
+        double computeViolationFromValue(const Eigen::VectorXd &g) const override
+        {
+            if (g.size() != 1) {
+                 throw std::runtime_error("MaxThrustMagnitudeConstraint: Input vector g must have size 1 in computeViolationFromValue.");
+            }
+            return std::max(0.0, g(0)); // Violation if g(0) > 0
+        }
+
+        std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd & /*control*/) const override
+        {
+            return {Eigen::MatrixXd::Zero(state.size(), state.size())};
+        }
+
+        std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd & /*state*/, const Eigen::VectorXd &control) const override
+        {
+            Eigen::MatrixXd H_norm_reg = Eigen::MatrixXd::Zero(control.size(), control.size());
+            double u_sq_norm = control.squaredNorm();
+            double term_in_sqrt = u_sq_norm + epsilon_;
+            double denominator = std::pow(term_in_sqrt, 1.5);
+
+            if (denominator > std::numeric_limits<double>::min())
+            {
+                 H_norm_reg = (term_in_sqrt * Eigen::MatrixXd::Identity(control.size(), control.size()) - control * control.transpose()) / denominator;
+            }
+            return {H_norm_reg};
+        }
+
+        std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override
+        {
+            return {Eigen::MatrixXd::Zero(control.size(), state.size())};
+        }
+
+    private:
         double max_thrust_norm_;
         double epsilon_;
     };
