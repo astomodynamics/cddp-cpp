@@ -66,7 +66,7 @@ int main() {
 
     // CDDP options
     cddp::CDDPOptions options;
-    options.max_iterations = 10;
+    options.max_iterations = 100;
     options.verbose = true;
     options.debug = false;
     options.use_parallel = false;
@@ -119,7 +119,7 @@ int main() {
     solver_baseline.setInitialTrajectory(X_baseline_init, U_baseline_init);
 
     // Solve
-    cddp::CDDPSolution solution_baseline = solver_baseline.solve("IPDDP");
+    cddp::CDDPSolution solution_baseline = solver_baseline.solve("MSIPDDP");
     auto X_baseline_sol = solution_baseline.state_sequence;   // horizon+1
     auto U_baseline_sol = solution_baseline.control_sequence; // horizon
     auto T_baseline_sol = solution_baseline.time_sequence;    // horizon+1
@@ -153,7 +153,7 @@ int main() {
     solver_ball.setInitialTrajectory(X_ball_init, U_ball_init);
 
     // Solve
-    cddp::CDDPSolution solution_ball = solver_ball.solve("IPDDP");
+    cddp::CDDPSolution solution_ball = solver_ball.solve("MSIPDDP");
     auto X_ball_sol = solution_ball.state_sequence;
     auto U_ball_sol = solution_ball.control_sequence;
     auto T_ball_sol = solution_ball.time_sequence;
