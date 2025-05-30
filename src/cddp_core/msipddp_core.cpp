@@ -654,7 +654,7 @@ namespace cddp
 
                 // Error tracking
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
-                rf_err += d.lpNorm<Eigen::Infinity>();
+                rf_err = std::max(rf_err, d.lpNorm<Eigen::Infinity>());
 
                 t--;
             } // end while t (unconstrained)
@@ -909,6 +909,10 @@ namespace cddp
         // Define tau for feasibility check
         double tau = std::max(0.99, 1.0 - mu_);
 
+        // Filter acceptance
+        double filter_merit_acceptance = options_.filter_merit_acceptance;
+        double filter_violation_acceptance = options_.filter_violation_acceptance;
+
         std::vector<Eigen::VectorXd> X_new = X_;
         std::vector<Eigen::VectorXd> U_new = U_;
         std::vector<Eigen::VectorXd> F_new = F_;
@@ -957,14 +961,16 @@ namespace cddp
                 F_new[t] = f_new_t;
 
                 // Determine if the *next* step (t+1) starts a new segment boundary
-                bool apply_gap_closing_strategy = (ms_segment_length_ > 0) &&
-                                                  ((t + 1) % ms_segment_length_ == 0) &&
-                                                  (t + 1 < horizon_);
+                const Eigen::VectorXd defect_at_segment_end = F_[t] - X_[t+1]; // Defect from the *previous* iteration's plan
+                bool is_segment_boundary = (ms_segment_length_ > 0) &&
+                                           ((t + 1) % ms_segment_length_ == 0) &&
+                                           (t + 1 < horizon_);
+                bool defect_is_large = defect_at_segment_end.lpNorm<Eigen::Infinity>() > options_.ms_defect_tolerance_for_single_shooting;
+
+                bool apply_gap_closing_strategy = is_segment_boundary && defect_is_large;
 
                 if (apply_gap_closing_strategy)
                 {
-                    const Eigen::VectorXd defect_at_segment_end = F_[t] - X_[t + 1]; // Defect from the *previous* iteration's plan
-
                     if (options_.ms_rollout_type == "nonlinear")
                     {
                         X_new[t + 1] = f_new_t + alpha * defect_at_segment_end;
@@ -999,7 +1005,6 @@ namespace cddp
             {
                 cost_new += objective_->running_cost(X_new[t], U_new[t], t);
                 Eigen::VectorXd d = F_new[t] - X_new[t + 1];
-                log_cost_new += defect_violation_penalty_ * d.lpNorm<Eigen::Infinity>();
                 rf_err += d.lpNorm<1>();
             } // End of cost and defect evaluation loop
             cost_new += objective_->terminal_cost(X_new.back());
@@ -1112,21 +1117,23 @@ namespace cddp
                 F_new[t] = f_new_t;
 
                 // Determine if the *next* step (t+1) starts a new segment boundary
-                bool apply_gap_closing_strategy = (ms_segment_length_ > 0) &&
-                                                  ((t + 1) % ms_segment_length_ == 0) &&
-                                                  (t + 1 < horizon_);
+                const Eigen::VectorXd defect_at_segment_end = F_[t] - X_[t+1]; // Defect from the *previous* iteration's plan
+                bool is_segment_boundary = (ms_segment_length_ > 0) &&
+                                           ((t + 1) % ms_segment_length_ == 0) &&
+                                           (t + 1 < horizon_);
+                bool defect_is_large = defect_at_segment_end.lpNorm<Eigen::Infinity>() > options_.ms_defect_tolerance_for_single_shooting;
+
+                bool apply_gap_closing_strategy = is_segment_boundary && defect_is_large;
 
                 if (apply_gap_closing_strategy)
                 {
-                    const Eigen::VectorXd defect_at_segment_end = F_[t] - X_[t + 1]; // Defect from the *previous* iteration's plan
-
                     if (options_.ms_rollout_type == "nonlinear")
                     {
                         X_new[t + 1] = f_new_t + alpha * defect_at_segment_end;
                     }
                     else if (options_.ms_rollout_type == "linear" || options_.ms_rollout_type == "hybrid")
                     {
-                        X_new[t + 1] = X_[t] + A_[t] * delta_x_k + alpha * B_[t] * k_u_[t] + alpha * defect_at_segment_end;
+                        X_new[t + 1] = X_[t] + A_[t] * delta_x_k + alpha * B_[t] * delta_u_k + alpha * defect_at_segment_end;
                     }
                 }
                 else // Not a segment boundary
@@ -1236,15 +1243,13 @@ namespace cddp
                 }
 
                 Eigen::VectorXd d = F_new[t] - X_new[t + 1];
-                log_cost_new += defect_violation_penalty_ * d.lpNorm<Eigen::Infinity>();
-                rf_err += d.lpNorm<1>();
+                rf_err = d.lpNorm<1>();
             }
 
             cost_new += objective_->terminal_cost(X_new.back());
             log_cost_new += cost_new;
 
-
-            double constraint_violation = std::max(rp_err, rf_err);
+            double constraint_violation = rp_err + rf_err;
             constraint_violation = std::max(constraint_violation, options_.cost_tolerance);
 
             FilterPoint candidate{log_cost_new, constraint_violation};
@@ -1313,24 +1318,13 @@ namespace cddp
 
             // Add defect violation penalty
             Eigen::VectorXd d = F_[t] - X_[t + 1];
-            L_ += defect_violation_penalty_ * d.lpNorm<1>();
             rf_err += d.lpNorm<1>();
         }
 
-        // Apply tolerances
-        if (rp_err < options_.cost_tolerance)
-        {
-            rp_err = options_.cost_tolerance;
-        }
-        if (rf_err < options_.grad_tolerance)
-        {
-            rf_err = options_.grad_tolerance;
-        }
-
-        constraint_violation_ = std::max(rp_err, 0.0);
+        constraint_violation_ = std::max(rp_err + rf_err, options_.cost_tolerance);
 
         // Update filter
-        filter_.push_back(cddp::FilterPoint(L_, rp_err)); 
+        filter_.push_back(cddp::FilterPoint(L_, constraint_violation_)); 
         return;
     }
 

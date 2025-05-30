@@ -69,6 +69,10 @@ struct CDDPOptions {
     double slack_scale = 1e-2;                      // Initial scale for slack variables
     double lambda_scale = 1e-6;                     // Initial scale for lambda variables
 
+    // ipddp line-search options
+    double filter_merit_acceptance = 1e-8;         // Small value for merit filter acceptance
+    double filter_violation_acceptance = 1e-8;     // Small value for violation filter acceptance
+
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
     
@@ -110,6 +114,7 @@ struct CDDPOptions {
     double ms_defect_penalty_mu0 = 10.0;            // Mu_0 safety margin for defect penalty update
     int ms_segment_length = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
     std::string ms_rollout_type = "hybrid"; // Rollout type: ["linear", "nonlinear", "hybrid"]
+    double ms_defect_tolerance_for_single_shooting = 1e-3; // Defect norm tolerance to switch to single shooting at segment boundaries
 };
 
 struct CDDPSolution {
