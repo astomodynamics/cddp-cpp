@@ -61,10 +61,10 @@ cddp::CDDPSolution CDDP::solve(std::string solver_type) {
     } else if (solver_type == "LogCDDP" || solver_type == "LogDDP") {
         if (options_.verbose) {
             std::cout << "--------------------" << std::endl;
-            std::cout << "Solving with LogCDDP" << std::endl;
+            std::cout << "Solving with LogDDP" << std::endl;
             std::cout << "--------------------" << std::endl;
         }
-        return solveLogCDDP();
+        return solveLogDDP();
     } else if (solver_type == "ASCDDP" || solver_type == "ASDDP") {
         if (options_.verbose) {
             std::cout << "--------------------" << std::endl;

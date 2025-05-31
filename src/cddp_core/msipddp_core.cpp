@@ -148,7 +148,7 @@ namespace cddp
                 {
                     // Initialize s_i = max(options.slack_scale, -g_i) to ensure s_i > 0
                     s_init_t(i) = std::max(options_.slack_scale, -g_at_xt_ut(i));
-
+                
                     // Initialize y_i = heuristic_initial_mu / s_i to satisfy s_i * y_i = heuristic_initial_mu
                     if (s_init_t(i) < 1e-12)
                     { // Safeguard
@@ -159,7 +159,7 @@ namespace cddp
                         y_init_t(i) = heuristic_initial_mu / s_init_t(i);
                     }
                     // Ensure y_i is also not too small
-                    y_init_t(i) = std::max(options_.dual_scale * 0.1, y_init_t(i)); // 10% of dual_scale as minimum
+                    y_init_t(i) = std::max(options_.dual_scale * 0.1, std::min(y_init_t(i), options_.dual_scale * 10.0)); // 10% of dual_scale 
                 }
                 Y_[constraint_name][t] = y_init_t;
                 S_[constraint_name][t] = s_init_t;
@@ -337,6 +337,7 @@ namespace cddp
             }
 
             // Check if already converged due to regularization limit in backward pass
+            // TODO: Remove this
             if (solution.converged)
             {
                 break;
@@ -346,7 +347,6 @@ namespace cddp
             best_result.success = false;
             best_result.cost = std::numeric_limits<double>::infinity();
             best_result.lagrangian = std::numeric_limits<double>::infinity();
-            // TODO: Add gap violation to result struct
             best_result.constraint_violation = 0.0; // Path constraint violation
 
             bool forward_pass_success = false;
@@ -432,9 +432,6 @@ namespace cddp
                 S_ = best_result.slack_sequence;      // Path constraint slacks
                 G_ = best_result.constraint_sequence; // Path constraint values
                 F_ = best_result.dynamics_sequence;   // Dynamics
-                // TODO: Update gaps_ and gap_multipliers_ from best_result
-                // gaps_ = best_result.gap_sequence;
-                // gap_multipliers_ = best_result.gap_multiplier_sequence;
 
                 dJ_ = J_ - best_result.cost;
                 J_ = best_result.cost;
@@ -970,7 +967,7 @@ namespace cddp
                 // Update lambda
                 Lambda_new[t] = alpha * Lambda_[t] + K_lambda_[t] * dx;
 
-                // --- Refactored Rollout Logic (v2) ---
+                // --- Rollout Logic ---
                 Eigen::VectorXd dynamics_eval_for_F_new_t;
 
                 if (options_.ms_rollout_type == "nonlinear" || options_.ms_rollout_type == "hybrid")
@@ -1013,7 +1010,7 @@ namespace cddp
                         X_new[t + 1] = X_[t] + A_[t] * dx + B_[t] * du; // Linear rollout for state
                     }
                 }
-                // --- End Refactored Rollout Logic (v2) ---
+                // --- End Rollout Logic ---
 
                 // --- Robustness Check during Rollout ---
                 if (!X_new[t + 1].allFinite() || !U_new[t].allFinite())
@@ -1046,24 +1043,34 @@ namespace cddp
             bool filter_acceptance = false;
             double expected_improvement = alpha * dV_(0);
 
-            if (constraint_violation_new > options_.filter_maximum_violation) {
-                if (constraint_violation_new < options_.filter_acceptance * constraint_violation_old) {
+            if (constraint_violation_new > options_.filter_maximum_violation)
+            {
+                if (constraint_violation_new < options_.filter_acceptance * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
-                else {
+                else
+                {
                     filter_acceptance = false;
                 }
-            } else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0) {
-                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement) {
+            }
+            else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0)
+            {
+                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement)
+                {
                     filter_acceptance = true;
                 }
-            } else {
-                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_new || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old) {
+            }
+            else
+            {
+                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_new || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
             }
 
-            if (filter_acceptance) {
+            if (filter_acceptance)
+            {
                 // Update the result with the new trajectories and metrics.
                 result.success = true;
                 result.state_sequence = X_new;
@@ -1281,21 +1288,30 @@ namespace cddp
             bool filter_acceptance = false;
             double expected_improvement = alpha * dV_(0);
 
-            if (constraint_violation_new > options_.filter_maximum_violation) {
-                if (constraint_violation_new < (1 - options_.filter_acceptance) * constraint_violation_old) {
+            if (constraint_violation_new > options_.filter_maximum_violation)
+            {
+                if (constraint_violation_new < (1 - options_.filter_acceptance) * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
-            } else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0) {
-                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement) {
+            }
+            else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0)
+            {
+                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement)
+                {
                     filter_acceptance = true;
                 }
-            } else {
-                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_old || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old) {
+            }
+            else
+            {
+                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_old || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
             }
 
-            if (filter_acceptance) {
+            if (filter_acceptance)
+            {
                 // Update the result with the new trajectories and metrics.
                 result.success = true;
                 result.state_sequence = X_new;
@@ -1331,15 +1347,15 @@ namespace cddp
                 const Eigen::VectorXd &g_vec = G_[cname][t]; // Assumes G_ is updated
 
                 L_ -= mu_ * s_vec.array().log().sum();
-                // rp_err += (s_vec + g_vec).lpNorm<1>();
+                rp_err += (s_vec + g_vec).lpNorm<1>();
             }
 
             // Add defect violation penalty
-            // Eigen::VectorXd d = F_[t] - X_[t + 1];
-            // rf_err += d.lpNorm<1>();
+            Eigen::VectorXd d = F_[t] - X_[t + 1];
+            rf_err += d.lpNorm<1>();
         }
 
-        // constraint_violation_ = rp_err + rf_err;
+        constraint_violation_ = rp_err + rf_err;
         return;
     }
 
