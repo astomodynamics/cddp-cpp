@@ -272,9 +272,6 @@ namespace cddp
         resetMSIPDDPFilter(); // L_ is computed inside this function
         solution.lagrangian_sequence.push_back(L_);
 
-        // Reset regularization
-        resetMSIPDDPRegularization();
-
         if (options_.verbose)
         {
             // TODO: Update printIteration to include gap violation norm
@@ -285,7 +282,6 @@ namespace cddp
         auto start_time = std::chrono::high_resolution_clock::now();
         int iter = 0;
         ForwardPassResult best_result;
-        ipddp_regularization_counter_ = 0; // Reset regularization counter
 
         // Main loop of MSIPDDP
         while (iter < options_.max_iterations)
@@ -524,7 +520,6 @@ namespace cddp
                 mu_ = std::max(options_.grad_tolerance / 10.0, std::min(linear_reduction_target_factor * mu_, std::pow(mu_, options_.barrier_update_power)));
 
                 resetMSIPDDPFilter();
-                resetMSIPDDPRegularization();
 
                 if (options_.debug)
                 {
@@ -570,7 +565,7 @@ namespace cddp
 
         bool first_pass_flag_at_start = ms_lambda_initialization_;
 
-        // --- Pre-computation Phase: Compute and store linearized dynamics ---
+        // --- Pre-computation Phase: Compute and store linearized dynamics --- TODO: Parallelize this
         for (int t = 0; t < horizon_; ++t)
         {
             const Eigen::VectorXd &x = X_[t];
@@ -1045,40 +1040,30 @@ namespace cddp
             cost_new += objective_->terminal_cost(X_new.back());
             log_cost_new += cost_new;
 
-            // Build a candidate filter point from the computed cost metrics.
-            FilterPoint candidate{log_cost_new, rf_err};
+            double constraint_violation_old = constraint_violation_;
+            double constraint_violation_new = rf_err;
+            double log_cost_old = L_;
+            bool filter_acceptance = false;
+            double expected_improvement = alpha * dV_(0);
 
-            // Check if candidate is dominated by any existing filter point
-            bool candidateDominated = false;
-            for (const auto &fp : filter_)
-            {
-                // If the candidate is dominated by an existing filter point, early exit.
-                if (candidate.log_cost >= fp.log_cost && candidate.violation >= fp.violation)
-                {
-                    candidateDominated = true;
-                    return result;
+            if (constraint_violation_new > options_.filter_maximum_violation) {
+                if (constraint_violation_new < options_.filter_acceptance * constraint_violation_old) {
+                    filter_acceptance = true;
+                }
+                else {
+                    filter_acceptance = false;
+                }
+            } else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0) {
+                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement) {
+                    filter_acceptance = true;
+                }
+            } else {
+                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_new || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old) {
+                    filter_acceptance = true;
                 }
             }
 
-            if (!candidateDominated)
-            {
-                // Remove any filter points that are dominated by the candidate.
-                for (auto it = filter_.begin(); it != filter_.end();)
-                {
-                    if (candidate.log_cost <= it->log_cost && candidate.violation <= it->violation)
-                    {
-                        // Candidate dominates this point, so erase it.
-                        it = filter_.erase(it);
-                    }
-                    else
-                    {
-                        ++it;
-                    }
-                }
-
-                // Append the candidate to the filter set.
-                filter_.push_back(candidate);
-
+            if (filter_acceptance) {
                 // Update the result with the new trajectories and metrics.
                 result.success = true;
                 result.state_sequence = X_new;
@@ -1090,7 +1075,7 @@ namespace cddp
                 result.constraint_sequence = G_new;
                 result.cost = cost_new;
                 result.lagrangian = log_cost_new;
-                result.constraint_violation = rf_err;
+                result.constraint_violation = constraint_violation_new;
             }
 
             return result;
@@ -1290,35 +1275,28 @@ namespace cddp
             cost_new += objective_->terminal_cost(X_new.back());
             log_cost_new += cost_new;
 
-            double constraint_violation = rp_err + rf_err;
-            constraint_violation = std::max(constraint_violation, options_.grad_tolerance);
+            double constraint_violation_old = constraint_violation_;
+            double constraint_violation_new = rp_err + rf_err;
+            double log_cost_old = L_;
+            bool filter_acceptance = false;
+            double expected_improvement = alpha * dV_(0);
 
-            FilterPoint candidate{log_cost_new, constraint_violation};
-            bool candidateDominated = false;
-            for (const auto &fp : filter_)
-            {
-                if (candidate.log_cost >= fp.log_cost && candidate.violation >= fp.violation)
-                {
-                    candidateDominated = true;
-                    break;
+            if (constraint_violation_new > options_.filter_maximum_violation) {
+                if (constraint_violation_new < (1 - options_.filter_acceptance) * constraint_violation_old) {
+                    filter_acceptance = true;
+                }
+            } else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0) {
+                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement) {
+                    filter_acceptance = true;
+                }
+            } else {
+                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_old || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old) {
+                    filter_acceptance = true;
                 }
             }
 
-            if (!candidateDominated)
-            {
-                for (auto it = filter_.begin(); it != filter_.end();)
-                {
-                    if (candidate.log_cost <= it->log_cost && candidate.violation <= it->violation)
-                    {
-                        it = filter_.erase(it);
-                    }
-                    else
-                    {
-                        ++it;
-                    }
-                }
-                filter_.push_back(candidate);
-
+            if (filter_acceptance) {
+                // Update the result with the new trajectories and metrics.
                 result.success = true;
                 result.state_sequence = X_new;
                 result.control_sequence = U_new;
@@ -1329,7 +1307,7 @@ namespace cddp
                 result.constraint_sequence = G_new;
                 result.cost = cost_new;
                 result.lagrangian = log_cost_new;
-                result.constraint_violation = constraint_violation;
+                result.constraint_violation = constraint_violation_new;
             }
             return result;
         }
@@ -1342,7 +1320,6 @@ namespace cddp
         L_ = J_;             // Assume J_ (total cost) is computed from a rollout
         double rp_err = 0.0; // Path constraint violation
         double rf_err = 0.0; // Gap violation
-        filter_ = {};        // TODO: Use ms_filter_
 
         // Calculate path constraint terms and violation
         for (int t = 0; t < horizon_; ++t)
@@ -1354,18 +1331,15 @@ namespace cddp
                 const Eigen::VectorXd &g_vec = G_[cname][t]; // Assumes G_ is updated
 
                 L_ -= mu_ * s_vec.array().log().sum();
-                rp_err += (s_vec + g_vec).lpNorm<1>();
+                // rp_err += (s_vec + g_vec).lpNorm<1>();
             }
 
             // Add defect violation penalty
-            Eigen::VectorXd d = F_[t] - X_[t + 1];
-            rf_err += d.lpNorm<1>();
+            // Eigen::VectorXd d = F_[t] - X_[t + 1];
+            // rf_err += d.lpNorm<1>();
         }
 
-        constraint_violation_ = std::max(rp_err + rf_err, options_.grad_tolerance);
-
-        // Update filter
-        filter_.push_back(cddp::FilterPoint(L_, constraint_violation_));
+        // constraint_violation_ = rp_err + rf_err;
         return;
     }
 
@@ -1403,14 +1377,6 @@ namespace cddp
         // Store the initial total cost.
         J_ = cost;
 
-        return;
-    }
-
-    // TODO: Rename resetIPDDPRegularization -> resetMSIPDDPRegularization if needed
-    void CDDP::resetMSIPDDPRegularization()
-    {
-        ipddp_regularization_counter_ = 0;
-        // TODO: Reset any MS-specific regularization parameters?
         return;
     }
 

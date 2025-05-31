@@ -34,7 +34,7 @@ int main() {
 
     // Create a CartPole instance with custom parameters.
     double cart_mass = 1.0;
-    double pole_mass = 0.4;
+    double pole_mass = 0.2;
     double pole_length = 0.5;
     double gravity = 9.81;
     double damping = 0.0; // TODO: Implement damping term.
@@ -45,7 +45,7 @@ int main() {
 
     // Cost matrices.
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Eigen::MatrixXd R = 1.0 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd R = 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
     Qf(0,0) = 100.0;  // Final cart position cost.
     Qf(1,1) = 100.0;  // Final cart velocity cost.
@@ -91,9 +91,11 @@ int main() {
     options.regularization_type = "control";
     options.regularization_control = 1e-5;
     options.is_ilqr = true;
+    options.use_parallel = true;
+    options.num_threads = 12;
     options.debug = false;
     options.barrier_coeff = 1e-1;
-    options.ms_segment_length = horizon / 10;
+    options.ms_segment_length = horizon;
     options.ms_rollout_type = "nonlinear";
     options.ms_defect_tolerance_for_single_shooting = 1e-5;
     options.barrier_update_factor = 0.2;
@@ -129,7 +131,7 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve.
-    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
     auto X_sol = solution.state_sequence;
     auto U_sol = solution.control_sequence;
     auto t_sol = solution.time_sequence;

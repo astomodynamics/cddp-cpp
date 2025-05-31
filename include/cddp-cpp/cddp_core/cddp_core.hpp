@@ -70,8 +70,11 @@ struct CDDPOptions {
     double lambda_scale = 1e-6;                     // Initial scale for lambda variables
 
     // ipddp line-search options
-    double filter_merit_acceptance = 1e-8;         // Small value for merit filter acceptance
-    double filter_violation_acceptance = 1e-8;     // Small value for violation filter acceptance
+    double filter_merit_acceptance = 1e-6;         // Small value for merit filter acceptance
+    double filter_violation_acceptance = 1e-6;     // Small value for violation filter acceptance
+    double filter_maximum_violation = 1e-2;         // Maximum violation for filter acceptance
+    double filter_minimum_violation = 1e-6;         // Minimum violation for filter acceptance
+    double armijo_constant = 1e-4;                   // Armijo constant c1 for filter acceptance
 
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
@@ -330,7 +333,6 @@ private:
     bool solveIPDDPBackwardPass();
     void resetIPDDPFilter();
     void initialIPDDPRollout();
-    void resetIPDDPRegularization();
 
     // MSIPDDP methods
     void initializeMSIPDDP();
@@ -339,7 +341,6 @@ private:
     bool solveMSIPDDPBackwardPass();
     void resetMSIPDDPFilter();
     void initialMSIPDDPRollout();
-    void resetMSIPDDPRegularization();
 
     // Feasible IPDDP methods
     void initializeFeasibleIPDDP();
@@ -417,8 +418,6 @@ private:
 
     // Log-barrier
     double mu_; // Barrier coefficient
-    std::vector<FilterPoint> filter_; // [logcost, error measure
-    int ipddp_regularization_counter_ = 0; // Regularization counter for IPDDP
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
     
