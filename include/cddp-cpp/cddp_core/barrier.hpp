@@ -120,6 +120,276 @@ private:
     bool is_relaxed_log_barrier_; ///< Use relaxed log-barrier method
 };
 
+/**
+ * @class RelaxedLogBarrier
+ * @brief Implements the relaxed log-barrier function for inequality constraints
+ *        of the form lower_bound <= g(x,u) <= upper_bound (element-wise),
+ *        based on the formulation:
+ *        beta_delta(z) = -log(z)                               if z > delta
+ *                        0.5 * [((z - 2*delta)/delta)^2 - 1] - log(delta) if z <= delta
+ */
+class RelaxedLogBarrier {
+public:
+    /**
+     * @brief Construct a relaxed log barrier with given parameters.
+     *
+     * @param barrier_coeff     Coefficient multiplying the barrier penalty (mu_penalty).
+     * @param relaxation_delta  The relaxation parameter delta.
+     */
+    RelaxedLogBarrier(double barrier_coeff = 1e-2, 
+                      double relaxation_delta = 1e-1)
+        : barrier_coeff_(barrier_coeff), relaxation_delta_(relaxation_delta) {
+        if (relaxation_delta_ <= 0) {
+            throw std::invalid_argument("Relaxation delta must be positive.");
+        }
+    }
+
+    /**
+     * @brief Evaluate the relaxed log-barrier function for a given constraint.
+     * 
+     * @param constraint A reference to the constraint object.
+     * @param state      Current state vector.
+     * @param control    Current control vector.
+     * @return Barrier function value.
+     */
+    double evaluate(const Constraint& constraint, 
+                    const Eigen::VectorXd& state,
+                    const Eigen::VectorXd& control) const {
+        Eigen::VectorXd g_val = constraint.evaluate(state, control);
+        Eigen::VectorXd L = constraint.getLowerBound();
+        Eigen::VectorXd U = constraint.getUpperBound();
+        int constraint_dim = g_val.size();
+        double total_barrier_cost = 0.0;
+
+        for (int i = 0; i < constraint_dim; ++i) {
+            double beta_val_L = 0.0, beta_prime_L = 0.0, beta_double_prime_L = 0.0;
+            double beta_val_U = 0.0, beta_prime_U = 0.0, beta_double_prime_U = 0.0;
+
+            if (L(i) != -std::numeric_limits<double>::infinity()) {
+                double s_L = g_val(i) - L(i);
+                if (s_L < 0 && std::abs(s_L) > 1e-9) {
+                }
+                calculate_beta_derivatives(s_L, relaxation_delta_, beta_val_L, beta_prime_L, beta_double_prime_L);
+                total_barrier_cost += beta_val_L;
+            }
+
+            if (U(i) != std::numeric_limits<double>::infinity()) {
+                double s_U = U(i) - g_val(i);
+                calculate_beta_derivatives(s_U, relaxation_delta_, beta_val_U, beta_prime_U, beta_double_prime_U);
+                total_barrier_cost += beta_val_U;
+            }
+        }
+        return barrier_coeff_ * total_barrier_cost;
+    }
+
+    /**
+     * @brief Compute the gradient (first derivative) w.r.t. state and control.
+     *
+     * @param constraint    Constraint being enforced.
+     * @param state         Current state vector.
+     * @param control       Current control vector.
+     * @return A tuple of two vectors: `(dBarrier/dx, dBarrier/du)`.
+     */
+    std::tuple<Eigen::VectorXd, Eigen::VectorXd> getGradients(
+        const Constraint& constraint, 
+        const Eigen::VectorXd& state,
+        const Eigen::VectorXd& control) const {
+        
+        Eigen::VectorXd g_val = constraint.evaluate(state, control);
+        Eigen::VectorXd L = constraint.getLowerBound();
+        Eigen::VectorXd U = constraint.getUpperBound();
+        Eigen::MatrixXd Gx = constraint.getStateJacobian(state, control);
+        Eigen::MatrixXd Gu = constraint.getControlJacobian(state, control);
+
+        int state_dim = state.size();
+        int control_dim = control.size();
+        int constraint_dim = g_val.size();
+
+        Eigen::VectorXd grad_x = Eigen::VectorXd::Zero(state_dim);
+        Eigen::VectorXd grad_u = Eigen::VectorXd::Zero(control_dim);
+
+        for (int i = 0; i < constraint_dim; ++i) {
+            double beta_val_L, beta_prime_L, beta_double_prime_L;
+            double beta_val_U, beta_prime_U, beta_double_prime_U;
+            
+            double dCost_dg_i = 0.0;
+
+            if (L(i) != -std::numeric_limits<double>::infinity()) {
+                double s_L = g_val(i) - L(i);
+                calculate_beta_derivatives(s_L, relaxation_delta_, beta_val_L, beta_prime_L, beta_double_prime_L);
+                dCost_dg_i += beta_prime_L;
+            }
+
+            if (U(i) != std::numeric_limits<double>::infinity()) {
+                double s_U = U(i) - g_val(i);
+                calculate_beta_derivatives(s_U, relaxation_delta_, beta_val_U, beta_prime_U, beta_double_prime_U);
+                dCost_dg_i -= beta_prime_U; 
+            }
+            
+            grad_x += dCost_dg_i * Gx.row(i).transpose();
+            grad_u += dCost_dg_i * Gu.row(i).transpose();
+        }
+        
+        return std::make_tuple(barrier_coeff_ * grad_x, barrier_coeff_ * grad_u);
+    }
+
+    /**
+     * @brief Compute second derivatives (Hessians) of the barrier function.
+     *
+     * @param constraint    Constraint being enforced.
+     * @param state         Current state vector.
+     * @param control       Current control vector.
+     * @return A tuple of matrices `(Hxx, Huu, Hxu)` in that order.
+     */
+    std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd> getHessians(
+        const Constraint& constraint,
+        const Eigen::VectorXd& state, 
+        const Eigen::VectorXd& control) const {
+
+        Eigen::VectorXd g_val = constraint.evaluate(state, control);
+        Eigen::VectorXd L = constraint.getLowerBound();
+        Eigen::VectorXd U = constraint.getUpperBound();
+        Eigen::MatrixXd Gx = constraint.getStateJacobian(state, control);
+        Eigen::MatrixXd Gu = constraint.getControlJacobian(state, control);
+
+        int state_dim = state.size();
+        int control_dim = control.size();
+        int constraint_dim = g_val.size();
+
+        Eigen::MatrixXd Hxx = Eigen::MatrixXd::Zero(state_dim, state_dim);
+        Eigen::MatrixXd Huu = Eigen::MatrixXd::Zero(control_dim, control_dim);
+        Eigen::MatrixXd Hux = Eigen::MatrixXd::Zero(control_dim, state_dim); 
+
+        std::vector<Eigen::MatrixXd> Gxx_constraint_vec, Guu_constraint_vec, Gux_constraint_vec;
+        bool constraint_provides_hessians = true;
+        try {
+            auto hess_tuple = constraint.getHessians(state, control);
+            Gxx_constraint_vec = std::get<0>(hess_tuple);
+            Guu_constraint_vec = std::get<1>(hess_tuple);
+            Gux_constraint_vec = std::get<2>(hess_tuple);
+            if (Gxx_constraint_vec.size() != constraint_dim || 
+                Guu_constraint_vec.size() != constraint_dim || 
+                Gux_constraint_vec.size() != constraint_dim) {
+                constraint_provides_hessians = false; 
+            }
+        } catch (const std::logic_error& e) {
+            constraint_provides_hessians = false;
+        }
+
+        for (int i = 0; i < constraint_dim; ++i) {
+            double beta_val_L, beta_prime_L, beta_double_prime_L;
+            double beta_val_U, beta_prime_U, beta_double_prime_U;
+
+            double term1_coeff_i = 0.0;
+            double term2_coeff_i = 0.0;
+
+            if (L(i) != -std::numeric_limits<double>::infinity()) {
+                double s_L = g_val(i) - L(i);
+                calculate_beta_derivatives(s_L, relaxation_delta_, beta_val_L, beta_prime_L, beta_double_prime_L);
+                term1_coeff_i += beta_double_prime_L;
+                term2_coeff_i += beta_prime_L;
+            }
+
+            if (U(i) != std::numeric_limits<double>::infinity()) {
+                double s_U = U(i) - g_val(i);
+                calculate_beta_derivatives(s_U, relaxation_delta_, beta_val_U, beta_prime_U, beta_double_prime_U);
+                term1_coeff_i += beta_double_prime_U; 
+                term2_coeff_i -= beta_prime_U;       
+            }
+            
+            Hxx += term1_coeff_i * Gx.row(i).transpose() * Gx.row(i);
+            Huu += term1_coeff_i * Gu.row(i).transpose() * Gu.row(i);
+            Hux += term1_coeff_i * Gu.row(i).transpose() * Gx.row(i);
+
+            if (constraint_provides_hessians) {
+                if (i < Gxx_constraint_vec.size() && Gxx_constraint_vec[i].size() > 0 &&
+                    Gxx_constraint_vec[i].rows() == state_dim && Gxx_constraint_vec[i].cols() == state_dim) {
+                    Hxx += term2_coeff_i * Gxx_constraint_vec[i];
+                }
+                if (i < Guu_constraint_vec.size() && Guu_constraint_vec[i].size() > 0 &&
+                    Guu_constraint_vec[i].rows() == control_dim && Guu_constraint_vec[i].cols() == control_dim) {
+                    Huu += term2_coeff_i * Guu_constraint_vec[i];
+                }
+                if (i < Gux_constraint_vec.size() && Gux_constraint_vec[i].size() > 0 &&
+                    Gux_constraint_vec[i].rows() == control_dim && Gux_constraint_vec[i].cols() == state_dim) {
+                    Hux += term2_coeff_i * Gux_constraint_vec[i];
+                }
+            }
+        }
+        
+        return std::make_tuple(barrier_coeff_ * Hxx, barrier_coeff_ * Huu, barrier_coeff_ * Hux);
+    }
+
+    /**
+     * @brief Get the barrier coefficient (mu_penalty).
+     * @return The coefficient multiplying the barrier penalty.
+     */
+    double getBarrierCoeff() const {
+        return barrier_coeff_;
+    }
+
+    /**
+     * @brief Set the barrier coefficient (mu_penalty).
+     * @param barrier_coeff New barrier penalty coefficient.
+     */
+    void setBarrierCoeff(double barrier_coeff) {
+        barrier_coeff_ = barrier_coeff;
+    }
+
+    /**
+     * @brief Get the current relaxation parameter delta.
+     * @return relaxation_delta_
+     */
+    double getRelaxationDelta() const {
+        return relaxation_delta_;
+    }
+
+    /**
+     * @brief Set the relaxation parameter delta.
+     * @param relaxation_delta New relaxation delta.
+     */
+    void setRelaxationDelta(double relaxation_delta) {
+        if (relaxation_delta <= 0) {
+            throw std::invalid_argument("Relaxation delta must be positive.");
+        }
+        relaxation_delta_ = relaxation_delta;
+    }
+
+private:
+    /**
+     * @brief Calculates beta_delta(z) and its first two derivatives.
+     * beta_delta(z) = -log(z)                               if z > delta
+     *                 0.5 * [((z - 2*delta)/delta)^2 - 1] - log(delta) if z <= delta
+     * Assumes delta > 0. Handles z approaching 0 for the -log(z) case with care.
+     */
+    void calculate_beta_derivatives(double z, double delta,
+                                    double& beta_val, 
+                                    double& beta_prime, 
+                                    double& beta_double_prime) const {
+        if (z > delta) {
+            if (z <= 1e-12) {
+                beta_val = -std::log(1e-12);
+                beta_prime = -1.0 / 1e-12;
+                beta_double_prime = 1.0 / (1e-12 * 1e-12); 
+            } else {
+                beta_val = -std::log(z);
+                beta_prime = -1.0 / z;
+                beta_double_prime = 1.0 / (z * z);
+            }
+        } else { // z <= delta
+            double term_val = (z - 2.0 * delta); 
+            double term_div_delta = term_val / delta;
+
+            beta_val = 0.5 * (term_div_delta * term_div_delta - 1.0) - std::log(delta);
+            beta_prime = term_div_delta / delta; 
+            beta_double_prime = 1.0 / (delta * delta);
+        }
+    }
+
+    double barrier_coeff_;    ///< Coefficient multiplying the barrier penalty (mu_penalty)
+    double relaxation_delta_; ///< The relaxation parameter delta
+};
+
 } // namespace cddp
 
 #endif // CDDP_BARRIER_HPP

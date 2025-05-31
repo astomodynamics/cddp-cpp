@@ -187,19 +187,25 @@ int main()
     initial_state(2) = constant_altitude;
     initial_state(3) = 1.0;
 
-    // Create CDDP solver options
+    // Solver options
     cddp::CDDPOptions options;
     options.max_iterations = 10000;
     options.verbose = true;
     options.debug = false;
-    options.use_parallel = false;
-    options.num_threads = 1;
+    options.use_parallel = true;
+    options.num_threads = 10;
     options.cost_tolerance = 1e-3;
     options.grad_tolerance = 1e-2;
     options.regularization_type = "control";
-    options.regularization_control = 1e-4;
+    options.regularization_control = 1e-1;
     options.regularization_state = 0.0;
     options.barrier_coeff = 1e-1;
+    options.ms_segment_length = horizon / 10;
+    options.ms_rollout_type = "nonlinear";
+    options.ms_defect_tolerance_for_single_shooting = 1e-5;
+    options.barrier_update_factor = 0.2;
+    options.barrier_update_power = 1.2;
+    options.minimum_reduction_ratio = 1e-4;
 
     // Instantiate CDDP solver
     cddp::CDDP cddp_solver(
@@ -236,7 +242,17 @@ int main()
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
+    options.max_line_search_iterations = 20;
+    options.barrier_coeff = 1e-0;
+    options.filter_merit_acceptance = 1e-6;
+    options.filter_violation_acceptance = 1e-6;
+    options.filter_maximum_violation = 1e+4;
+    options.filter_minimum_violation = 1e-7;
+    options.regularization_control_max = 1e+7;
+    options.armijo_constant = 1e-4;
+    options.cost_tolerance = 1e-9;
+    options.grad_tolerance = 1e-5;
 
     // Resolve problem with the ball constraint
     cddp::CDDP solver_ball(
@@ -258,8 +274,8 @@ int main()
     // Initial trajectory guess
     solver_ball.setInitialTrajectory(solution.state_sequence, solution.control_sequence);
     
-    // Solve the problem
-    cddp::CDDPSolution solution_ball = solver_ball.solve("IPDDP");
+    // Solve the problem (MSIPDDP, IPDDP)
+    cddp::CDDPSolution solution_ball = solver_ball.solve("MSIPDDP");
 
     auto X_sol = solution_ball.state_sequence;
     auto U_sol = solution_ball.control_sequence;

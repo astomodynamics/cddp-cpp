@@ -63,6 +63,7 @@ struct CDDPOptions {
     int barrier_order = 2;                          // Order for log-barrier method
     double filter_acceptance = 1e-8;                            // Small value for filter acceptance
     double constraint_tolerance = 1e-12;             // Tolerance for constraint violation
+    double relaxation_delta = 1e-1;                 // Relaxation delta for relaxed log-barrier method
 
     // ipddp options
     double dual_scale = 1e-1;                       // Initial scale for dual variables
@@ -72,8 +73,8 @@ struct CDDPOptions {
     // ipddp line-search options
     double filter_merit_acceptance = 1e-6;         // Small value for merit filter acceptance
     double filter_violation_acceptance = 1e-6;     // Small value for violation filter acceptance
-    double filter_maximum_violation = 1e-2;         // Maximum violation for filter acceptance
-    double filter_minimum_violation = 1e-6;         // Minimum violation for filter acceptance
+    double filter_maximum_violation = 1e+4;         // Maximum violation for filter acceptance
+    double filter_minimum_violation = 1e-7;         // Minimum violation for filter acceptance
     double armijo_constant = 1e-4;                   // Armijo constant c1 for filter acceptance
 
     // Regularization options
@@ -87,7 +88,7 @@ struct CDDPOptions {
 
     double regularization_control = 1e-6;           // Regularization for control
     double regularization_control_step = 1.0;       // Regularization step for control
-    double regularization_control_max = 1e5;        // Maximum regularization
+    double regularization_control_max = 1e7;        // Maximum regularization
     double regularization_control_min = 1e-8;       // Minimum regularization
     double regularization_control_factor = 1e1;     // Factor for control regularization
 
@@ -317,9 +318,12 @@ private:
     bool solveCLCDDPBackwardPass();
 
     // LogCDDP methods
-    CDDPSolution solveLogCDDP();
-    ForwardPassResult solveLogCDDPForwardPass(double alpha);
-    bool solveLogCDDPBackwardPass();
+    void initializeLogDDP();
+    CDDPSolution solveLogDDP();
+    ForwardPassResult solveLogDDPForwardPass(double alpha);
+    bool solveLogDDPBackwardPass();
+    void resetLogDDPFilter();
+    void initialLogDDPRollout();
 
     // ASCDDP methods
     CDDPSolution solveASCDDP();
@@ -378,6 +382,7 @@ private:
     std::unique_ptr<Objective> objective_;
     std::map<std::string, std::unique_ptr<Constraint>> constraint_set_; 
     std::unique_ptr<LogBarrier> log_barrier_;
+    std::unique_ptr<RelaxedLogBarrier> relaxed_log_barrier_;
     Eigen::VectorXd initial_state_;      
     Eigen::VectorXd reference_state_;      // Desired reference state
     std::vector<Eigen::VectorXd> reference_states_;     // Desired reference states (trajectory)
@@ -420,6 +425,7 @@ private:
     double mu_; // Barrier coefficient
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
+    double relaxation_delta_; // Relaxation parameter delta for relaxed log barrier
     
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_u_;
