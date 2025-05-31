@@ -21,6 +21,7 @@
 #include <memory>
 #include "cddp.hpp"
 #include "matplot/matplot.h"
+#include <random>
 
 using namespace matplot;
 namespace fs = std::filesystem;
@@ -33,23 +34,23 @@ int main() {
 
     // Create a CartPole instance with custom parameters.
     double cart_mass = 1.0;
-    double pole_mass = 0.2;
+    double pole_mass = 0.3;
     double pole_length = 0.5;
     double gravity = 9.81;
     double damping = 0.0; // TODO: Implement damping term.
-    std::string integration_type = "rk4";
+    std::string integration_type = "euler";
 
     std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::CartPole>(
         timestep, integration_type, cart_mass, pole_mass, pole_length, gravity, damping);
 
     // Cost matrices.
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Eigen::MatrixXd R = 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd R = 1.0 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf(0,0) = 100.0;  // Final cart position cost.
-    Qf(1,1) = 100.0;  // Final cart velocity cost.
-    Qf(2,2) = 100.0;  // Final pole angle cost.
-    Qf(3,3) = 100.0;  // Final pole angular velocity cost.
+    Qf(0,0) = 400.0;  // Final cart position cost.
+    Qf(1,1) = 400.0;  // Final cart velocity cost.
+    Qf(2,2) = 400.0;  // Final pole angle cost.
+    Qf(3,3) = 400.0;  // Final pole angular velocity cost.
 
     // Goal state: cart at origin, pole upright, zero velocities.
     Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
@@ -70,9 +71,9 @@ int main() {
 
     // Control constraints.
     Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -5.0;  // Maximum negative force.
+    control_lower_bound << -4.0;  // Maximum negative force.
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 5.0;   // Maximum positive force.
+    control_upper_bound << 4.0;   // Maximum positive force.
     
     // FIXME: For MSIPDDP 
     cddp_solver.addConstraint("ControlConstraint", 
@@ -92,8 +93,8 @@ int main() {
     options.is_ilqr = true;
     options.debug = false;
     options.barrier_coeff = 1e-1;
-    options.ms_segment_length = horizon / 50;
-    options.ms_rollout_type = "hybrid";
+    options.ms_segment_length = horizon / 10;
+    options.ms_rollout_type = "nonlinear";
     options.ms_defect_tolerance_for_single_shooting = 1e-5;
     options.barrier_update_factor = 0.2;
     options.barrier_update_power = 1.2;
@@ -106,6 +107,24 @@ int main() {
     // Generate initial trajectory by constant initial state
     for (int i = 0; i < horizon + 1; ++i) {
         X[i] = initial_state;
+    }
+    // // Generate initial trajectory by random
+    // for (int i = 0; i < horizon + 1; ++i) {
+    //     std::random_device rd;
+    //     std::mt19937 gen(rd());
+    //     std::uniform_real_distribution<double> dist(-0.025, 0.025);
+    //     X[i] = initial_state;
+    //     X[i](0) += dist(gen);
+    //     X[i](1) += dist(gen);
+    //     X[i](2) += dist(gen);
+    //     X[i](3) += dist(gen);
+    // }
+    for (int i = 0; i < horizon; ++i) {
+        std::random_device rd;
+        std::mt19937 gen(rd());
+        std::uniform_real_distribution<double> dist(-0.005, 0.005);
+        U[i] = Eigen::VectorXd::Zero(control_dim);
+        U[i](0) += dist(gen);
     }
     cddp_solver.setInitialTrajectory(X, U);
 

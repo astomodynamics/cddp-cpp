@@ -202,6 +202,12 @@ int main()
     options.regularization_control = 1e-4;
     options.regularization_state = 0.0;
     options.barrier_coeff = 1e-3;
+    options.ms_segment_length = horizon / 10;
+    options.ms_rollout_type = "nonlinear";
+    options.ms_defect_tolerance_for_single_shooting = 1e-5;
+    options.barrier_update_factor = 0.2;
+    options.barrier_update_power = 1.2;
+    options.minimum_reduction_ratio = 1e-4;
 
     // Create the CDDP solver
     cddp::CDDP cddp_solver(
