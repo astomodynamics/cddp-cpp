@@ -167,9 +167,7 @@ public:
 
             if (L(i) != -std::numeric_limits<double>::infinity()) {
                 double s_L = g_val(i) - L(i);
-                if (s_L < 0 && std::abs(s_L) > 1e-9) { // Constraint violated significantly for lower bound
-                     // Apply a large penalty or handle as per specific strategy for infeasible points.
-                     // For now, let it pass to calculate_beta_derivatives which might produce large values.
+                if (s_L < 0 && std::abs(s_L) > 1e-9) {
                 }
                 calculate_beta_derivatives(s_L, relaxation_delta_, beta_val_L, beta_prime_L, beta_double_prime_L);
                 total_barrier_cost += beta_val_L;
@@ -177,9 +175,6 @@ public:
 
             if (U(i) != std::numeric_limits<double>::infinity()) {
                 double s_U = U(i) - g_val(i);
-                 if (s_U < 0 && std::abs(s_U) > 1e-9) { // Constraint violated significantly for upper bound
-                     // Similar handling for infeasible points.
-                 }
                 calculate_beta_derivatives(s_U, relaxation_delta_, beta_val_U, beta_prime_U, beta_double_prime_U);
                 total_barrier_cost += beta_val_U;
             }
@@ -228,7 +223,7 @@ public:
             if (U(i) != std::numeric_limits<double>::infinity()) {
                 double s_U = U(i) - g_val(i);
                 calculate_beta_derivatives(s_U, relaxation_delta_, beta_val_U, beta_prime_U, beta_double_prime_U);
-                dCost_dg_i -= beta_prime_U; // ds_U/dg_i is -1
+                dCost_dg_i -= beta_prime_U; 
             }
             
             grad_x += dCost_dg_i * Gx.row(i).transpose();
@@ -263,7 +258,7 @@ public:
 
         Eigen::MatrixXd Hxx = Eigen::MatrixXd::Zero(state_dim, state_dim);
         Eigen::MatrixXd Huu = Eigen::MatrixXd::Zero(control_dim, control_dim);
-        Eigen::MatrixXd Hux = Eigen::MatrixXd::Zero(control_dim, state_dim); // Will store d^2C / (du dx)
+        Eigen::MatrixXd Hux = Eigen::MatrixXd::Zero(control_dim, state_dim); 
 
         std::vector<Eigen::MatrixXd> Gxx_constraint_vec, Guu_constraint_vec, Gux_constraint_vec;
         bool constraint_provides_hessians = true;
@@ -271,11 +266,10 @@ public:
             auto hess_tuple = constraint.getHessians(state, control);
             Gxx_constraint_vec = std::get<0>(hess_tuple);
             Guu_constraint_vec = std::get<1>(hess_tuple);
-            Gux_constraint_vec = std::get<2>(hess_tuple); // This is d^2g_i/dudx
+            Gux_constraint_vec = std::get<2>(hess_tuple);
             if (Gxx_constraint_vec.size() != constraint_dim || 
                 Guu_constraint_vec.size() != constraint_dim || 
                 Gux_constraint_vec.size() != constraint_dim) {
-                // Mismatch in expected number of Hessian matrices from constraint
                 constraint_provides_hessians = false; 
             }
         } catch (const std::logic_error& e) {
@@ -286,8 +280,8 @@ public:
             double beta_val_L, beta_prime_L, beta_double_prime_L;
             double beta_val_U, beta_prime_U, beta_double_prime_U;
 
-            double term1_coeff_i = 0.0; // For Gx^T * D * Gx term
-            double term2_coeff_i = 0.0; // For coeff * Gxx_constraint term
+            double term1_coeff_i = 0.0;
+            double term2_coeff_i = 0.0;
 
             if (L(i) != -std::numeric_limits<double>::infinity()) {
                 double s_L = g_val(i) - L(i);
@@ -299,17 +293,14 @@ public:
             if (U(i) != std::numeric_limits<double>::infinity()) {
                 double s_U = U(i) - g_val(i);
                 calculate_beta_derivatives(s_U, relaxation_delta_, beta_val_U, beta_prime_U, beta_double_prime_U);
-                term1_coeff_i += beta_double_prime_U; // (ds_U/dg_i)^2 = (-1)^2 = 1
-                term2_coeff_i -= beta_prime_U;       // ds_U/dg_i = -1
+                term1_coeff_i += beta_double_prime_U; 
+                term2_coeff_i -= beta_prime_U;       
             }
             
-            // Term 1: Gx.row(i).transpose() * D_i * Gx.row(i)
             Hxx += term1_coeff_i * Gx.row(i).transpose() * Gx.row(i);
             Huu += term1_coeff_i * Gu.row(i).transpose() * Gu.row(i);
             Hux += term1_coeff_i * Gu.row(i).transpose() * Gx.row(i);
 
-
-            // Term 2: coeff_i * Gxx_constraint[i]
             if (constraint_provides_hessians) {
                 if (i < Gxx_constraint_vec.size() && Gxx_constraint_vec[i].size() > 0 &&
                     Gxx_constraint_vec[i].rows() == state_dim && Gxx_constraint_vec[i].cols() == state_dim) {
@@ -375,33 +366,22 @@ private:
                                     double& beta_val, 
                                     double& beta_prime, 
                                     double& beta_double_prime) const {
-        // Assertion: delta is already checked to be > 0 in constructor/setter.
-        
         if (z > delta) {
-            if (z <= 1e-12) { // z is very close to or at zero (or negative, though less likely for a valid slack)
-                // This region implies a highly violated constraint if delta is also small,
-                // or an extremely satisfied constraint if z is positive and extremely small.
-                // Standard log barrier -> infinity.
-                // We use a large finite value to maintain numerical stability.
-                // The exact behavior might need tuning or a more sophisticated regularization
-                // if z can validly be very close to 0 and > delta.
-                // This typically occurs if delta itself is extremely small.
-                beta_val = -std::log(1e-12); // Large positive
-                beta_prime = -1.0 / 1e-12;    // Large negative
-                beta_double_prime = 1.0 / (1e-12 * 1e-12); // Very large positive
+            if (z <= 1e-12) {
+                beta_val = -std::log(1e-12);
+                beta_prime = -1.0 / 1e-12;
+                beta_double_prime = 1.0 / (1e-12 * 1e-12); 
             } else {
                 beta_val = -std::log(z);
                 beta_prime = -1.0 / z;
                 beta_double_prime = 1.0 / (z * z);
             }
         } else { // z <= delta
-            double term_val = (z - 2.0 * delta); // Numerator for term
-            // If delta is extremely small, term_val / delta can be large.
-            // (z - 2*delta)/delta = z/delta - 2
+            double term_val = (z - 2.0 * delta); 
             double term_div_delta = term_val / delta;
 
             beta_val = 0.5 * (term_div_delta * term_div_delta - 1.0) - std::log(delta);
-            beta_prime = term_div_delta / delta; // (z - 2*delta) / (delta*delta)
+            beta_prime = term_div_delta / delta; 
             beta_double_prime = 1.0 / (delta * delta);
         }
     }
