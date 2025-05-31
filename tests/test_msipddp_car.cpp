@@ -115,7 +115,6 @@ TEST(IPDDPCarTest, CarParking) {
     options.barrier_coeff = 1e-0;
     options.dual_scale = 1e-1;
     options.slack_scale = 1e-2;
-    options.defect_violation_penalty_initial = 1e-0;
     options.ms_segment_length = horizon / 100;
     options.ms_rollout_type = "nonlinear";
     cddp_solver.setOptions(options);

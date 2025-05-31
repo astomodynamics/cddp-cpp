@@ -68,7 +68,6 @@ TEST(MSIPDDPTest, Solve) {
     options.debug = false;
     options.barrier_coeff = 1e-1;
     options.is_ilqr = true;
-    options.defect_violation_penalty_initial = 1e-1;
     options.ms_segment_length = horizon / 20;
     options.ms_rollout_type = "nonlinear";
 
