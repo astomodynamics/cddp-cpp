@@ -337,6 +337,7 @@ namespace cddp
             }
 
             // Check if already converged due to regularization limit in backward pass
+            // TODO: Remove this
             if (solution.converged)
             {
                 break;
@@ -346,7 +347,6 @@ namespace cddp
             best_result.success = false;
             best_result.cost = std::numeric_limits<double>::infinity();
             best_result.lagrangian = std::numeric_limits<double>::infinity();
-            // TODO: Add gap violation to result struct
             best_result.constraint_violation = 0.0; // Path constraint violation
 
             bool forward_pass_success = false;
@@ -432,9 +432,6 @@ namespace cddp
                 S_ = best_result.slack_sequence;      // Path constraint slacks
                 G_ = best_result.constraint_sequence; // Path constraint values
                 F_ = best_result.dynamics_sequence;   // Dynamics
-                // TODO: Update gaps_ and gap_multipliers_ from best_result
-                // gaps_ = best_result.gap_sequence;
-                // gap_multipliers_ = best_result.gap_multiplier_sequence;
 
                 dJ_ = J_ - best_result.cost;
                 J_ = best_result.cost;
@@ -970,7 +967,7 @@ namespace cddp
                 // Update lambda
                 Lambda_new[t] = alpha * Lambda_[t] + K_lambda_[t] * dx;
 
-                // --- Refactored Rollout Logic (v2) ---
+                // --- Rollout Logic ---
                 Eigen::VectorXd dynamics_eval_for_F_new_t;
 
                 if (options_.ms_rollout_type == "nonlinear" || options_.ms_rollout_type == "hybrid")
@@ -1013,7 +1010,7 @@ namespace cddp
                         X_new[t + 1] = X_[t] + A_[t] * dx + B_[t] * du; // Linear rollout for state
                     }
                 }
-                // --- End Refactored Rollout Logic (v2) ---
+                // --- End Rollout Logic ---
 
                 // --- Robustness Check during Rollout ---
                 if (!X_new[t + 1].allFinite() || !U_new[t].allFinite())
