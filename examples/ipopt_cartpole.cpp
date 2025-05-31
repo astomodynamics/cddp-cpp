@@ -51,7 +51,7 @@ int main() {
 
     // Cost weighting matrices
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Eigen::MatrixXd R = 0.5 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd R = 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
     Qf(0,0) = 100.0;  // Cart position
     Qf(1,1) = 100.0;  // Pole angle
@@ -81,8 +81,8 @@ int main() {
     // Control bounds (e.g., force limits)
     Eigen::VectorXd control_lower_bound(control_dim);
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_lower_bound << -10.0;
-    control_upper_bound <<  10.0;
+    control_lower_bound << -5.0;
+    control_upper_bound <<  5.0;
 
     ////////// Decision Variables //////////
     const int n_states   = (horizon + 1) * state_dim;
@@ -156,8 +156,8 @@ int main() {
     for (int t = 0; t < horizon; t++) {
         casadi::MX x_diff = X_t(t) - goal_dm;
         casadi::MX u_diff = U_t(t);
-        casadi::MX state_cost = casadi::MX::mtimes({x_diff.T(), Q_dm, x_diff});
-        casadi::MX control_cost = casadi::MX::mtimes({u_diff.T(), R_dm, u_diff});
+        casadi::MX state_cost = casadi::MX::mtimes({x_diff.T(), Q_dm, x_diff}) * timestep;
+        casadi::MX control_cost = casadi::MX::mtimes({u_diff.T(), R_dm, u_diff}) * timestep;
         cost = cost + state_cost + control_cost;
     }
 
@@ -186,12 +186,12 @@ int main() {
     for (int i = 0; i < state_dim; i++) {
         x0[i] = initial_state(i);
     }
-    // Linearly interpolate the state trajectory from initial_state to goal_state.
-    for (int t = 1; t <= horizon; t++) {
-        for (int i = 0; i < state_dim; i++) {
-            x0[t * state_dim + i] = initial_state(i) + (goal_state(i) - initial_state(i)) * (double)t / horizon;
-        }
-    }
+    // // Linearly interpolate the state trajectory from initial_state to goal_state.
+    // for (int t = 1; t <= horizon; t++) {
+    //     for (int i = 0; i < state_dim; i++) {
+    //         x0[t * state_dim + i] = initial_state(i) + (goal_state(i) - initial_state(i)) * (double)t / horizon;
+    //     }
+    // }
 
     std::map<std::string, casadi::MX> nlp;
     nlp["x"] = z;
@@ -305,7 +305,7 @@ int main() {
     ylabel(ax4, "Angular Velocity [rad/s]");
     grid(ax4, true);
 
-    fig1->save(plotDirectory + "/cartpole_results.png");
+    fig1->save(plotDirectory + "/cartpole_ipopt_results.png");
 
     // --- Plot control inputs ---
     auto fig2 = figure();
@@ -315,7 +315,7 @@ int main() {
     xlabel("Time [s]");
     ylabel("Force [N]");
     grid(true);
-    fig2->save(plotDirectory + "/cartpole_control_inputs.png");
+    fig2->save(plotDirectory + "/cartpole_ipopt_control_inputs.png");
 
     // --- Animation ---
     auto fig3 = figure();
