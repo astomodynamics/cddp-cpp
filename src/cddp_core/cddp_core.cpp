@@ -61,10 +61,10 @@ cddp::CDDPSolution CDDP::solve(std::string solver_type) {
     } else if (solver_type == "LogCDDP" || solver_type == "LogDDP") {
         if (options_.verbose) {
             std::cout << "--------------------" << std::endl;
-            std::cout << "Solving with LogCDDP" << std::endl;
+            std::cout << "Solving with LogDDP" << std::endl;
             std::cout << "--------------------" << std::endl;
         }
-        return solveLogCDDP();
+        return solveLogDDP();
     } else if (solver_type == "ASCDDP" || solver_type == "ASDDP") {
         if (options_.verbose) {
             std::cout << "--------------------" << std::endl;
@@ -420,10 +420,12 @@ void CDDP::printOptions(const CDDPOptions &options)
     std::cout << "  BoxQP Verbose: " << (options.boxqp_verbose ? "Yes" : "No") << "\n";
 
     std::cout << "\nMSIPDDP:\n";
-    std::cout << "  Defect Penalty Initial: " << options.defect_violation_penalty_initial << "\n";
-    std::cout << "  Defect Penalty Rho: " << options.ms_defect_penalty_rho << "\n";
-    std::cout << "  Defect Penalty Kappa_d: " << options.ms_defect_penalty_kappa_d << "\n";
-    std::cout << "  Defect Penalty Mu0: " << options.ms_defect_penalty_mu0 << "\n";
+    std::cout << "  MS Segment Length: " << options.ms_segment_length << "\n";
+    std::cout << "  MS Rollout Type: " << options.ms_rollout_type << "\n";
+    std::cout << "  MS Defect Tolerance: " << options.ms_defect_tolerance_for_single_shooting << "\n";
+    std::cout << "  Barrier Update Factor: " << options.barrier_update_factor << "\n";
+    std::cout << "  Barrier Update Power: " << options.barrier_update_power << "\n";
+
 
     std::cout << "========================================\n\n";
 }

@@ -63,11 +63,19 @@ struct CDDPOptions {
     int barrier_order = 2;                          // Order for log-barrier method
     double filter_acceptance = 1e-8;                            // Small value for filter acceptance
     double constraint_tolerance = 1e-12;             // Tolerance for constraint violation
+    double relaxation_delta = 1e-1;                 // Relaxation delta for relaxed log-barrier method
 
     // ipddp options
     double dual_scale = 1e-1;                       // Initial scale for dual variables
     double slack_scale = 1e-2;                      // Initial scale for slack variables
     double lambda_scale = 1e-6;                     // Initial scale for lambda variables
+
+    // ipddp line-search options
+    double filter_merit_acceptance = 1e-6;         // Small value for merit filter acceptance
+    double filter_violation_acceptance = 1e-6;     // Small value for violation filter acceptance
+    double filter_maximum_violation = 1e+4;         // Maximum violation for filter acceptance
+    double filter_minimum_violation = 1e-7;         // Minimum violation for filter acceptance
+    double armijo_constant = 1e-4;                   // Armijo constant c1 for filter acceptance
 
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
@@ -80,7 +88,7 @@ struct CDDPOptions {
 
     double regularization_control = 1e-6;           // Regularization for control
     double regularization_control_step = 1.0;       // Regularization step for control
-    double regularization_control_max = 1e5;        // Maximum regularization
+    double regularization_control_max = 1e7;        // Maximum regularization
     double regularization_control_min = 1e-8;       // Minimum regularization
     double regularization_control_factor = 1e1;     // Factor for control regularization
 
@@ -103,13 +111,13 @@ struct CDDPOptions {
     double boxqp_armijo = 0.1;                      // Armijo parameter for boxqp
     bool boxqp_verbose = false;                     // Print debug info for boxqp
 
-    // msipddp options
-    double defect_violation_penalty_initial = 1.0; // Initial defect penalty
-    double ms_defect_penalty_rho = 0.5;             // Rho parameter for defect penalty update
-    double ms_defect_penalty_kappa_d = 1e-4;        // Kappa_d threshold for defect penalty update
-    double ms_defect_penalty_mu0 = 10.0;            // Mu_0 safety margin for defect penalty update
+    // msipddp optionsupdate
     int ms_segment_length = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
     std::string ms_rollout_type = "hybrid"; // Rollout type: ["linear", "nonlinear", "hybrid"]
+    double ms_defect_tolerance_for_single_shooting = 1e-3; // Defect norm tolerance to switch to single shooting at segment boundaries
+    double barrier_update_factor = 0.2; // Factor for barrier update: optimality_gap <= barrier_update_factor * mu; [0.0, 1.0]
+    double barrier_update_power = 1.2; // Power for barrier update: mu_new = mu * barrier_update_power; [1.0, 2.0]
+    double minimum_fraction_to_boundary = 0.99; // Minimum fraction to boundary for barrier update: tau = std::max(0.99, 1.0 - mu_);
 };
 
 struct CDDPSolution {
@@ -310,9 +318,12 @@ private:
     bool solveCLCDDPBackwardPass();
 
     // LogCDDP methods
-    CDDPSolution solveLogCDDP();
-    ForwardPassResult solveLogCDDPForwardPass(double alpha);
-    bool solveLogCDDPBackwardPass();
+    void initializeLogDDP();
+    CDDPSolution solveLogDDP();
+    ForwardPassResult solveLogDDPForwardPass(double alpha);
+    bool solveLogDDPBackwardPass();
+    void resetLogDDPFilter();
+    void initialLogDDPRollout();
 
     // ASCDDP methods
     CDDPSolution solveASCDDP();
@@ -326,7 +337,6 @@ private:
     bool solveIPDDPBackwardPass();
     void resetIPDDPFilter();
     void initialIPDDPRollout();
-    void resetIPDDPRegularization();
 
     // MSIPDDP methods
     void initializeMSIPDDP();
@@ -335,7 +345,6 @@ private:
     bool solveMSIPDDPBackwardPass();
     void resetMSIPDDPFilter();
     void initialMSIPDDPRollout();
-    void resetMSIPDDPRegularization();
 
     // Feasible IPDDP methods
     void initializeFeasibleIPDDP();
@@ -373,6 +382,7 @@ private:
     std::unique_ptr<Objective> objective_;
     std::map<std::string, std::unique_ptr<Constraint>> constraint_set_; 
     std::unique_ptr<LogBarrier> log_barrier_;
+    std::unique_ptr<RelaxedLogBarrier> relaxed_log_barrier_;
     Eigen::VectorXd initial_state_;      
     Eigen::VectorXd reference_state_;      // Desired reference state
     std::vector<Eigen::VectorXd> reference_states_;     // Desired reference states (trajectory)
@@ -413,15 +423,9 @@ private:
 
     // Log-barrier
     double mu_; // Barrier coefficient
-    std::vector<FilterPoint> filter_; // [logcost, error measure
-    int ipddp_regularization_counter_ = 0; // Regularization counter for IPDDP
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
-
-    // Regularization parameters
-    double defect_violation_penalty_ = 1.0;
-    double equality_violation_penalty_ = 1.0;
-    double inequality_violation_penalty_ = 1.0;
+    double relaxation_delta_; // Relaxation parameter delta for relaxed log barrier
     
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_u_;
@@ -451,6 +455,7 @@ private:
     BoxQPSolver boxqp_solver_;
 
     double optimality_gap_ = 1e+10;
+    double kkt_error_ = 1e+10; // maximum KKT residual except Qu term
 };
 } // namespace cddp
 #endif // CDDP_CDDP_CORE_HPP

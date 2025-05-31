@@ -115,10 +115,10 @@ int main()
     std::unique_ptr<cddp::DynamicalSystem> system =
         std::make_unique<cddp::Quadrotor>(timestep, mass, inertia_matrix, arm_length, integration_type);
 
-    // For propagation (e.g., initial trajectory), also create an instance (if needed)
+    // For propagation 
     cddp::Quadrotor quadrotor(timestep, mass, inertia_matrix, arm_length, integration_type);
 
-    // Cost matrices (dimensions updated for state_dim = 13)
+    // Cost matrices
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
     Q(0, 0) = 1.0;
     Q(1, 1) = 1.0;
@@ -201,7 +201,13 @@ int main()
     options.regularization_type = "control";
     options.regularization_control = 1e-4;
     options.regularization_state = 0.0;
-    options.barrier_coeff = 1e-3;
+    options.barrier_coeff = 1e-1;
+    options.ms_segment_length = horizon / 10;
+    options.ms_rollout_type = "nonlinear";
+    options.ms_defect_tolerance_for_single_shooting = 1e-5;
+    options.barrier_update_factor = 0.2;
+    options.barrier_update_power = 1.2;
+    options.minimum_reduction_ratio = 1e-4;
 
     // Create the CDDP solver
     cddp::CDDP cddp_solver(
@@ -241,7 +247,7 @@ int main()
     X = circle_reference_states;
     cddp_solver.setInitialTrajectory(X, U);
 
-    // Solve the optimal control problem
+    // Solve the optimal control problem (LogDDP, IPDDP, MSIPDDP)
     cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
     auto X_sol = solution.state_sequence;
     auto U_sol = solution.control_sequence;
@@ -249,314 +255,314 @@ int main()
 
     std::cout << "Final state: " << X_sol.back().transpose() << std::endl;
 
-    // Create plot directory if it doesn't exist
-    const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory))
-    {
-        fs::create_directory(plotDirectory);
-    }
-    // Create a directory for frame images.
-    (void)std::system("mkdir -p frames");
+    // // Create plot directory if it doesn't exist
+    // const std::string plotDirectory = "../results/tests";
+    // if (!fs::exists(plotDirectory))
+    // {
+    //     fs::create_directory(plotDirectory);
+    // }
+    // // Create a directory for frame images.
+    // (void)std::system("mkdir -p frames");
 
-    // Extract trajectory data
-    std::vector<double> time_arr, x_arr, y_arr, z_arr;
-    std::vector<double> phi_arr, theta_arr, psi_arr;
-    std::vector<double> qw_arr, qx_arr, qy_arr, qz_arr, q_norm_arr;
+    // // Extract trajectory data
+    // std::vector<double> time_arr, x_arr, y_arr, z_arr;
+    // std::vector<double> phi_arr, theta_arr, psi_arr;
+    // std::vector<double> qw_arr, qx_arr, qy_arr, qz_arr, q_norm_arr;
 
-    time_arr.reserve(X_sol.size());
-    x_arr.reserve(X_sol.size());
-    y_arr.reserve(X_sol.size());
-    z_arr.reserve(X_sol.size());
-    phi_arr.reserve(X_sol.size());
-    theta_arr.reserve(X_sol.size());
-    psi_arr.reserve(X_sol.size());
+    // time_arr.reserve(X_sol.size());
+    // x_arr.reserve(X_sol.size());
+    // y_arr.reserve(X_sol.size());
+    // z_arr.reserve(X_sol.size());
+    // phi_arr.reserve(X_sol.size());
+    // theta_arr.reserve(X_sol.size());
+    // psi_arr.reserve(X_sol.size());
 
-    qw_arr.reserve(X_sol.size());
-    qx_arr.reserve(X_sol.size());
-    qy_arr.reserve(X_sol.size());
-    qz_arr.reserve(X_sol.size());
-    q_norm_arr.reserve(X_sol.size());
+    // qw_arr.reserve(X_sol.size());
+    // qx_arr.reserve(X_sol.size());
+    // qy_arr.reserve(X_sol.size());
+    // qz_arr.reserve(X_sol.size());
+    // q_norm_arr.reserve(X_sol.size());
 
-    for (size_t i = 0; i < X_sol.size(); ++i)
-    {
-        time_arr.push_back(t_sol[i]);
-        x_arr.push_back(X_sol[i](0));
-        y_arr.push_back(X_sol[i](1));
-        z_arr.push_back(X_sol[i](2));
+    // for (size_t i = 0; i < X_sol.size(); ++i)
+    // {
+    //     time_arr.push_back(t_sol[i]);
+    //     x_arr.push_back(X_sol[i](0));
+    //     y_arr.push_back(X_sol[i](1));
+    //     z_arr.push_back(X_sol[i](2));
 
-        double qw = X_sol[i](3);
-        double qx = X_sol[i](4);
-        double qy = X_sol[i](5);
-        double qz = X_sol[i](6);
+    //     double qw = X_sol[i](3);
+    //     double qx = X_sol[i](4);
+    //     double qy = X_sol[i](5);
+    //     double qz = X_sol[i](6);
 
-        // Euler angles
-        Eigen::Vector3d euler = quaternionToEuler(qw, qx, qy, qz);
-        phi_arr.push_back(euler(0));
-        theta_arr.push_back(euler(1));
-        psi_arr.push_back(euler(2));
+    //     // Euler angles
+    //     Eigen::Vector3d euler = quaternionToEuler(qw, qx, qy, qz);
+    //     phi_arr.push_back(euler(0));
+    //     theta_arr.push_back(euler(1));
+    //     psi_arr.push_back(euler(2));
 
-        // Quaternion data
-        qw_arr.push_back(qw);
-        qx_arr.push_back(qx);
-        qy_arr.push_back(qy);
-        qz_arr.push_back(qz);
-        q_norm_arr.push_back(std::sqrt(qw*qw + qx*qx + qy*qy + qz*qz));
-    }
+    //     // Quaternion data
+    //     qw_arr.push_back(qw);
+    //     qx_arr.push_back(qx);
+    //     qy_arr.push_back(qy);
+    //     qz_arr.push_back(qz);
+    //     q_norm_arr.push_back(std::sqrt(qw*qw + qx*qx + qy*qy + qz*qz));
+    // }
 
-    // Control data
-    std::vector<double> time_arr2(time_arr.begin(), time_arr.end() - 1);
-    std::vector<double> f1_arr, f2_arr, f3_arr, f4_arr;
-    f1_arr.reserve(U_sol.size());
-    f2_arr.reserve(U_sol.size());
-    f3_arr.reserve(U_sol.size());
-    f4_arr.reserve(U_sol.size());
+    // // Control data
+    // std::vector<double> time_arr2(time_arr.begin(), time_arr.end() - 1);
+    // std::vector<double> f1_arr, f2_arr, f3_arr, f4_arr;
+    // f1_arr.reserve(U_sol.size());
+    // f2_arr.reserve(U_sol.size());
+    // f3_arr.reserve(U_sol.size());
+    // f4_arr.reserve(U_sol.size());
 
-    for (const auto &u : U_sol)
-    {
-        f1_arr.push_back(u(0));
-        f2_arr.push_back(u(1));
-        f3_arr.push_back(u(2));
-        f4_arr.push_back(u(3));
-    }
+    // for (const auto &u : U_sol)
+    // {
+    //     f1_arr.push_back(u(0));
+    //     f2_arr.push_back(u(1));
+    //     f3_arr.push_back(u(2));
+    //     f4_arr.push_back(u(3));
+    // }
 
-    // Plotting
-    auto f1 = figure();
-    f1->size(1200, 900); // Slightly bigger if you like
+    // // Plotting
+    // auto f1 = figure();
+    // f1->size(1200, 900); // Slightly bigger if you like
 
-    // (1) Position
-    auto ax1_f1 = subplot(4, 1, 0);
-    auto plot_handle1 = plot(ax1_f1, time_arr, x_arr, "-r");
-    plot_handle1->display_name("x");
-    plot_handle1->line_width(2);
-    hold(ax1_f1, true);
-    auto plot_handle2 = plot(ax1_f1, time_arr, y_arr, "-g");
-    plot_handle2->display_name("y");
-    plot_handle2->line_width(2);
-    auto plot_handle3 = plot(ax1_f1, time_arr, z_arr, "-b");
-    plot_handle3->display_name("z");
-    plot_handle3->line_width(2);
+    // // (1) Position
+    // auto ax1_f1 = subplot(4, 1, 0);
+    // auto plot_handle1 = plot(ax1_f1, time_arr, x_arr, "-r");
+    // plot_handle1->display_name("x");
+    // plot_handle1->line_width(2);
+    // hold(ax1_f1, true);
+    // auto plot_handle2 = plot(ax1_f1, time_arr, y_arr, "-g");
+    // plot_handle2->display_name("y");
+    // plot_handle2->line_width(2);
+    // auto plot_handle3 = plot(ax1_f1, time_arr, z_arr, "-b");
+    // plot_handle3->display_name("z");
+    // plot_handle3->line_width(2);
 
-    title(ax1_f1, "Position Trajectories");
-    xlabel(ax1_f1, "Time [s]");
-    ylabel(ax1_f1, "Position [m]");
-    matplot::legend(ax1_f1);
-    grid(ax1_f1, true);
+    // title(ax1_f1, "Position Trajectories");
+    // xlabel(ax1_f1, "Time [s]");
+    // ylabel(ax1_f1, "Position [m]");
+    // matplot::legend(ax1_f1);
+    // grid(ax1_f1, true);
 
-    // (2) Attitude (Euler angles)
-    auto ax2_f1 = subplot(4, 1, 1);
-    hold(ax2_f1, true);
-    auto plot_handle4 = plot(ax2_f1, time_arr, phi_arr, "-r");
-    plot_handle4->display_name("roll");
-    plot_handle4->line_width(2);
-    auto plot_handle5 = plot(ax2_f1, time_arr, theta_arr, "-g");
-    plot_handle5->display_name("pitch");
-    plot_handle5->line_width(2);
-    auto plot_handle6 = plot(ax2_f1, time_arr, psi_arr, "-b");
-    plot_handle6->display_name("yaw");
-    plot_handle6->line_width(2);
+    // // (2) Attitude (Euler angles)
+    // auto ax2_f1 = subplot(4, 1, 1);
+    // hold(ax2_f1, true);
+    // auto plot_handle4 = plot(ax2_f1, time_arr, phi_arr, "-r");
+    // plot_handle4->display_name("roll");
+    // plot_handle4->line_width(2);
+    // auto plot_handle5 = plot(ax2_f1, time_arr, theta_arr, "-g");
+    // plot_handle5->display_name("pitch");
+    // plot_handle5->line_width(2);
+    // auto plot_handle6 = plot(ax2_f1, time_arr, psi_arr, "-b");
+    // plot_handle6->display_name("yaw");
+    // plot_handle6->line_width(2);
 
-    title(ax2_f1, "Attitude Angles");
-    xlabel(ax2_f1, "Time [s]");
-    ylabel(ax2_f1, "Angle [rad]");
-    matplot::legend(ax2_f1);
-    grid(ax2_f1, true);
+    // title(ax2_f1, "Attitude Angles");
+    // xlabel(ax2_f1, "Time [s]");
+    // ylabel(ax2_f1, "Angle [rad]");
+    // matplot::legend(ax2_f1);
+    // grid(ax2_f1, true);
 
-    // (3) Motor forces
-    auto ax3_f1 = subplot(4, 1, 2);
-    auto plot_handle7 = plot(ax3_f1, time_arr2, f1_arr, "-r");
-    plot_handle7->display_name("f1");
-    plot_handle7->line_width(2);
-    hold(ax3_f1, true);
-    auto plot_handle8 = plot(ax3_f1, time_arr2, f2_arr, "-g");
-    plot_handle8->display_name("f2");
-    plot_handle8->line_width(2);
-    auto plot_handle9 = plot(ax3_f1, time_arr2, f3_arr, "-b");
-    plot_handle9->display_name("f3");
-    plot_handle9->line_width(2);
-    auto plot_handle10 = plot(ax3_f1, time_arr2, f4_arr, "-k");
-    plot_handle10->display_name("f4");
-    plot_handle10->line_width(2);
+    // // (3) Motor forces
+    // auto ax3_f1 = subplot(4, 1, 2);
+    // auto plot_handle7 = plot(ax3_f1, time_arr2, f1_arr, "-r");
+    // plot_handle7->display_name("f1");
+    // plot_handle7->line_width(2);
+    // hold(ax3_f1, true);
+    // auto plot_handle8 = plot(ax3_f1, time_arr2, f2_arr, "-g");
+    // plot_handle8->display_name("f2");
+    // plot_handle8->line_width(2);
+    // auto plot_handle9 = plot(ax3_f1, time_arr2, f3_arr, "-b");
+    // plot_handle9->display_name("f3");
+    // plot_handle9->line_width(2);
+    // auto plot_handle10 = plot(ax3_f1, time_arr2, f4_arr, "-k");
+    // plot_handle10->display_name("f4");
+    // plot_handle10->line_width(2);
 
-    title(ax3_f1, "Motor Forces");
-    xlabel(ax3_f1, "Time [s]");
-    ylabel(ax3_f1, "Force [N]");
-    matplot::legend(ax3_f1);
-    grid(ax3_f1, true);
+    // title(ax3_f1, "Motor Forces");
+    // xlabel(ax3_f1, "Time [s]");
+    // ylabel(ax3_f1, "Force [N]");
+    // matplot::legend(ax3_f1);
+    // grid(ax3_f1, true);
 
-    // (4) Quaternion trajectories and norm
-    auto ax4_f1 = subplot(4, 1, 3);
-    hold(ax4_f1, true);
+    // // (4) Quaternion trajectories and norm
+    // auto ax4_f1 = subplot(4, 1, 3);
+    // hold(ax4_f1, true);
 
-    auto qwh = plot(ax4_f1, time_arr, qw_arr, "-r");
-    qwh->display_name("q_w");
-    qwh->line_width(2);
+    // auto qwh = plot(ax4_f1, time_arr, qw_arr, "-r");
+    // qwh->display_name("q_w");
+    // qwh->line_width(2);
 
-    auto qxh = plot(ax4_f1, time_arr, qx_arr, "-g");
-    qxh->display_name("q_x");
-    qxh->line_width(2);
+    // auto qxh = plot(ax4_f1, time_arr, qx_arr, "-g");
+    // qxh->display_name("q_x");
+    // qxh->line_width(2);
 
-    auto qyh = plot(ax4_f1, time_arr, qy_arr, "-b");
-    qyh->display_name("q_y");
-    qyh->line_width(2);
+    // auto qyh = plot(ax4_f1, time_arr, qy_arr, "-b");
+    // qyh->display_name("q_y");
+    // qyh->line_width(2);
 
-    auto qzh = plot(ax4_f1, time_arr, qz_arr, "-m");
-    qzh->display_name("q_z");
-    qzh->line_width(2);
+    // auto qzh = plot(ax4_f1, time_arr, qz_arr, "-m");
+    // qzh->display_name("q_z");
+    // qzh->line_width(2);
 
-    // Norm in black
-    auto qnorm_handle = plot(ax4_f1, time_arr, q_norm_arr, "-k");
-    qnorm_handle->display_name("|q|");
+    // // Norm in black
+    // auto qnorm_handle = plot(ax4_f1, time_arr, q_norm_arr, "-k");
+    // qnorm_handle->display_name("|q|");
 
-    title(ax4_f1, "Quaternion Components and Norm");
-    xlabel(ax4_f1, "Time [s]");
-    ylabel(ax4_f1, "Value");
-    matplot::legend(ax4_f1);
-    grid(ax4_f1, true);
+    // title(ax4_f1, "Quaternion Components and Norm");
+    // xlabel(ax4_f1, "Time [s]");
+    // ylabel(ax4_f1, "Value");
+    // matplot::legend(ax4_f1);
+    // grid(ax4_f1, true);
 
-    // Save figure 1
-    f1->draw();
-    f1->save(plotDirectory + "/quadrotor_circle_states.png");
+    // // Save figure 1
+    // f1->draw();
+    // f1->save(plotDirectory + "/quadrotor_circle_states.png");
 
-    // 3D Trajectory
-    auto f2 = figure();
-    f2->size(800, 600);
-    auto ax2 = f2->current_axes();
-    hold(ax2, true);
-    auto traj3d = plot3(ax2, x_arr, y_arr, z_arr);
-    traj3d->display_name("Trajectory");
-    traj3d->line_style("-");
-    traj3d->line_width(2);
-    traj3d->color("blue");
-    // Project trajectory onto x-y plane at z=0
-    auto proj_xy = plot3(ax2, x_arr, y_arr, std::vector<double>(x_arr.size(), 0.0));
-    proj_xy->display_name("X-Y Projection");
-    proj_xy->line_style("--");
-    proj_xy->line_width(1);
-    proj_xy->color("gray");
-    xlabel(ax2, "X [m]");
-    ylabel(ax2, "Y [m]");
-    zlabel(ax2, "Z [m]");
-    xlim(ax2, {-5, 5});
-    ylim(ax2, {-5, 5});
-    zlim(ax2, {0, 5});
-    title(ax2, "3D Trajectory (Figure-8)");
-    grid(ax2, true);
-    f2->draw();
-    f2->save(plotDirectory + "/quadrotor_circle_3d.png");
+    // // 3D Trajectory
+    // auto f2 = figure();
+    // f2->size(800, 600);
+    // auto ax2 = f2->current_axes();
+    // hold(ax2, true);
+    // auto traj3d = plot3(ax2, x_arr, y_arr, z_arr);
+    // traj3d->display_name("Trajectory");
+    // traj3d->line_style("-");
+    // traj3d->line_width(2);
+    // traj3d->color("blue");
+    // // Project trajectory onto x-y plane at z=0
+    // auto proj_xy = plot3(ax2, x_arr, y_arr, std::vector<double>(x_arr.size(), 0.0));
+    // proj_xy->display_name("X-Y Projection");
+    // proj_xy->line_style("--");
+    // proj_xy->line_width(1);
+    // proj_xy->color("gray");
+    // xlabel(ax2, "X [m]");
+    // ylabel(ax2, "Y [m]");
+    // zlabel(ax2, "Z [m]");
+    // xlim(ax2, {-5, 5});
+    // ylim(ax2, {-5, 5});
+    // zlim(ax2, {0, 5});
+    // title(ax2, "3D Trajectory (Figure-8)");
+    // grid(ax2, true);
+    // f2->draw();
+    // f2->save(plotDirectory + "/quadrotor_circle_3d.png");
 
-    // Animation of the quadrotor frame
-    auto f_anim = figure();
-    f_anim->size(800, 600);
-    auto ax_anim = f_anim->current_axes();
+    // // Animation of the quadrotor frame
+    // auto f_anim = figure();
+    // f_anim->size(800, 600);
+    // auto ax_anim = f_anim->current_axes();
 
-    // For collecting the trajectory as we go
-    std::vector<double> anim_x, anim_y, anim_z;
-    anim_x.reserve(X_sol.size());
-    anim_y.reserve(X_sol.size());
-    anim_z.reserve(X_sol.size());
+    // // For collecting the trajectory as we go
+    // std::vector<double> anim_x, anim_y, anim_z;
+    // anim_x.reserve(X_sol.size());
+    // anim_y.reserve(X_sol.size());
+    // anim_z.reserve(X_sol.size());
 
-    // Render every Nth frame to reduce #images
-    int frame_stride = 15;
-    double prop_radius = 0.03; // radius for small spheres at motor ends
+    // // Render every Nth frame to reduce #images
+    // int frame_stride = 15;
+    // double prop_radius = 0.03; // radius for small spheres at motor ends
 
-    for (size_t i = 0; i < X_sol.size(); i += frame_stride)
-    {
-        ax_anim->clear();
-        ax_anim->hold(true);
-        ax_anim->grid(true);
+    // for (size_t i = 0; i < X_sol.size(); i += frame_stride)
+    // {
+    //     ax_anim->clear();
+    //     ax_anim->hold(true);
+    //     ax_anim->grid(true);
 
-        // Current state
-        double x = X_sol[i](0);
-        double y = X_sol[i](1);
-        double z = X_sol[i](2);
+    //     // Current state
+    //     double x = X_sol[i](0);
+    //     double y = X_sol[i](1);
+    //     double z = X_sol[i](2);
 
-        // Accumulate path
-        anim_x.push_back(x);
-        anim_y.push_back(y);
-        anim_z.push_back(z);
+    //     // Accumulate path
+    //     anim_x.push_back(x);
+    //     anim_y.push_back(y);
+    //     anim_z.push_back(z);
 
-        // Plot the partial trajectory so far (in black dotted line)
-        auto path_plot = plot3(anim_x, anim_y, anim_z);
-        path_plot->line_width(1.5);
-        path_plot->line_style("--");
-        path_plot->color("black");
+    //     // Plot the partial trajectory so far (in black dotted line)
+    //     auto path_plot = plot3(anim_x, anim_y, anim_z);
+    //     path_plot->line_width(1.5);
+    //     path_plot->line_style("--");
+    //     path_plot->color("black");
 
-        // Build rotation from quaternion
-        Eigen::Vector4d quat(X_sol[i](3), X_sol[i](4), X_sol[i](5), X_sol[i](6));
-        Eigen::Matrix3d R = getRotationMatrixFromQuaternion(quat(0), quat(1), quat(2), quat(3));
+    //     // Build rotation from quaternion
+    //     Eigen::Vector4d quat(X_sol[i](3), X_sol[i](4), X_sol[i](5), X_sol[i](6));
+    //     Eigen::Matrix3d R = getRotationMatrixFromQuaternion(quat(0), quat(1), quat(2), quat(3));
 
-        // Arm endpoints (front, right, back, left)
-        std::vector<Eigen::Vector3d> arm_endpoints;
-        arm_endpoints.push_back(Eigen::Vector3d(arm_length, 0, 0));
-        arm_endpoints.push_back(Eigen::Vector3d(0, arm_length, 0));
-        arm_endpoints.push_back(Eigen::Vector3d(-arm_length, 0, 0));
-        arm_endpoints.push_back(Eigen::Vector3d(0, -arm_length, 0));
+    //     // Arm endpoints (front, right, back, left)
+    //     std::vector<Eigen::Vector3d> arm_endpoints;
+    //     arm_endpoints.push_back(Eigen::Vector3d(arm_length, 0, 0));
+    //     arm_endpoints.push_back(Eigen::Vector3d(0, arm_length, 0));
+    //     arm_endpoints.push_back(Eigen::Vector3d(-arm_length, 0, 0));
+    //     arm_endpoints.push_back(Eigen::Vector3d(0, -arm_length, 0));
 
-        // Transform to world coords
-        for (auto &pt : arm_endpoints)
-        {
-            pt = Eigen::Vector3d(x, y, z) + R * pt;
-        }
+    //     // Transform to world coords
+    //     for (auto &pt : arm_endpoints)
+    //     {
+    //         pt = Eigen::Vector3d(x, y, z) + R * pt;
+    //     }
 
-        // Front-back arm
-        std::vector<double> fx = {arm_endpoints[0].x(), arm_endpoints[2].x()};
-        std::vector<double> fy = {arm_endpoints[0].y(), arm_endpoints[2].y()};
-        std::vector<double> fz = {arm_endpoints[0].z(), arm_endpoints[2].z()};
-        auto fb_arm = plot3(fx, fy, fz);
-        fb_arm->line_width(2.0);
-        fb_arm->color("blue");
+    //     // Front-back arm
+    //     std::vector<double> fx = {arm_endpoints[0].x(), arm_endpoints[2].x()};
+    //     std::vector<double> fy = {arm_endpoints[0].y(), arm_endpoints[2].y()};
+    //     std::vector<double> fz = {arm_endpoints[0].z(), arm_endpoints[2].z()};
+    //     auto fb_arm = plot3(fx, fy, fz);
+    //     fb_arm->line_width(2.0);
+    //     fb_arm->color("blue");
 
-        // Right-left arm
-        std::vector<double> rx = {arm_endpoints[1].x(), arm_endpoints[3].x()};
-        std::vector<double> ry = {arm_endpoints[1].y(), arm_endpoints[3].y()};
-        std::vector<double> rz = {arm_endpoints[1].z(), arm_endpoints[3].z()};
-        auto rl_arm = plot3(rx, ry, rz);
-        rl_arm->line_width(2.0);
-        rl_arm->color("red");
+    //     // Right-left arm
+    //     std::vector<double> rx = {arm_endpoints[1].x(), arm_endpoints[3].x()};
+    //     std::vector<double> ry = {arm_endpoints[1].y(), arm_endpoints[3].y()};
+    //     std::vector<double> rz = {arm_endpoints[1].z(), arm_endpoints[3].z()};
+    //     auto rl_arm = plot3(rx, ry, rz);
+    //     rl_arm->line_width(2.0);
+    //     rl_arm->color("red");
 
-        auto sphere_points = linspace(0, 2 * M_PI, 15);
-        for (const auto &motor_pos : arm_endpoints)
-        {
-            std::vector<double> circ_x, circ_y, circ_z;
-            circ_x.reserve(sphere_points.size());
-            circ_y.reserve(sphere_points.size());
-            circ_z.reserve(sphere_points.size());
-            for (auto angle : sphere_points)
-            {
-                circ_x.push_back(motor_pos.x() + prop_radius * cos(angle));
-                circ_y.push_back(motor_pos.y() + prop_radius * sin(angle));
-                circ_z.push_back(motor_pos.z()); // keep the same z for a small ring
-            }
-            auto sphere_plot = plot3(circ_x, circ_y, circ_z);
-            sphere_plot->line_style("solid");
-            sphere_plot->line_width(1.5);
-            sphere_plot->color("cyan");
-        }
+    //     auto sphere_points = linspace(0, 2 * M_PI, 15);
+    //     for (const auto &motor_pos : arm_endpoints)
+    //     {
+    //         std::vector<double> circ_x, circ_y, circ_z;
+    //         circ_x.reserve(sphere_points.size());
+    //         circ_y.reserve(sphere_points.size());
+    //         circ_z.reserve(sphere_points.size());
+    //         for (auto angle : sphere_points)
+    //         {
+    //             circ_x.push_back(motor_pos.x() + prop_radius * cos(angle));
+    //             circ_y.push_back(motor_pos.y() + prop_radius * sin(angle));
+    //             circ_z.push_back(motor_pos.z()); // keep the same z for a small ring
+    //         }
+    //         auto sphere_plot = plot3(circ_x, circ_y, circ_z);
+    //         sphere_plot->line_style("solid");
+    //         sphere_plot->line_width(1.5);
+    //         sphere_plot->color("cyan");
+    //     }
 
-        title(ax_anim, "Quadrotor Animation");
-        xlabel(ax_anim, "X [m]");
-        ylabel(ax_anim, "Y [m]");
-        zlabel(ax_anim, "Z [m]");
-        xlim(ax_anim, {-5, 5});
-        ylim(ax_anim, {-5, 5});
-        zlim(ax_anim, {0, 5});
+    //     title(ax_anim, "Quadrotor Animation");
+    //     xlabel(ax_anim, "X [m]");
+    //     ylabel(ax_anim, "Y [m]");
+    //     zlabel(ax_anim, "Z [m]");
+    //     xlim(ax_anim, {-5, 5});
+    //     ylim(ax_anim, {-5, 5});
+    //     zlim(ax_anim, {0, 5});
 
-        ax_anim->view(30, -30);
+    //     ax_anim->view(30, -30);
 
-        std::string frameFile = plotDirectory + "/quadrotor_anim_frame_" + std::to_string(i / frame_stride) + ".png";
-        f_anim->draw();
-        f_anim->save(frameFile);
-        std::this_thread::sleep_for(std::chrono::milliseconds(80));
-    }
+    //     std::string frameFile = plotDirectory + "/quadrotor_anim_frame_" + std::to_string(i / frame_stride) + ".png";
+    //     f_anim->draw();
+    //     f_anim->save(frameFile);
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(80));
+    // }
 
-    // -----------------------------
-    // Generate GIF from frames using ImageMagick
-    // -----------------------------
-    std::string gif_command = "convert -delay 30 " + plotDirectory + "/quadrotor_anim_frame_*.png " + plotDirectory + "/quadrotor_circle.gif";
-    std::system(gif_command.c_str());
+    // // -----------------------------
+    // // Generate GIF from frames using ImageMagick
+    // // -----------------------------
+    // std::string gif_command = "convert -delay 30 " + plotDirectory + "/quadrotor_anim_frame_*.png " + plotDirectory + "/quadrotor_circle.gif";
+    // std::system(gif_command.c_str());
 
-    std::string cleanup_command = "rm " + plotDirectory + "/quadrotor_anim_frame_*.png";
-    std::system(cleanup_command.c_str());
+    // std::string cleanup_command = "rm " + plotDirectory + "/quadrotor_anim_frame_*.png";
+    // std::system(cleanup_command.c_str());
     return 0;
 }
 

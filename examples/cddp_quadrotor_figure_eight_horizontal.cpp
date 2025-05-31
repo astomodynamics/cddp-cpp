@@ -201,7 +201,6 @@ int main()
     options.regularization_state = 0.0;
     options.barrier_coeff = 1e-1;
     options.is_ilqr = true;
-    options.defect_violation_penalty_initial = 1e+2;
     options.ms_segment_length = horizon / 10;
     options.ms_rollout_type = "nonlinear";
 
