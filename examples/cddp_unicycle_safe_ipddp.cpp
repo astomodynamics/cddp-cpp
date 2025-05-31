@@ -66,14 +66,14 @@ int main() {
 
     // CDDP options
     cddp::CDDPOptions options;
-    options.max_iterations = 10;
+    options.max_iterations = 100;
     options.verbose = true;
     options.debug = false;
     options.use_parallel = false;
     options.num_threads = 1;
-    options.cost_tolerance = 1e-5;
-    options.grad_tolerance = 1e-4;
-    options.regularization_type = "both";
+    options.cost_tolerance = 1e-4;
+    options.grad_tolerance = 1e-3;
+    options.regularization_type = "control";
     options.regularization_control = 1e-2;
     options.regularization_state = 1e-3;
     options.barrier_coeff = 1e-1;

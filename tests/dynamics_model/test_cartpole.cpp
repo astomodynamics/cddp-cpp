@@ -17,6 +17,7 @@
 #include <iostream>
 #include <vector>
 #include <filesystem>
+#include <cmath> // For M_PI
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -61,6 +62,41 @@ TEST(CartPoleTest, DiscreteDynamics) {
     ASSERT_EQ(cartpole.getControlDim(), 1);
     ASSERT_DOUBLE_EQ(cartpole.getTimestep(), 0.05);
     ASSERT_EQ(cartpole.getIntegrationType(), "rk4");
+}
+
+TEST(CartPoleJacobianTest, Jacobians) {
+    double timestep = 0.01; // Timestep for dynamics, not directly used by Jacobian of continuous dynamics
+    std::string integration_type = "rk4"; // Not directly used, but needed for constructor
+    cddp::CartPole cartpole(timestep, integration_type);
+
+    Eigen::VectorXd state(4);
+    // state << 0.1, 0.2, 0.3, 0.4;  // x, theta, x_dot, theta_dot
+    state << 0.0, M_PI / 6.0, 0.1, -0.1; // Example state: x=0, theta=30deg, x_dot=0.1, theta_dot=-0.1
+
+    Eigen::VectorXd control(1);
+    control << 1.0;  // Example control: force = 1.0
+
+    // Test State Jacobian
+    Eigen::MatrixXd analytical_A = cartpole.getStateJacobian(state, control);
+    Eigen::MatrixXd autodiff_A = cartpole.DynamicalSystem::getStateJacobian(state, control);
+
+    // std::cout << "Analytical State Jacobian (A):\n" << analytical_A << std::endl;
+    // std::cout << "Autodiff State Jacobian (A):\n" << autodiff_A << std::endl;
+
+    ASSERT_TRUE(analytical_A.isApprox(autodiff_A, 1e-9))
+        << "Analytical A:\n" << analytical_A
+        << "\nAutodiff A:\n" << autodiff_A;
+
+    // Test Control Jacobian
+    Eigen::MatrixXd analytical_B = cartpole.getControlJacobian(state, control);
+    Eigen::MatrixXd autodiff_B = cartpole.DynamicalSystem::getControlJacobian(state, control);
+
+    // std::cout << "Analytical Control Jacobian (B):\n" << analytical_B << std::endl;
+    // std::cout << "Autodiff Control Jacobian (B):\n" << autodiff_B << std::endl;
+
+    ASSERT_TRUE(analytical_B.isApprox(autodiff_B, 1e-9))
+        << "Analytical B:\n" << analytical_B
+        << "\nAutodiff B:\n" << autodiff_B;
 }
 
 int main(int argc, char **argv) {
