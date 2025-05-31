@@ -1043,24 +1043,34 @@ namespace cddp
             bool filter_acceptance = false;
             double expected_improvement = alpha * dV_(0);
 
-            if (constraint_violation_new > options_.filter_maximum_violation) {
-                if (constraint_violation_new < options_.filter_acceptance * constraint_violation_old) {
+            if (constraint_violation_new > options_.filter_maximum_violation)
+            {
+                if (constraint_violation_new < options_.filter_acceptance * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
-                else {
+                else
+                {
                     filter_acceptance = false;
                 }
-            } else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0) {
-                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement) {
+            }
+            else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0)
+            {
+                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement)
+                {
                     filter_acceptance = true;
                 }
-            } else {
-                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_new || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old) {
+            }
+            else
+            {
+                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_new || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
             }
 
-            if (filter_acceptance) {
+            if (filter_acceptance)
+            {
                 // Update the result with the new trajectories and metrics.
                 result.success = true;
                 result.state_sequence = X_new;
@@ -1278,21 +1288,30 @@ namespace cddp
             bool filter_acceptance = false;
             double expected_improvement = alpha * dV_(0);
 
-            if (constraint_violation_new > options_.filter_maximum_violation) {
-                if (constraint_violation_new < (1 - options_.filter_acceptance) * constraint_violation_old) {
+            if (constraint_violation_new > options_.filter_maximum_violation)
+            {
+                if (constraint_violation_new < (1 - options_.filter_acceptance) * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
-            } else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0) {
-                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement) {
+            }
+            else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0)
+            {
+                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement)
+                {
                     filter_acceptance = true;
                 }
-            } else {
-                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_old || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old) {
+            }
+            else
+            {
+                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_old || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
             }
 
-            if (filter_acceptance) {
+            if (filter_acceptance)
+            {
                 // Update the result with the new trajectories and metrics.
                 result.success = true;
                 result.state_sequence = X_new;
