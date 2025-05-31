@@ -1347,15 +1347,15 @@ namespace cddp
                 const Eigen::VectorXd &g_vec = G_[cname][t]; // Assumes G_ is updated
 
                 L_ -= mu_ * s_vec.array().log().sum();
-                // rp_err += (s_vec + g_vec).lpNorm<1>();
+                rp_err += (s_vec + g_vec).lpNorm<1>();
             }
 
             // Add defect violation penalty
-            // Eigen::VectorXd d = F_[t] - X_[t + 1];
-            // rf_err += d.lpNorm<1>();
+            Eigen::VectorXd d = F_[t] - X_[t + 1];
+            rf_err += d.lpNorm<1>();
         }
 
-        // constraint_violation_ = rp_err + rf_err;
+        constraint_violation_ = rp_err + rf_err;
         return;
     }
 
