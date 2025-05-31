@@ -34,11 +34,11 @@ int main() {
 
     // Create a CartPole instance with custom parameters.
     double cart_mass = 1.0;
-    double pole_mass = 0.3;
+    double pole_mass = 0.4;
     double pole_length = 0.5;
     double gravity = 9.81;
     double damping = 0.0; // TODO: Implement damping term.
-    std::string integration_type = "euler";
+    std::string integration_type = "rk4";
 
     std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::CartPole>(
         timestep, integration_type, cart_mass, pole_mass, pole_length, gravity, damping);
@@ -47,10 +47,10 @@ int main() {
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
     Eigen::MatrixXd R = 1.0 * Eigen::MatrixXd::Identity(control_dim, control_dim);
     Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf(0,0) = 400.0;  // Final cart position cost.
-    Qf(1,1) = 400.0;  // Final cart velocity cost.
-    Qf(2,2) = 400.0;  // Final pole angle cost.
-    Qf(3,3) = 400.0;  // Final pole angular velocity cost.
+    Qf(0,0) = 100.0;  // Final cart position cost.
+    Qf(1,1) = 100.0;  // Final cart velocity cost.
+    Qf(2,2) = 100.0;  // Final pole angle cost.
+    Qf(3,3) = 100.0;  // Final pole angular velocity cost.
 
     // Goal state: cart at origin, pole upright, zero velocities.
     Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
@@ -71,9 +71,9 @@ int main() {
 
     // Control constraints.
     Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -4.0;  // Maximum negative force.
+    control_lower_bound << -5.0;  // Maximum negative force.
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 4.0;   // Maximum positive force.
+    control_upper_bound << 5.0;   // Maximum positive force.
     
     // FIXME: For MSIPDDP 
     cddp_solver.addConstraint("ControlConstraint", 
@@ -119,13 +119,13 @@ int main() {
     //     X[i](2) += dist(gen);
     //     X[i](3) += dist(gen);
     // }
-    for (int i = 0; i < horizon; ++i) {
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<double> dist(-0.005, 0.005);
-        U[i] = Eigen::VectorXd::Zero(control_dim);
-        U[i](0) += dist(gen);
-    }
+    // for (int i = 0; i < horizon; ++i) {
+    //     std::random_device rd;
+    //     std::mt19937 gen(rd());
+    //     std::uniform_real_distribution<double> dist(-0.005, 0.005);
+    //     U[i] = Eigen::VectorXd::Zero(control_dim);
+    //     U[i](0) += dist(gen);
+    // }
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve.
