@@ -191,7 +191,7 @@ int main()
     cddp::CDDPOptions options;
     options.max_iterations = 10000;
     options.verbose = true;
-    options.debug = true;
+    options.debug = false;
     options.use_parallel = true;
     options.num_threads = 10;
     options.cost_tolerance = 1e-3;
@@ -243,6 +243,16 @@ int main()
 
     // Solve the problem
     cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
+    options.max_line_search_iterations = 20;
+    options.barrier_coeff = 1e-0;
+    options.filter_merit_acceptance = 1e-6;
+    options.filter_violation_acceptance = 1e-6;
+    options.filter_maximum_violation = 1e+4;
+    options.filter_minimum_violation = 1e-7;
+    options.regularization_control_max = 1e+7;
+    options.armijo_constant = 1e-4;
+    options.cost_tolerance = 1e-9;
+    options.grad_tolerance = 1e-5;
 
     // Resolve problem with the ball constraint
     cddp::CDDP solver_ball(
@@ -264,7 +274,7 @@ int main()
     // Initial trajectory guess
     solver_ball.setInitialTrajectory(solution.state_sequence, solution.control_sequence);
     
-    // Solve the problem
+    // Solve the problem (MSIPDDP, IPDDP)
     cddp::CDDPSolution solution_ball = solver_ball.solve("MSIPDDP");
 
     auto X_sol = solution_ball.state_sequence;

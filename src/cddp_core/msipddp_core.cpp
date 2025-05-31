@@ -148,7 +148,7 @@ namespace cddp
                 {
                     // Initialize s_i = max(options.slack_scale, -g_i) to ensure s_i > 0
                     s_init_t(i) = std::max(options_.slack_scale, -g_at_xt_ut(i));
-
+                
                     // Initialize y_i = heuristic_initial_mu / s_i to satisfy s_i * y_i = heuristic_initial_mu
                     if (s_init_t(i) < 1e-12)
                     { // Safeguard
@@ -159,7 +159,7 @@ namespace cddp
                         y_init_t(i) = heuristic_initial_mu / s_init_t(i);
                     }
                     // Ensure y_i is also not too small
-                    y_init_t(i) = std::max(options_.dual_scale * 0.1, y_init_t(i)); // 10% of dual_scale as minimum
+                    y_init_t(i) = std::max(options_.dual_scale * 0.1, std::min(y_init_t(i), options_.dual_scale * 10.0)); // 10% of dual_scale 
                 }
                 Y_[constraint_name][t] = y_init_t;
                 S_[constraint_name][t] = s_init_t;
