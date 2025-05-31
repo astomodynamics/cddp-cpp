@@ -73,7 +73,7 @@ struct CDDPOptions {
     // ipddp line-search options
     double filter_merit_acceptance = 1e-6;         // Small value for merit filter acceptance
     double filter_violation_acceptance = 1e-6;     // Small value for violation filter acceptance
-    double filter_maximum_violation = 1e-2;         // Maximum violation for filter acceptance
+    double filter_maximum_violation = 1e+4;         // Maximum violation for filter acceptance
     double filter_minimum_violation = 1e-6;         // Minimum violation for filter acceptance
     double armijo_constant = 1e-4;                   // Armijo constant c1 for filter acceptance
 
