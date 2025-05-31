@@ -92,10 +92,13 @@ namespace cddp
 
         // Determine initial mu for the heuristic s*y = mu
         double heuristic_initial_mu;
-        if (constraint_set_.empty()) {
+        if (constraint_set_.empty())
+        {
             heuristic_initial_mu = 1e-8; // A small value if no constraints
             mu_ = heuristic_initial_mu;
-        } else {
+        }
+        else
+        {
             heuristic_initial_mu = options_.barrier_coeff; // Default: 1.0
             mu_ = heuristic_initial_mu;
         }
@@ -122,14 +125,18 @@ namespace cddp
                 Eigen::VectorXd s_init_t = Eigen::VectorXd::Zero(dual_dim);
                 Eigen::VectorXd y_init_t = Eigen::VectorXd::Zero(dual_dim);
 
-                for (int i = 0; i < dual_dim; ++i) {
+                for (int i = 0; i < dual_dim; ++i)
+                {
                     // Initialize s_i = max(options.slack_scale, -g_i) to ensure s_i > 0
                     s_init_t(i) = std::max(options_.slack_scale, -g_at_xt_ut(i));
 
                     // Initialize y_i = heuristic_initial_mu / s_i to satisfy s_i * y_i = heuristic_initial_mu
-                    if (s_init_t(i) < 1e-12) { // Safeguard
+                    if (s_init_t(i) < 1e-12)
+                    { // Safeguard
                         y_init_t(i) = heuristic_initial_mu / 1e-12;
-                    } else {
+                    }
+                    else
+                    {
                         y_init_t(i) = heuristic_initial_mu / s_init_t(i);
                     }
                     // Ensure y_i is also not too small
@@ -418,8 +425,9 @@ namespace cddp
             }
 
             // Check termination
-            if (std::max(optimality_gap_, mu_) <= options_.grad_tolerance)
-            {   
+            double mu_vs_kkt_error = std::max(mu_, kkt_error_);
+            if (std::max(optimality_gap_, mu_vs_kkt_error) <= options_.grad_tolerance)
+            {
                 if (options_.debug)
                 {
                     std::cout << "IPDDP: Converged due to small change in cost and Lagrangian." << std::endl;
@@ -427,7 +435,7 @@ namespace cddp
                 solution.converged = true;
                 break;
             }
-            if (abs(dJ_) < options_.cost_tolerance && abs(dL_) < options_.cost_tolerance)
+            if (abs(dJ_) < options_.cost_tolerance && abs(dL_) < options_.cost_tolerance && mu_vs_kkt_error <= options_.grad_tolerance)
             {
                 if (options_.debug)
                 {
@@ -437,15 +445,33 @@ namespace cddp
                 break;
             }
 
-            // Barrier update logic 
-            if (optimality_gap_ <= 0.2 * mu_)
+            // Barrier update logic
+            if (kkt_error_ <= options_.barrier_update_factor * mu_)
             {
                 if (constraint_set_.empty())
                 {
                 }
                 else
+
                 {
-                    mu_ = std::max(options_.cost_tolerance / 10.0, std::min(0.2 * mu_, std::pow(mu_, 1.2)));
+                    double linear_reduction_target_factor = options_.barrier_update_factor;
+                    if (mu_ > 1e-12)
+                    {
+                        double kkt_progress_metric = kkt_error_ / mu_;
+                        // Satisfying the KKT conditions for the current mu.
+                        // So, we can be more aggressive in reducing mu.
+                        if (kkt_progress_metric < 0.1 * options_.barrier_update_factor)
+                        {
+                            // Significantly better than threshold: make reduction factor more aggressive
+                            linear_reduction_target_factor = options_.barrier_update_factor * 0.5;
+                        }
+                        else if (kkt_progress_metric < 0.5 * options_.barrier_update_factor)
+                        {
+                            // Moderately better than threshold: make reduction factor slightly more aggressive
+                            linear_reduction_target_factor = options_.barrier_update_factor * 0.75;
+                        }
+                    }
+                    mu_ = std::max(options_.grad_tolerance / 10.0, std::min(linear_reduction_target_factor * mu_, std::pow(mu_, options_.barrier_update_power)));
                 }
                 resetIPDDPFilter();
                 resetIPDDPRegularization();
@@ -536,7 +562,7 @@ namespace cddp
 
                 // Regularization
                 Eigen::MatrixXd Q_uu_reg = Q_uu;
-                // Apply regularization 
+                // Apply regularization
                 Q_uu_reg.diagonal().array() += regularization_control_;
                 Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
@@ -549,7 +575,7 @@ namespace cddp
                     }
                     return false;
                 }
-                
+
                 Eigen::VectorXd k_u = -llt.solve(Q_u);
                 Eigen::MatrixXd K_u = -llt.solve(Q_ux);
                 k_u_[t] = k_u;
@@ -570,6 +596,7 @@ namespace cddp
             } // end while t
 
             optimality_gap_ = Qu_err;
+            kkt_error_ = Qu_err;
             if (options_.debug)
             {
                 std::cout << "[IPDDP Backward Pass]\n"
@@ -637,21 +664,24 @@ namespace cddp
                     Q_yx.block(offset, 0, dual_dim, state_dim) = g_x;
                     Q_yu.block(offset, 0, dual_dim, control_dim) = g_u;
 
-                    // Get constraint Hessians if not using iLQR 
-                    if (!options_.is_ilqr) // Or a new option specific to constraint Hessians
-                    {
-                        const auto constraint_hessians = constraint->getHessians(x, u);
-                        const auto& g_xx_list = std::get<0>(constraint_hessians); // std::vector<Eigen::MatrixXd>
-                        const auto& g_uu_list = std::get<1>(constraint_hessians); // std::vector<Eigen::MatrixXd>
-                        const auto& g_ux_list = std::get<2>(constraint_hessians); // std::vector<Eigen::MatrixXd>
+                    // // Get constraint Hessians if not using iLQR
+                    // if (!options_.is_ilqr) // Or a new option specific to constraint Hessians
+                    // {
+                    //     const auto constraint_hessians = constraint->getHessians(x, u);
+                    //     const auto &g_xx_list = std::get<0>(constraint_hessians); // std::vector<Eigen::MatrixXd>
+                    //     const auto &g_uu_list = std::get<1>(constraint_hessians); // std::vector<Eigen::MatrixXd>
+                    //     const auto &g_ux_list = std::get<2>(constraint_hessians); // std::vector<Eigen::MatrixXd>
 
-                        for (int i = 0; i < dual_dim; ++i)
-                        {
-                            if (g_xx_list.size() > i && !g_xx_list[i].hasNaN()) sum_g_xx_y += y_vec(i) * g_xx_list[i];
-                            if (g_uu_list.size() > i && !g_uu_list[i].hasNaN()) sum_g_uu_y += y_vec(i) * g_uu_list[i];
-                            if (g_ux_list.size() > i && !g_ux_list[i].hasNaN()) sum_g_ux_y += y_vec(i) * g_ux_list[i];
-                        }
-                    }
+                    //     for (int i = 0; i < dual_dim; ++i)
+                    //     {
+                    //         if (g_xx_list.size() > i && !g_xx_list[i].hasNaN())
+                    //             sum_g_xx_y += y_vec(i) * g_xx_list[i];
+                    //         if (g_uu_list.size() > i && !g_uu_list[i].hasNaN())
+                    //             sum_g_uu_y += y_vec(i) * g_uu_list[i];
+                    //         if (g_ux_list.size() > i && !g_ux_list[i].hasNaN())
+                    //             sum_g_ux_y += y_vec(i) * g_ux_list[i];
+                    //     }
+                    // }
 
                     offset += dual_dim;
                 }
@@ -701,7 +731,7 @@ namespace cddp
 
                 // Regularization
                 Eigen::MatrixXd Q_uu_reg = Q_uu;
-                // Apply regularization 
+                // Apply regularization
                 Q_uu_reg.diagonal().array() += regularization_control_;
                 Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
@@ -714,7 +744,6 @@ namespace cddp
                     }
                     return false;
                 }
-                    
 
                 Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
                 bigRHS.col(0) = Q_u + Q_yu.transpose() * S_inv * rhat;
@@ -787,7 +816,8 @@ namespace cddp
             } // end while t
 
             // Compute optimality gap and print
-            optimality_gap_ = std::max(Qu_err, std::max(rp_err, rd_err));
+            optimality_gap_ = Qu_err;
+            kkt_error_ = std::max(rp_err, rd_err);
 
             if (options_.debug)
             {
@@ -815,7 +845,7 @@ namespace cddp
         const int control_dim = getControlDim();
         const int dual_dim = getTotalDualDim();
 
-        double tau = std::max(0.99, 1.0 - mu_);
+        double tau = std::max(options_.minimum_fraction_to_boundary, 1.0 - mu_);
 
         std::vector<Eigen::VectorXd> X_new = X_;
         std::vector<Eigen::VectorXd> U_new = U_;
@@ -1020,8 +1050,8 @@ namespace cddp
                 result.success = true;
                 result.state_sequence = X_new;
                 result.control_sequence = U_new;
-                result.dual_sequence = Y_new;    
-                result.slack_sequence = S_new;    
+                result.dual_sequence = Y_new;
+                result.slack_sequence = S_new;
                 result.constraint_sequence = G_new;
                 result.cost = cost_new;
                 result.lagrangian = log_cost_new;

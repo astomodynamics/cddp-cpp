@@ -107,14 +107,13 @@ struct CDDPOptions {
     double boxqp_armijo = 0.1;                      // Armijo parameter for boxqp
     bool boxqp_verbose = false;                     // Print debug info for boxqp
 
-    // msipddp options
-    double defect_violation_penalty_initial = 1.0; // Initial defect penalty
-    double ms_defect_penalty_rho = 0.5;             // Rho parameter for defect penalty update
-    double ms_defect_penalty_kappa_d = 1e-4;        // Kappa_d threshold for defect penalty update
-    double ms_defect_penalty_mu0 = 10.0;            // Mu_0 safety margin for defect penalty update
+    // msipddp optionsupdate
     int ms_segment_length = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
     std::string ms_rollout_type = "hybrid"; // Rollout type: ["linear", "nonlinear", "hybrid"]
     double ms_defect_tolerance_for_single_shooting = 1e-3; // Defect norm tolerance to switch to single shooting at segment boundaries
+    double barrier_update_factor = 0.2; // Factor for barrier update: optimality_gap <= barrier_update_factor * mu; [0.0, 1.0]
+    double barrier_update_power = 1.2; // Power for barrier update: mu_new = mu * barrier_update_power; [1.0, 2.0]
+    double minimum_fraction_to_boundary = 0.99; // Minimum fraction to boundary for barrier update: tau = std::max(0.99, 1.0 - mu_);
 };
 
 struct CDDPSolution {
@@ -422,11 +421,6 @@ private:
     int ipddp_regularization_counter_ = 0; // Regularization counter for IPDDP
     double constraint_violation_; // Current constraint violation measure
     double gamma_; // Small value for filter acceptance
-
-    // Regularization parameters
-    double defect_violation_penalty_ = 1.0;
-    double equality_violation_penalty_ = 1.0;
-    double inequality_violation_penalty_ = 1.0;
     
     // Feedforward and feedback gains
     std::vector<Eigen::VectorXd> k_u_;
@@ -456,6 +450,7 @@ private:
     BoxQPSolver boxqp_solver_;
 
     double optimality_gap_ = 1e+10;
+    double kkt_error_ = 1e+10; // maximum KKT residual except Qu term
 };
 } // namespace cddp
 #endif // CDDP_CDDP_CORE_HPP

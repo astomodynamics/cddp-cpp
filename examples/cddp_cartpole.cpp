@@ -74,19 +74,30 @@ int main() {
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 5.0;   // Maximum positive force.
     
+    // FIXME: For MSIPDDP 
     cddp_solver.addConstraint("ControlConstraint", 
         std::make_unique<cddp::ControlConstraint>( control_upper_bound));
+
+    // FIXME: For CLDDP
+    // cddp_solver.addConstraint("ControlBoxConstraint", 
+    //     std::make_unique<cddp::ControlBoxConstraint>( control_lower_bound, control_upper_bound));
 
     // Solver options.
     cddp::CDDPOptions options;
     options.max_iterations = 500;
+    options.cost_tolerance = 1e-7;
+    options.grad_tolerance = 1e-6;
     options.regularization_type = "control";
-    options.regularization_control = 1e-3;
+    options.regularization_control = 1e-5;
     options.is_ilqr = true;
     options.debug = false;
-    options.defect_violation_penalty_initial = 1e-0;
-    options.ms_segment_length = horizon / 20;
-    options.ms_rollout_type = "nonlinear";
+    options.barrier_coeff = 1e-1;
+    options.ms_segment_length = horizon / 50;
+    options.ms_rollout_type = "hybrid";
+    options.ms_defect_tolerance_for_single_shooting = 1e-5;
+    options.barrier_update_factor = 0.2;
+    options.barrier_update_power = 1.2;
+    options.minimum_reduction_ratio = 1e-4;
     cddp_solver.setOptions(options);
 
     // Initial trajectory.

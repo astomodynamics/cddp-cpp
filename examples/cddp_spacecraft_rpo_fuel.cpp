@@ -206,7 +206,6 @@ int main()
     options.barrier_coeff = 1e-1; // Starting barrier coefficient
     options.is_ilqr = true;
     options.debug = true;
-    options.defect_violation_penalty_initial = 1e-0;
     options.ms_segment_length = horizon / 10;
     options.ms_rollout_type = "nonlinear";
 
