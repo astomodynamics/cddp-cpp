@@ -57,15 +57,17 @@ TEST(CDDPTest, SolveLogCDDP) {
     cddp::CDDPOptions options;
     options.max_iterations = 30;
     options.cost_tolerance = 1e-5;
-    options.use_parallel = true;
-    options.num_threads = 10;
-    options.regularization_type = "both";
-    options.regularization_state = 1e-5;
+    options.grad_tolerance = 1e-5;
+    options.use_parallel = false;
+    options.num_threads = 1;
+    options.regularization_type = "control";
     options.regularization_control = 1e-3;
-    options.barrier_coeff = 1e-2;
-    options.barrier_factor = 1e-1;
+    options.barrier_coeff = 1e-1;
     options.verbose = true;
-    options.debug = false;
+    options.debug = true;
+    options.ms_segment_length = horizon;
+    options.ms_rollout_type = "nonlinear";
+    options.ms_defect_tolerance_for_single_shooting = 1e-5;
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(
@@ -88,16 +90,16 @@ TEST(CDDPTest, SolveLogCDDP) {
     control_lower_bound << -1.0, -M_PI;
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 1.0, M_PI;
-    cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-    auto control_box_constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    cddp_solver.addConstraint("ControlConstraint", 
+        std::make_unique<cddp::ControlConstraint>( control_upper_bound));
 
-    // Define state box constraints
-    Eigen::VectorXd state_lower_bound(state_dim);
-    state_lower_bound << -0.1, -0.1, -10.0;
-    Eigen::VectorXd state_upper_bound(state_dim);
-    state_upper_bound << 2.5, 2.5, 10.0;
-    cddp_solver.addConstraint(std::string("StateBoxConstraint"), std::make_unique<cddp::StateBoxConstraint>(state_lower_bound, state_upper_bound));
-    auto state_box_constraint = cddp_solver.getConstraint<cddp::StateBoxConstraint>("StateBoxConstraint");
+    // // Define state box constraints
+    // Eigen::VectorXd state_lower_bound(state_dim);
+    // state_lower_bound << -0.1, -0.1, -10.0;
+    // Eigen::VectorXd state_upper_bound(state_dim);
+    // state_upper_bound << 2.5, 2.5, 10.0;
+    // cddp_solver.addConstraint(std::string("StateBoxConstraint"), std::make_unique<cddp::StateBoxConstraint>(state_lower_bound, state_upper_bound));
+    // auto state_box_constraint = cddp_solver.getConstraint<cddp::StateBoxConstraint>("StateBoxConstraint");
 
     // Define ball constraint
     double radius = 0.2;
@@ -115,14 +117,17 @@ TEST(CDDPTest, SolveLogCDDP) {
     X[0] = initial_state;
     double v = 0.01;
     for (int i = 0; i < horizon; ++i) {
-          double x = X[i](0);
-          double y = X[i](1);
-          double theta = X[i](2);
+        X[i+1] = initial_state;
+    }
+    // for (int i = 0; i < horizon; ++i) {
+    //       double x = X[i](0);
+    //       double y = X[i](1);
+    //       double theta = X[i](2);
   
-          x_arr0[i] = X[i](0);
-          y_arr0[i] = X[i](1);
-          X[i+1] = Eigen::Vector3d(x + v * cos(theta), y + v * sin(theta), theta - 0.01);
-      }
+    //       x_arr0[i] = X[i](0);
+    //       y_arr0[i] = X[i](1);
+    //       X[i+1] = Eigen::Vector3d(x + v * cos(theta), y + v * sin(theta), theta - 0.01);
+    //   }
 
     cddp_solver.setInitialTrajectory(X, U);
 
@@ -130,11 +135,6 @@ TEST(CDDPTest, SolveLogCDDP) {
     cddp::CDDPSolution solution = cddp_solver.solve("LogCDDP");
     solution.converged = true;
     ASSERT_TRUE(solution.converged);
-
-    // Extract solution
-    auto X_sol = solution.state_sequence; // size: horizon + 1
-    auto U_sol = solution.control_sequence; // size: horizon
-    auto t_sol = solution.time_sequence; // size: horizon + 1
 }
 
 // Create gif from images using ImageMagick
