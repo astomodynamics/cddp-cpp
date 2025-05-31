@@ -426,30 +426,18 @@ namespace cddp
             }
 
             // Barrier update logic
-            if (kkt_error_ <= options_.barrier_update_factor * mu_)
-            {
-                double linear_reduction_target_factor = options_.barrier_update_factor;
-                if (mu_ > 1e-12)
-                {
-                    double kkt_progress_metric = kkt_error_ / mu_;
-                    // Satisfying the KKT conditions for the current mu.
-                    // So, we can be more aggressive in reducing mu.
-                    if (kkt_progress_metric < 0.1 * options_.barrier_update_factor)
-                    {
-                        // Significantly better than threshold: make reduction factor more aggressive
-                        linear_reduction_target_factor = options_.barrier_update_factor * 0.5;
-                    }
-                    else if (kkt_progress_metric < 0.5 * options_.barrier_update_factor)
-                    {
-                        // Moderately better than threshold: make reduction factor slightly more aggressive
-                        linear_reduction_target_factor = options_.barrier_update_factor * 0.75;
-                    }
-                }
-                mu_ = std::max(options_.grad_tolerance / 10.0, std::min(linear_reduction_target_factor * mu_, std::pow(mu_, options_.barrier_update_power)));
-
+            kkt_error_ = std::max(optimality_gap_, constraint_violation_);
+            if (forward_pass_success && kkt_error_ < options_.grad_tolerance) {
+                // Dramatically decrease mu if optimization is going well
+                mu_ = std::max(mu_ * 0.1, options_.barrier_tolerance);
+                resetLogDDPFilter();
+            } else {
+                // Normal decrease rate
+                mu_ = std::max(options_.grad_tolerance / 10.0, std::min(options_.barrier_update_factor * mu_, std::pow(mu_, options_.barrier_update_power)));
                 resetLogDDPFilter();
             }
-
+            
+            
             relaxed_log_barrier_->setBarrierCoeff(mu_);
             relaxed_log_barrier_->setRelaxationDelta(relaxation_delta_);
         }
