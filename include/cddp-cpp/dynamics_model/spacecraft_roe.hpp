@@ -27,7 +27,7 @@ namespace cddp
      * @brief Spacecraft Relative Orbital Elements (ROE) Dynamics
      *
      * State vector (6 dimensions):
-     *   x = [ da, dlambda, dex, dey, dix, diy ]
+     *   x = [ da, dlambda, dex, dey, dix, diy, t]
      * where:
      *   - da       : Relative semi-major axis
      *   - dlambda  : Relative mean longitude (or some variant of relative angle)
@@ -66,7 +66,8 @@ namespace cddp
         static constexpr int STATE_DEY = 3;     ///< Relative eccentricity y-component
         static constexpr int STATE_DIX = 4;     ///< Relative inclination x-component
         static constexpr int STATE_DIY = 5;     ///< Relative inclination y-component
-        static constexpr int STATE_DIM = 6;     ///< State dimension
+        static constexpr int STATE_T = 6;       ///< Time [s]
+        static constexpr int STATE_DIM = 7;     ///< State dimension
 
         // Control indices
         static constexpr int CONTROL_UR = 0;  ///< Radial acceleration

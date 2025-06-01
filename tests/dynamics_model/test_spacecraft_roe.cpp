@@ -66,10 +66,10 @@ TEST(TestSpacecraftROE, BasicQNSROEPropagation)
     Eigen::VectorXd expected_x0_roe(6), expected_xf_roe(6);
     expected_x0_roe << -4.910333106887314, -200.0, -500.0000000000003, 0.0, -100.0, -6.123233995736765e-15;
     expected_xf_roe << -4.910333106887314, -107.44240150834467, -500.0000000000003, 0.0, -100.0, -6.123233995736765e-15;
-    Eigen::VectorXd obtained_x0_roe = states.front() * a;
-    Eigen::VectorXd obtained_xf_roe = states.back() * a;   
-    ASSERT_EQ(states.front().size(), 6);
-    ASSERT_EQ(states.back().size(), 6);
+    Eigen::VectorXd obtained_x0_roe = states.front().head(6) * a;
+    Eigen::VectorXd obtained_xf_roe = states.back().head(6) * a;
+    ASSERT_EQ(states.front().size(), SpacecraftROE::STATE_DIM);
+    ASSERT_EQ(states.back().size(), SpacecraftROE::STATE_DIM);
     ASSERT_NEAR(obtained_x0_roe.norm(), expected_x0_roe.norm(), 1e-1);
     ASSERT_NEAR(obtained_xf_roe.norm(), expected_xf_roe.norm(), 1e-1);
 }
@@ -101,6 +101,11 @@ TEST(TestSpacecraftROE, RelativeTrajectory)
     // 4) Convert initial HCW to ROE
     Eigen::VectorXd x0_roe = qnsRoeModel.transformHCWToROE(x0_hcw, 0.0);
 
+    std::cout << "[ INFO ] Initial HCW state:\n"
+              << x0_hcw.transpose() << std::endl;
+    std::cout << "[ INFO ] Initial ROE state:\n"
+              << x0_roe.transpose() << std::endl;
+
     // 5) Simulate for a portion of an orbit
     int num_steps = static_cast<int>(3.0 * period / dt); // Simulate for 3 orbits
     Eigen::VectorXd current_roe_state = x0_roe;
@@ -109,22 +114,28 @@ TEST(TestSpacecraftROE, RelativeTrajectory)
     std::vector<Eigen::VectorXd> roe_trajectory;
     std::vector<Eigen::VectorXd> hcw_trajectory;
     roe_trajectory.push_back(current_roe_state);
-    hcw_trajectory.push_back(qnsRoeModel.transformROEToHCW(current_roe_state, 0.0));
+    hcw_trajectory.push_back(qnsRoeModel.transformROEToHCW(current_roe_state.head(6), 0.0));
 
     for (int i = 0; i < num_steps; ++i) {
         double t = (i + 1) * dt;
         current_roe_state = qnsRoeModel.getDiscreteDynamics(current_roe_state, control);
         roe_trajectory.push_back(current_roe_state);
-        hcw_trajectory.push_back(qnsRoeModel.transformROEToHCW(current_roe_state, t));
+        hcw_trajectory.push_back(qnsRoeModel.transformROEToHCW(current_roe_state.head(6), t));
     }
+
+    // Print the final HCW state
+    std::cout << "[ INFO ] Final HCW state:\n"
+              << hcw_trajectory.back().transpose() << std::endl;
+    std::cout << "[ INFO ] Final ROE state:\n"
+              << roe_trajectory.back().transpose() * a<< std::endl;
 
     // 6) Basic Assertions
     ASSERT_EQ(roe_trajectory.size(), num_steps + 1);
     ASSERT_EQ(hcw_trajectory.size(), num_steps + 1);
 
     // Check that the initial HCW state, when converted to ROE and back to HCW, is consistent.
-    Eigen::VectorXd x0_hcw_reconstructed = qnsRoeModel.transformROEToHCW(x0_roe, 0.0);
-    for (int i = 0; i < SpacecraftROE::STATE_DIM; ++i) {
+    Eigen::VectorXd x0_hcw_reconstructed = qnsRoeModel.transformROEToHCW(x0_roe.head(6), 0.0);
+    for (int i = 0; i < 6; ++i) {
         ASSERT_NEAR(x0_hcw(i), x0_hcw_reconstructed(i), 1e-9);
     }
 

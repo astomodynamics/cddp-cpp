@@ -39,11 +39,11 @@ namespace cddp
          * Based on the linear QNSROE model:
          *   ẋ = A x + B u
          *
-         *   x = [ da, dlambda, dex, dey, dix, diy ]
+         *   x = [ da, dlambda, dex, dey, dix, diy]
          *   u = [ ur, ut, un ]
          *
-         * A = [  0           0  0  0  0  0
-         *       -3/2 * n_ref_ 0  0  0  0  0
+         * A = [  0           0  0  0  0  0 0
+         *       -3/2 * n_ref_ 0  0  0  0  0 
          *        0           0  0  0  0  0
          *        0           0  0  0  0  0
          *        0           0  0  0  0  0
@@ -74,8 +74,8 @@ namespace cddp
         const double factor = 1.0 / (n_ref_ * a_);
 
         // Calculate su and cu based on initial argument of latitude:
-        double su = std::sin(u0_);
-        double cu = std::cos(u0_);
+        double su = std::sin(u0_ + n_ref_ * state(STATE_T));
+        double cu = std::cos(u0_ + n_ref_ * state(STATE_T));
 
         // Combine:
         xdot(STATE_DA) += 2.0 * factor * ut;
@@ -84,6 +84,7 @@ namespace cddp
         xdot(STATE_DEY) = factor * (-cu * ur + 2.0 * su * ut);
         xdot(STATE_DIX) = factor * (cu * un);
         xdot(STATE_DIY) = factor * (su * un);
+        xdot(STATE_T) = 1.0;
 
         return xdot;
     }
@@ -98,6 +99,7 @@ namespace cddp
         A.setZero();
 
         A(STATE_DA, STATE_DLAMBDA) = -1.5 * n_ref_ * state(STATE_DA);
+        A(STATE_T, STATE_T) = 1.0;
 
         return A;
     }
@@ -111,8 +113,8 @@ namespace cddp
         Eigen::MatrixXd B(STATE_DIM, CONTROL_DIM);
         B.setZero();
         double factor = 1.0 / (n_ref_ * a_);
-        double su = std::sin(u0_);
-        double cu = std::cos(u0_);
+        double su = std::sin(u0_ + n_ref_ * state(STATE_T));
+        double cu = std::cos(u0_ + n_ref_ * state(STATE_T));
 
         B(STATE_DA, CONTROL_UT) = 2.0 * factor;
         B(STATE_DLAMBDA, CONTROL_UR) = -2.0 * factor;
@@ -154,7 +156,7 @@ namespace cddp
     Eigen::VectorXd SpacecraftROE::transformROEToHCW(const Eigen::VectorXd &roe, double t) const
     {
         // Check dimension
-        if (roe.size() != STATE_DIM)
+        if (roe.size() != 6)
         {
             throw std::runtime_error(
                 "transformROEToHCW: input ROE vector must be 6D [da, dlambda, dex, dey, dix, diy].");
@@ -223,7 +225,7 @@ namespace cddp
         T *= a_;
 
         // 3) Multiply T by the input ROE vector
-        Eigen::VectorXd hcw = T * roe; // hcw is [x, y, z, xdot, ydot, zdot]
+        Eigen::VectorXd hcw = T * roe.head(6); // hcw is [x, y, z, xdot, ydot, zdot]
 
         return hcw;
     }
@@ -231,7 +233,7 @@ namespace cddp
     Eigen::VectorXd SpacecraftROE::transformHCWToROE(const Eigen::VectorXd &hcw, double t) const
     {
         // Check dimension
-        if (hcw.size() != STATE_DIM)
+        if (hcw.size() != 6)
         {
             throw std::runtime_error(
                 "transformHCWToROE: input HCW state vector must be 6D [x, y, z, xdot, ydot, zdot].");
@@ -307,9 +309,13 @@ namespace cddp
         Tinv /= a_;
 
         // 3) Multiply Tinv by the input HCW vector => QNS-ROE
-        Eigen::VectorXd roeVec = Tinv * hcw;
+        Eigen::VectorXd roe_6dim = Tinv * hcw;
 
-        return roeVec;
+        Eigen::VectorXd roe_7dim = Eigen::VectorXd::Zero(STATE_DIM);
+        roe_7dim.head(6) = roe_6dim;
+        roe_7dim(STATE_T) = t;
+
+        return roe_7dim;
     }
 
 } // namespace cddp
