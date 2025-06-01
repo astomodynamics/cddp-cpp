@@ -144,7 +144,7 @@ public:
         return reference_state_;
     }
 
-private:
+protected:
     Eigen::MatrixXd Q_, R_, Qf_;      // Weight matrices for state, control, and final state
     Eigen::VectorXd reference_state_; // Reference/target state
     std::vector<Eigen::VectorXd> reference_states_; // Reference/target states 
@@ -262,7 +262,7 @@ public:
      */
     Eigen::MatrixXd getFinalCostHessian(const Eigen::VectorXd& final_state) const override;
 
-private:
+protected:
     double timestep_;  ///< Time step for cost scaling
 };
 
