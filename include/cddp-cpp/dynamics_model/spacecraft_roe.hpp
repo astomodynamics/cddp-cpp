@@ -27,7 +27,7 @@ namespace cddp
      * @brief Spacecraft Relative Orbital Elements (ROE) Dynamics
      *
      * State vector (6 dimensions):
-     *   x = [ da, dlambda, dex, dey, dix, diy, t]
+     *   x = [ da, dlambda, dex, dey, dix, diy]
      * where:
      *   - da       : Relative semi-major axis
      *   - dlambda  : Relative mean longitude (or some variant of relative angle)
@@ -35,6 +35,7 @@ namespace cddp
      *   - dey      : Relative y-component of eccentricity vector
      *   - dix      : Relative x-component of inclination vector
      *   - diy      : Relative y-component of inclination vector
+     *   - M        : Mean anomaly [rad]
      *
      * Control vector (3 dimensions):
      *   u = [ ur, ut, un ]
@@ -57,7 +58,8 @@ namespace cddp
             double timestep,
             const std::string &integration_type,
             double a,
-            double u0 = 0.0);
+            double u0 = 0.0,
+            double mass_kg = 1.0);
 
         // State indices
         static constexpr int STATE_DA = 0;      ///< Relative semi-major axis
@@ -66,7 +68,7 @@ namespace cddp
         static constexpr int STATE_DEY = 3;     ///< Relative eccentricity y-component
         static constexpr int STATE_DIX = 4;     ///< Relative inclination x-component
         static constexpr int STATE_DIY = 5;     ///< Relative inclination y-component
-        static constexpr int STATE_T = 6;       ///< Time [s]
+        static constexpr int STATE_NU = 6;      ///< Mean argument of latitude [rad]
         static constexpr int STATE_DIM = 7;     ///< State dimension
 
         // Control indices
@@ -126,6 +128,15 @@ namespace cddp
             const Eigen::VectorXd &control) const override;
 
         /**
+         * Computes the continuous-time dynamics of the quadrotor model using autodiff
+         * @param state Current state vector
+         * @param control Current control input
+         * @return State derivative vector
+         */
+        VectorXdual2nd getContinuousDynamicsAutodiff(const VectorXdual2nd &state,
+                                                     const VectorXdual2nd &control) const override;
+
+        /**
          * @brief Transform the QNS-ROE state to the local Hill/Clohessy-Wiltshire frame.
          *
          * The returned vector is [x, y, z, xdot, ydot, zdot], representing the relative
@@ -159,10 +170,11 @@ namespace cddp
         void setInitialMeanArgumentOfLatitude(double u0) { u0_ = u0; }
 
     private:
-        double a_;             ///< Semi-major axis of the reference orbit [m]
-        double n_ref_;         ///< Mean motion of the reference orbit [rad/s]
-        double u0_;            ///< Initial mean argu- ment of latitude [rad]
+        double a_;                 ///< Semi-major axis of the reference orbit [m]
+        double n_ref_;             ///< Mean motion of the reference orbit [rad/s]
+        double u0_;                ///< Initial mean argu- ment of latitude [rad]
         double mu_ = 3.9860044e14; ///< Gravitational parameter [m^3/s^2]
+        double mass_kg_;           ///< Mass in kg
     };
 
 } // namespace cddp

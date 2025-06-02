@@ -135,8 +135,8 @@ using namespace cddp;
 int main()
 {
     // Optimization horizon info
-    int horizon = 6000;                  // Optimization horizon length
-    double dt = 1.0; // Time step for optimization
+    int horizon = 500;                  // Optimization horizon length
+    double dt = 20.0; // Time step for optimization
     int state_dim = SpacecraftROE::STATE_DIM; // Use consistent state dimension from SpacecraftROE
     int control_dim = SpacecraftROE::CONTROL_DIM; // Use consistent control dimension
 
@@ -145,13 +145,14 @@ int main()
     double nu0_rad = 0.0;             // Initial argument of latitude for ROE (rad)
     double mass_kg = 1.0;           // Mass in kg
     double period = 2 * M_PI * sqrt(pow(a_ref_m, 3) / 3.9860044e14); // Orbital period (s)
+    double mean_motion = 2 * M_PI / period;
 
     // Input constraints
     double u_force_max_N = 0.05;
 
     // Cost weighting for SumOfTwoNormObjective
     double weight_running_control = 1.0;
-    double weight_terminal_state = 1000.0;
+    double weight_terminal_state = 10.0;
 
     // Create the SpacecraftROE system for optimization
     std::unique_ptr<cddp::DynamicalSystem> roe_system =
@@ -159,15 +160,31 @@ int main()
 
     // Initial state
     Eigen::VectorXd initial_state_roe(state_dim);
-    initial_state_roe << 0.0, 1000.0, 0.0, 500.0, 0.0, 700.0, 0.0; // Time is the 7th element
-    initial_state_roe /= a_ref_m;
-    initial_state_roe(6) = 0.0;
+    // initial_state_roe << 0.0, 1000.0, 0.0, 500.0, 0.0, 700.0, 0.0; // Time is the 7th element
+    // initial_state_roe /= a_ref_m;
+    // initial_state_roe(6) = 0.0;
+    Eigen::VectorXd initial_state_hcw(6);
+    initial_state_hcw << 0.0, -1000.0, 0.0, 0.0, 0.0, 0.0;
+    if (auto* roe_model = dynamic_cast<cddp::SpacecraftROE*>(roe_system.get())) {
+        initial_state_roe = roe_model->transformHCWToROE(initial_state_hcw, 0.0);
+    } else {
+        std::cerr << "Error: roe_system is not a SpacecraftROE model at initial_state_roe." << std::endl;
+        return 1; // Or handle error appropriately
+    }
 
     // Final state
     Eigen::VectorXd goal_state_roe(state_dim);
-    goal_state_roe << 0.0, 100.0, 0.0, 300.0, 0.0, 400.0, 0.0; // Time is the 7th element, init to 0.0
-    goal_state_roe /= a_ref_m;
-    goal_state_roe(6) = horizon * dt; // Set target time to the end of the horizon
+    // goal_state_roe << 0.0, 100.0, 0.0, 300.0, 0.0, 400.0, 0.0; // Time is the 7th element, init to 0.0
+    // goal_state_roe /= a_ref_m;
+    // goal_state_roe(6) = horizon * dt; // Set target time to the end of the horizon
+    Eigen::VectorXd goal_state_hcw(6);
+    goal_state_hcw << -100.0, 0.0, 0.0, 0.0, 200.0 * mean_motion, 0.0;
+    if (auto* roe_model = dynamic_cast<cddp::SpacecraftROE*>(roe_system.get())) {
+        goal_state_roe = roe_model->transformHCWToROE(goal_state_hcw, horizon * dt);
+    } else {
+        std::cerr << "Error: roe_system is not a SpacecraftROE model at goal_state_roe." << std::endl;
+        return 1; // Or handle error appropriately
+    }
 
     // Build cost objective
     auto objective = std::make_unique<cddp::SumOfTwoNormObjective>(
@@ -200,10 +217,15 @@ int main()
     std::vector<std::vector<double>> X_hcw_final(num_steps + 1);
     for (int i = 0; i < num_steps + 1; ++i)
     {
-        Eigen::VectorXd state_hcw_initial = static_cast<SpacecraftROE *>(roe_system.get())->transformROEToHCW(X_roe_initial[i].head(6), X_roe_initial[i][6]);
-        Eigen::VectorXd state_hcw_final = static_cast<SpacecraftROE *>(roe_system.get())->transformROEToHCW(X_roe_final[i].head(6), X_roe_final[i][6]);
-        X_hcw_initial[i] = {state_hcw_initial(0), state_hcw_initial(1), state_hcw_initial(2), state_hcw_initial(3), state_hcw_initial(4), state_hcw_initial(5)};
-        X_hcw_final[i] = {state_hcw_final(0), state_hcw_final(1), state_hcw_final(2), state_hcw_final(3), state_hcw_final(4), state_hcw_final(5)};
+        if (auto* roe_model = dynamic_cast<cddp::SpacecraftROE*>(roe_system.get())) {
+            Eigen::VectorXd state_hcw_initial = roe_model->transformROEToHCW(X_roe_initial[i].head(6), X_roe_initial[i][6]);
+            Eigen::VectorXd state_hcw_final = roe_model->transformROEToHCW(X_roe_final[i].head(6), X_roe_final[i][6]);
+            X_hcw_initial[i] = {state_hcw_initial(0), state_hcw_initial(1), state_hcw_initial(2), state_hcw_initial(3), state_hcw_initial(4), state_hcw_initial(5)};
+            X_hcw_final[i] = {state_hcw_final(0), state_hcw_final(1), state_hcw_final(2), state_hcw_final(3), state_hcw_final(4), state_hcw_final(5)};
+        } else {
+            std::cerr << "Error: roe_system is not a SpacecraftROE model during trajectory conversion." << std::endl;
+            // Handle error appropriately, maybe clear X_hcw_initial[i] or return
+        }
     }
 
     // Prepare data for 3D plotting
@@ -261,7 +283,7 @@ int main()
     
     // Solver options.
     cddp::CDDPOptions options;
-    options.max_iterations = 100;
+    options.max_iterations = 1000;
     options.cost_tolerance = 1e-7;
     options.grad_tolerance = 1e-6;
     options.regularization_type = "control";
