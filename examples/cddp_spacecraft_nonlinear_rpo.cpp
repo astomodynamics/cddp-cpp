@@ -38,6 +38,7 @@ namespace cddp
               weight_terminal_state_(weight_terminal_state)
         {
             Qf_ = Eigen::MatrixXd::Identity(goal_state.size(), goal_state.size());
+            Qf_(6, 6) = 0.0;
             Qf_(7, 7) = 0.0;
             Qf_(8, 8) = 0.0;
             Qf_(9, 9) = 0.0;
@@ -55,7 +56,7 @@ namespace cddp
         double terminal_cost(const Eigen::VectorXd &final_state) const override
         {
             Eigen::VectorXd state_error = final_state - goal_state_;
-            return weight_terminal_state_ * state_error.squaredNorm();
+            return weight_terminal_state_ * state_error.transpose() * Qf_ * state_error;
         }
 
         // Analytical Gradients
@@ -77,7 +78,7 @@ namespace cddp
         Eigen::VectorXd getFinalCostGradient(const Eigen::VectorXd &final_state) const override
         {
             Eigen::VectorXd state_error = final_state - goal_state_;
-            return 2.0 * weight_terminal_state_ * state_error;
+            return 2.0 * weight_terminal_state_ * Qf_ * state_error;
         }
 
         // Analytical Hessians
@@ -107,7 +108,7 @@ namespace cddp
         Eigen::MatrixXd getFinalCostHessian(const Eigen::VectorXd & /*final_state*/) const override
         {
             int state_dim = goal_state_.size();
-            return 2.0 * weight_terminal_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim);
+            return 2.0 * weight_terminal_state_ * Qf_;
         }
 
     private:
@@ -125,8 +126,8 @@ using namespace cddp;
 int main()
 {
     // Optimization horizon info
-    int horizon = 200;                  // Optimization horizon length
-    double time_horizon = 200.0;        // Time horizon for optimization [s]
+    int horizon = 500;                  // Optimization horizon length
+    double time_horizon = 10000.0;        // Time horizon for optimization [s]
     double dt = time_horizon / horizon; // Time step for optimization
     int state_dim = 10;
     int control_dim = 3;
@@ -142,11 +143,11 @@ int main()
 
     // Initial state
     Eigen::VectorXd initial_state(state_dim);
-    initial_state << -1000.0, 0.0, 0.0, 0.0, 0.0, 0.0, ref_radius, 0.0, 0.0, ref_mean_motion;
+    initial_state << 0.0, -1000.0, 0.0, 0.0, 0.0, 0.0, ref_radius, 0.0, 0.0, ref_mean_motion;
 
     // Final (reference/goal) state
     Eigen::VectorXd goal_state(state_dim);
-    goal_state << -100.0, 0.0, 0.0, 0.0, 0.0, 0.0, ref_radius, 0.0, 0.0, ref_mean_motion; // Goal is the origin
+    goal_state << -100.0, 0.0, 0.0, 0.0, 2*ref_mean_motion*100.0, 0.0, ref_radius, 0.0, 0.0, ref_mean_motion; 
 
     // Input constraints
     double u_max = 0.05;  // for each dimension
@@ -171,7 +172,7 @@ int main()
 
     // Setup IPDDP solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 1000; // May need more iterations for one-shot solve
+    options.max_iterations = 100; // May need more iterations for one-shot solve
     options.max_line_search_iterations = 21;
     options.cost_tolerance = 1e-7; // Tighter tolerance for final solve
     options.grad_tolerance = 1e-7; // Tighter tolerance for final solve
@@ -216,6 +217,12 @@ int main()
     // // Add Thrust Magnitude Constraint
     // cddp_solver.addConstraint("MaxThrustMagnitudeConstraint",
     //     std::make_unique<cddp::MaxThrustMagnitudeConstraint>(u_max_norm));
+
+     // Add Ball Constraint (for keep-out zone)
+    double radius = 90.0;
+    Eigen::Vector2d center(0.0, 0.0);
+    // cddp_solver.addConstraint("BallConstraint",
+    //     std::make_unique<cddp::BallConstraint>(radius, center, 0.1));
 
     // Solve the Trajectory Optimization Problem
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
@@ -262,6 +269,13 @@ int main()
                 uz[i] = control(2);
                 thrust_magnitude[i] = control.norm();
             }
+        }
+
+        // Circle data for plotting
+        std::vector<double> circle_x, circle_y;
+        for (double theta = 0; theta <= 2*M_PI; theta += 0.01) {
+            circle_x.push_back(radius * std::cos(theta));
+            circle_y.push_back(radius * std::sin(theta));
         }
 
         // --- Generate Plots ---
@@ -316,7 +330,29 @@ int main()
         plt::legend();
         plt::title("Thrust Magnitude (ZOH) vs. Time");
 
-        // 7. 3D Trajectory
+        // 7. X-Y plane trajectory (x-axis vertical to the top, y-axis horizontal to the left)
+        plt::figure();
+        plt::plot(y_pos, x_pos)->line_width(2).display_name("Trajectory");
+        plt::hold(true);
+        // Plot Start and End points
+        if (!x_pos.empty() && !y_pos.empty()){ // Check if trajectories are not empty
+             plt::scatter(std::vector<double>{y_pos.front()}, std::vector<double>{x_pos.front()})
+                ->marker_color("g").marker_style("o").marker_size(10).display_name("Start");
+             plt::scatter(std::vector<double>{y_pos.back()}, std::vector<double>{x_pos.back()})
+                ->marker_color("r").marker_style("x").marker_size(10).display_name("End");
+        }
+        // Plot Ball Constraint
+        plt::hold(true);
+        plt::plot(circle_x, circle_y)->line_width(2).display_name("Ball Constraint");
+        plt::hold(false);
+        plt::xlabel("y (m)");
+        plt::ylabel("x (m)");
+        plt::legend();
+        plt::title("X-Y Plane Trajectory");
+        plt::axis(plt::equal); // For aspect_ratio=:equal
+        plt::gca()->x_axis().reverse(true); // Make y-axis (horizontal on plot) increase to the left
+
+        // 8. 3D Trajectory
         plt::figure();
         plt::plot3(x_pos, y_pos, z_pos, "-o")->line_width(2).marker_size(4).display_name("Trajectory");
         plt::hold(true);
@@ -334,7 +370,6 @@ int main()
         plt::legend();
         plt::title("3D Trajectory");
         plt::axis(plt::equal); // For aspect_ratio=:equal
-
 
         // Show all plots
         plt::show();
