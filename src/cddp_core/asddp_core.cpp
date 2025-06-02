@@ -159,12 +159,6 @@ CDDPSolution CDDP::solveASCDDP()
 
             // Decrease regularization
             decreaseRegularization();
-
-            // // Check termination
-            // if (dJ_ < options_.cost_tolerance) {
-            //     solution.converged = true;
-            //     break;
-            // }
         } else {
             bool early_termination_flag = false; // TODO: Improve early termination
             // Increase regularization
@@ -172,7 +166,7 @@ CDDPSolution CDDP::solveASCDDP()
             
             // If limit is reached treat as converged
             if (isRegularizationLimitReached()) {
-                if ((dJ_ < options_.cost_tolerance * 1e2) ||
+                if ((dJ_ < options_.cost_tolerance * 1e1) ||
                     (optimality_gap_ < options_.grad_tolerance * 1e1)) 
                 {
                     solution.converged = true;
@@ -342,8 +336,8 @@ bool CDDP::solveASCDDPBackwardPass()
                 for (int j = 0; j < constraint_vals.size(); j++)
                 {
                     if (std::abs(constraint_vals(j)) <= active_set_tol) {  
-                        C.row(active_constraint_index) = C_state.row(j) * Fu;  
-                        D.row(active_constraint_index) = -D_state.row(j) * Fx; 
+                        C.row(active_constraint_index) = C_state.row(j) * B;  
+                        D.row(active_constraint_index) = C_state.row(j) * A; 
                         active_constraint_index++;
                     }
                 }
@@ -422,7 +416,6 @@ bool CDDP::solveASCDDPBackwardPass()
         // Compute optimality gap (Inf-norm) for convergence check
         Qu_error = std::max(Qu_error, Q_u.lpNorm<Eigen::Infinity>());
 
-        // TODO: Add constraint optimality gap analysis
         optimality_gap_ = Qu_error;
     }
 
