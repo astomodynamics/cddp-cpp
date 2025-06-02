@@ -129,7 +129,7 @@ namespace cddp
                 {
                     // Initialize s_i = max(options.slack_scale, -g_i) to ensure s_i > 0
                     s_init_t(i) = std::max(options_.slack_scale, -g_at_xt_ut(i));
-                
+
                     // Initialize y_i = heuristic_initial_mu / s_i to satisfy s_i * y_i = heuristic_initial_mu
                     if (s_init_t(i) < 1e-12)
                     { // Safeguard
@@ -152,9 +152,6 @@ namespace cddp
                 K_s_[constraint_name][t].setZero(dual_dim, state_dim);
             }
         }
-
-        // Initialize cost
-        J_ = objective_->evaluate(X_, U_);
 
         // Initialize line search parameters
         alphas_.clear();
@@ -388,6 +385,7 @@ namespace cddp
                 dL_ = L_ - best_result.lagrangian;
                 L_ = best_result.lagrangian;
                 alpha_ = best_result.alpha;
+                constraint_violation_ = best_result.constraint_violation;
 
                 solution.cost_sequence.push_back(J_);
                 solution.lagrangian_sequence.push_back(L_);
@@ -561,8 +559,8 @@ namespace cddp
                 Q_uu_reg.diagonal().array() += regularization_control_;
                 Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
-                Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg);
-                if (llt.info() != Eigen::Success)
+                Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
+                if (ldlt.info() != Eigen::Success)
                 {
                     if (options_.debug)
                     {
@@ -571,8 +569,8 @@ namespace cddp
                     return false;
                 }
 
-                Eigen::VectorXd k_u = -llt.solve(Q_u);
-                Eigen::MatrixXd K_u = -llt.solve(Q_ux);
+                Eigen::VectorXd k_u = -ldlt.solve(Q_u);
+                Eigen::MatrixXd K_u = -ldlt.solve(Q_ux);
                 k_u_[t] = k_u;
                 K_u_[t] = K_u;
 
@@ -660,7 +658,8 @@ namespace cddp
                     Q_yu.block(offset, 0, dual_dim, control_dim) = g_u;
 
                     // // Get constraint Hessians if not using iLQR
-                    // if (!options_.is_ilqr) // Or a new option specific to constraint Hessians
+                    // // Or a new option specific to constraint Hessians
+                    // if (!options_.is_ilqr)
                     // {
                     //     const auto constraint_hessians = constraint->getHessians(x, u);
                     //     const auto &g_xx_list = std::get<0>(constraint_hessians); // std::vector<Eigen::MatrixXd>
@@ -730,8 +729,8 @@ namespace cddp
                 Q_uu_reg.diagonal().array() += regularization_control_;
                 Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
-                Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg + Q_yu.transpose() * YSinv * Q_yu);
-                if (llt.info() != Eigen::Success)
+                Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg + Q_yu.transpose() * YSinv * Q_yu);
+                if (ldlt.info() != Eigen::Success)
                 {
                     if (options_.debug)
                     {
@@ -749,9 +748,7 @@ namespace cddp
                     bigRHS.col(col + 1) = M.col(col);
                 }
 
-                Eigen::MatrixXd R = llt.matrixU();
-                Eigen::MatrixXd z = R.triangularView<Eigen::Upper>().solve(bigRHS);
-                Eigen::MatrixXd kK = -R.transpose().triangularView<Eigen::Lower>().solve(z);
+                Eigen::MatrixXd kK = -ldlt.solve(bigRHS);
 
                 // parse out feedforward (ku) and feedback (Ku)
                 Eigen::VectorXd k_u = kK.col(0); // dimension [control_dim]
@@ -1021,24 +1018,34 @@ namespace cddp
             bool filter_acceptance = false;
             double expected_improvement = alpha * dV_(0);
 
-            if (constraint_violation_new > options_.filter_maximum_violation) {
-                if (constraint_violation_new < options_.filter_acceptance * constraint_violation_old) {
+            if (constraint_violation_new > options_.filter_maximum_violation)
+            {
+                if (constraint_violation_new < options_.filter_acceptance * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
-                else {
+                else
+                {
                     filter_acceptance = false;
                 }
-            } else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0) {
-                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement) {
+            }
+            else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0)
+            {
+                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement)
+                {
                     filter_acceptance = true;
                 }
-            } else {
-                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_new || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old) {
+            }
+            else
+            {
+                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_new || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
             }
 
-            if (filter_acceptance) {
+            if (filter_acceptance)
+            {
                 // Update the result with the new trajectories and metrics.
                 result.success = true;
                 result.state_sequence = X_new;
@@ -1059,8 +1066,7 @@ namespace cddp
         // Evaluate log-barrier cost
         L_ = J_; // Assume J_ is already computed
         double rp_err = 0.0;
-        // filter_ = {};
-        // # TODO: accelerate this process
+
         for (int t = 0; t < horizon_; ++t)
         {
             for (const auto &cKV : constraint_set_)

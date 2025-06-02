@@ -245,14 +245,21 @@ int main()
     cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
     options.max_line_search_iterations = 20;
     options.barrier_coeff = 1e-0;
+    options.barrier_update_factor = 0.5;
     options.filter_merit_acceptance = 1e-6;
     options.filter_violation_acceptance = 1e-6;
     options.filter_maximum_violation = 1e+4;
     options.filter_minimum_violation = 1e-7;
     options.regularization_control_max = 1e+7;
     options.armijo_constant = 1e-4;
-    options.cost_tolerance = 1e-9;
-    options.grad_tolerance = 1e-5;
+    options.cost_tolerance = 1e-6;
+    options.grad_tolerance = 1e-6;
+    options.slack_scale = 1e-1;
+    options.dual_scale = 1e-2;
+    options.ms_segment_length = horizon / 100;
+    options.ms_rollout_type = "nonlinear";
+    options.ms_defect_tolerance_for_single_shooting = 1e-5;
+    options.minimum_reduction_ratio = 1e-4;
 
     // Resolve problem with the ball constraint
     cddp::CDDP solver_ball(
@@ -267,7 +274,7 @@ int main()
     solver_ball.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
 
     // Ball constraint
-    double ball_radius = 0.4; // 40 cm
+    double ball_radius = 0.7; // 70 cm
     Eigen::Vector3d ball_center(0.0, 0.0, constant_altitude); // Center of the ball
     solver_ball.addConstraint("BallConstraint", std::make_unique<cddp::BallConstraint>(ball_radius, ball_center));
 
