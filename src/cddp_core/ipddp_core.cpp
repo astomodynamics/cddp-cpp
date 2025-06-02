@@ -140,7 +140,7 @@ namespace cddp
                         y_init_t(i) = heuristic_initial_mu / s_init_t(i);
                     }
                     // Ensure y_i is also not too small
-                    y_init_t(i) = std::max(options_.dual_scale * 0.1, std::min(y_init_t(i), options_.dual_scale * 10.0)); // 10% of dual_scale 
+                    y_init_t(i) = std::max(options_.dual_scale * 0.01, std::min(y_init_t(i), options_.dual_scale * 100.0)); // 1% and 100x of dual_scale
                 }
                 Y_[constraint_name][t] = y_init_t;
                 S_[constraint_name][t] = s_init_t;
