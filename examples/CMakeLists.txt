@@ -79,6 +79,9 @@ target_link_libraries(cddp_spacecraft_linear_docking cddp)
 add_executable(cddp_spacecraft_linear_rpo cddp_spacecraft_linear_rpo.cpp)
 target_link_libraries(cddp_spacecraft_linear_rpo cddp)
 
+add_executable(cddp_spacecraft_nonlinear_rpo cddp_spacecraft_nonlinear_rpo.cpp)
+target_link_libraries(cddp_spacecraft_nonlinear_rpo cddp)
+
 add_executable(cddp_spacecraft_rpo cddp_spacecraft_rpo.cpp)
 target_link_libraries(cddp_spacecraft_rpo cddp)
 
