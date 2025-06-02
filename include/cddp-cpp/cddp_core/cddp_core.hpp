@@ -118,6 +118,7 @@ struct CDDPOptions {
     double barrier_update_factor = 0.5; // Factor for barrier update: optimality_gap <= barrier_update_factor * mu; [0.0, 1.0]
     double barrier_update_power = 1.2; // Power for barrier update: mu_new = mu * barrier_update_power; [1.0, 2.0]
     double minimum_fraction_to_boundary = 0.99; // Minimum fraction to boundary for barrier update: tau = std::max(0.99, 1.0 - mu_);
+    bool controlled_rollout = false; // Use controlled rollout for MSIPDDP
 };
 
 struct CDDPSolution {
