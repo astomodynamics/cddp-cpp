@@ -127,7 +127,7 @@ struct CDDPSolution {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> dual_sequence;
     std::vector<Eigen::VectorXd> slack_sequence;
-    std::vector<Eigen::VectorXd> lambda_sequence;
+    std::vector<Eigen::VectorXd> costate_sequence;
     std::vector<double> cost_sequence;
     std::vector<double> lagrangian_sequence;
     std::vector<Eigen::MatrixXd> control_gain;
@@ -144,7 +144,7 @@ struct ForwardPassResult {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
     std::vector<Eigen::VectorXd> dynamics_sequence;
-    std::vector<Eigen::VectorXd>  lambda_sequence;
+    std::vector<Eigen::VectorXd>  costate_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>>  constraint_sequence;
