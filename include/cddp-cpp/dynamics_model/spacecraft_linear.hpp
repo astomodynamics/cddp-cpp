@@ -109,10 +109,7 @@ public:
     VectorXdual2nd getContinuousDynamicsAutodiff(const VectorXdual2nd& state, 
                                                 const VectorXdual2nd& control, double time) const override;
 
-private:
-    double mean_motion_;  // Mean motion of reference orbit
-    double mass_;         // Mass of the chaser spacecraft
-
+    // Publicly accessible constants
     // State indices
     static constexpr int STATE_X = 0;   // x position (radial)
     static constexpr int STATE_Y = 1;   // y position (along-track)
@@ -127,6 +124,10 @@ private:
     static constexpr int CONTROL_FY = 1;  // force in y direction
     static constexpr int CONTROL_FZ = 2;  // force in z direction
     static constexpr int CONTROL_DIM = 3; // control dimension
+
+private:
+    double mean_motion_;  // Mean motion of reference orbit
+    double mass_;         // Mass of the chaser spacecraft
 };
 
 } // namespace cddp

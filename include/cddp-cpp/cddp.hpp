@@ -55,6 +55,7 @@
 #include "dynamics_model/euler_attitude.hpp"
 #include "dynamics_model/quaternion_attitude.hpp"
 #include "dynamics_model/mrp_attitude.hpp"
+#include "dynamics_model/spacecraft_linear_6dof.hpp"
 
 #include "matplot/matplot.h"
 

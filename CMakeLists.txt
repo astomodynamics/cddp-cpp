@@ -320,6 +320,7 @@ set(dynamics_model_srcs
   src/dynamics_model/quaternion_attitude.cpp
   src/dynamics_model/mrp_attitude.cpp
   src/dynamics_model/euler_attitude.cpp
+  src/dynamics_model/spacecraft_linear_6dof.cpp
 )
 
 add_library(${PROJECT_NAME} 
