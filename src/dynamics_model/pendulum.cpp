@@ -27,7 +27,7 @@ Pendulum::Pendulum(double timestep, double length, double mass, double damping,
         length_(length), mass_(mass), damping_(damping) {}
 
 Eigen::VectorXd Pendulum::getContinuousDynamics(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
     
@@ -49,7 +49,7 @@ Eigen::VectorXd Pendulum::getContinuousDynamics(
 }
 
 Eigen::MatrixXd Pendulum::getStateJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
     
@@ -69,7 +69,7 @@ Eigen::MatrixXd Pendulum::getStateJacobian(
 }
 
 Eigen::MatrixXd Pendulum::getControlJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);
     
@@ -81,7 +81,7 @@ Eigen::MatrixXd Pendulum::getControlJacobian(
 }
 
 std::vector<Eigen::MatrixXd> Pendulum::getStateHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // Initialize a vector of matrices (one matrix per state dimension)
     std::vector<Eigen::MatrixXd> hessian(STATE_DIM);
@@ -101,7 +101,7 @@ std::vector<Eigen::MatrixXd> Pendulum::getStateHessian(
 }
 
 std::vector<Eigen::MatrixXd> Pendulum::getControlHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // Initialize a vector of matrices (one matrix per state dimension)
     std::vector<Eigen::MatrixXd> hessian(STATE_DIM);
@@ -116,7 +116,7 @@ std::vector<Eigen::MatrixXd> Pendulum::getControlHessian(
 }
 
 VectorXdual2nd Pendulum::getContinuousDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {
 
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
     const autodiff::dual2nd theta = state(STATE_THETA);

@@ -31,7 +31,7 @@ namespace cddp
           inertia_inv_(inertia_matrix.inverse()) {}
 
     Eigen::VectorXd QuaternionAttitude::getContinuousDynamics(const Eigen::VectorXd &state,
-                                                              const Eigen::VectorXd &control) const
+                                                              const Eigen::VectorXd &control, double time) const
     {
         Eigen::VectorXd state_dot(STATE_DIM);
 
@@ -64,7 +64,7 @@ namespace cddp
     }
 
     Eigen::MatrixXd QuaternionAttitude::getStateJacobian(const Eigen::VectorXd &state,
-                                                         const Eigen::VectorXd &control) const
+                                                         const Eigen::VectorXd &control, double time) const
     {
         // Use autodiff to compute state Jacobian
         VectorXdual2nd x = state;   // Cast state to autodiff type
@@ -73,7 +73,7 @@ namespace cddp
         // Define lambda for dynamics w.r.t. state
         auto dynamics_wrt_x = [&](const VectorXdual2nd &x_ad) -> VectorXdual2nd
         {
-            return this->getContinuousDynamicsAutodiff(x_ad, u);
+            return this->getContinuousDynamicsAutodiff(x_ad, u, time);
         };
 
         // Compute Jacobian
@@ -81,7 +81,7 @@ namespace cddp
     }
 
     Eigen::MatrixXd QuaternionAttitude::getControlJacobian(const Eigen::VectorXd &state,
-                                                           const Eigen::VectorXd &control) const
+                                                           const Eigen::VectorXd &control, double time) const
     {
         // Use autodiff to compute control Jacobian
         VectorXdual2nd x = state;   // Cast state to autodiff type
@@ -90,7 +90,7 @@ namespace cddp
         // Define lambda for dynamics w.r.t. control
         auto dynamics_wrt_u = [&](const VectorXdual2nd &u_ad) -> VectorXdual2nd
         {
-            return this->getContinuousDynamicsAutodiff(x, u_ad);
+            return this->getContinuousDynamicsAutodiff(x, u_ad, time);
         };
 
         // Compute Jacobian
@@ -98,7 +98,7 @@ namespace cddp
     }
 
     std::vector<Eigen::MatrixXd> QuaternionAttitude::getStateHessian(const Eigen::VectorXd &state,
-                                                                     const Eigen::VectorXd &control) const
+                                                                     const Eigen::VectorXd &control, double time) const
     {
         // Use autodiff to compute state Hessian
         VectorXdual2nd x = state;
@@ -109,9 +109,9 @@ namespace cddp
         for (int i = 0; i < STATE_DIM; ++i)
         {
             // Define lambda for the i-th component of dynamics w.r.t. state
-            auto fi_x = [&, i](const VectorXdual2nd &x_ad) -> autodiff::dual2nd
+            auto fi_x = [&, i, time](const VectorXdual2nd &x_ad) -> autodiff::dual2nd
             {
-                return this->getContinuousDynamicsAutodiff(x_ad, u)(i);
+                return this->getContinuousDynamicsAutodiff(x_ad, u, time)(i);
             };
 
             // Compute Hessian for the i-th component
@@ -122,7 +122,7 @@ namespace cddp
     }
 
     std::vector<Eigen::MatrixXd> QuaternionAttitude::getControlHessian(const Eigen::VectorXd &state,
-                                                                       const Eigen::VectorXd &control) const
+                                                                       const Eigen::VectorXd &control, double time) const
     {
         // Use autodiff to compute control Hessian
         VectorXdual2nd x = state;
@@ -133,9 +133,9 @@ namespace cddp
         for (int i = 0; i < STATE_DIM; ++i)
         {
             // Define lambda for the i-th component of dynamics w.r.t. control
-            auto fi_u = [&, i](const VectorXdual2nd &u_ad) -> autodiff::dual2nd
+            auto fi_u = [&, i, time](const VectorXdual2nd &u_ad) -> autodiff::dual2nd
             {
-                return this->getContinuousDynamicsAutodiff(x, u_ad)(i);
+                return this->getContinuousDynamicsAutodiff(x, u_ad, time)(i);
             };
 
             // Compute Hessian for the i-th component
@@ -146,7 +146,7 @@ namespace cddp
     }
 
     std::vector<Eigen::MatrixXd> QuaternionAttitude::getCrossHessian(const Eigen::VectorXd &state,
-                                                                     const Eigen::VectorXd &control) const
+                                                                     const Eigen::VectorXd &control, double time) const
     {
         // Use autodiff to compute cross Hessian (Jacobian of gradient)
         VectorXdual2nd x = state;
@@ -157,12 +157,12 @@ namespace cddp
         for (int i = 0; i < STATE_DIM; ++i)
         {
             // Define lambda that computes the gradient of the i-th component w.r.t. state
-            auto gradient_fi_x = [&, i](const VectorXdual2nd &u_ad) -> VectorXdual2nd
+            auto gradient_fi_x = [&, i, time](const VectorXdual2nd &u_ad) -> VectorXdual2nd
             {
                 // Inner lambda: i-th component of dynamics w.r.t state (holding u_ad constant)
-                auto fi_x = [&, u_ad, i](const VectorXdual2nd &x_ad) -> autodiff::dual2nd
+                auto fi_x = [&, u_ad, i, time](const VectorXdual2nd &x_ad) -> autodiff::dual2nd
                 {
-                    return this->getContinuousDynamicsAutodiff(x_ad, u_ad)(i);
+                    return this->getContinuousDynamicsAutodiff(x_ad, u_ad, time)(i);
                 };
                 // Return the gradient w.r.t. x
                 return autodiff::gradient(fi_x, wrt(x), at(x));
@@ -178,7 +178,7 @@ namespace cddp
     // Autodiff version of the continuous dynamics
     VectorXdual2nd QuaternionAttitude::getContinuousDynamicsAutodiff(
         const VectorXdual2nd &state,
-        const VectorXdual2nd &control) const
+        const VectorXdual2nd &control, double time) const
     {
 
         // Cast member variables to autodiff types

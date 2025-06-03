@@ -62,7 +62,7 @@ TEST(SpacecraftLanding2DTest, DiscreteDynamics) {
         
         energy_data.push_back(potential + kinetic);
 
-        state = spacecraft.getDiscreteDynamics(state, control);
+        state = spacecraft.getDiscreteDynamics(state, control, 0.0);
     }
 
     // Basic assertions

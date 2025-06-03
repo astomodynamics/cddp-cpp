@@ -31,7 +31,7 @@ Quadrotor::Quadrotor(double timestep, double mass, const Eigen::Matrix3d& inerti
 }
 
 Eigen::VectorXd Quadrotor::getContinuousDynamics(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
 
@@ -124,28 +124,28 @@ Eigen::Matrix3d Quadrotor::getRotationMatrix(double qw, double qx, double qy, do
 }
 
 Eigen::MatrixXd Quadrotor::getStateJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
 
     // Use autodiff to compute state Jacobian
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
 
     auto dynamics_wrt_x = [&](const VectorXdual2nd& x_ad) -> VectorXdual2nd {
-        return this->getContinuousDynamicsAutodiff(x_ad, u);
+        return this->getContinuousDynamicsAutodiff(x_ad, u, time);
     };
 
     return autodiff::jacobian(dynamics_wrt_x, wrt(x), at(x));
 }
 
 Eigen::MatrixXd Quadrotor::getControlJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // Use autodiff to compute control Jacobian
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
 
     auto dynamics_wrt_u = [&](const VectorXdual2nd& u_ad) -> VectorXdual2nd {
-        return this->getContinuousDynamicsAutodiff(x, u_ad);
+        return this->getContinuousDynamicsAutodiff(x, u_ad, time);
     };
 
     return autodiff::jacobian(dynamics_wrt_u, wrt(u), at(u));
@@ -173,7 +173,7 @@ Eigen::Matrix<autodiff::dual2nd, 3, 3> Quadrotor::getRotationMatrixAutodiff(
 }
 
 VectorXdual2nd Quadrotor::getContinuousDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
 
     // --- Position Derivative ---
@@ -248,7 +248,7 @@ VectorXdual2nd Quadrotor::getContinuousDynamicsAutodiff(
 
 // TODO: Implement a more accurate version if needed
 std::vector<Eigen::MatrixXd> Quadrotor::getStateHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     // We'll use autodiff to compute Hessians
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
@@ -257,8 +257,8 @@ std::vector<Eigen::MatrixXd> Quadrotor::getStateHessian(
     
     for (int i = 0; i < STATE_DIM; ++i) {
         // Define lambda for the ith component of the dynamics
-        auto fi = [&, i](const VectorXdual2nd& x_ad) -> autodiff::dual2nd {
-            return getContinuousDynamicsAutodiff(x_ad, u)(i);
+        auto fi = [&, i, time](const VectorXdual2nd& x_ad) -> autodiff::dual2nd {
+            return getContinuousDynamicsAutodiff(x_ad, u, time)(i);
         };
         
         // Compute Hessian of ith component w.r.t. state
@@ -270,7 +270,7 @@ std::vector<Eigen::MatrixXd> Quadrotor::getStateHessian(
 
 // TODO: Implement a more accurate version if needed
 std::vector<Eigen::MatrixXd> Quadrotor::getControlHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     // We'll use autodiff to compute Hessians
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
@@ -279,8 +279,8 @@ std::vector<Eigen::MatrixXd> Quadrotor::getControlHessian(
     
     for (int i = 0; i < STATE_DIM; ++i) {
         // Define lambda for the ith component of the dynamics
-        auto fi = [&, i](const VectorXdual2nd& u_ad) -> autodiff::dual2nd {
-            return getContinuousDynamicsAutodiff(x, u_ad)(i);
+        auto fi = [&, i, time](const VectorXdual2nd& u_ad) -> autodiff::dual2nd {
+            return getContinuousDynamicsAutodiff(x, u_ad, time)(i);
         };
         
         // Compute Hessian of ith component w.r.t. control
@@ -291,7 +291,7 @@ std::vector<Eigen::MatrixXd> Quadrotor::getControlHessian(
 }
 
 std::vector<Eigen::MatrixXd> Quadrotor::getCrossHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     // For mixed partial derivatives, we need a different approach
     // We compute derivatives of Jacobian w.r.t. control
     VectorXdual2nd x = state;
@@ -301,10 +301,10 @@ std::vector<Eigen::MatrixXd> Quadrotor::getCrossHessian(
     
     for (int i = 0; i < STATE_DIM; ++i) {
         // Define a function that returns the gradient of the ith component w.r.t. state
-        auto gradient_i = [&, i](const VectorXdual2nd& u_ad) -> VectorXdual2nd {
+        auto gradient_i = [&, i, time](const VectorXdual2nd& u_ad) -> VectorXdual2nd {
             // Capture the current u_ad in a lambda
-            auto fi_x = [&, u_ad, i](const VectorXdual2nd& x_ad) -> autodiff::dual2nd {
-                return getContinuousDynamicsAutodiff(x_ad, u_ad)(i);
+            auto fi_x = [&, u_ad, i, time](const VectorXdual2nd& x_ad) -> autodiff::dual2nd {
+                return getContinuousDynamicsAutodiff(x_ad, u_ad, time)(i);
             };
             
             // Return the gradient of fi with respect to x at the current x

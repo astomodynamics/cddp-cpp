@@ -34,21 +34,23 @@ public:
      * @brief Computes the continuous-time dynamics dx/dt = f(x, u).
      * @param state Current state vector [x, y, psi, u, v, r].
      * @param control Current control input [tau_u, tau_v, tau_r].
+     * @param time Current time
      * @return State derivative vector [dx, dy, dpsi, du, dv, dr].
      */
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state,
-                                          const Eigen::VectorXd& control) const override;
+                                          const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the discrete-time dynamics x_{k+1} = F(x_k, u_k).
      *        Uses the base class numerical integration.
      * @param state Current state vector x_k.
      * @param control Current control input u_k.
+     * @param time Current time
      * @return Next state vector x_{k+1}.
      */
     Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state,
-                                        const Eigen::VectorXd& control) const override {
-        return DynamicalSystem::getDiscreteDynamics(state, control);
+                                        const Eigen::VectorXd& control, double time) const override {
+        return DynamicalSystem::getDiscreteDynamics(state, control, time);
     }
 
     /**
@@ -59,7 +61,7 @@ public:
      * @return State Jacobian matrix A (6x6).
      */
     Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state,
-                                     const Eigen::VectorXd& control) const override;
+                                     const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the Jacobian of the dynamics wrt. control (B = df/du).
@@ -69,36 +71,39 @@ public:
      * @return Control Jacobian matrix B (6x3).
      */
     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state,
-                                       const Eigen::VectorXd& control) const override;
+                                       const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the Hessian of the dynamics wrt. state (d^2f/dx^2).
      *        Currently uses numerical differentiation from the base class.
      * @param state Current state vector.
      * @param control Current control input.
+     * @param time Current time
      * @return Vector of state Hessian matrices (one 6x6 matrix per state dimension).
      */
     std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state,
-                                    const Eigen::VectorXd& control) const override;
+                                    const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the Hessian of the dynamics wrt. control (d^2f/du^2).
      *        Currently uses numerical differentiation from the base class.
      * @param state Current state vector.
      * @param control Current control input.
+     * @param time Current time
      * @return Vector of control Hessian matrices (one 3x3 matrix per state dimension).
      */
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state,
-                                      const Eigen::VectorXd& control) const override;
+                                      const Eigen::VectorXd& control, double time) const override;
     
     /**
      * @brief Auto-diff version of continuous dynamics 
      * @param state State vector with dual numbers.
      * @param control Control vector with dual numbers.
+     * @param time Current time
      * @return State derivative vector with dual numbers.
      */
     VectorXdual2nd getContinuousDynamicsAutodiff(
-        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+        const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const override;
 
 
 private:

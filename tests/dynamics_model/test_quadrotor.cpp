@@ -149,7 +149,7 @@ TEST(QuadrotorTest, DiscreteDynamics) {
         psi_data.push_back(euler[2]);
 
         // Compute the next state
-        state = quadrotor.getDiscreteDynamics(state, control);
+        state = quadrotor.getDiscreteDynamics(state, control, 0.0);
     }
 
     // Basic assertions
@@ -188,7 +188,7 @@ TEST(QuadrotorTest, ContinuousDynamics) {
     control << hover_thrust, hover_thrust, hover_thrust, hover_thrust;
 
     // Get continuous dynamics
-    Eigen::VectorXd state_dot = quadrotor.getContinuousDynamics(state, control);
+    Eigen::VectorXd state_dot = quadrotor.getContinuousDynamics(state, control, 0.0);
 
     // For hover: position derivative should equal the velocity (which is zero)
     EXPECT_NEAR(state_dot[0], 0.0, 1e-10);  // dx/dt
@@ -214,7 +214,7 @@ TEST(QuadrotorTest, ContinuousDynamics) {
     // Test with unbalanced thrust (should create a nonzero angular acceleration)
     control(0) += 0.1;  // Increase front rotor thrust
     control(2) -= 0.1;  // Decrease back rotor thrust
-    state_dot = quadrotor.getContinuousDynamics(state, control);
+    state_dot = quadrotor.getContinuousDynamics(state, control, 0.0);
     
     // Check that the angular acceleration in x (roll) is non-zero
     EXPECT_GT(std::abs(state_dot[10]), 0.0);
@@ -245,11 +245,11 @@ TEST(QuadrotorTest, StateJacobianFiniteDifference) {
     control << hover_thrust, hover_thrust, hover_thrust, hover_thrust;
 
     // Get analytical Jacobian
-    Eigen::MatrixXd A_analytical = quadrotor.getStateJacobian(state, control);
+    Eigen::MatrixXd A_analytical = quadrotor.getStateJacobian(state, control, 0.0);
 
     // Get numerical Jacobian
     auto f_A = [&](const Eigen::VectorXd& x) {
-        return quadrotor.getContinuousDynamics(x, control);
+        return quadrotor.getContinuousDynamics(x, control, 0.0);
     };
     Eigen::MatrixXd A_numerical = finite_difference_jacobian(f_A, state);
 
@@ -281,7 +281,7 @@ TEST(QuadrotorTest, StateJacobianFiniteDifference) {
     state(6) /= qnorm;
 
     // Get Jacobians for non-zero state
-    A_analytical = quadrotor.getStateJacobian(state, control);
+    A_analytical = quadrotor.getStateJacobian(state, control, 0.0);
     A_numerical = finite_difference_jacobian(f_A, state);
     
     // Compare again
@@ -313,11 +313,11 @@ TEST(QuadrotorTest, ControlJacobianFiniteDifference) {
     control << hover_thrust, hover_thrust, hover_thrust, hover_thrust;
 
     // Get analytical Jacobian
-    Eigen::MatrixXd B_analytical = quadrotor.getControlJacobian(state, control);
+    Eigen::MatrixXd B_analytical = quadrotor.getControlJacobian(state, control, 0.0);
 
     // Get numerical Jacobian
     auto f_B = [&](const Eigen::VectorXd& u) {
-        return quadrotor.getContinuousDynamics(state, u);
+        return quadrotor.getContinuousDynamics(state, u, 0.0);
     };
     Eigen::MatrixXd B_numerical = finite_difference_jacobian(f_B, control);
 
@@ -352,7 +352,7 @@ TEST(QuadrotorTest, ControlJacobianFiniteDifference) {
     control << hover_thrust*1.1, hover_thrust*0.9, hover_thrust*1.1, hover_thrust*0.9;
 
     // Get Jacobians for non-zero state and non-uniform control
-    B_analytical = quadrotor.getControlJacobian(state, control);
+    B_analytical = quadrotor.getControlJacobian(state, control, 0.0);
     B_numerical = finite_difference_jacobian(f_B, control);
     
     // Compare again
@@ -384,11 +384,11 @@ TEST(QuadrotorTest, StateJacobianAutodiff) {
     control << hover_thrust, hover_thrust, hover_thrust, hover_thrust;
 
     // Get Jacobian using autodiff (which is the default implementation)
-    Eigen::MatrixXd A_autodiff = quadrotor.getStateJacobian(state, control);
+    Eigen::MatrixXd A_autodiff = quadrotor.getStateJacobian(state, control, 0.0);
 
     // Get numerical Jacobian for comparison
     auto f_A = [&](const Eigen::VectorXd& x) {
-        return quadrotor.getContinuousDynamics(x, control);
+        return quadrotor.getContinuousDynamics(x, control, 0.0);
     };
     Eigen::MatrixXd A_numerical = finite_difference_jacobian(f_A, state);
 
@@ -416,7 +416,7 @@ TEST(QuadrotorTest, StateJacobianAutodiff) {
     state(6) /= qnorm;
 
     // Get Jacobians for non-zero state
-    A_autodiff = quadrotor.getStateJacobian(state, control);
+    A_autodiff = quadrotor.getStateJacobian(state, control, 0.0);
     A_numerical = finite_difference_jacobian(f_A, state);
     
     // Compare again
@@ -448,11 +448,11 @@ TEST(QuadrotorTest, ControlJacobianAutodiff) {
     control << hover_thrust, hover_thrust, hover_thrust, hover_thrust;
 
     // Get Jacobian using autodiff (which is the default implementation)
-    Eigen::MatrixXd B_autodiff = quadrotor.getControlJacobian(state, control);
+    Eigen::MatrixXd B_autodiff = quadrotor.getControlJacobian(state, control, 0.0);
 
     // Get numerical Jacobian for comparison
     auto f_B = [&](const Eigen::VectorXd& u) {
-        return quadrotor.getContinuousDynamics(state, u);
+        return quadrotor.getContinuousDynamics(state, u, 0.0);
     };
     Eigen::MatrixXd B_numerical = finite_difference_jacobian(f_B, control);
 
@@ -483,7 +483,7 @@ TEST(QuadrotorTest, ControlJacobianAutodiff) {
     control << hover_thrust*1.1, hover_thrust*0.9, hover_thrust*1.1, hover_thrust*0.9;
 
     // Get Jacobians for non-zero state and non-uniform control
-    B_autodiff = quadrotor.getControlJacobian(state, control);
+    B_autodiff = quadrotor.getControlJacobian(state, control, 0.0);
     B_numerical = finite_difference_jacobian(f_B, control);
     
     // Compare again

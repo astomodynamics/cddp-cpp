@@ -93,7 +93,7 @@ TEST_F(PendulumHessianTest, ParametersAreCorrect) {
 
 // Test pendulum dynamics calculation
 TEST_F(PendulumHessianTest, DynamicsCalculation) {
-    Eigen::VectorXd xdot = pendulum->getContinuousDynamics(state, control);
+    Eigen::VectorXd xdot = pendulum->getContinuousDynamics(state, control, 0.0);
     
     // Expected values for theta_dot and theta_ddot
     double expected_theta_dot = state(1);  // state(1) is the current angular velocity
@@ -108,7 +108,7 @@ TEST_F(PendulumHessianTest, DynamicsCalculation) {
 
 // Test pendulum state Jacobian
 TEST_F(PendulumHessianTest, StateJacobian) {
-    Eigen::MatrixXd A = pendulum->getStateJacobian(state, control);
+    Eigen::MatrixXd A = pendulum->getStateJacobian(state, control, 0.0);
     
     // Expected values for the state Jacobian
     double expected_A_11 = 0.0;  // d(theta_dot)/d(theta)
@@ -124,7 +124,7 @@ TEST_F(PendulumHessianTest, StateJacobian) {
 
 // Test pendulum control Jacobian
 TEST_F(PendulumHessianTest, ControlJacobian) {
-    Eigen::MatrixXd B = pendulum->getControlJacobian(state, control);
+    Eigen::MatrixXd B = pendulum->getControlJacobian(state, control, 0.0);
     
     // Expected values for the control Jacobian
     double expected_B_11 = 0.0;  // d(theta_dot)/d(torque)
@@ -136,7 +136,7 @@ TEST_F(PendulumHessianTest, ControlJacobian) {
 
 // Test pendulum state Hessian
 TEST_F(PendulumHessianTest, StateHessian) {
-    std::vector<Eigen::MatrixXd> state_hessian = pendulum->getStateHessian(state, control);
+    std::vector<Eigen::MatrixXd> state_hessian = pendulum->getStateHessian(state, control, 0.0);
     
     // Check dimensions
     EXPECT_EQ(state_hessian.size(), 2);  // Two state dimensions
@@ -161,7 +161,7 @@ TEST_F(PendulumHessianTest, StateHessian) {
 
 // Test pendulum control Hessian
 TEST_F(PendulumHessianTest, ControlHessian) {
-    std::vector<Eigen::MatrixXd> control_hessian = pendulum->getControlHessian(state, control);
+    std::vector<Eigen::MatrixXd> control_hessian = pendulum->getControlHessian(state, control, 0.0);
     
     // Check dimensions
     EXPECT_EQ(control_hessian.size(), 2);  // Two state dimensions
@@ -182,7 +182,7 @@ TEST_F(DubinsCarHessianTest, ParametersAreCorrect) {
 
 // Test Dubins car dynamics calculation
 TEST_F(DubinsCarHessianTest, DynamicsCalculation) {
-    Eigen::VectorXd xdot = dubins_car->getContinuousDynamics(state, control);
+    Eigen::VectorXd xdot = dubins_car->getContinuousDynamics(state, control, 0.0);
     
     // Expected values
     double expected_x_dot = speed * std::cos(state(2));
@@ -196,7 +196,7 @@ TEST_F(DubinsCarHessianTest, DynamicsCalculation) {
 
 // Test Dubins car state Jacobian
 TEST_F(DubinsCarHessianTest, StateJacobian) {
-    Eigen::MatrixXd A = dubins_car->getStateJacobian(state, control);
+    Eigen::MatrixXd A = dubins_car->getStateJacobian(state, control, 0.0);
     
     // Expected values for the state Jacobian
     double expected_A_13 = -speed * std::sin(state(2));  // dx/dtheta
@@ -208,7 +208,7 @@ TEST_F(DubinsCarHessianTest, StateJacobian) {
 
 // Test Dubins car control Jacobian
 TEST_F(DubinsCarHessianTest, ControlJacobian) {
-    Eigen::MatrixXd B = dubins_car->getControlJacobian(state, control);
+    Eigen::MatrixXd B = dubins_car->getControlJacobian(state, control, 0.0);
     
     // Expected values for the control Jacobian
     double expected_B_31 = 1.0;  // dtheta/domega
@@ -218,7 +218,7 @@ TEST_F(DubinsCarHessianTest, ControlJacobian) {
 
 // Test Dubins car state Hessian
 TEST_F(DubinsCarHessianTest, StateHessian) {
-    std::vector<Eigen::MatrixXd> state_hessian = dubins_car->getStateHessian(state, control);
+    std::vector<Eigen::MatrixXd> state_hessian = dubins_car->getStateHessian(state, control, 0.0);
     
     // Check dimensions
     EXPECT_EQ(state_hessian.size(), 3);  // Three state dimensions
@@ -246,7 +246,7 @@ TEST_F(DubinsCarHessianTest, StateHessian) {
 
 // Test Dubins car control Hessian
 TEST_F(DubinsCarHessianTest, ControlHessian) {
-    std::vector<Eigen::MatrixXd> control_hessian = dubins_car->getControlHessian(state, control);
+    std::vector<Eigen::MatrixXd> control_hessian = dubins_car->getControlHessian(state, control, 0.0);
     
     // Check dimensions
     EXPECT_EQ(control_hessian.size(), 3);  // Three state dimensions

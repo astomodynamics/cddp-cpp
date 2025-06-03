@@ -69,7 +69,7 @@ TEST(LTISystemTest, DynamicsComputation) {
      control << 0.01, 0.01;
     
 
-     Eigen::VectorXd dx = sys.getDiscreteDynamics(state, control);
+     Eigen::VectorXd dx = sys.getDiscreteDynamics(state, control, 0.0);
      Eigen::VectorXd expected_dx = A_ * state + B_ * control;
      EXPECT_TRUE(dx.isApprox(expected_dx));
 
@@ -106,11 +106,11 @@ TEST(LTISystemTest, Jacobians) {
      control << 0.01, 0.01;
 
 
-     Eigen::MatrixXd A = sys.getStateJacobian(state, control);
+     Eigen::MatrixXd A = sys.getStateJacobian(state, control, 0.0);
      A *= timestep;
      A.diagonal().array() += 1.0;
      
-     Eigen::MatrixXd B = sys.getControlJacobian(state, control);
+     Eigen::MatrixXd B = sys.getControlJacobian(state, control, 0.0);
      B *= timestep;
 
      Eigen::MatrixXd A_true(4, 4);

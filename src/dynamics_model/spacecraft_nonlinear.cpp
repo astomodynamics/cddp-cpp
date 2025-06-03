@@ -35,7 +35,7 @@ SpacecraftNonlinear::SpacecraftNonlinear(
 
 Eigen::VectorXd SpacecraftNonlinear::getContinuousDynamics(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& control, double time) const {
 
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
 
@@ -83,10 +83,10 @@ Eigen::VectorXd SpacecraftNonlinear::getContinuousDynamics(
 
 Eigen::MatrixXd SpacecraftNonlinear::getStateJacobian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& control, double time) const {
 
     auto f = [&](const Eigen::VectorXd& x) {
-        return getContinuousDynamics(x, control);
+        return getContinuousDynamics(x, control, time);
     };
 
     return finite_difference_jacobian(f, state);
@@ -94,17 +94,17 @@ Eigen::MatrixXd SpacecraftNonlinear::getStateJacobian(
 
 Eigen::MatrixXd SpacecraftNonlinear::getControlJacobian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& control, double time) const {
 
     auto f = [&](const Eigen::VectorXd& u) {
-        return getContinuousDynamics(state, u);
+        return getContinuousDynamics(state, u, time);
     };
     return finite_difference_jacobian(f, control);
 }
 
 std::vector<Eigen::MatrixXd> SpacecraftNonlinear::getStateHessian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& control, double time) const {
     
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
@@ -115,7 +115,7 @@ std::vector<Eigen::MatrixXd> SpacecraftNonlinear::getStateHessian(
 
 std::vector<Eigen::MatrixXd> SpacecraftNonlinear::getControlHessian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& control, double time) const {
 
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {

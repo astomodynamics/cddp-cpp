@@ -143,11 +143,11 @@ TEST(TorchPendulumTest, DiscreteDynamics)
     test_control << 0.0;
 
     // Analytical next state
-    auto analytical_next = analytical_pendulum.getDiscreteDynamics(test_state, test_control);
+    auto analytical_next = analytical_pendulum.getDiscreteDynamics(test_state, test_control, 0.0);
     printVectorInfo(analytical_next, "Analytical Next State");
 
     // Torch next state
-    auto torch_next = torch_pendulum.getDiscreteDynamics(test_state, test_control);
+    auto torch_next = torch_pendulum.getDiscreteDynamics(test_state, test_control, 0.0);
     printVectorInfo(torch_next, "Torch Next State");
 
     // Compare errors
@@ -166,8 +166,8 @@ TEST(TorchPendulumTest, DiscreteDynamics)
         << "Discrete dynamics: model deviance too large";
 
     // Test Jacobians
-    auto A = torch_pendulum.getStateJacobian(test_state, test_control);
-    auto B = torch_pendulum.getControlJacobian(test_state, test_control);
+    auto A = torch_pendulum.getStateJacobian(test_state, test_control, 0.0);
+    auto B = torch_pendulum.getControlJacobian(test_state, test_control, 0.0);
 
     std::cout << "State Jacobian A:\n" << A << std::endl;
     std::cout << "Control Jacobian B:\n" << B << std::endl;

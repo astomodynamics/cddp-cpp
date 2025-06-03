@@ -280,7 +280,7 @@ bool CDDP::solveCLCDDPBackwardPass() {
 
         // TODO: Precompute Jacobians and store them?
         // Get continuous dynamics Jacobians
-        const auto [Fx, Fu] = system_->getJacobians(x, u);
+        const auto [Fx, Fu] = system_->getJacobians(x, u, t * timestep_);
 
         // Convert continuous dynamics to discrete time
         A = timestep_ * Fx; 
@@ -434,7 +434,7 @@ ForwardPassResult CDDP::solveCLCDDPForwardPass(double alpha) {
         }
 
         J_new += objective_->running_cost(x, U_new[t], t);
-        X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t]);
+        X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t], t * timestep_);
     }
     J_new += objective_->terminal_cost(X_new.back());
     double dJ = J_ - J_new;

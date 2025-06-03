@@ -48,30 +48,89 @@ public:
      * Computes continuous-time dynamics
      * State vector: [x, x_dot, y, y_dot, theta, theta_dot]
      * Control vector: [thrust_percent, thrust_angle]
+     * @param state Current state vector
+     * @param control Current control input
+     * @param time Current time
+     * @return State derivative vector
      */
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
-                                         const Eigen::VectorXd& control) const override;
+                                         const Eigen::VectorXd& control, double time) const override;
 
+    /**
+     * Computes continuous-time dynamics using autodiff
+     * State vector: [x, x_dot, y, y_dot, theta, theta_dot]
+     * Control vector: [thrust_percent, thrust_angle]
+     * @param state Current state vector
+     * @param control Current control input
+     * @return State derivative vector
+     */
     VectorXdual2nd getContinuousDynamicsAutodiff( // Use alias
-        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+        const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const override;
 
+    /**
+     * Computes discrete-time dynamics
+     * State vector: [x, x_dot, y, y_dot, theta, theta_dot]
+     * Control vector: [thrust_percent, thrust_angle]
+     * @param state Current state vector
+     * @param control Current control input
+     * @param time Current time
+     * @return State derivative vector
+     */
     Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state, 
-                                       const Eigen::VectorXd& control) const override {
-        return DynamicalSystem::getDiscreteDynamics(state, control);
+                                       const Eigen::VectorXd& control, double time) const override {
+        return DynamicalSystem::getDiscreteDynamics(state, control, time);
     }
 
+    /**
+     * Computes state Jacobian
+     * State vector: [x, x_dot, y, y_dot, theta, theta_dot]
+     * Control vector: [thrust_percent, thrust_angle]
+     * @param state Current state vector
+     * @param control Current control input
+     * @param time Current time
+     * @return State Jacobian matrix
+     */
     Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, 
-                                    const Eigen::VectorXd& control) const override;
+                                    const Eigen::VectorXd& control, double time) const override;
 
+    /**
+     * Computes control Jacobian
+     * State vector: [x, x_dot, y, y_dot, theta, theta_dot]
+     * Control vector: [thrust_percent, thrust_angle]
+     * @param state Current state vector
+     * @param control Current control input
+     * @param time Current time
+     * @return Control Jacobian matrix
+     */
     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, 
-                                      const Eigen::VectorXd& control) const override;
+                                      const Eigen::VectorXd& control, double time) const override;
 
+    /**
+     * Computes control Hessian
+     * State vector: [x, x_dot, y, y_dot, theta, theta_dot]
+     * Control vector: [thrust_percent, thrust_angle]
+     * @param state Current state vector
+     * @param control Current control input
+     * @return Control Hessian matrix
+     */
     std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
-                                   const Eigen::VectorXd& control) const override;
+                                   const Eigen::VectorXd& control, double time) const override;
 
+    /**
+     * Computes control Hessian
+     * State vector: [x, x_dot, y, y_dot, theta, theta_dot]
+     * Control vector: [thrust_percent, thrust_angle]
+     * @param state Current state vector
+     * @param control Current control input
+     * @return Control Hessian matrix
+     */
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
-                                     const Eigen::VectorXd& control) const override;
+                                     const Eigen::VectorXd& control, double time) const override;
 
+    /**
+     * Returns the state dimension
+     * @return State dimension
+     */
     // Accessors
     int getStateDim() const { return STATE_DIM; }
     int getControlDim() const { return CONTROL_DIM; }

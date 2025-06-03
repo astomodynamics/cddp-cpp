@@ -73,7 +73,7 @@ TEST(SpacecraftLinearFuelTest, DiscreteDynamics) {
         acc_control_data.push_back(state(7));
 
         // Compute the next state
-        state = model.getDiscreteDynamics(state, control);
+        state = model.getDiscreteDynamics(state, control, 0.0);
     }
 
     // Basic assertions
@@ -122,7 +122,7 @@ TEST(SpacecraftLinearFuelTest, RelativeTrajectory) {
 
     // Simulate dynamics
     for (int i = 0; i < num_steps; ++i) {
-        states[i + 1] = model.getDiscreteDynamics(states[i], control);
+        states[i + 1] = model.getDiscreteDynamics(states[i], control, 0.0);
     }
 
     // Store trajectory points

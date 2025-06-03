@@ -50,7 +50,7 @@ TEST(DreyfusRocketTest, DiscreteDynamics) {
         double kinetic = 0.5 * state[1] * state[1];
         energy_data.push_back(potential + kinetic);
 
-        state = rocket.getDiscreteDynamics(state, control);
+        state = rocket.getDiscreteDynamics(state, control, 0.0);
     }
 
     // Basic assertions

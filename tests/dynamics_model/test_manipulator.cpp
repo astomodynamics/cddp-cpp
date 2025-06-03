@@ -83,7 +83,7 @@ TEST(ManipulatorTest, Dynamics) {
     
     // Compute gravity compensation torques
     Eigen::VectorXd zero_control = Eigen::VectorXd::Zero(3);
-    Eigen::VectorXd state_dot = manipulator.getContinuousDynamics(state, zero_control);
+    Eigen::VectorXd state_dot = manipulator.getContinuousDynamics(state, zero_control, 0.0);
 
     // Check that gravity causes downward acceleration
     EXPECT_GT(std::abs(state_dot(4)), 0.0);  // Should have non-zero acceleration due to gravity

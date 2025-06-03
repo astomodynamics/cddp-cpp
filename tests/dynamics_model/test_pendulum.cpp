@@ -52,7 +52,7 @@ TEST(PendulumTest, DiscreteDynamics) {
         theta_dot_data.push_back(state[1]);
 
         // Compute the next state
-        state = pendulum.getDiscreteDynamics(state, control); 
+        state = pendulum.getDiscreteDynamics(state, control, 0.0); 
     }
 
     // Assert true if the pendulum has the correct state dimension

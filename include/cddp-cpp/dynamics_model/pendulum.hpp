@@ -50,7 +50,7 @@ public:
      * @return State derivative vector
      */
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
-                                         const Eigen::VectorXd& control) const override;
+                                         const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the discrete-time dynamics using the specified integration method
@@ -59,8 +59,8 @@ public:
      * @return Next state vector
      */
     Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state, 
-                                       const Eigen::VectorXd& control) const override {
-        return DynamicalSystem::getDiscreteDynamics(state, control);
+                                       const Eigen::VectorXd& control, double time) const override {
+        return DynamicalSystem::getDiscreteDynamics(state, control, time);
     }
 
     /**
@@ -70,7 +70,7 @@ public:
      * @return State Jacobian matrix (A matrix)
      */
     Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, 
-                                    const Eigen::VectorXd& control) const override;
+                                    const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the Jacobian of the dynamics with respect to the control input
@@ -79,7 +79,7 @@ public:
      * @return Control Jacobian matrix (B matrix)
      */
     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, 
-                                      const Eigen::VectorXd& control) const override;
+                                      const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the Hessian of the dynamics with respect to the state
@@ -88,7 +88,7 @@ public:
      * @return Vector of state Hessian matrices (one matrix per state dimension)
      */
     std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
-                                   const Eigen::VectorXd& control) const override;
+                                   const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the Hessian of the dynamics with respect to the control
@@ -97,7 +97,7 @@ public:
      * @return Vector of control Hessian matrices (one matrix per state dimension)
      */
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
-                                     const Eigen::VectorXd& control) const override;
+                                     const Eigen::VectorXd& control, double time) const override;
 
     // Getters
     int getStateDim() const { return STATE_DIM; }
@@ -111,7 +111,7 @@ public:
 
 
     VectorXdual2nd getContinuousDynamicsAutodiff(
-        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+        const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const override;
 
 private:
     // Pendulum parameters

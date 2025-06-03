@@ -252,7 +252,7 @@ bool CDDP::solveASCDDPBackwardPass()
         const Eigen::VectorXd &u = U_[t];
 
         // Get continuous dynamics Jacobians
-        const auto [Fx, Fu] = system_->getJacobians(x, u);
+        const auto [Fx, Fu] = system_->getJacobians(x, u, t * timestep_);
 
         // Convert continuous dynamics to discrete time
         A = timestep_ * Fx;
@@ -494,11 +494,11 @@ ForwardPassResult CDDP::solveASCDDPForwardPass(double alpha)
         // Second block: state constraints
         int row_index = control_dim;
         if (t < horizon_ - 1) {
-            auto [fx, fu] = system_->getJacobians(x, u);
+            auto [fx, fu] = system_->getJacobians(x, u, t * timestep_);
             Eigen::MatrixXd Fu = timestep_ * fu;
 
             // Predicted next state
-            Eigen::VectorXd x_next = system_->getDiscreteDynamics(x, u);
+            Eigen::VectorXd x_next = system_->getDiscreteDynamics(x, u, t * timestep_);
 
             for (const auto &constraint : constraint_set_) {
                 if (constraint.first == "ControlBoxConstraint") {
@@ -552,7 +552,7 @@ ForwardPassResult CDDP::solveASCDDPForwardPass(double alpha)
 
         // Compute running cost and propagate state.
         J_new += objective_->running_cost(x, U_new[t], t);
-        X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t]);
+        X_new[t + 1] = system_->getDiscreteDynamics(x, U_new[t], t * timestep_);
     }
     // Add terminal cost.
     J_new += objective_->terminal_cost(X_new.back());

@@ -69,14 +69,14 @@ void LTISystem::initializeRandomSystem() {
 }
 
 Eigen::VectorXd LTISystem::getDiscreteDynamics(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // For LTI system: dx/dt = Ax + Bu
     return A_ * state + B_ * control;
 }
 
 Eigen::MatrixXd LTISystem::getStateJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // For LTI system, state Jacobian is just A
     Eigen::MatrixXd A = A_;
@@ -85,14 +85,14 @@ Eigen::MatrixXd LTISystem::getStateJacobian(
 }
 
 Eigen::MatrixXd LTISystem::getControlJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // For LTI system, control Jacobian is just B
     return B_/timestep_;
 }
 
 std::vector<Eigen::MatrixXd> LTISystem::getStateHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // State Hessian is zero for linear system
     std::vector<Eigen::MatrixXd> hessians(state_dim_);
@@ -103,7 +103,7 @@ std::vector<Eigen::MatrixXd> LTISystem::getStateHessian(
 }
 
 std::vector<Eigen::MatrixXd> LTISystem::getControlHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // Control Hessian is zero for linear system
     std::vector<Eigen::MatrixXd> hessians(state_dim_);
@@ -115,13 +115,13 @@ std::vector<Eigen::MatrixXd> LTISystem::getControlHessian(
 
 
 VectorXdual2nd LTISystem::getDiscreteDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {
     return A_ * state + B_ * control;
 }
 
 VectorXdual2nd LTISystem::getContinuousDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
-    VectorXdual2nd next_state = this->getDiscreteDynamicsAutodiff(state, control);
+    const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {
+    VectorXdual2nd next_state = this->getDiscreteDynamicsAutodiff(state, control, time);
     return (next_state - state) / timestep_;
 }
 

@@ -78,51 +78,56 @@ namespace cddp
          * @brief Compute continuous-time dynamics in ROE coordinates
          * @param state   Current ROE state vector
          * @param control Current control vector [ur, ut, un]
+         * @param time Current time
          * @return        Derivative of the ROE state vector
          */
         Eigen::VectorXd getContinuousDynamics(
             const Eigen::VectorXd &state,
-            const Eigen::VectorXd &control) const override;
+            const Eigen::VectorXd &control, double time) const override;
 
         /**
          * @brief Compute state Jacobian matrix via numerical finite difference
          * @param state   Current ROE state vector
          * @param control Current control vector
+         * @param time Current time
          * @return        State Jacobian matrix (d f / d state)
          */
         Eigen::MatrixXd getStateJacobian(
             const Eigen::VectorXd &state,
-            const Eigen::VectorXd &control) const override;
+            const Eigen::VectorXd &control, double time) const override;
 
         /**
          * @brief Compute control Jacobian matrix via numerical finite difference
          * @param state   Current ROE state vector
          * @param control Current control vector
+         * @param time Current time
          * @return        Control Jacobian matrix (d f / d control)
          */
         Eigen::MatrixXd getControlJacobian(
             const Eigen::VectorXd &state,
-            const Eigen::VectorXd &control) const override;
+            const Eigen::VectorXd &control, double time) const override;
 
         /**
          * @brief Compute state Hessian tensor
          * @param state   Current state vector
          * @param control Current control vector
+         * @param time Current time
          * @return        Vector of state Hessian matrices, one per state dimension
          */
         std::vector<Eigen::MatrixXd> getStateHessian(
             const Eigen::VectorXd &state,
-            const Eigen::VectorXd &control) const override;
+            const Eigen::VectorXd &control, double time) const override;
 
         /**
          * @brief Compute control Hessian tensor
          * @param state   Current state vector
          * @param control Current control vector
+         * @param time Current time
          * @return        Vector of control Hessian matrices, one per state dimension
          */
         std::vector<Eigen::MatrixXd> getControlHessian(
             const Eigen::VectorXd &state,
-            const Eigen::VectorXd &control) const override;
+            const Eigen::VectorXd &control, double time) const override;
 
         /**
          * @brief Transform the QNS-ROE state to the local Hill/Clohessy-Wiltshire frame.
@@ -134,7 +139,7 @@ namespace cddp
          * @param t    Time since epoch [s]
          * @return     A 6D vector [x, y, z, xdot, ydot, zdot] in the HCW frame
          */
-        Eigen::VectorXd transformROEToHCW(const Eigen::VectorXd &roe, double t) const;
+        Eigen::VectorXd transformROEToHCW(const Eigen::VectorXd &roe, double time) const;
 
         /**
          * @brief Transform a HCW state to the QNS-ROE state.

@@ -50,7 +50,7 @@ TEST(UnicycleTest, DiscreteDynamics) {
         theta_data.push_back(state[2]);
 
         // Compute the next state
-        state = unicycle.getDiscreteDynamics(state, control); 
+        state = unicycle.getDiscreteDynamics(state, control, 0.0); 
     }
 
     // Assert true if the unicycle has the correct state dimension
