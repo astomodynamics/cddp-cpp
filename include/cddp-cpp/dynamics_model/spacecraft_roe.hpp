@@ -88,6 +88,17 @@ namespace cddp
             const Eigen::VectorXd &control, double time) const override;
 
         /**
+         * @brief Compute continuous-time dynamics in ROE coordinates using autodiff
+         * @param state   Current ROE state vector
+         * @param control Current control vector [ur, ut, un]
+         * @param time Current time
+         * @return        Derivative of the ROE state vector
+         */
+        VectorXdual2nd getContinuousDynamicsAutodiff(
+            const VectorXdual2nd &state,
+            const VectorXdual2nd &control, double time) const override;
+
+        /**
          * @brief Compute state Jacobian matrix via numerical finite difference
          * @param state   Current ROE state vector
          * @param control Current control vector

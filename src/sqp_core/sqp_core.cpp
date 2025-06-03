@@ -80,11 +80,11 @@ void SCPSolver::computeLinearizedDynamics(const std::vector<Eigen::VectorXd>& X,
     for (int t = 0; t < horizon_; ++t) {
         Eigen::VectorXd x = X[t];
         Eigen::VectorXd u = U[t];
-        Eigen::VectorXd f0 = system_->getDiscreteDynamics(x, u);
+        Eigen::VectorXd f0 = system_->getDiscreteDynamics(x, u, t * timestep_);
         A[t] = Eigen::MatrixXd::Zero(state_dim, state_dim);
         B[t] = Eigen::MatrixXd::Zero(state_dim, control_dim);
         
-        auto [fx, fu] = system_->getJacobians(x, u);
+        auto [fx, fu] = system_->getJacobians(x, u, t * timestep_);
         A[t] = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * fx;
         B[t] = timestep_ * fu;
     }
@@ -176,7 +176,7 @@ SCPResult SCPSolver::solve() {
         std::vector<Eigen::MatrixXd> A, B;
         computeLinearizedDynamics(X_prev, U_prev, A, B);
         for (int t = 0; t < N; ++t) {
-            Eigen::VectorXd f_nom = system_->getDiscreteDynamics(X_prev[t], U_prev[t]);
+            Eigen::VectorXd f_nom = system_->getDiscreteDynamics(X_prev[t], U_prev[t], t * timestep_);
             DM f_nom_dm = DM(std::vector<double>(f_nom.data(),
                                                    f_nom.data() + state_dim));
             DM xbar = DM(std::vector<double>(X_prev[t].data(),

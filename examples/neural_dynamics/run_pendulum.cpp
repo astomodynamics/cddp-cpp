@@ -159,7 +159,7 @@ int main(int argc, char* argv[])
         theta_vec_true[i]    = static_cast<float>(state(0));
         thetadot_vec_true[i] = static_cast<float>(state(1));
         if (i < seq_length - 1) {
-            state = pendulum.getDiscreteDynamics(state, control);
+            state = pendulum.getDiscreteDynamics(state, control, 0.0);
             // Wrap theta to [0.0, 2*pi]
             state(0) = std::fmod(state(0), 2.0 * M_PI);
             if (state(0) < 0) {

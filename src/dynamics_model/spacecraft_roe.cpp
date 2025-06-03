@@ -99,43 +99,33 @@ namespace cddp
         return xdot + B * control;
     }
 
-    //-----------------------------------------------------------------------------
-    Eigen::MatrixXd SpacecraftROE::getStateJacobian(
-        const Eigen::VectorXd &state,
-        const Eigen::VectorXd &control, double time) const
+    VectorXdual2nd SpacecraftROE::getContinuousDynamicsAutodiff(
+        const VectorXdual2nd &state, const VectorXdual2nd &control, double time) const
     {
-        Eigen::MatrixXd A(STATE_DIM, STATE_DIM);
-        A.setZero();
+        VectorXdual2nd xdot = VectorXdual2nd::Zero(STATE_DIM);
 
         // Current argument of latitude
         double nu = n_ref_ * time + u0_;
 
-        // Calculate su and cu based on initial argument of latitude:
-        double su = std::sin(nu);
-        double cu = std::cos(nu);
+        // A*x portion:
+        autodiff::dual2nd da = state(STATE_DA);
+        xdot(STATE_DLAMBDA) = -1.5 * n_ref_ * da;
 
-        A(STATE_DLAMBDA, STATE_DA) = -1.5 * n_ref_;
-
-        return A;
-    }
-
-    //-----------------------------------------------------------------------------
-    Eigen::MatrixXd SpacecraftROE::getControlJacobian(
-        const Eigen::VectorXd &state,
-        const Eigen::VectorXd &control, double time) const
-    {
-        Eigen::MatrixXd B(STATE_DIM, CONTROL_DIM);
-        B.setZero();
-
-        // Current argument of latitude
-        double nu = n_ref_ * time + u0_;
-
-        // Calculate su and cu based on initial argument of latitude:
-        double su = std::sin(nu);
-        double cu = std::cos(nu);
+        // B*u portion:
+        autodiff::dual2nd ur = control(CONTROL_UR);
+        autodiff::dual2nd ut = control(CONTROL_UT);
+        autodiff::dual2nd un = control(CONTROL_UN);
 
         // Factor for scaling control
         const double factor = 1.0 / (n_ref_ * a_ * mass_kg_);
+
+        // Calculate su and cu based on initial argument of latitude:
+        double su = std::sin(nu);
+        double cu = std::cos(nu);
+
+        // Return the control Jacobian matrix B
+        Eigen::MatrixXd B(STATE_DIM, CONTROL_DIM);
+        B.setZero();
 
         B(STATE_DA, CONTROL_UT) = 2.0;
         B(STATE_DLAMBDA, CONTROL_UR) = -2.0;
@@ -147,7 +137,40 @@ namespace cddp
         B(STATE_DIY, CONTROL_UN) = su;
         B *= factor;
 
-        return B;
+        return xdot + B * control;
+    }
+
+    //-----------------------------------------------------------------------------
+    Eigen::MatrixXd SpacecraftROE::getStateJacobian(
+        const Eigen::VectorXd &state, const Eigen::VectorXd &control, double time) const
+    {
+
+        // Use autodiff to compute state Jacobian
+        VectorXdual2nd x = state;
+        VectorXdual2nd u = control;
+
+        auto dynamics_wrt_x = [&](const VectorXdual2nd &x_ad) -> VectorXdual2nd
+        {
+            return this->getContinuousDynamicsAutodiff(x_ad, u, time);
+        };
+
+        return autodiff::jacobian(dynamics_wrt_x, wrt(x), at(x));
+    }
+
+    Eigen::MatrixXd SpacecraftROE::getControlJacobian(
+        const Eigen::VectorXd &state, const Eigen::VectorXd &control, double time) const
+    {
+
+        // Use autodiff to compute control Jacobian
+        VectorXdual2nd x = state;
+        VectorXdual2nd u = control;
+
+        auto dynamics_wrt_u = [&](const VectorXdual2nd &u_ad) -> VectorXdual2nd
+        {
+            return this->getContinuousDynamicsAutodiff(x, u_ad, time);
+        };
+
+        return autodiff::jacobian(dynamics_wrt_u, wrt(u), at(u));
     }
 
     //-----------------------------------------------------------------------------
