@@ -214,7 +214,7 @@ TEST(NeuralPendulumTest, Training)
         Eigen::VectorXd control(1);
         control << (2.0 * rand() / RAND_MAX - 1.0) * 2.0;
 
-        auto next_state = analytical_pendulum.getDiscreteDynamics(state, control);
+        auto next_state = analytical_pendulum.getDiscreteDynamics(state, control, 0.0);
 
         // Copy to torch Tensors
         state_tensor[i] = torch::from_blob(state.data(), {2}, cpu_options).clone();
@@ -288,7 +288,7 @@ TEST(NeuralPendulumTest, Training)
     std::memcpy(pred_eigen.data(), pred.data_ptr<double>(), sizeof(double) * 2);
 
     // Compare to analytical
-    auto analytical_next = analytical_pendulum.getDiscreteDynamics(test_state, test_control);
+    auto analytical_next = analytical_pendulum.getDiscreteDynamics(test_state, test_control, 0.0);
     double error = (analytical_next - pred_eigen).norm();
     std::cout << "Test error: " << error << std::endl;
     EXPECT_LT(error, 0.1);
