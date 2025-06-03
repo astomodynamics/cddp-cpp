@@ -42,7 +42,7 @@ SpacecraftLanding2D::SpacecraftLanding2D(double timestep,
 }
 
 Eigen::VectorXd SpacecraftLanding2D::getContinuousDynamics(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
 
@@ -79,26 +79,26 @@ Eigen::VectorXd SpacecraftLanding2D::getContinuousDynamics(
 }
 
 Eigen::MatrixXd SpacecraftLanding2D::getStateJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     auto f = [&](const Eigen::VectorXd& x) {
-        return getContinuousDynamics(x, control);
+        return getContinuousDynamics(x, control, time);
     };
 
     return finite_difference_jacobian(f, state);
 }
 
 Eigen::MatrixXd SpacecraftLanding2D::getControlJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     auto f = [&](const Eigen::VectorXd& u) {
-        return getContinuousDynamics(state, u);
+        return getContinuousDynamics(state, u, time);
     };
     return finite_difference_jacobian(f, control);
 }
 
 std::vector<Eigen::MatrixXd> SpacecraftLanding2D::getStateHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
         hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
@@ -107,7 +107,7 @@ std::vector<Eigen::MatrixXd> SpacecraftLanding2D::getStateHessian(
 }
 
 std::vector<Eigen::MatrixXd> SpacecraftLanding2D::getControlHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
         hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
@@ -116,7 +116,7 @@ std::vector<Eigen::MatrixXd> SpacecraftLanding2D::getControlHessian(
 }
 
 VectorXdual2nd SpacecraftLanding2D::getContinuousDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {    
 
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
 

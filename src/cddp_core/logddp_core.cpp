@@ -481,7 +481,7 @@ namespace cddp
             const Eigen::VectorXd &u = U_[t];
 
             // Dynamics Jacobians
-            const auto [Fx, Fu] = system_->getJacobians(x, u);
+            const auto [Fx, Fu] = system_->getJacobians(x, u, t * timestep_);
             Fx_[t] = Fx;
             Fu_[t] = Fu;
 
@@ -492,7 +492,7 @@ namespace cddp
             // Dynamics Hessians
             if (!options_.is_ilqr)
             {
-                const auto hessians = system_->getHessians(x, u);
+                const auto hessians = system_->getHessians(x, u, t * timestep_);
                 Fxx_[t] = std::get<0>(hessians);
                 Fuu_[t] = std::get<1>(hessians);
                 Fux_[t] = std::get<2>(hessians);
@@ -654,7 +654,7 @@ namespace cddp
 
             if (options_.ms_rollout_type == "nonlinear" || options_.ms_rollout_type == "hybrid")
             {
-                dynamics_eval_for_F_new_t = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                dynamics_eval_for_F_new_t = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
             }
             else // options_.ms_rollout_type == "linear"
             {
@@ -812,7 +812,7 @@ namespace cddp
             cost += objective_->running_cost(x_t, u_t, t);
 
             // Compute defect
-            Eigen::VectorXd f = system_->getDiscreteDynamics(x_t, u_t);
+            Eigen::VectorXd f = system_->getDiscreteDynamics(x_t, u_t, t * timestep_);
             F_[t] = f;
         }
 

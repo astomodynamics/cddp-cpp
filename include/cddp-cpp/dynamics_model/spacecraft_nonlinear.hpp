@@ -87,51 +87,56 @@ public:
      * @brief Compute continuous-time dynamics
      * @param state Current state vector
      * @param control Current control vector
+     * @param time Current time
      * @return State derivative vector
      */
     Eigen::VectorXd getContinuousDynamics(
         const Eigen::VectorXd& state,
-        const Eigen::VectorXd& control) const override;
+        const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Compute state Jacobian matrix
      * @param state Current state vector
      * @param control Current control vector
+     * @param time Current time
      * @return State Jacobian matrix
      */
     Eigen::MatrixXd getStateJacobian(
         const Eigen::VectorXd& state,
-        const Eigen::VectorXd& control) const override;
+        const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Compute control Jacobian matrix
      * @param state Current state vector
      * @param control Current control vector
+     * @param time Current time
      * @return Control Jacobian matrix
      */
     Eigen::MatrixXd getControlJacobian(
         const Eigen::VectorXd& state,
-        const Eigen::VectorXd& control) const override;
+        const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Compute state Hessian tensor
      * @param state Current state vector
      * @param control Current control vector
+     * @param time Current time
      * @return Vector of state Hessian matrices, one per state dimension
      */
     std::vector<Eigen::MatrixXd> getStateHessian(
         const Eigen::VectorXd& state,
-        const Eigen::VectorXd& control) const override;
+        const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Compute control Hessian tensor
      * @param state Current state vector
      * @param control Current control vector
+     * @param time Current time
      * @return Vector of control Hessian matrices, one per state dimension
      */
     std::vector<Eigen::MatrixXd> getControlHessian(
         const Eigen::VectorXd& state,
-        const Eigen::VectorXd& control) const override;
+        const Eigen::VectorXd& control, double time) const override;
 
 private:
     double mass_;      ///< Spacecraft mass [kg]

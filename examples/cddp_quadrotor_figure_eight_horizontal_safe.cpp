@@ -237,7 +237,7 @@ int main()
     X[0] = initial_state;
     for (int i = 0; i < horizon; ++i)
     {
-        X[i + 1] = quadrotor.getDiscreteDynamics(X[i], U[i]);
+        X[i + 1] = quadrotor.getDiscreteDynamics(X[i], U[i], i * timestep);
     }
     cddp_solver.setInitialTrajectory(X, U);
 

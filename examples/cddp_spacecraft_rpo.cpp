@@ -184,7 +184,7 @@ int main()
     // Generate initial trajectory by constant initial state
     for (int i = 0; i < horizon; ++i)
     {
-        X[i + 1] = hcw_system->getDiscreteDynamics(X[i], U[i]);
+        X[i + 1] = hcw_system->getDiscreteDynamics(X[i], U[i], i * dt);
         // X[i] = initial_state;
     }
 

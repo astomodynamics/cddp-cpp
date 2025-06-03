@@ -516,7 +516,7 @@ namespace cddp
             {
                 const Eigen::VectorXd &x = X_[t];
                 const Eigen::VectorXd &u = U_[t];
-                const auto [Fx, Fu] = system_->getJacobians(x, u);
+                const auto [Fx, Fu] = system_->getJacobians(x, u, t * timestep_);
                 Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx;
                 Eigen::MatrixXd B = timestep_ * Fu;
 
@@ -524,7 +524,7 @@ namespace cddp
                 std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
                 if (!options_.is_ilqr)
                 {
-                    const auto hessians = system_->getHessians(x, u);
+                    const auto hessians = system_->getHessians(x, u, t * timestep_);
                     Fxx = std::get<0>(hessians);
                     Fuu = std::get<1>(hessians);
                     Fux = std::get<2>(hessians);
@@ -608,13 +608,13 @@ namespace cddp
                 const Eigen::VectorXd &u = U_[t];
 
                 // Continuous dynamics
-                const auto [Fx, Fu] = system_->getJacobians(x, u);
+                const auto [Fx, Fu] = system_->getJacobians(x, u, t * timestep_);
 
                 // Get dynamics hessians if not using iLQR
                 std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
                 if (!options_.is_ilqr)
                 {
-                    const auto hessians = system_->getHessians(x, u);
+                    const auto hessians = system_->getHessians(x, u, t * timestep_);
                     Fxx = std::get<0>(hessians);
                     Fuu = std::get<1>(hessians);
                     Fux = std::get<2>(hessians);
@@ -863,7 +863,7 @@ namespace cddp
                 U_new[t] = U_[t] + alpha * k_u_[t] + K_u_[t] * (X_new[t] - X_[t]);
 
                 // Propagate dynamics
-                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
 
                 // Accumulate stage cost
                 cost_new += objective_->running_cost(X_new[t], U_new[t], t);
@@ -922,7 +922,7 @@ namespace cddp
                 U_new[t] = U_[t] + alpha_s * k_u_[t] + K_u_[t] * delta_x_k;
 
                 // Propagate dynamics
-                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
             }
 
             if (!s_trajectory_feasible)
@@ -1116,7 +1116,7 @@ namespace cddp
             }
 
             // Compute the next state using the system dynamics.
-            X_[t + 1] = system_->getDiscreteDynamics(x, u);
+            X_[t + 1] = system_->getDiscreteDynamics(x, u, t * timestep_);
         }
 
         // Add terminal cost.

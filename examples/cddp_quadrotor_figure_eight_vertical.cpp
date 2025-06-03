@@ -236,7 +236,7 @@ int main()
     // Propagate initial trajectory using discrete dynamics
     for (size_t i = 0; i < static_cast<size_t>(horizon); ++i)
     {
-        X[i + 1] = quadrotor.getDiscreteDynamics(X[i], U[i]);
+        X[i + 1] = quadrotor.getDiscreteDynamics(X[i], U[i], i * timestep);
     }
     cddp_solver.setInitialTrajectory(X, U);
 

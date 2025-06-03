@@ -31,7 +31,7 @@ namespace cddp
           inertia_inv_(inertia_matrix.inverse()) {}
 
     Eigen::VectorXd EulerAttitude::getContinuousDynamics(
-        const Eigen::VectorXd &state, const Eigen::VectorXd &control) const
+        const Eigen::VectorXd &state, const Eigen::VectorXd &control, double time) const
     {
         Eigen::VectorXd state_dot(STATE_DIM);
 
@@ -52,106 +52,102 @@ namespace cddp
     }
 
     Eigen::MatrixXd EulerAttitude::getStateJacobian(
-        const Eigen::VectorXd &state, const Eigen::VectorXd &control) const
+        const Eigen::VectorXd &state, const Eigen::VectorXd &control, double time) const
     {
-        // Use autodiff to compute state Jacobian
-        VectorXdual2nd x = state;
-        VectorXdual2nd u = control;
+        VectorXdual2nd x_ad = state;
+        VectorXdual2nd u_ad = control;
 
-        auto dynamics_wrt_x = [&](const VectorXdual2nd &x_ad) -> VectorXdual2nd
+        auto dynamics_eval = [&](const VectorXdual2nd &x_in) -> VectorXdual2nd
         {
-            return this->getContinuousDynamicsAutodiff(x_ad, u);
+            return this->getContinuousDynamicsAutodiff(x_in, u_ad, time);
         };
-
-        return autodiff::jacobian(dynamics_wrt_x, wrt(x), at(x));
+        return autodiff::jacobian(dynamics_eval, wrt(x_ad), at(x_ad));
     }
 
     Eigen::MatrixXd EulerAttitude::getControlJacobian(
-        const Eigen::VectorXd &state, const Eigen::VectorXd &control) const
+        const Eigen::VectorXd &state, const Eigen::VectorXd &control, double time) const
     {
-        // Use autodiff to compute control Jacobian
-        VectorXdual2nd x = state;
-        VectorXdual2nd u = control;
+        VectorXdual2nd x_ad = state;
+        VectorXdual2nd u_ad = control;
 
-        auto dynamics_wrt_u = [&](const VectorXdual2nd &u_ad) -> VectorXdual2nd
+        auto dynamics_eval = [&](const VectorXdual2nd &u_in) -> VectorXdual2nd
         {
-            return this->getContinuousDynamicsAutodiff(x, u_ad);
+            return this->getContinuousDynamicsAutodiff(x_ad, u_in, time);
         };
-
-        return autodiff::jacobian(dynamics_wrt_u, wrt(u), at(u));
+        return autodiff::jacobian(dynamics_eval, wrt(u_ad), at(u_ad));
     }
 
     std::vector<Eigen::MatrixXd> EulerAttitude::getStateHessian(
-        const Eigen::VectorXd &state, const Eigen::VectorXd &control) const
+        const Eigen::VectorXd &state, const Eigen::VectorXd &control, double time) const
     {
-        // Use autodiff to compute state Hessian
-        VectorXdual2nd x = state;
-        VectorXdual2nd u = control;
+        VectorXdual2nd x_ad = state;
+        VectorXdual2nd u_ad = control;
 
         std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-
         for (int i = 0; i < STATE_DIM; ++i)
         {
-            auto fi_x = [&, i](const VectorXdual2nd &x_ad) -> autodiff::dual2nd
+            auto dynamics_component_i = [&](const VectorXdual2nd &x_in) -> autodiff::dual2nd
             {
-                return this->getContinuousDynamicsAutodiff(x_ad, u)(i);
+                return this->getContinuousDynamicsAutodiff(x_in, u_ad, time)(i);
             };
-            hessians[i] = autodiff::hessian(fi_x, wrt(x), at(x));
+            hessians[i] = autodiff::hessian(dynamics_component_i, wrt(x_ad), at(x_ad));
         }
-
         return hessians;
     }
 
     std::vector<Eigen::MatrixXd> EulerAttitude::getControlHessian(
-        const Eigen::VectorXd &state, const Eigen::VectorXd &control) const
+        const Eigen::VectorXd &state, const Eigen::VectorXd &control, double time) const
     {
-        // Use autodiff to compute control Hessian
-        VectorXdual2nd x = state;
-        VectorXdual2nd u = control;
+        VectorXdual2nd x_ad = state;
+        VectorXdual2nd u_ad = control;
 
         std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-
         for (int i = 0; i < STATE_DIM; ++i)
         {
-            auto fi_u = [&, i](const VectorXdual2nd &u_ad) -> autodiff::dual2nd
+            auto dynamics_component_i = [&](const VectorXdual2nd &u_in) -> autodiff::dual2nd
             {
-                return this->getContinuousDynamicsAutodiff(x, u_ad)(i);
+                return this->getContinuousDynamicsAutodiff(x_ad, u_in, time)(i);
             };
-            hessians[i] = autodiff::hessian(fi_u, wrt(u), at(u));
+            hessians[i] = autodiff::hessian(dynamics_component_i, wrt(u_ad), at(u_ad));
         }
-
         return hessians;
     }
 
     std::vector<Eigen::MatrixXd> EulerAttitude::getCrossHessian(
-        const Eigen::VectorXd &state, const Eigen::VectorXd &control) const
+        const Eigen::VectorXd &state, const Eigen::VectorXd &control, double time) const
     {
-        // Use autodiff to compute cross Hessian
-        VectorXdual2nd x = state;
-        VectorXdual2nd u = control;
+        VectorXdual2nd x_target = state; // Point at which to evaluate the gradient w.r.t. x
+        VectorXdual2nd u_wrt = control; // Variable of differentiation for the outer Jacobian
 
         std::vector<Eigen::MatrixXd> cross_hessians(STATE_DIM);
 
         for (int i = 0; i < STATE_DIM; ++i)
         {
-            auto gradient_fi_x = [&, i](const VectorXdual2nd &u_ad) -> VectorXdual2nd
+            // Define a lambda that computes the gradient of the i-th component of dynamics w.r.t. state (x)
+            // This gradient will be a function of control (u_inner)
+            auto gradient_fi_x_of_u = [&](const VectorXdual2nd &u_inner) -> VectorXdual2nd
             {
-                auto fi_x = [&, u_ad, i](const VectorXdual2nd &x_ad) -> autodiff::dual2nd
+                // Inner lambda: f_i(x, u_inner) - evaluates the i-th component of dynamics
+                auto fi_of_x = [&](const VectorXdual2nd &x_inner) -> autodiff::dual2nd
                 {
-                    return this->getContinuousDynamicsAutodiff(x_ad, u_ad)(i);
+                    return this->getContinuousDynamicsAutodiff(x_inner, u_inner, time)(i);
                 };
-                return autodiff::gradient(fi_x, wrt(x), at(x));
+                // Compute gradient of fi_of_x w.r.t x, evaluated at x_target.
+                // For autodiff::gradient, wrt(variable_to_diff) and at(point_of_evaluation)
+                return autodiff::gradient(fi_of_x, wrt(x_target), at(x_target)); 
             };
-            cross_hessians[i] = autodiff::jacobian(gradient_fi_x, wrt(u), at(u));
+            
+            // Compute the Jacobian of gradient_fi_x_of_u w.r.t. u_wrt
+            cross_hessians[i] = autodiff::jacobian(gradient_fi_x_of_u, wrt(u_wrt), at(u_wrt));
         }
-
         return cross_hessians;
     }
 
     // Autodiff version of the continuous dynamics
     VectorXdual2nd EulerAttitude::getContinuousDynamicsAutodiff(
         const VectorXdual2nd &state,
-        const VectorXdual2nd &control) const
+        const VectorXdual2nd &control,
+        double time) const
     {
 
         // Cast member variables to autodiff types

@@ -54,7 +54,7 @@ TEST(CartPoleTest, DiscreteDynamics) {
 
         energy_data.push_back(potential + kinetic);
 
-        state = cartpole.getDiscreteDynamics(state, control);
+        state = cartpole.getDiscreteDynamics(state, control, 0.0);
     }
     std::cout << "final state: " << state.transpose() << std::endl;
     // Basic assertions
@@ -77,8 +77,8 @@ TEST(CartPoleJacobianTest, Jacobians) {
     control << 1.0;  // Example control: force = 1.0
 
     // Test State Jacobian
-    Eigen::MatrixXd analytical_A = cartpole.getStateJacobian(state, control);
-    Eigen::MatrixXd autodiff_A = cartpole.DynamicalSystem::getStateJacobian(state, control);
+    Eigen::MatrixXd analytical_A = cartpole.getStateJacobian(state, control, 0.0);
+    Eigen::MatrixXd autodiff_A = cartpole.DynamicalSystem::getStateJacobian(state, control, 0.0);
 
     // std::cout << "Analytical State Jacobian (A):\n" << analytical_A << std::endl;
     // std::cout << "Autodiff State Jacobian (A):\n" << autodiff_A << std::endl;
@@ -88,8 +88,8 @@ TEST(CartPoleJacobianTest, Jacobians) {
         << "\nAutodiff A:\n" << autodiff_A;
 
     // Test Control Jacobian
-    Eigen::MatrixXd analytical_B = cartpole.getControlJacobian(state, control);
-    Eigen::MatrixXd autodiff_B = cartpole.DynamicalSystem::getControlJacobian(state, control);
+    Eigen::MatrixXd analytical_B = cartpole.getControlJacobian(state, control, 0.0);
+    Eigen::MatrixXd autodiff_B = cartpole.DynamicalSystem::getControlJacobian(state, control, 0.0);
 
     // std::cout << "Analytical Control Jacobian (B):\n" << analytical_B << std::endl;
     // std::cout << "Autodiff Control Jacobian (B):\n" << autodiff_B << std::endl;

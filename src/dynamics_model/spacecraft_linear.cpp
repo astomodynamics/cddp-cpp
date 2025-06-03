@@ -29,7 +29,7 @@ HCW::HCW(double timestep, double mean_motion, double mass,
 }
 
 Eigen::VectorXd HCW::getContinuousDynamics(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
     
@@ -67,7 +67,7 @@ Eigen::VectorXd HCW::getContinuousDynamics(
 }
 
 Eigen::MatrixXd HCW::getStateJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // For HCW equations, we can compute the analytical Jacobian
     const double n = mean_motion_;
@@ -92,7 +92,7 @@ Eigen::MatrixXd HCW::getStateJacobian(
 }
 
 Eigen::MatrixXd HCW::getControlJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // For HCW equations, we can compute the analytical control Jacobian
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);
@@ -106,7 +106,7 @@ Eigen::MatrixXd HCW::getControlJacobian(
 }
 
 std::vector<Eigen::MatrixXd> HCW::getStateHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     // HCW equations are linear, so state Hessian is zero
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
@@ -116,7 +116,7 @@ std::vector<Eigen::MatrixXd> HCW::getStateHessian(
 }
 
 std::vector<Eigen::MatrixXd> HCW::getControlHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     // HCW equations are linear in control, so control Hessian is zero
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
@@ -126,7 +126,7 @@ std::vector<Eigen::MatrixXd> HCW::getControlHessian(
 }
 
 VectorXdual2nd HCW::getContinuousDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
 
     // Extract state variables (dual2nd)

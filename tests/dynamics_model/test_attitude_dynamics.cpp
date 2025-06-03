@@ -61,15 +61,15 @@ namespace cddp
         TEST_F(AttitudeDynamicsTest, MrpDynamicsDimension)
         {
             MrpAttitude mrp_model(dt, inertia);
-            Eigen::VectorXd x_dot = mrp_model.getContinuousDynamics(state_mrp, control_mrp);
+            Eigen::VectorXd x_dot = mrp_model.getContinuousDynamics(state_mrp, control_mrp, 0.0);
             EXPECT_EQ(x_dot.size(), MrpAttitude::STATE_DIM);
         }
 
         TEST_F(AttitudeDynamicsTest, MrpJacobianDimensions)
         {
             MrpAttitude mrp_model(dt, inertia);
-            Eigen::MatrixXd A = mrp_model.getStateJacobian(state_mrp, control_mrp);
-            Eigen::MatrixXd B = mrp_model.getControlJacobian(state_mrp, control_mrp);
+            Eigen::MatrixXd A = mrp_model.getStateJacobian(state_mrp, control_mrp, 0.0);
+            Eigen::MatrixXd B = mrp_model.getControlJacobian(state_mrp, control_mrp, 0.0);
             EXPECT_EQ(A.rows(), MrpAttitude::STATE_DIM);
             EXPECT_EQ(A.cols(), MrpAttitude::STATE_DIM);
             EXPECT_EQ(B.rows(), MrpAttitude::STATE_DIM);
@@ -79,9 +79,9 @@ namespace cddp
         TEST_F(AttitudeDynamicsTest, MrpHessianDimensions)
         {
             MrpAttitude mrp_model(dt, inertia);
-            auto state_hess = mrp_model.getStateHessian(state_mrp, control_mrp);
-            auto control_hess = mrp_model.getControlHessian(state_mrp, control_mrp);
-            auto cross_hess = mrp_model.getCrossHessian(state_mrp, control_mrp);
+            auto state_hess = mrp_model.getStateHessian(state_mrp, control_mrp, 0.0);
+            auto control_hess = mrp_model.getControlHessian(state_mrp, control_mrp, 0.0);
+            auto cross_hess = mrp_model.getCrossHessian(state_mrp, control_mrp, 0.0);
 
             EXPECT_EQ(state_hess.size(), MrpAttitude::STATE_DIM);
             EXPECT_EQ(control_hess.size(), MrpAttitude::STATE_DIM);
@@ -113,15 +113,15 @@ namespace cddp
         TEST_F(AttitudeDynamicsTest, QuaternionDynamicsDimension)
         {
             QuaternionAttitude quat_model(dt, inertia);
-            Eigen::VectorXd x_dot = quat_model.getContinuousDynamics(state_quat, control_quat);
+            Eigen::VectorXd x_dot = quat_model.getContinuousDynamics(state_quat, control_quat, 0.0);
             EXPECT_EQ(x_dot.size(), QuaternionAttitude::STATE_DIM);
         }
 
         TEST_F(AttitudeDynamicsTest, QuaternionJacobianDimensions)
         {
             QuaternionAttitude quat_model(dt, inertia);
-            Eigen::MatrixXd A = quat_model.getStateJacobian(state_quat, control_quat);
-            Eigen::MatrixXd B = quat_model.getControlJacobian(state_quat, control_quat);
+            Eigen::MatrixXd A = quat_model.getStateJacobian(state_quat, control_quat, 0.0);
+            Eigen::MatrixXd B = quat_model.getControlJacobian(state_quat, control_quat, 0.0);
             EXPECT_EQ(A.rows(), QuaternionAttitude::STATE_DIM);
             EXPECT_EQ(A.cols(), QuaternionAttitude::STATE_DIM);
             EXPECT_EQ(B.rows(), QuaternionAttitude::STATE_DIM);
@@ -131,9 +131,9 @@ namespace cddp
         TEST_F(AttitudeDynamicsTest, QuaternionHessianDimensions)
         {
             QuaternionAttitude quat_model(dt, inertia);
-            auto state_hess = quat_model.getStateHessian(state_quat, control_quat);
-            auto control_hess = quat_model.getControlHessian(state_quat, control_quat);
-            auto cross_hess = quat_model.getCrossHessian(state_quat, control_quat);
+            auto state_hess = quat_model.getStateHessian(state_quat, control_quat, 0.0);
+            auto control_hess = quat_model.getControlHessian(state_quat, control_quat, 0.0);
+            auto cross_hess = quat_model.getCrossHessian(state_quat, control_quat, 0.0);
 
             EXPECT_EQ(state_hess.size(), QuaternionAttitude::STATE_DIM);
             EXPECT_EQ(control_hess.size(), QuaternionAttitude::STATE_DIM);
@@ -165,7 +165,7 @@ namespace cddp
         TEST_F(AttitudeDynamicsTest, EulerDynamicsDimension)
         {
             EulerAttitude euler_model(dt, inertia);
-            Eigen::VectorXd x_dot = euler_model.getContinuousDynamics(state_euler, control_euler);
+            Eigen::VectorXd x_dot = euler_model.getContinuousDynamics(state_euler, control_euler, 0.0);
             EXPECT_EQ(x_dot.size(), EulerAttitude::STATE_DIM);
         }
 
@@ -175,8 +175,8 @@ namespace cddp
             // Test near non-singular point
             Eigen::VectorXd non_singular_state = state_euler;
             non_singular_state(EulerAttitude::STATE_EULER_Y) = 0.1; // Ensure pitch is not pi/2
-            Eigen::MatrixXd A = euler_model.getStateJacobian(non_singular_state, control_euler);
-            Eigen::MatrixXd B = euler_model.getControlJacobian(non_singular_state, control_euler);
+            Eigen::MatrixXd A = euler_model.getStateJacobian(non_singular_state, control_euler, 0.0);
+            Eigen::MatrixXd B = euler_model.getControlJacobian(non_singular_state, control_euler, 0.0);
             EXPECT_EQ(A.rows(), EulerAttitude::STATE_DIM);
             EXPECT_EQ(A.cols(), EulerAttitude::STATE_DIM);
             EXPECT_EQ(B.rows(), EulerAttitude::STATE_DIM);
@@ -189,9 +189,9 @@ namespace cddp
             // Test near non-singular point
             Eigen::VectorXd non_singular_state = state_euler;
             non_singular_state(EulerAttitude::STATE_EULER_Y) = 0.1; // Ensure pitch is not pi/2
-            auto state_hess = euler_model.getStateHessian(non_singular_state, control_euler);
-            auto control_hess = euler_model.getControlHessian(non_singular_state, control_euler);
-            auto cross_hess = euler_model.getCrossHessian(non_singular_state, control_euler);
+            auto state_hess = euler_model.getStateHessian(non_singular_state, control_euler, 0.0);
+            auto control_hess = euler_model.getControlHessian(non_singular_state, control_euler, 0.0);
+            auto cross_hess = euler_model.getCrossHessian(non_singular_state, control_euler, 0.0);
 
             EXPECT_EQ(state_hess.size(), EulerAttitude::STATE_DIM);
             EXPECT_EQ(control_hess.size(), EulerAttitude::STATE_DIM);
@@ -250,9 +250,9 @@ namespace cddp
             // Simulation loop (using zero control)
             for (int k = 0; k < num_steps; ++k)
             {
-                current_state_mrp = mrp_model.getDiscreteDynamics(current_state_mrp, control_mrp);
-                current_state_quat = quat_model.getDiscreteDynamics(current_state_quat, control_quat);
-                current_state_euler = euler_model.getDiscreteDynamics(current_state_euler, control_euler);
+                current_state_mrp = mrp_model.getDiscreteDynamics(current_state_mrp, control_mrp, 0.0);
+                current_state_quat = quat_model.getDiscreteDynamics(current_state_quat, control_quat, 0.0);
+                current_state_euler = euler_model.getDiscreteDynamics(current_state_euler, control_euler, 0.0);
 
                 // Store results
                 t_eval[k + 1] = (k + 1) * dt;

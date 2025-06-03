@@ -65,7 +65,7 @@ TEST(HCWTest, DiscreteDynamics) {
         vz_data.push_back(state[5]);
 
         // Compute the next state
-        state = hcw.getDiscreteDynamics(state, control);
+        state = hcw.getDiscreteDynamics(state, control, 0.0);
     }
 
     // Basic assertions
@@ -92,7 +92,7 @@ TEST(HCWTest, ContinuousDynamics) {
     control << hover_thrust, 0.0, 0.0;  // Radial thrust only
 
     // Get dynamics
-    Eigen::VectorXd state_dot = hcw.getContinuousDynamics(state, control);
+    Eigen::VectorXd state_dot = hcw.getContinuousDynamics(state, control, 0.0);
 
 }
 

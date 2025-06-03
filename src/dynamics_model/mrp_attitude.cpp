@@ -29,7 +29,7 @@ namespace cddp
           inertia_inv_(inertia_matrix.inverse()) {}
 
     Eigen::VectorXd MrpAttitude::getContinuousDynamics(const Eigen::VectorXd &state,
-                                                       const Eigen::VectorXd &control) const
+                                                       const Eigen::VectorXd &control, double time) const
     {
         Eigen::Vector3d mrp = state.segment<3>(STATE_MRP_X);
         Eigen::Vector3d omega = state.segment<3>(STATE_OMEGA_X);
@@ -48,37 +48,37 @@ namespace cddp
     }
 
     Eigen::MatrixXd MrpAttitude::getStateJacobian(const Eigen::VectorXd &state,
-                                                  const Eigen::VectorXd &control) const
+                                                  const Eigen::VectorXd &control, double dt) const
     {
-        return DynamicalSystem::getStateJacobian(state, control); // Use autodiff
+        return DynamicalSystem::getStateJacobian(state, control, dt); // Use autodiff
     }
 
     Eigen::MatrixXd MrpAttitude::getControlJacobian(const Eigen::VectorXd &state,
-                                                    const Eigen::VectorXd &control) const
+                                                    const Eigen::VectorXd &control, double dt) const
     {
-        return DynamicalSystem::getControlJacobian(state, control); // Use autodiff
+        return DynamicalSystem::getControlJacobian(state, control, dt); // Use autodiff
     }
 
     std::vector<Eigen::MatrixXd> MrpAttitude::getStateHessian(const Eigen::VectorXd &state,
-                                                              const Eigen::VectorXd &control) const
+                                                              const Eigen::VectorXd &control, double dt) const
     {
-        return DynamicalSystem::getStateHessian(state, control); // Use autodiff
+        return DynamicalSystem::getStateHessian(state, control, dt); // Use autodiff
     }
 
     std::vector<Eigen::MatrixXd> MrpAttitude::getControlHessian(const Eigen::VectorXd &state,
-                                                                const Eigen::VectorXd &control) const
+                                                                const Eigen::VectorXd &control, double dt) const
     {
-        return DynamicalSystem::getControlHessian(state, control); // Use autodiff
+        return DynamicalSystem::getControlHessian(state, control, dt); // Use autodiff
     }
 
     std::vector<Eigen::MatrixXd> MrpAttitude::getCrossHessian(const Eigen::VectorXd &state,
-                                                              const Eigen::VectorXd &control) const
+                                                              const Eigen::VectorXd &control, double dt) const
     {
-        return DynamicalSystem::getCrossHessian(state, control); // Use autodiff
+        return DynamicalSystem::getCrossHessian(state, control, dt); // Use autodiff
     }
 
     VectorXdual2nd MrpAttitude::getContinuousDynamicsAutodiff(const VectorXdual2nd &state,
-                                                              const VectorXdual2nd &control) const
+                                                              const VectorXdual2nd &control, double time) const
     {
         autodiff::Matrix3dual2nd inertia_ad = this->inertia_.cast<autodiff::dual2nd>();
         autodiff::Matrix3dual2nd inertia_inv_ad = this->inertia_inv_.cast<autodiff::dual2nd>();

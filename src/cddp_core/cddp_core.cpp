@@ -79,13 +79,6 @@ cddp::CDDPSolution CDDP::solve(std::string solver_type) {
             std::cout << "--------------------" << std::endl;
         }
         return solveIPDDP();
-    } else if (solver_type == "FeasibleIPDDP") {
-        if (options_.verbose) {
-            std::cout << "--------------------" << std::endl;
-            std::cout << "Solving with FeasibleIPDDP" << std::endl;
-            std::cout << "--------------------" << std::endl;
-        }
-        return solveFeasibleIPDDP();
     } else if (solver_type == "MSIPDDP") {
         if (options_.verbose) {
             std::cout << "--------------------" << std::endl;

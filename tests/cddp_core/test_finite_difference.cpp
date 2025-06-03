@@ -42,15 +42,15 @@ TEST(JacobianTest , Pendulum) {
     control << 0.0; // No torque initially
     
     // Compute the Jacobians
-    Eigen::MatrixXd A = pendulum.getStateJacobian(state, control);
-    Eigen::MatrixXd B = pendulum.getControlJacobian(state, control);
+    Eigen::MatrixXd A = pendulum.getStateJacobian(state, control, 0.0);
+    Eigen::MatrixXd B = pendulum.getControlJacobian(state, control, 0.0);
 
     // Check the Jacobians
     auto f_A = [&](const Eigen::VectorXd& x) {
-        return pendulum.getContinuousDynamics(x, control);
+        return pendulum.getContinuousDynamics(x, control, 0.0);
     };
     auto f_B = [&](const Eigen::VectorXd& u) {
-        return pendulum.getContinuousDynamics(state, u);
+        return pendulum.getContinuousDynamics(state, u, 0.0);
     };
     Eigen::MatrixXd A_expected = finite_difference_jacobian(f_A, state);
     Eigen::MatrixXd B_expected = finite_difference_jacobian(f_B, control);

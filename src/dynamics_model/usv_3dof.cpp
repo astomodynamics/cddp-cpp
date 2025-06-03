@@ -57,7 +57,8 @@ Usv3Dof::Usv3Dof(double timestep, std::string integration_type)
 
 Eigen::VectorXd Usv3Dof::getContinuousDynamics(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& control,
+    double time) const
 {
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
 
@@ -101,7 +102,7 @@ Eigen::VectorXd Usv3Dof::getContinuousDynamics(
 
 
 VectorXdual2nd Usv3Dof::getContinuousDynamicsAutodiff(
-        const VectorXdual2nd& state, const VectorXdual2nd& control) const
+        const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const
 {
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
     using autodiff::dual2nd; // Use autodiff's dual number type
@@ -150,7 +151,8 @@ VectorXdual2nd Usv3Dof::getContinuousDynamicsAutodiff(
 
 Eigen::MatrixXd Usv3Dof::getStateJacobian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& control,
+    double time) const
 {
     // Use analytical calculation for better accuracy/efficiency
      Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
@@ -210,7 +212,8 @@ Eigen::MatrixXd Usv3Dof::getStateJacobian(
 
 Eigen::MatrixXd Usv3Dof::getControlJacobian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& control,
+    double time) const
 {
     // Use analytical calculation
      Eigen::MatrixXd B = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);
@@ -225,14 +228,16 @@ Eigen::MatrixXd Usv3Dof::getControlJacobian(
 
 std::vector<Eigen::MatrixXd> Usv3Dof::getStateHessian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& control,
+    double dt) const
 {
-     return DynamicalSystem::getStateHessian(state, control);
+     return DynamicalSystem::getStateHessian(state, control, dt);
 }
 
 std::vector<Eigen::MatrixXd> Usv3Dof::getControlHessian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& control,
+    double time) const
 {
     // Dynamics are linear in control (nu_dot = M_inv * (tau - ...)),
     // so the second derivative d^2f / du^2 is zero.
