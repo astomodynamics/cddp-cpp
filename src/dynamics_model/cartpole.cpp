@@ -36,7 +36,7 @@ CartPole::CartPole(double timestep, std::string integration_type,
 }
 
 Eigen::VectorXd CartPole::getContinuousDynamics(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
     
     const double x = state(STATE_X);
@@ -63,7 +63,7 @@ Eigen::VectorXd CartPole::getContinuousDynamics(
 }
 
 cddp::VectorXdual2nd CartPole::getContinuousDynamicsAutodiff(
-    const cddp::VectorXdual2nd& state, const cddp::VectorXdual2nd& control) const {
+    const cddp::VectorXdual2nd& state, const cddp::VectorXdual2nd& control, double time) const {
 
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
 
@@ -93,13 +93,13 @@ cddp::VectorXdual2nd CartPole::getContinuousDynamicsAutodiff(
 }
 
 Eigen::MatrixXd CartPole::getStateJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return DynamicalSystem::getStateJacobian(state, control); // Use autodiff
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
+    return DynamicalSystem::getStateJacobian(state, control, time); // Use autodiff
 }
 
 Eigen::MatrixXd CartPole::getControlJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return DynamicalSystem::getControlJacobian(state, control); // Use autodiff
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
+    return DynamicalSystem::getControlJacobian(state, control, time); // Use autodiff
 }
 
 // Eigen::MatrixXd CartPole::getStateJacobian(
@@ -189,13 +189,13 @@ Eigen::MatrixXd CartPole::getControlJacobian(
 // }
 
 std::vector<Eigen::MatrixXd> CartPole::getStateHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return DynamicalSystem::getStateHessian(state, control); // Use autodiff
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
+    return DynamicalSystem::getStateHessian(state, control, time); // Use autodiff
 }
 
 std::vector<Eigen::MatrixXd> CartPole::getControlHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
-    return DynamicalSystem::getControlHessian(state, control); // Use autodiff
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
+    return DynamicalSystem::getControlHessian(state, control, time); // Use autodiff
 }
 
 } // namespace cddp

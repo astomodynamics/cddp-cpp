@@ -59,12 +59,12 @@ Eigen::MatrixXd computeStateJacobianFD(const cddp::DynamicalSystem& model,
         // Perturb state element i positively
         state_perturbed = state;
         state_perturbed(i) += epsilon;
-        f_plus = model.getContinuousDynamics(state_perturbed, control); // Use continuous dynamics
+        f_plus = model.getContinuousDynamics(state_perturbed, control, 0.0); // Use continuous dynamics
 
         // Perturb state element i negatively
         state_perturbed = state;
         state_perturbed(i) -= epsilon;
-        f_minus = model.getContinuousDynamics(state_perturbed, control); // Use continuous dynamics
+        f_minus = model.getContinuousDynamics(state_perturbed, control, 0.0); // Use continuous dynamics
 
         // Compute finite difference approximation for column i
         A_numerical.col(i) = (f_plus - f_minus) / (2.0 * epsilon);
@@ -87,12 +87,12 @@ Eigen::MatrixXd computeControlJacobianFD(const cddp::DynamicalSystem& model,
         // Perturb control element i positively
         control_perturbed = control;
         control_perturbed(i) += epsilon;
-        f_plus = model.getContinuousDynamics(state, control_perturbed); // Use continuous dynamics
+        f_plus = model.getContinuousDynamics(state, control_perturbed, 0.0); // Use continuous dynamics
 
         // Perturb control element i negatively
         control_perturbed = control;
         control_perturbed(i) -= epsilon;
-        f_minus = model.getContinuousDynamics(state, control_perturbed); // Use continuous dynamics
+        f_minus = model.getContinuousDynamics(state, control_perturbed, 0.0); // Use continuous dynamics
 
         // Compute finite difference approximation for column i
         B_numerical.col(i) = (f_plus - f_minus) / (2.0 * epsilon);
@@ -134,7 +134,7 @@ TEST_F(MrpAttitudeTest, Dimensions) {
 }
 
 TEST_F(MrpAttitudeTest, ContinuousDynamics) {
-    Eigen::VectorXd state_dot = model_->getContinuousDynamics(state_, control_);
+    Eigen::VectorXd state_dot = model_->getContinuousDynamics(state_, control_, 0.0);
 
     // Manual calculation
     Eigen::Vector3d mrp = state_.segment<3>(0);
@@ -157,10 +157,10 @@ TEST_F(MrpAttitudeTest, ContinuousDynamicsAutodiff) {
     VectorXdual2nd control_ad = control_.cast<autodiff::dual2nd>();
 
     // Call autodiff dynamics
-    VectorXdual2nd state_dot_ad = model_->getContinuousDynamicsAutodiff(state_ad, control_ad);
+    VectorXdual2nd state_dot_ad = model_->getContinuousDynamicsAutodiff(state_ad, control_ad, 0.0);
 
     // Get standard dynamics for comparison
-    Eigen::VectorXd state_dot_double = model_->getContinuousDynamics(state_, control_);
+    Eigen::VectorXd state_dot_double = model_->getContinuousDynamics(state_, control_, 0.0);
 
     ASSERT_EQ(state_dot_ad.size(), 6);
     for (int i = 0; i < 6; ++i) {
@@ -170,7 +170,7 @@ TEST_F(MrpAttitudeTest, ContinuousDynamicsAutodiff) {
 
 TEST_F(MrpAttitudeTest, StateJacobianFiniteDifference) {
     // Get analytical Jacobian (calculated via autodiff in the base class)
-    Eigen::MatrixXd A_analytical = model_->getStateJacobian(state_, control_);
+    Eigen::MatrixXd A_analytical = model_->getStateJacobian(state_, control_, 0.0);
 
     // Get numerical Jacobian using finite difference helper
     Eigen::MatrixXd A_numerical = computeStateJacobianFD(*model_, state_, control_);
@@ -186,7 +186,7 @@ TEST_F(MrpAttitudeTest, StateJacobianFiniteDifference) {
 
 TEST_F(MrpAttitudeTest, ControlJacobianFiniteDifference) {
     // Get analytical Jacobian (calculated via autodiff in the base class)
-    Eigen::MatrixXd B_analytical = model_->getControlJacobian(state_, control_);
+    Eigen::MatrixXd B_analytical = model_->getControlJacobian(state_, control_, 0.0);
 
     // Get numerical Jacobian using finite difference helper
     Eigen::MatrixXd B_numerical = computeControlJacobianFD(*model_, state_, control_);
@@ -229,7 +229,7 @@ TEST_F(MrpAttitudeTest, SimulationAndPlotting) {
         omega_z_data.push_back(current_state(MrpAttitude::STATE_OMEGA_Z));
 
         // Get next state
-        current_state = model_->getDiscreteDynamics(current_state, constant_control);
+        current_state = model_->getDiscreteDynamics(current_state, constant_control, 0.0);
     }
 
     // Add final state

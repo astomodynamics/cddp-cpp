@@ -135,7 +135,7 @@ int main() {
     for (size_t t = 0; t < horizon; t++) {
         cost = cddp_solver.getObjective().running_cost(X[t], U[t], t);
         J += cost;
-        X[t + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t]);
+        X[t + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t], t * timestep);
     }
     J += cddp_solver.getObjective().terminal_cost(X.back());
     std::cout << "Initial state: " << X[0].transpose() << std::endl;

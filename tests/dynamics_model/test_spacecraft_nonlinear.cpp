@@ -74,7 +74,7 @@ TEST(SpacecraftNonlinearTest, DiscreteDynamics) {
         theta_data.push_back(state[7]);
 
         // Compute the next state
-        state = spacecraft.getDiscreteDynamics(state, control);
+        state = spacecraft.getDiscreteDynamics(state, control, 0.0);
     }
 }
 

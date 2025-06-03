@@ -49,7 +49,7 @@ TEST(TestSpacecraftROE, BasicQNSROEPropagation)
     for (int i = 0; i < num_steps; ++i)
     {
         double t = i * dt;
-        x_roe = qnsRoeModel.getDiscreteDynamics(x_roe, Eigen::VectorXd::Zero(SpacecraftROE::CONTROL_DIM));
+        x_roe = qnsRoeModel.getDiscreteDynamics(x_roe, Eigen::VectorXd::Zero(SpacecraftROE::CONTROL_DIM), 0.0);
         times.push_back(t);
         states.push_back(x_roe);
     }

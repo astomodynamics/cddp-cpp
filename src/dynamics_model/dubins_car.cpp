@@ -31,7 +31,8 @@ DubinsCar::DubinsCar(double speed,
 
 Eigen::VectorXd DubinsCar::getContinuousDynamics(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& control,
+    double time) const
 {
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
 
@@ -50,7 +51,7 @@ Eigen::VectorXd DubinsCar::getContinuousDynamics(
 }
 
 cddp::VectorXdual2nd DubinsCar::getContinuousDynamicsAutodiff(
-    const cddp::VectorXdual2nd& state, const cddp::VectorXdual2nd& control) const {
+    const cddp::VectorXdual2nd& state, const cddp::VectorXdual2nd& control, double time) const {
 
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
 
@@ -70,7 +71,8 @@ cddp::VectorXdual2nd DubinsCar::getContinuousDynamicsAutodiff(
 
 Eigen::MatrixXd DubinsCar::getStateJacobian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& control,
+    double time) const
 {
     (void)control; // Not used in partials wrt. state for linear terms
     Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
@@ -84,7 +86,8 @@ Eigen::MatrixXd DubinsCar::getStateJacobian(
 
 Eigen::MatrixXd DubinsCar::getControlJacobian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& control,
+    double time) const
 {
     (void)state;  
     (void)control; 
@@ -100,7 +103,8 @@ Eigen::MatrixXd DubinsCar::getControlJacobian(
 
 std::vector<Eigen::MatrixXd> DubinsCar::getStateHessian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& control,
+    double time) const
 {
     (void)control; // Not used for state Hessian
     
@@ -126,7 +130,8 @@ std::vector<Eigen::MatrixXd> DubinsCar::getStateHessian(
 
 std::vector<Eigen::MatrixXd> DubinsCar::getControlHessian(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& control,
+    double time) const
 {
     (void)state;
     (void)control;

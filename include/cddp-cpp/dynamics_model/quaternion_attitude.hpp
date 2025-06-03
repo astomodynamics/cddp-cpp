@@ -60,56 +60,85 @@ namespace cddp
          * Control vector: [tau_x, tau_y, tau_z] (applied torques)
          * @param state Current state vector
          * @param control Current control input
+         * @param time Current time
          * @return State derivative vector
          */
         Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd &state,
-                                              const Eigen::VectorXd &control) const override;
+                                              const Eigen::VectorXd &control, double time) const override;
 
         /**
          * Computes the discrete-time dynamics using the specified integration method
+         * @param state Current state vector
+         * @param control Current control input
+         * @param time Current time
+         * @return Next state vector
          */
         Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd &state,
-                                            const Eigen::VectorXd &control) const override
+                                            const Eigen::VectorXd &control, double time) const override
         {
-            return DynamicalSystem::getDiscreteDynamics(state, control);
+            return DynamicalSystem::getDiscreteDynamics(state, control, time);
         }
 
         /**
          * Computes the Jacobian of the dynamics with respect to the state using Autodiff.
+         * @param state Current state vector
+         * @param control Current control input
+         * @param time Current time
+         * @return State Jacobian matrix
          */
         Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state,
-                                         const Eigen::VectorXd &control) const override;
+                                         const Eigen::VectorXd &control, double time) const override;
 
         /**
          * Computes the Jacobian of the dynamics with respect to the control input using Autodiff.
+         * @param state Current state vector
+         * @param control Current control input
+         * @param time Current time
+         * @return Control Jacobian matrix
          */
         Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd &state,
-                                           const Eigen::VectorXd &control) const override;
+                                           const Eigen::VectorXd &control, double time) const override;
 
         /**
          * Computes the Hessian of the dynamics with respect to the state using Autodiff.
+         * @param state Current state vector
+         * @param control Current control input
+         * @param time Current time
+         * @return State Hessian matrix
          */
         std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state,
-                                                     const Eigen::VectorXd &control) const override;
+                                                     const Eigen::VectorXd &control, double time) const override;
 
         /**
          * Computes the Hessian of the dynamics with respect to the control using Autodiff.
+         * @param state Current state vector
+         * @param control Current control input
+         * @param time Current time
+         * @return Control Hessian matrix
          */
         std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd &state,
-                                                       const Eigen::VectorXd &control) const override;
+                                                       const Eigen::VectorXd &control, double time) const override;
 
         /**
          * Computes the cross Hessian of the dynamics w.r.t. state and control using Autodiff.
+         * @param state Current state vector
+         * @param control Current control input
+         * @param time Current time
+         * @return Cross Hessian matrix
          */
         std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state,
-                                                     const Eigen::VectorXd &control) const override;
+                                                     const Eigen::VectorXd &control, double time) const override;
 
         /**
          * Computes the continuous-time dynamics using Autodiff types.
          * Used internally for calculating Jacobians and Hessians.
+         * @param state Current state vector
+         * @param control Current control input
+         * @param time Current time
+         * @return State derivative vector
          */
         VectorXdual2nd getContinuousDynamicsAutodiff(const VectorXdual2nd &state,
-                                                     const VectorXdual2nd &control) const override;
+                                                     const VectorXdual2nd &control, double time) const override;
 
     private:
         Eigen::Matrix3d inertia_;     // Inertia matrix

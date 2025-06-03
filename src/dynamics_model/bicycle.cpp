@@ -27,7 +27,7 @@ Bicycle::Bicycle(double timestep, double wheelbase, std::string integration_type
 }
 
 Eigen::VectorXd Bicycle::getContinuousDynamics(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
     
@@ -49,7 +49,7 @@ Eigen::VectorXd Bicycle::getContinuousDynamics(
 }
 
 VectorXdual2nd Bicycle::getContinuousDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {
 
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
 
@@ -71,7 +71,7 @@ VectorXdual2nd Bicycle::getContinuousDynamicsAutodiff(
 }
 
 Eigen::MatrixXd Bicycle::getStateJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
     
@@ -100,7 +100,7 @@ Eigen::MatrixXd Bicycle::getStateJacobian(
 }
 
 Eigen::MatrixXd Bicycle::getControlJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);
     
@@ -121,7 +121,7 @@ Eigen::MatrixXd Bicycle::getControlJacobian(
 }
 
 std::vector<Eigen::MatrixXd> Bicycle::getStateHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
@@ -151,7 +151,7 @@ std::vector<Eigen::MatrixXd> Bicycle::getStateHessian(
 }
 
 std::vector<Eigen::MatrixXd> Bicycle::getControlHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {

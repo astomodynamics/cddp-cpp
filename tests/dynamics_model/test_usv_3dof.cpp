@@ -53,33 +53,33 @@ TEST(Usv3DofTest, DynamicsAndDerivatives) {
     ASSERT_EQ(usv_model.getIntegrationType(), integration_type);
 
     // --- Dynamics Checks ---
-    Eigen::VectorXd x_dot = usv_model.getContinuousDynamics(x0, u0);
+    Eigen::VectorXd x_dot = usv_model.getContinuousDynamics(x0, u0, 0.0);
     ASSERT_EQ(x_dot.size(), 6);
 
-    Eigen::VectorXd x1 = usv_model.getDiscreteDynamics(x0, u0);
+    Eigen::VectorXd x1 = usv_model.getDiscreteDynamics(x0, u0, 0.0);
     ASSERT_EQ(x1.size(), 6);
     // Basic sanity check: state should change
     ASSERT_FALSE(x1.isApprox(x0));
 
     // --- Jacobian Checks ---
-    Eigen::MatrixXd A_analytical = usv_model.getStateJacobian(x0, u0);
+    Eigen::MatrixXd A_analytical = usv_model.getStateJacobian(x0, u0, 0.0);
     ASSERT_EQ(A_analytical.rows(), 6);
     ASSERT_EQ(A_analytical.cols(), 6);
 
-    Eigen::MatrixXd B_analytical = usv_model.getControlJacobian(x0, u0);
+    Eigen::MatrixXd B_analytical = usv_model.getControlJacobian(x0, u0, 0.0);
     ASSERT_EQ(B_analytical.rows(), 6);
     ASSERT_EQ(B_analytical.cols(), 3);
 
 
     // --- Hessian Checks ---
-    std::vector<Eigen::MatrixXd> stateHessian = usv_model.getStateHessian(x0, u0);
+    std::vector<Eigen::MatrixXd> stateHessian = usv_model.getStateHessian(x0, u0, 0.0);
     ASSERT_EQ(stateHessian.size(), 6);
     for(const auto& Hxx_i : stateHessian) {
         ASSERT_EQ(Hxx_i.rows(), 6);
         ASSERT_EQ(Hxx_i.cols(), 6);
     }
 
-    std::vector<Eigen::MatrixXd> controlHessian = usv_model.getControlHessian(x0, u0);
+    std::vector<Eigen::MatrixXd> controlHessian = usv_model.getControlHessian(x0, u0, 0.0);
     ASSERT_EQ(controlHessian.size(), 6); // One matrix for each state dim derivative
     for(const auto& Huu_i : controlHessian) {
         ASSERT_EQ(Huu_i.rows(), 3);

@@ -45,60 +45,73 @@ public:
      * Control vector: [omega] (steering angle rate)
      * @param state Current state vector
      * @param control Current control input
+     * @param time Current time
      * @return State derivative vector
      */
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state, 
-                                         const Eigen::VectorXd& control) const override;
+                                         const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the discrete-time dynamics using the specified integration method
      * @param state Current state vector
      * @param control Current control input
+     * @param time Current time
      * @return Next state vector
      */
     Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state, 
-                                       const Eigen::VectorXd& control) const override {
-        return DynamicalSystem::getDiscreteDynamics(state, control);
+                                       const Eigen::VectorXd& control, double time) const override {
+        return DynamicalSystem::getDiscreteDynamics(state, control, time);
     }
 
     /**
      * @brief Computes the Jacobian of the dynamics with respect to the state
      * @param state Current state vector
      * @param control Current control input
+     * @param time Current time
      * @return State Jacobian matrix (A matrix)
      */
     Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state, 
-                                    const Eigen::VectorXd& control) const override;
+                                    const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the Jacobian of the dynamics with respect to the control input
      * @param state Current state vector
      * @param control Current control input
+     * @param time Current time
      * @return Control Jacobian matrix (B matrix)
      */
     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state, 
-                                      const Eigen::VectorXd& control) const override;
+                                      const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the Hessian of the dynamics with respect to the state
      * @param state Current state vector
      * @param control Current control input
+     * @param time Current time
      * @return Vector of state Hessian matrices, one per state dimension
      */
     std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state, 
-                                   const Eigen::VectorXd& control) const override;
+                                   const Eigen::VectorXd& control, double time) const override;
 
     /**
      * @brief Computes the Hessian of the dynamics with respect to the control
      * @param state Current state vector
      * @param control Current control input
+     * @param time Current time
      * @return Vector of control Hessian matrices, one per state dimension
      */
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state, 
-                                     const Eigen::VectorXd& control) const override;
+                                     const Eigen::VectorXd& control, double time) const override;
 
+    /**
+     * @brief Computes the continuous-time dynamics of the Unicycle model using autodiff
+     * @param state Current state vector
+     * @param control Current control input
+     * @param time Current time
+     * @return State derivative vector
+     */
     VectorXdual2nd getContinuousDynamicsAutodiff(
-        const VectorXdual2nd& state, const VectorXdual2nd& control) const override;
+        const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const override;
 
 private:
     // State indices

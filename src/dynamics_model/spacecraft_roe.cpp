@@ -35,7 +35,7 @@ namespace cddp
     //-----------------------------------------------------------------------------
     Eigen::VectorXd SpacecraftROE::getContinuousDynamics(
         const Eigen::VectorXd &state,
-        const Eigen::VectorXd &control) const
+        const Eigen::VectorXd &control, double time) const
     {
         /**
          * Based on the linear QNSROE model:
@@ -134,7 +134,8 @@ namespace cddp
 
     //-----------------------------------------------------------------------------
     Eigen::MatrixXd SpacecraftROE::getStateJacobian(
-        const Eigen::VectorXd &state, const Eigen::VectorXd &control) const
+        const Eigen::VectorXd &state,
+        const Eigen::VectorXd &control, double time) const
     {
 
         // Use autodiff to compute state Jacobian
@@ -151,7 +152,8 @@ namespace cddp
 
     //-----------------------------------------------------------------------------
     Eigen::MatrixXd SpacecraftROE::getControlJacobian(
-        const Eigen::VectorXd &state, const Eigen::VectorXd &control) const
+        const Eigen::VectorXd &state,
+        const Eigen::VectorXd &control, double time) const
     {
 
         // Use autodiff to compute control Jacobian
@@ -169,7 +171,7 @@ namespace cddp
     //-----------------------------------------------------------------------------
     std::vector<Eigen::MatrixXd> SpacecraftROE::getStateHessian(
         const Eigen::VectorXd & /*state*/,
-        const Eigen::VectorXd & /*control*/) const
+        const Eigen::VectorXd & /*control*/, double time) const
     {
         // For this linear(ish) model, second derivatives wrt state are zero.
         std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
@@ -183,7 +185,7 @@ namespace cddp
     //-----------------------------------------------------------------------------
     std::vector<Eigen::MatrixXd> SpacecraftROE::getControlHessian(
         const Eigen::VectorXd & /*state*/,
-        const Eigen::VectorXd & /*control*/) const
+        const Eigen::VectorXd & /*control*/, double time) const
     {
         // Similarly, second derivatives wrt control are zero for a linear system.
         std::vector<Eigen::MatrixXd> hessians(STATE_DIM);

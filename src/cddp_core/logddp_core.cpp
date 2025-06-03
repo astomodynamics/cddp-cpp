@@ -427,17 +427,19 @@ namespace cddp
 
             // Barrier update logic
             kkt_error_ = std::max(optimality_gap_, constraint_violation_);
-            if (forward_pass_success && kkt_error_ < options_.grad_tolerance) {
+            if (forward_pass_success && kkt_error_ < options_.grad_tolerance)
+            {
                 // Dramatically decrease mu if optimization is going well
                 mu_ = std::max(mu_ * 0.1, options_.barrier_tolerance);
                 resetLogDDPFilter();
-            } else {
+            }
+            else
+            {
                 // Normal decrease rate
                 mu_ = std::max(options_.grad_tolerance / 10.0, std::min(options_.barrier_update_factor * mu_, std::pow(mu_, options_.barrier_update_power)));
                 resetLogDDPFilter();
             }
-            
-            
+
             relaxed_log_barrier_->setBarrierCoeff(mu_);
             relaxed_log_barrier_->setRelaxationDelta(relaxation_delta_);
         }
@@ -479,7 +481,7 @@ namespace cddp
             const Eigen::VectorXd &u = U_[t];
 
             // Dynamics Jacobians
-            const auto [Fx, Fu] = system_->getJacobians(x, u);
+            const auto [Fx, Fu] = system_->getJacobians(x, u, t * timestep_);
             Fx_[t] = Fx;
             Fu_[t] = Fu;
 
@@ -490,7 +492,7 @@ namespace cddp
             // Dynamics Hessians
             if (!options_.is_ilqr)
             {
-                const auto hessians = system_->getHessians(x, u);
+                const auto hessians = system_->getHessians(x, u, t * timestep_);
                 Fxx_[t] = std::get<0>(hessians);
                 Fuu_[t] = std::get<1>(hessians);
                 Fux_[t] = std::get<2>(hessians);
@@ -550,8 +552,8 @@ namespace cddp
             Q_uu_reg.diagonal().array() += regularization_control_;
             Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
-            Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg);
-            if (llt.info() != Eigen::Success)
+            Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
+            if (ldlt.info() != Eigen::Success)
             {
                 if (options_.debug)
                 {
@@ -560,21 +562,34 @@ namespace cddp
                 return false;
             }
 
-            // Solve for gains k_u, K_u
-            const Eigen::MatrixXd &H = Q_uu_reg.inverse();
-            Eigen::VectorXd k = -H * Q_u;
-            Eigen::MatrixXd K = -H * Q_ux;
+            Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
+            bigRHS.col(0) = Q_u;
+            Eigen::MatrixXd M = Q_ux;
+            for (int col = 0; col < state_dim; col++)
+            {
+                bigRHS.col(col + 1) = M.col(col);
+            }
 
-            // Store feedforward and feedback gain
-            k_u_[t] = k;
-            K_u_[t] = K;
+            Eigen::MatrixXd kK = -ldlt.solve(bigRHS);
+
+            // parse out feedforward (ku) and feedback (Ku)
+            Eigen::VectorXd k_u = kK.col(0); // dimension [control_dim]
+            Eigen::MatrixXd K_u(control_dim, state_dim);
+            for (int col = 0; col < state_dim; col++)
+            {
+                K_u.col(col) = kK.col(col + 1);
+            }
+
+            // Save gains
+            k_u_[t] = k_u;
+            K_u_[t] = K_u;
 
             // Compute value function approximation
             Eigen::Vector2d dV_step;
-            dV_step << Q_u.dot(k), 0.5 * k.dot(Q_uu * k);
+            dV_step << Q_u.dot(k_u), 0.5 * k_u.dot(Q_uu * k_u);
             dV_ = dV_ + dV_step;
-            V_x = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
-            V_xx = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
+            V_x = Q_x + K_u.transpose() * Q_uu * k_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_u;
+            V_xx = Q_xx + K_u.transpose() * Q_uu * K_u + Q_ux.transpose() * K_u + K_u.transpose() * Q_ux;
             V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize Hessian
 
             // Compute optimality gap (Inf-norm) for convergence check
@@ -639,7 +654,7 @@ namespace cddp
 
             if (options_.ms_rollout_type == "nonlinear" || options_.ms_rollout_type == "hybrid")
             {
-                dynamics_eval_for_F_new_t = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                dynamics_eval_for_F_new_t = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
             }
             else // options_.ms_rollout_type == "linear"
             {
@@ -797,7 +812,7 @@ namespace cddp
             cost += objective_->running_cost(x_t, u_t, t);
 
             // Compute defect
-            Eigen::VectorXd f = system_->getDiscreteDynamics(x_t, u_t);
+            Eigen::VectorXd f = system_->getDiscreteDynamics(x_t, u_t, t * timestep_);
             F_[t] = f;
         }
 

@@ -129,7 +129,7 @@ namespace cddp
                 {
                     // Initialize s_i = max(options.slack_scale, -g_i) to ensure s_i > 0
                     s_init_t(i) = std::max(options_.slack_scale, -g_at_xt_ut(i));
-                
+
                     // Initialize y_i = heuristic_initial_mu / s_i to satisfy s_i * y_i = heuristic_initial_mu
                     if (s_init_t(i) < 1e-12)
                     { // Safeguard
@@ -140,7 +140,7 @@ namespace cddp
                         y_init_t(i) = heuristic_initial_mu / s_init_t(i);
                     }
                     // Ensure y_i is also not too small
-                    y_init_t(i) = std::max(options_.dual_scale * 0.1, std::min(y_init_t(i), options_.dual_scale * 10.0)); // 10% of dual_scale 
+                    y_init_t(i) = std::max(options_.dual_scale * 0.01, std::min(y_init_t(i), options_.dual_scale * 100.0)); // 1% and 100x of dual_scale
                 }
                 Y_[constraint_name][t] = y_init_t;
                 S_[constraint_name][t] = s_init_t;
@@ -152,9 +152,6 @@ namespace cddp
                 K_s_[constraint_name][t].setZero(dual_dim, state_dim);
             }
         }
-
-        // Initialize cost
-        J_ = objective_->evaluate(X_, U_);
 
         // Initialize line search parameters
         alphas_.clear();
@@ -388,6 +385,7 @@ namespace cddp
                 dL_ = L_ - best_result.lagrangian;
                 L_ = best_result.lagrangian;
                 alpha_ = best_result.alpha;
+                constraint_violation_ = best_result.constraint_violation;
 
                 solution.cost_sequence.push_back(J_);
                 solution.lagrangian_sequence.push_back(L_);
@@ -518,7 +516,7 @@ namespace cddp
             {
                 const Eigen::VectorXd &x = X_[t];
                 const Eigen::VectorXd &u = U_[t];
-                const auto [Fx, Fu] = system_->getJacobians(x, u);
+                const auto [Fx, Fu] = system_->getJacobians(x, u, t * timestep_);
                 Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx;
                 Eigen::MatrixXd B = timestep_ * Fu;
 
@@ -526,7 +524,7 @@ namespace cddp
                 std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
                 if (!options_.is_ilqr)
                 {
-                    const auto hessians = system_->getHessians(x, u);
+                    const auto hessians = system_->getHessians(x, u, t * timestep_);
                     Fxx = std::get<0>(hessians);
                     Fuu = std::get<1>(hessians);
                     Fux = std::get<2>(hessians);
@@ -561,8 +559,8 @@ namespace cddp
                 Q_uu_reg.diagonal().array() += regularization_control_;
                 Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
-                Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg);
-                if (llt.info() != Eigen::Success)
+                Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
+                if (ldlt.info() != Eigen::Success)
                 {
                     if (options_.debug)
                     {
@@ -571,8 +569,8 @@ namespace cddp
                     return false;
                 }
 
-                Eigen::VectorXd k_u = -llt.solve(Q_u);
-                Eigen::MatrixXd K_u = -llt.solve(Q_ux);
+                Eigen::VectorXd k_u = -ldlt.solve(Q_u);
+                Eigen::MatrixXd K_u = -ldlt.solve(Q_ux);
                 k_u_[t] = k_u;
                 K_u_[t] = K_u;
 
@@ -610,13 +608,13 @@ namespace cddp
                 const Eigen::VectorXd &u = U_[t];
 
                 // Continuous dynamics
-                const auto [Fx, Fu] = system_->getJacobians(x, u);
+                const auto [Fx, Fu] = system_->getJacobians(x, u, t * timestep_);
 
                 // Get dynamics hessians if not using iLQR
                 std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
                 if (!options_.is_ilqr)
                 {
-                    const auto hessians = system_->getHessians(x, u);
+                    const auto hessians = system_->getHessians(x, u, t * timestep_);
                     Fxx = std::get<0>(hessians);
                     Fuu = std::get<1>(hessians);
                     Fux = std::get<2>(hessians);
@@ -660,7 +658,8 @@ namespace cddp
                     Q_yu.block(offset, 0, dual_dim, control_dim) = g_u;
 
                     // // Get constraint Hessians if not using iLQR
-                    // if (!options_.is_ilqr) // Or a new option specific to constraint Hessians
+                    // // Or a new option specific to constraint Hessians
+                    // if (!options_.is_ilqr)
                     // {
                     //     const auto constraint_hessians = constraint->getHessians(x, u);
                     //     const auto &g_xx_list = std::get<0>(constraint_hessians); // std::vector<Eigen::MatrixXd>
@@ -730,8 +729,8 @@ namespace cddp
                 Q_uu_reg.diagonal().array() += regularization_control_;
                 Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
-                Eigen::LLT<Eigen::MatrixXd> llt(Q_uu_reg + Q_yu.transpose() * YSinv * Q_yu);
-                if (llt.info() != Eigen::Success)
+                Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg + Q_yu.transpose() * YSinv * Q_yu);
+                if (ldlt.info() != Eigen::Success)
                 {
                     if (options_.debug)
                     {
@@ -749,9 +748,7 @@ namespace cddp
                     bigRHS.col(col + 1) = M.col(col);
                 }
 
-                Eigen::MatrixXd R = llt.matrixU();
-                Eigen::MatrixXd z = R.triangularView<Eigen::Upper>().solve(bigRHS);
-                Eigen::MatrixXd kK = -R.transpose().triangularView<Eigen::Lower>().solve(z);
+                Eigen::MatrixXd kK = -ldlt.solve(bigRHS);
 
                 // parse out feedforward (ku) and feedback (Ku)
                 Eigen::VectorXd k_u = kK.col(0); // dimension [control_dim]
@@ -866,7 +863,7 @@ namespace cddp
                 U_new[t] = U_[t] + alpha * k_u_[t] + K_u_[t] * (X_new[t] - X_[t]);
 
                 // Propagate dynamics
-                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
 
                 // Accumulate stage cost
                 cost_new += objective_->running_cost(X_new[t], U_new[t], t);
@@ -925,7 +922,7 @@ namespace cddp
                 U_new[t] = U_[t] + alpha_s * k_u_[t] + K_u_[t] * delta_x_k;
 
                 // Propagate dynamics
-                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                X_new[t + 1] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
             }
 
             if (!s_trajectory_feasible)
@@ -1021,24 +1018,34 @@ namespace cddp
             bool filter_acceptance = false;
             double expected_improvement = alpha * dV_(0);
 
-            if (constraint_violation_new > options_.filter_maximum_violation) {
-                if (constraint_violation_new < options_.filter_acceptance * constraint_violation_old) {
+            if (constraint_violation_new > options_.filter_maximum_violation)
+            {
+                if (constraint_violation_new < options_.filter_acceptance * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
-                else {
+                else
+                {
                     filter_acceptance = false;
                 }
-            } else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0) {
-                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement) {
+            }
+            else if (std::max(constraint_violation_new, constraint_violation_old) < options_.filter_minimum_violation && expected_improvement < 0)
+            {
+                if (log_cost_new < log_cost_old + options_.armijo_constant * expected_improvement)
+                {
                     filter_acceptance = true;
                 }
-            } else {
-                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_new || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old) {
+            }
+            else
+            {
+                if (log_cost_new < log_cost_old - options_.filter_merit_acceptance * constraint_violation_new || constraint_violation_new < (1 - options_.filter_violation_acceptance) * constraint_violation_old)
+                {
                     filter_acceptance = true;
                 }
             }
 
-            if (filter_acceptance) {
+            if (filter_acceptance)
+            {
                 // Update the result with the new trajectories and metrics.
                 result.success = true;
                 result.state_sequence = X_new;
@@ -1059,8 +1066,7 @@ namespace cddp
         // Evaluate log-barrier cost
         L_ = J_; // Assume J_ is already computed
         double rp_err = 0.0;
-        // filter_ = {};
-        // # TODO: accelerate this process
+
         for (int t = 0; t < horizon_; ++t)
         {
             for (const auto &cKV : constraint_set_)
@@ -1110,7 +1116,7 @@ namespace cddp
             }
 
             // Compute the next state using the system dynamics.
-            X_[t + 1] = system_->getDiscreteDynamics(x, u);
+            X_[t + 1] = system_->getDiscreteDynamics(x, u, t * timestep_);
         }
 
         // Add terminal cost.

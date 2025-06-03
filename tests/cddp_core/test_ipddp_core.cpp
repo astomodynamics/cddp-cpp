@@ -93,7 +93,7 @@ TEST(IPDDPTest, Solve) {
     X[0] = initial_state;
     for (int i = 0; i < horizon; ++i) {
       U[i] << 0.01, 0.01;
-      X[i+1] = system->getDiscreteDynamics(X[i], U[i]);
+      X[i+1] = system->getDiscreteDynamics(X[i], U[i], i * timestep);
     }
     cddp_solver.setInitialTrajectory(X, U);
 

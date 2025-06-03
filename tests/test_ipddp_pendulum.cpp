@@ -85,7 +85,7 @@ TEST(IPDDPPendulumTest, Solve) {
     double J = 0.0;
     for (size_t t = 0; t < horizon; t++) {
         J += cddp_solver.getObjective().running_cost(X[t], U[t], t);
-        X[t + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t]);
+        X[t + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t], t * timestep);
     }
     J += cddp_solver.getObjective().terminal_cost(X.back());
     std::cout << "Initial cost: " << J << std::endl;

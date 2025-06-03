@@ -115,9 +115,10 @@ struct CDDPOptions {
     int ms_segment_length = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
     std::string ms_rollout_type = "hybrid"; // Rollout type: ["linear", "nonlinear", "hybrid"]
     double ms_defect_tolerance_for_single_shooting = 1e-3; // Defect norm tolerance to switch to single shooting at segment boundaries
-    double barrier_update_factor = 0.2; // Factor for barrier update: optimality_gap <= barrier_update_factor * mu; [0.0, 1.0]
+    double barrier_update_factor = 0.5; // Factor for barrier update: optimality_gap <= barrier_update_factor * mu; [0.0, 1.0]
     double barrier_update_power = 1.2; // Power for barrier update: mu_new = mu * barrier_update_power; [1.0, 2.0]
     double minimum_fraction_to_boundary = 0.99; // Minimum fraction to boundary for barrier update: tau = std::max(0.99, 1.0 - mu_);
+    bool controlled_rollout = false; // Use controlled rollout for MSIPDDP
 };
 
 struct CDDPSolution {
@@ -126,7 +127,7 @@ struct CDDPSolution {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> dual_sequence;
     std::vector<Eigen::VectorXd> slack_sequence;
-    std::vector<Eigen::VectorXd> lambda_sequence;
+    std::vector<Eigen::VectorXd> costate_sequence;
     std::vector<double> cost_sequence;
     std::vector<double> lagrangian_sequence;
     std::vector<Eigen::MatrixXd> control_gain;
@@ -143,7 +144,7 @@ struct ForwardPassResult {
     std::vector<Eigen::VectorXd> state_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
     std::vector<Eigen::VectorXd> dynamics_sequence;
-    std::vector<Eigen::VectorXd>  lambda_sequence;
+    std::vector<Eigen::VectorXd>  costate_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
     std::map<std::string, std::vector<Eigen::VectorXd>>  constraint_sequence;
