@@ -68,7 +68,7 @@ endif()
 # If you want to install LibTorch, please follow the instructions at:
 # https://pytorch.org/
 # $ sudo cp -r libtorch /usr/local/lib/
-option(CDDP_CPP_TORCH "Whether to use LibTorch" ON)
+option(CDDP_CPP_TORCH "Whether to use LibTorch" OFF)
 option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" OFF)
 set(LIBTORCH_DIR /usr/local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
