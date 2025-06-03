@@ -76,11 +76,23 @@ target_link_libraries(cddp_unicycle_safe_comparison cddp)
 add_executable(cddp_spacecraft_linear_docking cddp_spacecraft_linear_docking.cpp)
 target_link_libraries(cddp_spacecraft_linear_docking cddp)
 
+add_executable(cddp_spacecraft_linear_rpo cddp_spacecraft_linear_rpo.cpp)
+target_link_libraries(cddp_spacecraft_linear_rpo cddp)
+
+add_executable(cddp_spacecraft_nonlinear_rpo cddp_spacecraft_nonlinear_rpo.cpp)
+target_link_libraries(cddp_spacecraft_nonlinear_rpo cddp)
+
 add_executable(cddp_spacecraft_rpo cddp_spacecraft_rpo.cpp)
 target_link_libraries(cddp_spacecraft_rpo cddp)
 
+add_executable(cddp_spacecraft_rpo_mc cddp_spacecraft_rpo_mc.cpp)
+target_link_libraries(cddp_spacecraft_rpo_mc cddp)
+
 add_executable(cddp_spacecraft_rpo_fuel cddp_spacecraft_rpo_fuel.cpp)
 target_link_libraries(cddp_spacecraft_rpo_fuel cddp)
+
+add_executable(cddp_spacecraft_roe_rpo cddp_spacecraft_roe_rpo.cpp)
+target_link_libraries(cddp_spacecraft_roe_rpo cddp)
 
 # add_executable(mpc_hcw mpc_hcw.cpp)
 # target_link_libraries(mpc_hcw cddp)

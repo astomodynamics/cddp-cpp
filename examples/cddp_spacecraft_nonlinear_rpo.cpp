@@ -37,6 +37,11 @@ namespace cddp
               weight_running_control_(weight_running_control),
               weight_terminal_state_(weight_terminal_state)
         {
+            Qf_ = Eigen::MatrixXd::Identity(goal_state.size(), goal_state.size());
+            Qf_(6, 6) = 0.0;
+            Qf_(7, 7) = 0.0;
+            Qf_(8, 8) = 0.0;
+            Qf_(9, 9) = 0.0;
         }
 
         double running_cost(const Eigen::VectorXd &state,
@@ -51,7 +56,7 @@ namespace cddp
         double terminal_cost(const Eigen::VectorXd &final_state) const override
         {
             Eigen::VectorXd state_error = final_state - goal_state_;
-            return weight_terminal_state_ * state_error.squaredNorm();
+            return weight_terminal_state_ * state_error.transpose() * Qf_ * state_error;
         }
 
         // Analytical Gradients
@@ -73,7 +78,7 @@ namespace cddp
         Eigen::VectorXd getFinalCostGradient(const Eigen::VectorXd &final_state) const override
         {
             Eigen::VectorXd state_error = final_state - goal_state_;
-            return 2.0 * weight_terminal_state_ * state_error;
+            return 2.0 * weight_terminal_state_ * Qf_ * state_error;
         }
 
         // Analytical Hessians
@@ -103,7 +108,7 @@ namespace cddp
         Eigen::MatrixXd getFinalCostHessian(const Eigen::VectorXd & /*final_state*/) const override
         {
             int state_dim = goal_state_.size();
-            return 2.0 * weight_terminal_state_ * Eigen::MatrixXd::Identity(state_dim, state_dim);
+            return 2.0 * weight_terminal_state_ * Qf_;
         }
 
     private:
@@ -111,6 +116,7 @@ namespace cddp
         double weight_running_control_;
         double weight_terminal_state_;
         double epsilon_ = 1e-5;
+        Eigen::MatrixXd Qf_;
     };
 } // namespace cddp
 
@@ -123,20 +129,25 @@ int main()
     int horizon = 500;                  // Optimization horizon length
     double time_horizon = 10000.0;        // Time horizon for optimization [s]
     double dt = time_horizon / horizon; // Time step for optimization
-    int state_dim = 6;
+    int state_dim = 10;
     int control_dim = 3;
 
     // HCW parameters
-    double mean_motion = 0.001107;
+    double gravitational_parameter = 3.9860044e14;
+    double ref_radius = (6371.0 + 500.0) * 1e3;
+    double ref_period = 2 * M_PI * sqrt(pow(ref_radius, 3) / 3.9860044e14);
+    double ref_mean_motion = 2 * M_PI / ref_period;
     double mass = 100.0;
+    double nominal_radius = 50.0;
+    std::string integration_type = "rk4";
 
-    // Initial state (v-bar hold at 1km)
+    // Initial state
     Eigen::VectorXd initial_state(state_dim);
-    initial_state << 0.0, -1000.0, 0.0, 0.0, 0.0, 0.0;
+    initial_state << 0.0, -1000.0, 0.0, 0.0, 0.0, 0.0, ref_radius, 0.0, 0.0, ref_mean_motion;
 
-    // Final (reference/goal) state (r-bar )
+    // Final (reference/goal) state
     Eigen::VectorXd goal_state(state_dim);
-    goal_state << -100.0, 0.0, 0.0, 0.0, 2*mean_motion*100.0, 0.0;
+    goal_state << -100.0, 0.0, 0.0, 0.0, 2*ref_mean_motion*100.0, 0.0, ref_radius, 0.0, 0.0, ref_mean_motion; 
 
     // Input constraints
     double u_max = 0.05;  // for each dimension
@@ -146,11 +157,11 @@ int main()
 
     // Cost weighting for SumOfTwoNormObjective
     double weight_running_control = 1.0;  // Example value
-    double weight_terminal_state = 2000.0; // Example value
+    double weight_terminal_state = 1000.0; // Example value
 
-    // Create the HCW system for optimization
-    std::unique_ptr<cddp::DynamicalSystem> hcw_system =
-        std::make_unique<HCW>(dt, mean_motion, mass, "euler");
+    // Create the SpacecraftNonlinear system for optimization
+    std::unique_ptr<cddp::DynamicalSystem> spacecraft_system =
+        std::make_unique<SpacecraftNonlinear>(dt, integration_type, mass, 1.0, 1.0, gravitational_parameter);
 
     // Build cost objective
     auto objective = std::make_unique<cddp::SumOfTwoNormObjective>(
@@ -161,7 +172,7 @@ int main()
 
     // Setup IPDDP solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 1000; // May need more iterations for one-shot solve
+    options.max_iterations = 100; // May need more iterations for one-shot solve
     options.max_line_search_iterations = 21;
     options.cost_tolerance = 1e-7; // Tighter tolerance for final solve
     options.grad_tolerance = 1e-7; // Tighter tolerance for final solve
@@ -193,7 +204,7 @@ int main()
         goal_state,
         horizon,
         dt,
-        std::move(hcw_system),
+        std::move(spacecraft_system),
         std::move(objective),
         options);
     cddp_solver.setInitialTrajectory(X, U);
@@ -207,11 +218,11 @@ int main()
     // cddp_solver.addConstraint("MaxThrustMagnitudeConstraint",
     //     std::make_unique<cddp::MaxThrustMagnitudeConstraint>(u_max_norm));
 
-    // Add Ball Constraint (for keep-out zone)
+     // Add Ball Constraint (for keep-out zone)
     double radius = 90.0;
     Eigen::Vector2d center(0.0, 0.0);
-    cddp_solver.addConstraint("BallConstraint",
-        std::make_unique<cddp::BallConstraint>(radius, center, 0.1));
+    // cddp_solver.addConstraint("BallConstraint",
+    //     std::make_unique<cddp::BallConstraint>(radius, center, 0.1));
 
     // Solve the Trajectory Optimization Problem
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");

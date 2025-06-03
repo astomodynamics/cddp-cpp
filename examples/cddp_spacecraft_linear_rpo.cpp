@@ -146,7 +146,7 @@ int main()
 
     // Cost weighting for SumOfTwoNormObjective
     double weight_running_control = 1.0;  // Example value
-    double weight_terminal_state = 2000.0; // Example value
+    double weight_terminal_state = 1000.0; // Example value
 
     // Create the HCW system for optimization
     std::unique_ptr<cddp::DynamicalSystem> hcw_system =
@@ -210,8 +210,8 @@ int main()
     // Add Ball Constraint (for keep-out zone)
     double radius = 90.0;
     Eigen::Vector2d center(0.0, 0.0);
-    cddp_solver.addConstraint("BallConstraint",
-        std::make_unique<cddp::BallConstraint>(radius, center, 0.1));
+    // cddp_solver.addConstraint("BallConstraint",
+    //     std::make_unique<cddp::BallConstraint>(radius, center, 0.1));
 
     // Solve the Trajectory Optimization Problem
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
