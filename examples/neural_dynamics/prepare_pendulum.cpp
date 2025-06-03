@@ -118,7 +118,7 @@ int main(int argc, char* argv[]) {
         control << 0.0; // zero torque
 
         // 3) Integrate one step to get the next state (RK4 inside)
-        Eigen::VectorXd next_state = pendulum.getDiscreteDynamics(state, control);
+        Eigen::VectorXd next_state = pendulum.getDiscreteDynamics(state, control, 0.0);
 
         // 4) Write the row to CSV
         csv_file 
