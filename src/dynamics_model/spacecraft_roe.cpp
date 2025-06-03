@@ -63,10 +63,12 @@ namespace cddp
         // Create a zero derivative vector
         Eigen::VectorXd xdot = Eigen::VectorXd::Zero(STATE_DIM);
 
+        // Current argument of latitude
+        double nu = n_ref_ * time + u0_;
+
         // A*x portion:
         double da = state(STATE_DA);
         xdot(STATE_DLAMBDA) = -1.5 * n_ref_ * da;
-        xdot(STATE_NU) = n_ref_;
 
         // B*u portion:
         double ur = control(CONTROL_UR);
@@ -77,8 +79,8 @@ namespace cddp
         const double factor = 1.0 / (n_ref_ * a_ * mass_kg_);
 
         // Calculate su and cu based on initial argument of latitude:
-        double su = std::sin(state(STATE_NU));
-        double cu = std::cos(state(STATE_NU));
+        double su = std::sin(nu);
+        double cu = std::cos(nu);
 
         // Return the control Jacobian matrix B
         Eigen::MatrixXd B(STATE_DIM, CONTROL_DIM);
@@ -97,57 +99,24 @@ namespace cddp
         return xdot + B * control;
     }
 
-    VectorXdual2nd SpacecraftROE::getContinuousDynamicsAutodiff(
-        const VectorXdual2nd &state, const VectorXdual2nd &control) const
-    {
-        VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
-        
-        autodiff::dual2nd da = state(STATE_DA);
-        autodiff::dual2nd dlambda = state(STATE_DLAMBDA);
-        autodiff::dual2nd dex = state(STATE_DEX);
-        autodiff::dual2nd dey = state(STATE_DEY);
-        autodiff::dual2nd dix = state(STATE_DIX);
-        autodiff::dual2nd diy = state(STATE_DIY);
-        autodiff::dual2nd nu = state(STATE_NU);
-
-        autodiff::dual2nd ur = control(CONTROL_UR);
-        autodiff::dual2nd ut = control(CONTROL_UT);
-        autodiff::dual2nd un = control(CONTROL_UN);
-        
-        state_dot(STATE_DLAMBDA) = -1.5 * n_ref_ * da;
-        state_dot(STATE_NU) = n_ref_;
-
-        // Calculate su and cu based on initial argument of latitude:
-        autodiff::dual2nd su = autodiff::detail::sin(nu);
-        autodiff::dual2nd cu = autodiff::detail::cos(nu);
-        autodiff::dual2nd factor = 1.0 / (n_ref_ * a_ * mass_kg_);
-
-        state_dot(STATE_DA) = 2.0 * factor * ut;
-        state_dot(STATE_DLAMBDA) = -2.0 * factor * ur;
-        state_dot(STATE_DEX) = factor * (su * ur + 2.0 * cu * ut);
-        state_dot(STATE_DEY) = factor * (-cu * ur + 2.0 * su * ut);
-        state_dot(STATE_DIX) = factor * cu * un;
-        state_dot(STATE_DIY) = factor * su * un;
-
-        return state_dot;
-    }
-
     //-----------------------------------------------------------------------------
     Eigen::MatrixXd SpacecraftROE::getStateJacobian(
         const Eigen::VectorXd &state,
         const Eigen::VectorXd &control, double time) const
     {
+        Eigen::MatrixXd A(STATE_DIM, STATE_DIM);
+        A.setZero();
 
-        // Use autodiff to compute state Jacobian
-        VectorXdual2nd x = state;
-        VectorXdual2nd u = control;
+        // Current argument of latitude
+        double nu = n_ref_ * time + u0_;
 
-        auto dynamics_wrt_x = [&](const VectorXdual2nd &x_ad) -> VectorXdual2nd
-        {
-            return this->getContinuousDynamicsAutodiff(x_ad, u);
-        };
+        // Calculate su and cu based on initial argument of latitude:
+        double su = std::sin(nu);
+        double cu = std::cos(nu);
 
-        return autodiff::jacobian(dynamics_wrt_x, wrt(x), at(x));
+        A(STATE_DLAMBDA, STATE_DA) = -1.5 * n_ref_;
+
+        return A;
     }
 
     //-----------------------------------------------------------------------------
@@ -155,17 +124,30 @@ namespace cddp
         const Eigen::VectorXd &state,
         const Eigen::VectorXd &control, double time) const
     {
+        Eigen::MatrixXd B(STATE_DIM, CONTROL_DIM);
+        B.setZero();
 
-        // Use autodiff to compute control Jacobian
-        VectorXdual2nd x = state;
-        VectorXdual2nd u = control;
+        // Current argument of latitude
+        double nu = n_ref_ * time + u0_;
 
-        auto dynamics_wrt_u = [&](const VectorXdual2nd &u_ad) -> VectorXdual2nd
-        {
-            return this->getContinuousDynamicsAutodiff(x, u_ad);
-        };
+        // Calculate su and cu based on initial argument of latitude:
+        double su = std::sin(nu);
+        double cu = std::cos(nu);
 
-        return autodiff::jacobian(dynamics_wrt_u, wrt(u), at(u));
+        // Factor for scaling control
+        const double factor = 1.0 / (n_ref_ * a_ * mass_kg_);
+
+        B(STATE_DA, CONTROL_UT) = 2.0;
+        B(STATE_DLAMBDA, CONTROL_UR) = -2.0;
+        B(STATE_DEX, CONTROL_UR) = su;
+        B(STATE_DEX, CONTROL_UT) = 2.0 * cu;
+        B(STATE_DEY, CONTROL_UR) = -cu;
+        B(STATE_DEY, CONTROL_UT) = 2.0 * su;
+        B(STATE_DIX, CONTROL_UN) = cu;
+        B(STATE_DIY, CONTROL_UN) = su;
+        B *= factor;
+
+        return B;
     }
 
     //-----------------------------------------------------------------------------
@@ -262,7 +244,7 @@ namespace cddp
         T *= a_;
 
         // 3) Multiply T by the input ROE vector
-        Eigen::VectorXd hcw = T * roe.head(6); // hcw is [x, y, z, xdot, ydot, zdot]
+        Eigen::VectorXd hcw = T * roe; // hcw is [x, y, z, xdot, ydot, zdot]
 
         return hcw;
     }
@@ -341,11 +323,7 @@ namespace cddp
         // 3) Multiply Tinv by the input HCW vector => QNS-ROE
         Eigen::VectorXd roe_6dim = Tinv * hcw;
 
-        Eigen::VectorXd roe_7dim = Eigen::VectorXd::Zero(STATE_DIM);
-        roe_7dim.head(6) = roe_6dim;
-        roe_7dim(STATE_NU) = phi;
-
-        return roe_7dim;
+        return roe_6dim;
     }
 
 } // namespace cddp

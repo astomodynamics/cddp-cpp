@@ -68,8 +68,7 @@ namespace cddp
         static constexpr int STATE_DEY = 3;     ///< Relative eccentricity y-component
         static constexpr int STATE_DIX = 4;     ///< Relative inclination x-component
         static constexpr int STATE_DIY = 5;     ///< Relative inclination y-component
-        static constexpr int STATE_NU = 6;      ///< Mean argument of latitude [rad]
-        static constexpr int STATE_DIM = 7;     ///< State dimension
+        static constexpr int STATE_DIM = 6;     ///< State dimension
 
         // Control indices
         static constexpr int CONTROL_UR = 0;  ///< Radial acceleration
@@ -131,15 +130,6 @@ namespace cddp
         std::vector<Eigen::MatrixXd> getControlHessian(
             const Eigen::VectorXd &state,
             const Eigen::VectorXd &control, double time) const override;
-
-        /**
-         * Computes the continuous-time dynamics of the quadrotor model using autodiff
-         * @param state Current state vector
-         * @param control Current control input
-         * @return State derivative vector
-         */
-        VectorXdual2nd getContinuousDynamicsAutodiff(const VectorXdual2nd &state,
-                                                     const VectorXdual2nd &control) const override;
 
         /**
          * @brief Transform the QNS-ROE state to the local Hill/Clohessy-Wiltshire frame.

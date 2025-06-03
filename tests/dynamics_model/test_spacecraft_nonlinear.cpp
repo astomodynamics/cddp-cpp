@@ -120,7 +120,7 @@ TEST(SpacecraftNonlinearTest, AlfriendExample4_1_RelativeMotion) {
 
     Eigen::VectorXd current_state = initial_state;
     for (int i = 0; i < num_steps; ++i) {
-        current_state = spacecraft.getDiscreteDynamics(current_state, control);
+        current_state = spacecraft.getDiscreteDynamics(current_state, control, i * timestep);
         state_history.push_back(current_state);
     }
 
@@ -320,7 +320,7 @@ TEST(SpacecraftNonlinearTest, RelativeMotion2) {
 
     Eigen::VectorXd current_state = initial_state;
     for (int i = 0; i < num_steps; ++i) {
-        current_state = spacecraft.getDiscreteDynamics(current_state, control);
+        current_state = spacecraft.getDiscreteDynamics(current_state, control, i * timestep);
         state_history.push_back(current_state);
     }
 
