@@ -618,6 +618,7 @@ namespace cddp
                 // Update value function
                 V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
                 V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
+                V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize Hessian DO NOT REMOVE THIS
 
                 // Accumulate cost improvement
                 dV_[0] += k_u.dot(Q_u);
@@ -779,7 +780,7 @@ namespace cddp
                 {
                     if (options_.debug)
                     {
-                        std::cerr << "IPDDP: Backward pass failed at time " << t << std::endl;
+                        std::cerr << "MSIPDDP: Backward pass failed at time " << t << std::endl;
                     }
                     return false;
                 }
@@ -848,6 +849,7 @@ namespace cddp
                 // Update value function
                 V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
                 V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
+                V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize Hessian DO NOT REMOVE THIS
 
                 // Error tracking
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
