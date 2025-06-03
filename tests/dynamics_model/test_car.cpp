@@ -53,7 +53,7 @@ TEST(CarTest, DiscreteDynamics) {
         v_data.push_back(state[3]);
 
         // Compute the next state
-        state = car.getDiscreteDynamics(state, control);
+        state = car.getDiscreteDynamics(state, control, 0.0);
     }
 
     // Basic assertions
@@ -65,7 +65,7 @@ TEST(CarTest, DiscreteDynamics) {
     // First Step test
     state << 1.0, 1.0, 3*M_PI/2, 0.0; 
     control << 0.01, 0.01;
-    state = car.getDiscreteDynamics(state, control);
+    state = car.getDiscreteDynamics(state, control, 0.0);
     EXPECT_NEAR(state[0], 1.0, 1e-4);
     EXPECT_NEAR(state[1], 1.0, 1e-4);
     EXPECT_NEAR(state[2], 4.7124, 1e-4);
@@ -74,7 +74,7 @@ TEST(CarTest, DiscreteDynamics) {
     // Second Step test
     state << 1.0, 1.0, 3*M_PI/2, 1.0;
     control << 0.3, 0.1;
-    state = car.getDiscreteDynamics(state, control);
+    state = car.getDiscreteDynamics(state, control, 0.0);
     EXPECT_NEAR(state[0], 1.0, 1e-4);
     EXPECT_NEAR(state[1], 0.9713, 1e-4);
     EXPECT_NEAR(state[2], 4.7168, 1e-4);
@@ -95,11 +95,11 @@ TEST(CarTest, JacobianTest) {
     control << 0.01, 0.01; // Small steering angle and acceleration
 
     // Compute the Jacobians
-    Eigen::MatrixXd A_numerical = car.getStateJacobian(state, control);
+    Eigen::MatrixXd A_numerical = car.getStateJacobian(state, control, 0.0);
     A_numerical *= timestep;
     A_numerical.diagonal().array() += 1.0; 
     
-    Eigen::MatrixXd B_numerical = car.getControlJacobian(state, control);
+    Eigen::MatrixXd B_numerical = car.getControlJacobian(state, control, 0.0);
     B_numerical *= timestep;
 
     Eigen::MatrixXd A_known(4, 4);
@@ -133,11 +133,11 @@ TEST(CarTest, JacobianTest) {
     state << 1.0, 1.0, 3*M_PI/2, 1.0;
     control << 0.3, 0.1;
 
-    A_numerical = car.getStateJacobian(state, control);
+    A_numerical = car.getStateJacobian(state, control, 0.0);
     A_numerical *= timestep;
     A_numerical.diagonal().array() += 1.0;
 
-    B_numerical = car.getControlJacobian(state, control);
+    B_numerical = car.getControlJacobian(state, control, 0.0);
     B_numerical *= timestep;
     
     A_known << 1.0, 0.0, 0.0287, 0.0,
@@ -178,8 +178,8 @@ TEST(CarTest, HessianTest) {
     control << 0.3, 0.1;
 
     // Get the state and control Hessians
-    std::vector<Eigen::MatrixXd> state_hessians = car.getStateHessian(state, control);
-    std::vector<Eigen::MatrixXd> control_hessians = car.getControlHessian(state, control);
+    std::vector<Eigen::MatrixXd> state_hessians = car.getStateHessian(state, control, 0.0);
+    std::vector<Eigen::MatrixXd> control_hessians = car.getControlHessian(state, control, 0.0);
 
     // Scale Hessians back since they were divided by timestep in implementation
     for (auto& H : state_hessians) {
@@ -215,8 +215,8 @@ TEST(CarTest, HessianTest) {
     state << 1.0, 1.0, 3*M_PI/2, 0.0;
     control << 0.01, 0.01;
     
-    state_hessians = car.getStateHessian(state, control);
-    control_hessians = car.getControlHessian(state, control);
+    state_hessians = car.getStateHessian(state, control, 0.0);
+    control_hessians = car.getControlHessian(state, control, 0.0);
     
     // Scale Hessians back
     for (auto& H : state_hessians) {

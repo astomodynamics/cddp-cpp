@@ -53,8 +53,8 @@ TEST(DubinsCarTest, DiscreteDynamics) {
         y_data.push_back(state[1]);
         theta_data.push_back(state[2]);
 
-        // Compute the next state
-        state = dubins_car.getDiscreteDynamics(state, control); 
+        // Compute the next state   
+        state = dubins_car.getDiscreteDynamics(state, control, 0.0); 
     }
 
     // Check state dimension

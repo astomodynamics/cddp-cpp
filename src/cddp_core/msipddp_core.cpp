@@ -551,13 +551,13 @@ namespace cddp
                 const Eigen::VectorXd &d = f - X_[t + 1];
 
                 // Continuous dynamics
-                const auto [Fx, Fu] = system_->getJacobians(x, u);
+                const auto [Fx, Fu] = system_->getJacobians(x, u, t * timestep_);
 
                 // Get dynamics hessians if not using iLQR
                 std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
                 if (!options_.is_ilqr)
                 {
-                    const auto hessians = system_->getHessians(x, u);
+                    const auto hessians = system_->getHessians(x, u, t * timestep_);
                     Fxx = std::get<0>(hessians);
                     Fuu = std::get<1>(hessians);
                     Fux = std::get<2>(hessians);
@@ -653,13 +653,13 @@ namespace cddp
                 const Eigen::VectorXd &lambda = Lambda_[t];
                 
                 // Continuous dynamics
-                const auto [Fx, Fu] = system_->getJacobians(x, u);
+                const auto [Fx, Fu] = system_->getJacobians(x, u, t * timestep_);
 
                 // Get dynamics hessians if not using iLQR
                 std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
                 if (!options_.is_ilqr)
                 {
-                    const auto hessians = system_->getHessians(x, u);
+                    const auto hessians = system_->getHessians(x, u, t * timestep_);
                     Fxx = std::get<0>(hessians);
                     Fuu = std::get<1>(hessians);
                     Fux = std::get<2>(hessians);
@@ -934,15 +934,15 @@ namespace cddp
                 {
                     if (options_.ms_rollout_type == "nonlinear")
                     {
-                        F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                        F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
                         X_new[t + 1] = X_[t + 1] + (F_new[t] - F_[t]) + alpha * (F_[t] - X_[t + 1]);
                     }
                     else if (options_.ms_rollout_type == "hybrid")
                     {   
-                        F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                        F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
 
                         // Continuous dynamics
-                        const auto [Fx, Fu] = system_->getJacobians(X_[t], U_[t]);
+                        const auto [Fx, Fu] = system_->getJacobians(X_[t], U_[t], t * timestep_);
                         Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx;
                         Eigen::MatrixXd B = timestep_ * Fu;
 
@@ -951,7 +951,7 @@ namespace cddp
                 }
                 else
                 {
-                    F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                    F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
                     X_new[t + 1] = F_new[t];
                 }
 
@@ -1060,15 +1060,15 @@ namespace cddp
                 {
                     if (options_.ms_rollout_type == "nonlinear")
                     {
-                        F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                        F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
                         X_new[t + 1] = X_[t + 1] + (F_new[t] - F_[t]) + alpha_s * (F_[t] - X_[t + 1]);
                     }
                     else if (options_.ms_rollout_type == "hybrid")
                     {   
-                        F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                        F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
 
                         // Continuous dynamics
-                        const auto [Fx, Fu] = system_->getJacobians(X_[t], U_[t]);
+                        const auto [Fx, Fu] = system_->getJacobians(X_[t], U_[t], t * timestep_);
                         Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx;
                         Eigen::MatrixXd B = timestep_ * Fu;
 
@@ -1077,7 +1077,7 @@ namespace cddp
                 }
                 else
                 {
-                    F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t]);
+                    F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
                     X_new[t + 1] = F_new[t];
                 }
             }
@@ -1275,7 +1275,7 @@ namespace cddp
             }
 
             // Compute the next state using the system dynamics.
-            F_[t] = system_->getDiscreteDynamics(x, u);
+            F_[t] = system_->getDiscreteDynamics(x, u, t * timestep_);
 
             if (options_.controlled_rollout)
             {

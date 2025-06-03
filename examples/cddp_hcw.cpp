@@ -136,7 +136,7 @@ int main() {
     double J_init = 0.0;
     for (int t = 0; t < horizon; t++) {
         J_init += cddp_solver.getObjective().running_cost(X[t], U[t], t);
-        X[t+1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t]);
+        X[t+1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t], t * timestep);
     }
     J_init += cddp_solver.getObjective().terminal_cost(X[horizon]);
     std::cout << "[Info] Initial cost: " << J_init << std::endl;

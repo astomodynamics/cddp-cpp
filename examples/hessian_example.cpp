@@ -76,23 +76,23 @@ void demonstratePendulumHessian() {
     std::cout << "Control: [torque] = [" << control.transpose() << "]" << std::endl << std::endl;
     
     // Compute dynamics
-    Eigen::VectorXd xdot = pendulum.getContinuousDynamics(state, control);
+    Eigen::VectorXd xdot = pendulum.getContinuousDynamics(state, control, 0.0);
     std::cout << "Continuous Dynamics (xdot): [" << xdot.transpose() << "]" << std::endl;
     
-    Eigen::VectorXd next_state = pendulum.getDiscreteDynamics(state, control);
+    Eigen::VectorXd next_state = pendulum.getDiscreteDynamics(state, control, 0.0);
     std::cout << "Discrete Dynamics (next state): [" << next_state.transpose() << "]" << std::endl << std::endl;
     
     // Compute Jacobians
-    Eigen::MatrixXd A = pendulum.getStateJacobian(state, control);
-    Eigen::MatrixXd B = pendulum.getControlJacobian(state, control);
+    Eigen::MatrixXd A = pendulum.getStateJacobian(state, control, 0.0);
+    Eigen::MatrixXd B = pendulum.getControlJacobian(state, control, 0.0);
     
     printMatrix("State Jacobian (A)", A);
     printMatrix("Control Jacobian (B)", B);
     
     // Compute Hessians
-    std::vector<Eigen::MatrixXd> state_hessian = pendulum.getStateHessian(state, control);
-    std::vector<Eigen::MatrixXd> control_hessian = pendulum.getControlHessian(state, control);
-    std::vector<Eigen::MatrixXd> cross_hessian = pendulum.getCrossHessian(state, control);
+    std::vector<Eigen::MatrixXd> state_hessian = pendulum.getStateHessian(state, control, 0.0);
+    std::vector<Eigen::MatrixXd> control_hessian = pendulum.getControlHessian(state, control, 0.0);
+    std::vector<Eigen::MatrixXd> cross_hessian = pendulum.getCrossHessian(state, control, 0.0);
     
     printHessianTensor("State Hessian (d²f/dx²)", state_hessian);
     printHessianTensor("Control Hessian (d²f/du²)", control_hessian);
@@ -137,23 +137,23 @@ void demonstrateDubinsCarHessian() {
     std::cout << "Control: [omega] = [" << control.transpose() << "]" << std::endl << std::endl;
     
     // Compute dynamics
-    Eigen::VectorXd xdot = dubins_car.getContinuousDynamics(state, control);
+    Eigen::VectorXd xdot = dubins_car.getContinuousDynamics(state, control, 0.0);
     std::cout << "Continuous Dynamics (xdot): [" << xdot.transpose() << "]" << std::endl;
     
-    Eigen::VectorXd next_state = dubins_car.getDiscreteDynamics(state, control);
+    Eigen::VectorXd next_state = dubins_car.getDiscreteDynamics(state, control, 0.0);
     std::cout << "Discrete Dynamics (next state): [" << next_state.transpose() << "]" << std::endl << std::endl;
     
     // Compute Jacobians
-    Eigen::MatrixXd A = dubins_car.getStateJacobian(state, control);
-    Eigen::MatrixXd B = dubins_car.getControlJacobian(state, control);
+    Eigen::MatrixXd A = dubins_car.getStateJacobian(state, control, 0.0);
+    Eigen::MatrixXd B = dubins_car.getControlJacobian(state, control, 0.0);
     
     printMatrix("State Jacobian (A)", A);
     printMatrix("Control Jacobian (B)", B);
     
     // Compute Hessians
-    std::vector<Eigen::MatrixXd> state_hessian = dubins_car.getStateHessian(state, control);
-    std::vector<Eigen::MatrixXd> control_hessian = dubins_car.getControlHessian(state, control);
-    std::vector<Eigen::MatrixXd> cross_hessian = dubins_car.getCrossHessian(state, control);
+    std::vector<Eigen::MatrixXd> state_hessian = dubins_car.getStateHessian(state, control, 0.0);
+    std::vector<Eigen::MatrixXd> control_hessian = dubins_car.getControlHessian(state, control, 0.0);
+    std::vector<Eigen::MatrixXd> cross_hessian = dubins_car.getCrossHessian(state, control, 0.0);
     
     printHessianTensor("State Hessian (d²f/dx²)", state_hessian);
     printHessianTensor("Control Hessian (d²f/du²)", control_hessian);

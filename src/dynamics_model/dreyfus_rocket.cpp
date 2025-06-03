@@ -30,7 +30,7 @@ DreyfusRocket::DreyfusRocket(double timestep, std::string integration_type,
 }
 
 Eigen::VectorXd DreyfusRocket::getContinuousDynamics(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
     
@@ -44,7 +44,7 @@ Eigen::VectorXd DreyfusRocket::getContinuousDynamics(
 }
 
 Eigen::MatrixXd DreyfusRocket::getStateJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
     
@@ -53,7 +53,7 @@ Eigen::MatrixXd DreyfusRocket::getStateJacobian(
 }
 
 Eigen::MatrixXd DreyfusRocket::getControlJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);
     
@@ -64,7 +64,7 @@ Eigen::MatrixXd DreyfusRocket::getControlJacobian(
 }
 
 std::vector<Eigen::MatrixXd> DreyfusRocket::getStateHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
         hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
@@ -73,7 +73,7 @@ std::vector<Eigen::MatrixXd> DreyfusRocket::getStateHessian(
 }
 
 std::vector<Eigen::MatrixXd> DreyfusRocket::getControlHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
@@ -88,7 +88,7 @@ std::vector<Eigen::MatrixXd> DreyfusRocket::getControlHessian(
 }
 
 VectorXdual2nd DreyfusRocket::getContinuousDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {
 
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
     const autodiff::dual2nd x_dot = state(STATE_X_DOT);

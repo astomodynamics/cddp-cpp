@@ -25,41 +25,41 @@ using namespace cddp;
 using namespace autodiff; // Use autodiff namespace
 
 // Implement integration methods
-Eigen::VectorXd DynamicalSystem::euler_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const {
-    return state + dt * getContinuousDynamics(state, control);
+Eigen::VectorXd DynamicalSystem::euler_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt, double time) const {
+    return state + dt * getContinuousDynamics(state, control, time);
 }
 
-Eigen::VectorXd DynamicalSystem::heun_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const {
-    Eigen::VectorXd k1 = getContinuousDynamics(state, control);
-    Eigen::VectorXd k2 = getContinuousDynamics(state + dt * k1, control);
+Eigen::VectorXd DynamicalSystem::heun_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt, double time) const {
+    Eigen::VectorXd k1 = getContinuousDynamics(state, control, time);
+    Eigen::VectorXd k2 = getContinuousDynamics(state + dt * k1, control, time + dt);
     return state + 0.5 * dt * (k1 + k2);
 }
 
-Eigen::VectorXd DynamicalSystem::rk3_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const {
-    Eigen::VectorXd k1 = getContinuousDynamics(state, control);
-    Eigen::VectorXd k2 = getContinuousDynamics(state + 0.5 * dt * k1, control);
-    Eigen::VectorXd k3 = getContinuousDynamics(state - dt * k1 + 2 * dt * k2, control);
+Eigen::VectorXd DynamicalSystem::rk3_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt, double time) const {
+    Eigen::VectorXd k1 = getContinuousDynamics(state, control, time);
+    Eigen::VectorXd k2 = getContinuousDynamics(state + 0.5 * dt * k1, control, time + 0.5 * dt);
+    Eigen::VectorXd k3 = getContinuousDynamics(state - dt * k1 + 2 * dt * k2, control, time + dt);
     return state + (dt / 6) * (k1 + 4 * k2 + k3);
 }
 
-Eigen::VectorXd DynamicalSystem::rk4_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt) const {
-    Eigen::VectorXd k1 = getContinuousDynamics(state, control);
-    Eigen::VectorXd k2 = getContinuousDynamics(state + 0.5 * dt * k1, control);
-    Eigen::VectorXd k3 = getContinuousDynamics(state + 0.5 * dt * k2, control);
-    Eigen::VectorXd k4 = getContinuousDynamics(state + dt * k3, control);
+Eigen::VectorXd DynamicalSystem::rk4_step(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double dt, double time) const {
+    Eigen::VectorXd k1 = getContinuousDynamics(state, control, time);
+    Eigen::VectorXd k2 = getContinuousDynamics(state + 0.5 * dt * k1, control, time + 0.5 * dt);
+    Eigen::VectorXd k3 = getContinuousDynamics(state + 0.5 * dt * k2, control, time + 0.5 * dt);
+    Eigen::VectorXd k4 = getContinuousDynamics(state + dt * k3, control, time + dt);
     return state + (dt / 6) * (k1 + 2 * k2 + 2 * k3 + k4);
 }
 
 
-Eigen::VectorXd DynamicalSystem::getDiscreteDynamics(const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+Eigen::VectorXd DynamicalSystem::getDiscreteDynamics(const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     if (integration_type_ == "euler") {
-        return euler_step(state, control, timestep_);
+        return euler_step(state, control, timestep_, time);
     } else if (integration_type_ == "heun") {
-        return heun_step(state, control, timestep_);
+        return heun_step(state, control, timestep_, time);
     } else if (integration_type_ == "rk3") {
-        return rk3_step(state, control, timestep_);
+        return rk3_step(state, control, timestep_, time);
     } else if (integration_type_ == "rk4") {
-        return rk4_step(state, control, timestep_);
+        return rk4_step(state, control, timestep_, time);
     } else {
         std::cerr << "Integration type not supported!" << std::endl;
         return Eigen::VectorXd::Zero(state.size()); 
@@ -68,10 +68,10 @@ Eigen::VectorXd DynamicalSystem::getDiscreteDynamics(const Eigen::VectorXd& stat
 
 Eigen::VectorXd DynamicalSystem::getContinuousDynamics(
     const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& control, double time) const {
 
     // Get next state using discrete dynamics
-    Eigen::VectorXd next_state = getDiscreteDynamics(state, control);
+    Eigen::VectorXd next_state = getDiscreteDynamics(state, control, time);
     
     // Compute continuous dynamics using finite difference
     // dx/dt ≈ (x_{k+1} - x_k) / dt
@@ -83,14 +83,14 @@ Eigen::VectorXd DynamicalSystem::getContinuousDynamics(
 // --- Autodiff Default Implementations for Jacobians ---
 
 Eigen::MatrixXd DynamicalSystem::getStateJacobian(const Eigen::VectorXd& state,
-                                                  const Eigen::VectorXd& control) const {
+                                                  const Eigen::VectorXd& control, double time) const {
     // Use second-order duals for consistency, jacobian works fine
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
 
     // Need to capture 'this' pointer for member function access
     auto dynamics_wrt_x = [&](const VectorXdual2nd& x_ad) -> VectorXdual2nd {
-        return this->getContinuousDynamicsAutodiff(x_ad, u);
+        return this->getContinuousDynamicsAutodiff(x_ad, u, time);
     };
 
     // Compute Jacobian w.r.t. state
@@ -99,12 +99,12 @@ Eigen::MatrixXd DynamicalSystem::getStateJacobian(const Eigen::VectorXd& state,
 }
 
 Eigen::MatrixXd DynamicalSystem::getControlJacobian(const Eigen::VectorXd& state,
-                                                    const Eigen::VectorXd& control) const {
+                                                    const Eigen::VectorXd& control, double time) const {
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
 
     auto dynamics_wrt_u = [&](const VectorXdual2nd& u_ad) -> VectorXdual2nd {
-        return this->getContinuousDynamicsAutodiff(x, u_ad);
+        return this->getContinuousDynamicsAutodiff(x, u_ad, time);
     };
 
     Eigen::MatrixXd Ju = jacobian(dynamics_wrt_u, wrt(u), at(u));
@@ -114,7 +114,7 @@ Eigen::MatrixXd DynamicalSystem::getControlJacobian(const Eigen::VectorXd& state
 // --- Autodiff Default Implementations for Hessians ---
 
 std::vector<Eigen::MatrixXd> DynamicalSystem::getStateHessian(const Eigen::VectorXd& state,
-                                                             const Eigen::VectorXd& control) const {
+                                                             const Eigen::VectorXd& control, double time) const {
     int n = state_dim_;
     int m = control_dim_;
     std::vector<Eigen::MatrixXd> state_hessian_tensor(state_dim_);
@@ -131,7 +131,7 @@ std::vector<Eigen::MatrixXd> DynamicalSystem::getStateHessian(const Eigen::Vecto
             VectorXdual2nd x_ad = z_ad.head(n);
             VectorXdual2nd u_ad = z_ad.tail(m);
             // Return the i-th component of the dynamics vector
-            return this->getContinuousDynamicsAutodiff(x_ad, u_ad)(i);
+            return this->getContinuousDynamicsAutodiff(x_ad, u_ad, time)(i);
         };
 
         // Compute the full Hessian matrix for the i-th output w.r.t z = [x, u]
@@ -144,7 +144,7 @@ std::vector<Eigen::MatrixXd> DynamicalSystem::getStateHessian(const Eigen::Vecto
 }
 
 std::vector<Eigen::MatrixXd> DynamicalSystem::getControlHessian(const Eigen::VectorXd& state,
-                                                               const Eigen::VectorXd& control) const {
+                                                               const Eigen::VectorXd& control, double time) const {
     int n = state_dim_;
     int m = control_dim_;
     std::vector<Eigen::MatrixXd> control_hessian_tensor(state_dim_);
@@ -157,7 +157,7 @@ std::vector<Eigen::MatrixXd> DynamicalSystem::getControlHessian(const Eigen::Vec
         auto f_i = [&](const VectorXdual2nd& z_ad) -> autodiff::dual2nd {
             VectorXdual2nd x_ad = z_ad.head(n);
             VectorXdual2nd u_ad = z_ad.tail(m);
-            return this->getContinuousDynamicsAutodiff(x_ad, u_ad)(i);
+            return this->getContinuousDynamicsAutodiff(x_ad, u_ad, time)(i);
         };
         Eigen::MatrixXd H_i = hessian(f_i, wrt(z), at(z));
         // Extract the bottom-right (m x m) block (d^2 f_i / du^2)
@@ -167,7 +167,7 @@ std::vector<Eigen::MatrixXd> DynamicalSystem::getControlHessian(const Eigen::Vec
 }
 
 std::vector<Eigen::MatrixXd> DynamicalSystem::getCrossHessian(const Eigen::VectorXd& state,
-                                                             const Eigen::VectorXd& control) const {
+                                                             const Eigen::VectorXd& control, double time) const {
     int n = state_dim_;
     int m = control_dim_;
     std::vector<Eigen::MatrixXd> cross_hessian_tensor(state_dim_);
@@ -180,7 +180,7 @@ std::vector<Eigen::MatrixXd> DynamicalSystem::getCrossHessian(const Eigen::Vecto
         auto f_i = [&](const VectorXdual2nd& z_ad) -> autodiff::dual2nd {
             VectorXdual2nd x_ad = z_ad.head(n);
             VectorXdual2nd u_ad = z_ad.tail(m);
-            return this->getContinuousDynamicsAutodiff(x_ad, u_ad)(i);
+            return this->getContinuousDynamicsAutodiff(x_ad, u_ad, time)(i);
         };
         Eigen::MatrixXd H_i = hessian(f_i, wrt(z), at(z));
         // Extract the bottom-left (m x n) block (d^2 f_i / dudx)

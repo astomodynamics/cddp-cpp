@@ -61,70 +61,98 @@ public:
      *
      * @param state Current state (Eigen vector)
      * @param control Current control (Eigen vector)
+     * @param time Current time
      * @return Eigen::VectorXd Continuous-time derivative of state
      */
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd& state,
-                                          const Eigen::VectorXd& control) const override;
+                                          const Eigen::VectorXd& control,
+                                          double time) const override;
 
     /**
      * @brief Compute discrete-time dynamics: x_{t+1} = f(x_t, u_t).
      *
      * @param state Current state (Eigen vector)
      * @param control Current control (Eigen vector)
+     * @param time Current time
      * @return Eigen::VectorXd Discrete next state
      */
     Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd& state,
-                                        const Eigen::VectorXd& control) const override;
+                                        const Eigen::VectorXd& control,
+                                        double time) const override;
 
     /**
      * @brief Jacobian of the dynamics w.r.t. state: df/dx
      *
      * @param state Current state (Eigen vector)
      * @param control Current control (Eigen vector)
+     * @param time Current time
      * @return Eigen::MatrixXd Jacobian df/dx
      */
     Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state,
-                                     const Eigen::VectorXd& control) const override;
+                                     const Eigen::VectorXd& control,
+                                     double time) const override;
 
     /**
      * @brief Jacobian of the dynamics w.r.t. control: df/du
      *
      * @param state Current state (Eigen vector)
      * @param control Current control (Eigen vector)
+     * @param time Current time
      * @return Eigen::MatrixXd Jacobian df/du
      */
     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state,
-                                       const Eigen::VectorXd& control) const override;
+                                       const Eigen::VectorXd& control,
+                                       double time) const override;
 
     /**
      * @brief Hessian of the dynamics w.r.t. state
      *
      * @param state Current state (Eigen vector)
      * @param control Current control (Eigen vector)
+     * @param time Current time
      * @return std::vector<Eigen::MatrixXd> Vector of Hessian matrices, one per state dimension
      */
     std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd& state,
-                                    const Eigen::VectorXd& control) const override;
+                                    const Eigen::VectorXd& control,
+                                    double time) const override;
 
     /**
      * @brief Hessian of the dynamics w.r.t. control
      *
      * @param state Current state (Eigen vector)
      * @param control Current control (Eigen vector)
+     * @param time Current time
      * @return std::vector<Eigen::MatrixXd> Vector of Hessian matrices, one per state dimension
      */
     std::vector<Eigen::MatrixXd> getControlHessian(const Eigen::VectorXd& state,
-                                      const Eigen::VectorXd& control) const override;
+                                      const Eigen::VectorXd& control,
+                                      double time) const override;
 
     /**
      * @brief Hessian of the dynamics w.r.t. state and control
      *
      * @param state Current state (Eigen vector)
      * @param control Current control (Eigen vector)
+     * @param time Current time
      * @return std::vector<Eigen::MatrixXd> Vector of Hessian matrices, one per state dimension
      */
     std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd& state,
-                                    const Eigen::VectorXd& control) const override;
+                                    const Eigen::VectorXd& control,
+                                    double time) const override;
+
+    /**
+     * @brief Autodiff version of continuous dynamics using second-order duals.
+     * For NeuralDynamicalSystem, this method indicates that base class autodiff
+     * is not directly supported due to the external Torch model.
+     * @param state Current state vector (autodiff type)
+     * @param control Current control input (autodiff type)
+     * @param time Current time
+     * @return State derivative vector (autodiff type)
+     */
+    VectorXdual2nd getContinuousDynamicsAutodiff(
+        const VectorXdual2nd& state,
+        const VectorXdual2nd& control,
+        double time) const override;
 
 private:
     std::shared_ptr<DynamicsModelInterface> model_;

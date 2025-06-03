@@ -26,7 +26,7 @@ Unicycle::Unicycle(double timestep, std::string integration_type)
 }
 
 Eigen::VectorXd Unicycle::getContinuousDynamics(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
     
@@ -46,7 +46,7 @@ Eigen::VectorXd Unicycle::getContinuousDynamics(
 }
 
 Eigen::MatrixXd Unicycle::getStateJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
     
@@ -67,7 +67,7 @@ Eigen::MatrixXd Unicycle::getStateJacobian(
 }
 
 Eigen::MatrixXd Unicycle::getControlJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);  // Note: Using 2 for control dim as per original
     
@@ -88,7 +88,7 @@ Eigen::MatrixXd Unicycle::getControlJacobian(
 }
 
 std::vector<Eigen::MatrixXd> Unicycle::getStateHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
@@ -108,7 +108,7 @@ std::vector<Eigen::MatrixXd> Unicycle::getStateHessian(
 }
 
 std::vector<Eigen::MatrixXd> Unicycle::getControlHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
@@ -121,7 +121,7 @@ std::vector<Eigen::MatrixXd> Unicycle::getControlHessian(
 }
 
 VectorXdual2nd Unicycle::getContinuousDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {
 
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
 

@@ -51,7 +51,7 @@ TEST(BicycleTest, DiscreteDynamics) {
         v_data.push_back(state[3]);
 
         // Compute the next state
-        state = bicycle.getDiscreteDynamics(state, control);
+        state = bicycle.getDiscreteDynamics(state, control, 0.0);
     }
 
     // Basic assertions
@@ -74,15 +74,15 @@ TEST(BicycleTest, Jacobians) {
     control << 0.5, 0.1;  // Non-zero controls
 
     // Get analytical Jacobians
-    Eigen::MatrixXd A_analytical = bicycle.getStateJacobian(state, control);
-    Eigen::MatrixXd B_analytical = bicycle.getControlJacobian(state, control);
+    Eigen::MatrixXd A_analytical = bicycle.getStateJacobian(state, control, 0.0);
+    Eigen::MatrixXd B_analytical = bicycle.getControlJacobian(state, control, 0.0);
 
     // Get numerical Jacobians
     auto f_A = [&](const Eigen::VectorXd& x) {
-        return bicycle.getContinuousDynamics(x, control);
+        return bicycle.getContinuousDynamics(x, control, 0.0);
     };
     auto f_B = [&](const Eigen::VectorXd& u) {
-        return bicycle.getContinuousDynamics(state, u);
+        return bicycle.getContinuousDynamics(state, u, 0.0);
     };
     Eigen::MatrixXd A_numerical = finite_difference_jacobian(f_A, state);
     Eigen::MatrixXd B_numerical = finite_difference_jacobian(f_B, control);
@@ -112,7 +112,7 @@ TEST(BicycleTest, ContinuousDynamics) {
     control << 0.0, 0.0;  // No acceleration or steering
 
     // Get dynamics
-    Eigen::VectorXd state_dot = bicycle.getContinuousDynamics(state, control);
+    Eigen::VectorXd state_dot = bicycle.getContinuousDynamics(state, control, 0.0);
 
     // Test expected behavior for straight motion
     EXPECT_NEAR(state_dot[0], 1.0, 1e-10);  // dx/dt = v * cos(theta)
@@ -123,7 +123,7 @@ TEST(BicycleTest, ContinuousDynamics) {
     // Test turning behavior
     state << 0.0, 0.0, 0.0, 1.0;
     control << 0.0, 0.1;  // Some steering angle
-    state_dot = bicycle.getContinuousDynamics(state, control);
+    state_dot = bicycle.getContinuousDynamics(state, control, 0.0);
     
     // Should have non-zero angular velocity when steering
     EXPECT_GT(std::abs(state_dot[2]), 0.0);

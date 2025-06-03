@@ -37,7 +37,7 @@ SpacecraftLinearFuel::SpacecraftLinearFuel(double timestep, double mean_motion, 
 }
 
 Eigen::VectorXd SpacecraftLinearFuel::getContinuousDynamics(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
     
@@ -80,7 +80,7 @@ Eigen::VectorXd SpacecraftLinearFuel::getContinuousDynamics(
 }
 
 VectorXdual2nd SpacecraftLinearFuel::getContinuousDynamicsAutodiff(
-    const VectorXdual2nd& state, const VectorXdual2nd& control) const {
+    const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
 
     const autodiff::dual2nd x = state(STATE_X);
@@ -119,27 +119,27 @@ VectorXdual2nd SpacecraftLinearFuel::getContinuousDynamicsAutodiff(
 }
 
 Eigen::MatrixXd SpacecraftLinearFuel::getStateJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
 
     auto f = [&](const Eigen::VectorXd& x) {
-        return getContinuousDynamics(x, control);
+        return getContinuousDynamics(x, control, time);
     };
 
     return finite_difference_jacobian(f, state);
 }
 
 Eigen::MatrixXd SpacecraftLinearFuel::getControlJacobian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     auto f = [&](const Eigen::VectorXd& u) {
-        return getContinuousDynamics(state, u);
+        return getContinuousDynamics(state, u, time);
     };
     return finite_difference_jacobian(f, control);
 }
 
 
 std::vector<Eigen::MatrixXd> SpacecraftLinearFuel::getStateHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
         hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
@@ -148,7 +148,7 @@ std::vector<Eigen::MatrixXd> SpacecraftLinearFuel::getStateHessian(
 }
 
 std::vector<Eigen::MatrixXd> SpacecraftLinearFuel::getControlHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
         hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
@@ -157,7 +157,7 @@ std::vector<Eigen::MatrixXd> SpacecraftLinearFuel::getControlHessian(
 }
 
 std::vector<Eigen::MatrixXd> SpacecraftLinearFuel::getCrossHessian(
-    const Eigen::VectorXd& state, const Eigen::VectorXd& control) const {
+    const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     for (int i = 0; i < STATE_DIM; ++i) {
         hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);

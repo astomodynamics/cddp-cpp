@@ -55,7 +55,8 @@ NeuralDynamicalSystem::NeuralDynamicalSystem(int state_dim,
 //                    getContinuousDynamics
 // ----------------------------------------------------------------------------
 Eigen::VectorXd NeuralDynamicalSystem::getContinuousDynamics(const Eigen::VectorXd& state,
-                                                             const Eigen::VectorXd& control) const
+                                                             const Eigen::VectorXd& control,
+                                                             double /*time*/) const
 {
     // We'll assume the model produces x_dot = f(x,u).
     // Or if it produces next state, adapt accordingly.
@@ -73,14 +74,15 @@ Eigen::VectorXd NeuralDynamicalSystem::getContinuousDynamics(const Eigen::Vector
 //                    getDiscreteDynamics
 // ----------------------------------------------------------------------------
 Eigen::VectorXd NeuralDynamicalSystem::getDiscreteDynamics(const Eigen::VectorXd& state,
-                                                           const Eigen::VectorXd& control) const
+                                                           const Eigen::VectorXd& control,
+                                                           double time) const
 {
     // A typical approach: x_next = x + x_dot*dt if the model outputs x_dot
     // If your model directly outputs next-state, just return the model result.
     // For demonstration: x_{t+1} = x + dt * f(x, u)
     // Adjust as needed if your model is purely discrete.
 
-    Eigen::VectorXd x_dot = getContinuousDynamics(state, control);
+    Eigen::VectorXd x_dot = getContinuousDynamics(state, control, time);
     return state + x_dot * timestep_;
 }
 
@@ -88,7 +90,8 @@ Eigen::VectorXd NeuralDynamicalSystem::getDiscreteDynamics(const Eigen::VectorXd
 //                           getStateJacobian
 // ----------------------------------------------------------------------------
 Eigen::MatrixXd NeuralDynamicalSystem::getStateJacobian(const Eigen::VectorXd& state,
-                                                        const Eigen::VectorXd& control) const
+                                                        const Eigen::VectorXd& control,
+                                                        double time) const
 {
     // Placeholder approach #1: Identity, as a quick stub
     // return Eigen::MatrixXd::Identity(state_dim_, state_dim_);
@@ -102,13 +105,13 @@ Eigen::MatrixXd NeuralDynamicalSystem::getStateJacobian(const Eigen::VectorXd& s
     Eigen::MatrixXd A(state_dim_, state_dim_);
 
     // Baseline
-    Eigen::VectorXd f0 = getContinuousDynamics(state, control);
+    Eigen::VectorXd f0 = getContinuousDynamics(state, control, time);
 
     for (int i = 0; i < state_dim_; ++i) {
         Eigen::VectorXd perturbed = state;
         perturbed(i) += eps;
 
-        Eigen::VectorXd f_pert = getContinuousDynamics(perturbed, control);
+        Eigen::VectorXd f_pert = getContinuousDynamics(perturbed, control, time);
         A.col(i) = (f_pert - f0) / eps;
     }
     return A;
@@ -118,20 +121,21 @@ Eigen::MatrixXd NeuralDynamicalSystem::getStateJacobian(const Eigen::VectorXd& s
 //                           getControlJacobian
 // ----------------------------------------------------------------------------
 Eigen::MatrixXd NeuralDynamicalSystem::getControlJacobian(const Eigen::VectorXd& state,
-                                                          const Eigen::VectorXd& control) const
+                                                          const Eigen::VectorXd& control,
+                                                          double time) const
 {
     // Similar naive finite-difference:
     const double eps = 1e-6;
     Eigen::MatrixXd B(state_dim_, control_dim_);
 
     // Baseline
-    Eigen::VectorXd f0 = getContinuousDynamics(state, control);
+    Eigen::VectorXd f0 = getContinuousDynamics(state, control, time);
 
     for (int j = 0; j < control_dim_; ++j) {
         Eigen::VectorXd ctrl_pert = control;
         ctrl_pert(j) += eps;
 
-        Eigen::VectorXd f_pert = getContinuousDynamics(state, ctrl_pert);
+        Eigen::VectorXd f_pert = getContinuousDynamics(state, ctrl_pert, time);
         B.col(j) = (f_pert - f0) / eps;
     }
     return B;
@@ -141,8 +145,9 @@ Eigen::MatrixXd NeuralDynamicalSystem::getControlJacobian(const Eigen::VectorXd&
 //                         Hessians (placeholders)
 // ----------------------------------------------------------------------------
 std::vector<Eigen::MatrixXd> NeuralDynamicalSystem::getStateHessian(
-    const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& /*state*/,
+    const Eigen::VectorXd& /*control*/,
+    double /*time*/) const
 {
     // Initialize vector of matrices (one matrix per state dimension)
     std::vector<Eigen::MatrixXd> hessian(state_dim_);
@@ -158,8 +163,9 @@ std::vector<Eigen::MatrixXd> NeuralDynamicalSystem::getStateHessian(
 }
 
 std::vector<Eigen::MatrixXd> NeuralDynamicalSystem::getControlHessian(
-    const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& /*state*/,
+    const Eigen::VectorXd& /*control*/,
+    double /*time*/) const
 {
     // Initialize vector of matrices (one matrix per state dimension)
     std::vector<Eigen::MatrixXd> hessian(state_dim_);
@@ -173,8 +179,9 @@ std::vector<Eigen::MatrixXd> NeuralDynamicalSystem::getControlHessian(
 }
 
 std::vector<Eigen::MatrixXd> NeuralDynamicalSystem::getCrossHessian(
-    const Eigen::VectorXd& state,
-    const Eigen::VectorXd& control) const
+    const Eigen::VectorXd& /*state*/,
+    const Eigen::VectorXd& /*control*/,
+    double /*time*/) const
 {
     // Initialize vector of matrices (one matrix per state dimension)
     std::vector<Eigen::MatrixXd> hessian(state_dim_);
@@ -185,6 +192,20 @@ std::vector<Eigen::MatrixXd> NeuralDynamicalSystem::getCrossHessian(
     // Placeholder implementation
     
     return hessian;
+}
+
+// ----------------------------------------------------------------------------
+//                    getContinuousDynamicsAutodiff
+// ----------------------------------------------------------------------------
+VectorXdual2nd NeuralDynamicalSystem::getContinuousDynamicsAutodiff(
+    const VectorXdual2nd& /*state*/,
+    const VectorXdual2nd& /*control*/,
+    double /*time*/) const {
+    throw std::logic_error(
+        "getContinuousDynamicsAutodiff is not implemented for NeuralDynamicalSystem "
+        "in a way that supports base class autodiff with external Torch models. "
+        "Please use the overridden Jacobian/Hessian methods specific to NeuralDynamicalSystem, "
+        "which should ideally use PyTorch's autograd.");
 }
 
 // ----------------------------------------------------------------------------
