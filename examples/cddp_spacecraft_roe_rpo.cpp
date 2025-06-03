@@ -202,14 +202,14 @@ int main()
     X_roe_initial[0] = initial_state_roe;
     for (int i = 0; i < num_steps; ++i) // Iterate up to num_steps
     {
-        X_roe_initial[i + 1] = roe_system->getDiscreteDynamics(X_roe_initial[i], U_accel_initial[i]);
+        X_roe_initial[i + 1] = roe_system->getDiscreteDynamics(X_roe_initial[i], U_accel_initial[i], i * dt);
     }
     std::vector<Eigen::VectorXd> X_roe_final(num_steps + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U_accel_final(num_steps, Eigen::VectorXd::Zero(control_dim));
     X_roe_final[0] = goal_state_roe;
     for (int i = 0; i < num_steps; ++i) // Iterate up to num_steps
     {
-        X_roe_final[i + 1] = roe_system->getDiscreteDynamics(X_roe_final[i], U_accel_final[i]);
+        X_roe_final[i + 1] = roe_system->getDiscreteDynamics(X_roe_final[i], U_accel_final[i], i * dt);
     }
 
     // Convert initial and final trajectory to HCW coordinates vector of doubles
