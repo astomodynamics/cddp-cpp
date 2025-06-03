@@ -45,18 +45,18 @@ endif()
 option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
 
 # SQP Configuration
-option(CDDP_CPP_SQP "Whether to use SQP solver" ON)
+option(CDDP_CPP_SQP "Whether to use SQP solver" OFF)
 
 # CasADi Configuration
-option(CDDP_CPP_CASADI "Whether to use CasADi" ON)
+option(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
 
 # Acado Configuration 
-option(CDDP_CPP_ACADO "Whether to use Acado" ON)
+option(CDDP_CPP_ACADO "Whether to use Acado" OFF)
 
 # Gurobi Configuration
 # If you want to install Gurobi, please follow the instructions at:
 # https://support.gurobi.com/hc/en-us/articles/4534161999889-How-do-I-install-Gurobi-Optimizer 
-option(CDDP_CPP_GUROBI "Whether to use Gurobi solver." ON)
+option(CDDP_CPP_GUROBI "Whether to use Gurobi solver." OFF)
 option(GUROBI_ROOT "Path to Gurobi installation" "") 
 if(APPLE)
   set(GUROBI_ROOT /Library/gurobi1201/macos_universal2)  # macOS default path
