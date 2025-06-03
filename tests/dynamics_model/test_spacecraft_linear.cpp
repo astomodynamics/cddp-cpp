@@ -141,49 +141,49 @@ TEST(HCWTest, RelativeTrajectory) {
         state = hcw.getDiscreteDynamics(state, control, 0.0);
     }
 
-    // Plot the trajectory
-    namespace plt = matplot;    
-    std::vector<double> t_states_plot(num_steps + 1);
-    for(int i = 0; i <= num_steps; ++i) t_states_plot[i] = i * timestep;
+    // // Plot the trajectory
+    // namespace plt = matplot;    
+    // std::vector<double> t_states_plot(num_steps + 1);
+    // for(int i = 0; i <= num_steps; ++i) t_states_plot[i] = i * timestep;
 
 
-    // X-Y plane trajectory 
-    plt::figure();
-    plt::plot(y_pos_plot, x_pos_plot)->line_width(2).display_name("Trajectory");
-    plt::hold(true);
-    if (!x_pos_plot.empty() && !y_pos_plot.empty()){ 
-         plt::scatter(std::vector<double>{y_pos_plot.front()}, std::vector<double>{x_pos_plot.front()})
-            ->marker_color("g").marker_style("o").marker_size(10).display_name("Start");
-         plt::scatter(std::vector<double>{y_pos_plot.back()}, std::vector<double>{x_pos_plot.back()})
-            ->marker_color("r").marker_style("x").marker_size(10).display_name("End");
-    }
-    plt::hold(false);
-    plt::xlabel("y (m) [In-track]");
-    plt::ylabel("x (m) [Radial]");
-    plt::legend();
-    plt::title("HCW X-Y Plane Trajectory");
-    plt::axis(plt::equal);
-    plt::gca()->x_axis().reverse(true); 
+    // // X-Y plane trajectory 
+    // plt::figure();
+    // plt::plot(y_pos_plot, x_pos_plot)->line_width(2).display_name("Trajectory");
+    // plt::hold(true);
+    // if (!x_pos_plot.empty() && !y_pos_plot.empty()){ 
+    //      plt::scatter(std::vector<double>{y_pos_plot.front()}, std::vector<double>{x_pos_plot.front()})
+    //         ->marker_color("g").marker_style("o").marker_size(10).display_name("Start");
+    //      plt::scatter(std::vector<double>{y_pos_plot.back()}, std::vector<double>{x_pos_plot.back()})
+    //         ->marker_color("r").marker_style("x").marker_size(10).display_name("End");
+    // }
+    // plt::hold(false);
+    // plt::xlabel("y (m) [In-track]");
+    // plt::ylabel("x (m) [Radial]");
+    // plt::legend();
+    // plt::title("HCW X-Y Plane Trajectory");
+    // plt::axis(plt::equal);
+    // plt::gca()->x_axis().reverse(true); 
 
-    // 3D Trajectory
-    plt::figure();
-    plt::plot3(x_pos_plot, y_pos_plot, z_pos_plot, "-o")->line_width(2).marker_size(4).display_name("Trajectory");
-    plt::hold(true);
-    if (!x_pos_plot.empty()){ 
-         plt::scatter3(std::vector<double>{x_pos_plot.front()}, std::vector<double>{y_pos_plot.front()}, std::vector<double>{z_pos_plot.front()})
-            ->marker_color("g").marker_style("o").marker_size(10).display_name("Start");
-         plt::scatter3(std::vector<double>{x_pos_plot.back()}, std::vector<double>{y_pos_plot.back()}, std::vector<double>{z_pos_plot.back()})
-            ->marker_color("r").marker_style("x").marker_size(10).display_name("End");
-    }
-    plt::hold(false);
-    plt::xlabel("x (m) [Radial]");
-    plt::ylabel("y (m) [In-track]");
-    plt::zlabel("z (m) [Cross-track]");
-    plt::legend();
-    plt::title("3D HCW Trajectory");
-    plt::axis(plt::equal); 
+    // // 3D Trajectory
+    // plt::figure();
+    // plt::plot3(x_pos_plot, y_pos_plot, z_pos_plot, "-o")->line_width(2).marker_size(4).display_name("Trajectory");
+    // plt::hold(true);
+    // if (!x_pos_plot.empty()){ 
+    //      plt::scatter3(std::vector<double>{x_pos_plot.front()}, std::vector<double>{y_pos_plot.front()}, std::vector<double>{z_pos_plot.front()})
+    //         ->marker_color("g").marker_style("o").marker_size(10).display_name("Start");
+    //      plt::scatter3(std::vector<double>{x_pos_plot.back()}, std::vector<double>{y_pos_plot.back()}, std::vector<double>{z_pos_plot.back()})
+    //         ->marker_color("r").marker_style("x").marker_size(10).display_name("End");
+    // }
+    // plt::hold(false);
+    // plt::xlabel("x (m) [Radial]");
+    // plt::ylabel("y (m) [In-track]");
+    // plt::zlabel("z (m) [Cross-track]");
+    // plt::legend();
+    // plt::title("3D HCW Trajectory");
+    // plt::axis(plt::equal); 
 
-    plt::show(); // Show all plots
+    // plt::show(); // Show all plots
 }
 
 // Helper function to create spacecraft marker coordinates

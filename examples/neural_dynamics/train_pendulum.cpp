@@ -217,7 +217,7 @@ private:
 
                 // if j < seq_length_-1, step forward
                 if (j < seq_length_ - 1) {
-                    state = pendulum_.getDiscreteDynamics(state, control);
+                    state = pendulum_.getDiscreteDynamics(state, control, 0.0);
                 }
             }
         }
