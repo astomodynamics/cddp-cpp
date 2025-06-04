@@ -35,95 +35,7 @@
 #include "cddp_core/boxqp.hpp"
 
 namespace cddp {
-
-struct CDDPOptions {
-    double cost_tolerance = 1e-4;                   // Tolerance for changes in cost function
-    double grad_tolerance = 1e-4;                   // Tolerance for cost gradient magnitude
-    int max_iterations = 1;                         // Maximum number of iterations
-    double max_cpu_time = 0.0;                      // Maximum CPU time for the solver in seconds
-
-    // Line search method
-    int max_line_search_iterations = 11;            // Maximum iterations for line search
-    double backtracking_coeff = 1.0;                // Coefficient for line search backtracking
-    double backtracking_min = 1e-7;                  // Minimum step size for line search
-    double backtracking_factor = 0.5;   // Factor for line search backtracking
-    double minimum_reduction_ratio = 1e-6;          // Minimum reduction for line search
-
-    // interior-point method
-    double mu_initial = 1e-2;                       // Initial barrier coefficient
-    double mu_min = 1e-8;                           // Minimum barrier coefficient
-    double mu_max = 1e1;                            // Maximum barrier coefficient
-    double mu_reduction_ratio = 0.1;                         // Factor for barrier coefficient
-
-    // log-barrier method
-    double barrier_coeff = 1e-1;                    // Coefficient for log-barrier method
-    double barrier_factor = 0.10;                   // Factor for log-barrier method
-    double barrier_tolerance = 1e-8;                // Tolerance for log-barrier method
-    double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
-    int barrier_order = 2;                          // Order for log-barrier method
-    double filter_acceptance = 1e-8;                            // Small value for filter acceptance
-    double constraint_tolerance = 1e-12;             // Tolerance for constraint violation
-    double relaxation_delta = 1e-1;                 // Relaxation delta for relaxed log-barrier method
-
-    // ipddp options
-    double dual_scale = 1e-1;                       // Initial scale for dual variables
-    double slack_scale = 1e-2;                      // Initial scale for slack variables
-    double lambda_scale = 1e-6;                     // Initial scale for lambda variables
-
-    // ipddp line-search options
-    double filter_merit_acceptance = 1e-6;         // Small value for merit filter acceptance
-    double filter_violation_acceptance = 1e-6;     // Small value for violation filter acceptance
-    double filter_maximum_violation = 1e+4;         // Maximum violation for filter acceptance
-    double filter_minimum_violation = 1e-7;         // Minimum violation for filter acceptance
-    double armijo_constant = 1e-4;                   // Armijo constant c1 for filter acceptance
-
-    double ipddp_scaling_max = 100.0;               // Maximum scaling factor for ipddp used in termination check
-    double msipddp_scaling_max = 100.0;             // Maximum scaling factor for msipddp used in termination check
-
-    // Regularization options
-    std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
     
-    double regularization_state = 1e-6;             // Regularization for state
-    double regularization_state_step = 1.0;         // Regularization step for state
-    double regularization_state_max = 1e6;          // Maximum regularization
-    double regularization_state_min = 1e-8;         // Minimum regularization
-    double regularization_state_factor = 1e1;       // Factor for state regularization
-
-    double regularization_control = 1e-6;           // Regularization for control
-    double regularization_control_step = 1.0;       // Regularization step for control
-    double regularization_control_max = 1e7;        // Maximum regularization
-    double regularization_control_min = 1e-8;       // Minimum regularization
-    double regularization_control_factor = 1e1;     // Factor for control regularization
-
-    // Other options
-    bool verbose = true;                            // Option for debug printing
-    bool debug = false;                             // Option for debug mode
-    bool header_and_footer = true;                  // Option for header and footer
-    bool is_ilqr = true;                            // Option for iLQR
-    bool use_parallel = true;                      // Option for parallel computation
-    int num_threads = max_line_search_iterations; // Number of threads to use
-    bool is_relaxed_log_barrier = false;            // Use relaxed log-barrier method
-    bool early_termination = true;                 // Terminate early if cost does not change NOTE: This may be critical for some problems
-
-    // Boxqp options
-    double boxqp_max_iterations = 100;              // Maximum number of iterations for boxqp
-    double boxqp_min_grad = 1e-8;                   // Minimum gradient norm for boxqp
-    double boxqp_min_rel_improve = 1e-8;            // Minimum relative improvement for boxqp
-    double boxqp_step_dec = 0.6;                    // Step decrease factor for boxqp
-    double boxqp_min_step = 1e-22;                  // Minimum step size for boxqp
-    double boxqp_armijo = 0.1;                      // Armijo parameter for boxqp
-    bool boxqp_verbose = false;                     // Print debug info for boxqp
-
-    // msipddp options
-    int ms_segment_length = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
-    std::string ms_rollout_type = "hybrid"; // Rollout type: ["linear", "nonlinear", "hybrid"]
-    double ms_defect_tolerance_for_single_shooting = 1e-3; // Defect norm tolerance to switch to single shooting at segment boundaries
-    double barrier_update_factor = 0.2; // Factor for barrier update: optimality_gap <= barrier_update_factor * mu; [0.0, 1.0]
-    double barrier_update_power = 1.5; // Power for barrier update: mu_new = mu * barrier_update_power; [1.0, 2.0]
-    double minimum_fraction_to_boundary = 0.99; // Minimum fraction to boundary for barrier update: tau = std::max(0.99, 1.0 - mu_);
-    bool controlled_rollout = false; // Use controlled rollout for MSIPDDP
-};
-
 struct CDDPSolution {
     std::vector<double> time_sequence;
     std::vector<Eigen::VectorXd> control_sequence;
@@ -448,8 +360,6 @@ private:
     std::vector<Eigen::VectorXd> Q_U_;     
 
     // Regularization parameters
-    double regularization_state_;
-    double regularization_state_step_;
     double regularization_control_;
     double regularization_control_step_;   
 
@@ -457,8 +367,14 @@ private:
     BoxQPOptions boxqp_options_;
     BoxQPSolver boxqp_solver_;
 
-    double optimality_gap_ = 1e+10;
-    double kkt_error_ = 1e+10; // maximum KKT residual except Qu term
+    // double inf_pr_ = std::numeric_limits<double>::infinity();
+    // double inf_du_ = std::numeric_limits<double>::infinity();
+    // double barrier_param_ = std::numeric_limits<double>::infinity();
+    // double ku_norm_ = std::numeric_limits<double>::infinity();
+    // double regularization_control_ = std::numeric_limits<double>::infinity();
+    // double alpha_du_ = std::numeric_limits<double>::infinity();
+    // double alpha_pr_ = std::numeric_limits<double>::infinity();
+    // int alpha
 };
 } // namespace cddp
 #endif // CDDP_CDDP_CORE_HPP
