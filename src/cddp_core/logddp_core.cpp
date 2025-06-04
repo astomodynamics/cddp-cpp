@@ -403,8 +403,9 @@ namespace cddp
                 printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_);
             }
 
-            // Check termination=
-            if (std::max(optimality_gap_, constraint_violation_) <= options_.grad_tolerance)
+            // Check termination
+            double termination_metric = std::max(optimality_gap_, constraint_violation_);
+            if (termination_metric <= options_.grad_tolerance)
             {
                 if (options_.debug)
                 {
@@ -415,7 +416,7 @@ namespace cddp
             }
 
             // TODO: This should be removed
-            if (abs(dJ_) < options_.cost_tolerance && abs(dL_) < options_.cost_tolerance && constraint_violation_ <= options_.grad_tolerance)
+            if (abs(dJ_) < options_.cost_tolerance && abs(dL_) < options_.cost_tolerance && termination_metric <= options_.grad_tolerance * 100.0)
             {
                 if (options_.debug)
                 {
@@ -426,17 +427,18 @@ namespace cddp
             }
 
             // Barrier update logic
-            kkt_error_ = std::max(optimality_gap_, constraint_violation_);
-            if (forward_pass_success && kkt_error_ < options_.grad_tolerance)
+            if (forward_pass_success && termination_metric < options_.grad_tolerance)
             {
                 // Dramatically decrease mu if optimization is going well
                 mu_ = std::max(mu_ * 0.1, options_.barrier_tolerance);
+                relaxation_delta_ = std::max(options_.grad_tolerance / 10.0, std::min(relaxation_delta_ * 0.1, std::pow(relaxation_delta_, options_.barrier_update_power)));
                 resetLogDDPFilter();
             }
             else
             {
                 // Normal decrease rate
                 mu_ = std::max(options_.grad_tolerance / 10.0, std::min(options_.barrier_update_factor * mu_, std::pow(mu_, options_.barrier_update_power)));
+                relaxation_delta_ = std::max(options_.grad_tolerance / 10.0, std::min(relaxation_delta_ * 0.1, std::pow(relaxation_delta_, options_.barrier_update_power)));
                 resetLogDDPFilter();
             }
 
@@ -643,63 +645,48 @@ namespace cddp
         // Rollout loop
         for (int t = 0; t < horizon_; ++t)
         {
-            const Eigen::VectorXd delta_x_k = X_new[t] - X_[t];
-
-            // Update control
-            const Eigen::VectorXd delta_u_k = alpha * k_u_[t] + K_u_[t] * delta_x_k;
-            U_new[t] = U_[t] + delta_u_k;
-
-            // --- Rollout Logic  ---
-            Eigen::VectorXd dynamics_eval_for_F_new_t;
-
-            if (options_.ms_rollout_type == "nonlinear" || options_.ms_rollout_type == "hybrid")
-            {
-                dynamics_eval_for_F_new_t = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
-            }
-            else // options_.ms_rollout_type == "linear"
-            {
-                dynamics_eval_for_F_new_t = F_[t] + A_[t] * delta_x_k + B_[t] * delta_u_k;
-            }
-            F_new[t] = dynamics_eval_for_F_new_t; // Store the calculated dynamics/approximation
+            const Eigen::VectorXd delta_x_t = X_new[t] - X_[t];
 
             // Determine if the *next* step (t+1) starts a new segment boundary
-            const Eigen::VectorXd defect_at_segment_end = F_[t] - X_[t + 1];
             bool is_segment_boundary = (ms_segment_length_ > 0) &&
                                        ((t + 1) % ms_segment_length_ == 0) &&
                                        (t + 1 < horizon_);
-            bool defect_is_large = defect_at_segment_end.lpNorm<Eigen::Infinity>() > options_.ms_defect_tolerance_for_single_shooting;
-            bool apply_gap_closing_strategy = is_segment_boundary && defect_is_large;
+            bool apply_gap_closing_strategy = is_segment_boundary;
 
+            // Update control
+            Eigen::VectorXd delta_u_k = alpha * k_u_[t] + K_u_[t] * delta_x_t;
+            U_new[t] = U_[t] + delta_u_k;
             if (apply_gap_closing_strategy)
             {
                 if (options_.ms_rollout_type == "nonlinear")
                 {
-                    X_new[t + 1] = dynamics_eval_for_F_new_t + alpha * defect_at_segment_end;
+                    F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
+                    X_new[t + 1] = X_[t + 1] + (F_new[t] - F_[t]) + alpha * (F_[t] - X_[t + 1]);
                 }
-                else if (options_.ms_rollout_type == "linear" || options_.ms_rollout_type == "hybrid")
+                else if (options_.ms_rollout_type == "hybrid")
                 {
-                    X_new[t + 1] = X_[t] + A_[t] * delta_x_k + alpha * B_[t] * k_u_[t] + alpha * defect_at_segment_end;
+                    F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
+
+                    // Continuous dynamics
+                    const auto [Fx, Fu] = system_->getJacobians(X_[t], U_[t], t * timestep_);
+                    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep_ * Fx;
+                    Eigen::MatrixXd B = timestep_ * Fu;
+
+                    X_new[t + 1] = X_[t + 1] + (A + B * K_u_[t]) * delta_x_t + alpha * (B * k_u_[t] + F_[t] - X_[t + 1]);
                 }
             }
-            else // Not a segment boundary or defect is small, so no gap closing strategy applied
+            else
             {
-                if (options_.ms_rollout_type == "nonlinear" || options_.ms_rollout_type == "hybrid")
-                {
-                    X_new[t + 1] = dynamics_eval_for_F_new_t; // This is the nonlinear dynamics evaluation
-                }
-                else // options_.ms_rollout_type == "linear"
-                {
-                    X_new[t + 1] = X_[t] + A_[t] * delta_x_k + B_[t] * delta_u_k; // Linear rollout for state
-                }
+                F_new[t] = system_->getDiscreteDynamics(X_new[t], U_new[t], t * timestep_);
+                X_new[t + 1] = F_new[t];
             }
-            // --- End Rollout Logic ---
 
             // --- Robustness Check during Rollout ---
             if (!X_new[t + 1].allFinite() || !U_new[t].allFinite())
             {
                 if (options_.debug)
                 {
-                    std::cerr << "[MSIPDDP Forward Pass] NaN/Inf detected during HYBRID rollout (nonlinear within, linear between) at t=" << t
+                    std::cerr << "[LogDDP Forward Pass] NaN/Inf detected during HYBRID rollout (nonlinear within, linear between) at t=" << t
                               << " for alpha=" << alpha << std::endl; // Updated debug message
                 }
                 result.success = false;
