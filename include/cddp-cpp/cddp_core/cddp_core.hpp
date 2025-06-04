@@ -56,7 +56,7 @@ struct CDDPOptions {
     double mu_reduction_ratio = 0.1;                         // Factor for barrier coefficient
 
     // log-barrier method
-    double barrier_coeff = 1e-0;                    // Coefficient for log-barrier method
+    double barrier_coeff = 1e-1;                    // Coefficient for log-barrier method
     double barrier_factor = 0.10;                   // Factor for log-barrier method
     double barrier_tolerance = 1e-8;                // Tolerance for log-barrier method
     double relaxation_coeff = 1.0;                  // Relaxation for log-barrier method
@@ -76,6 +76,9 @@ struct CDDPOptions {
     double filter_maximum_violation = 1e+4;         // Maximum violation for filter acceptance
     double filter_minimum_violation = 1e-7;         // Minimum violation for filter acceptance
     double armijo_constant = 1e-4;                   // Armijo constant c1 for filter acceptance
+
+    double ipddp_scaling_max = 100.0;               // Maximum scaling factor for ipddp used in termination check
+    double msipddp_scaling_max = 100.0;             // Maximum scaling factor for msipddp used in termination check
 
     // Regularization options
     std::string regularization_type = "control";    // different regularization types: ["none", "control", "state", "both"]
@@ -111,12 +114,12 @@ struct CDDPOptions {
     double boxqp_armijo = 0.1;                      // Armijo parameter for boxqp
     bool boxqp_verbose = false;                     // Print debug info for boxqp
 
-    // msipddp optionsupdate
+    // msipddp options
     int ms_segment_length = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
     std::string ms_rollout_type = "hybrid"; // Rollout type: ["linear", "nonlinear", "hybrid"]
     double ms_defect_tolerance_for_single_shooting = 1e-3; // Defect norm tolerance to switch to single shooting at segment boundaries
-    double barrier_update_factor = 0.5; // Factor for barrier update: optimality_gap <= barrier_update_factor * mu; [0.0, 1.0]
-    double barrier_update_power = 1.2; // Power for barrier update: mu_new = mu * barrier_update_power; [1.0, 2.0]
+    double barrier_update_factor = 0.2; // Factor for barrier update: optimality_gap <= barrier_update_factor * mu; [0.0, 1.0]
+    double barrier_update_power = 1.5; // Power for barrier update: mu_new = mu * barrier_update_power; [1.0, 2.0]
     double minimum_fraction_to_boundary = 0.99; // Minimum fraction to boundary for barrier update: tau = std::max(0.99, 1.0 - mu_);
     bool controlled_rollout = false; // Use controlled rollout for MSIPDDP
 };
@@ -382,7 +385,6 @@ private:
     std::unique_ptr<DynamicalSystem> system_;        
     std::unique_ptr<Objective> objective_;
     std::map<std::string, std::unique_ptr<Constraint>> constraint_set_; 
-    std::unique_ptr<LogBarrier> log_barrier_;
     std::unique_ptr<RelaxedLogBarrier> relaxed_log_barrier_;
     Eigen::VectorXd initial_state_;      
     Eigen::VectorXd reference_state_;      // Desired reference state
