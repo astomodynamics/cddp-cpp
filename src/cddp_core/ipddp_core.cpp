@@ -418,9 +418,22 @@ namespace cddp
                 printIteration(iter, J_, L_, optimality_gap_, regularization_state_, regularization_control_, alpha_, mu_, constraint_violation_);
             }
 
+
+
             // Check termination
-            double mu_vs_kkt_error = std::max(mu_, kkt_error_);
-            if (std::max(optimality_gap_, mu_vs_kkt_error) <= options_.grad_tolerance)
+            const int total_dual_dim = getTotalDualDim(); 
+            double l1_norm_of_all_multipliers = 0.0;
+            for (const auto& s_map_entry : S_) {
+                const std::vector<Eigen::VectorXd>& s_trajectory = s_map_entry.second;
+                for (const Eigen::VectorXd& s_t : s_trajectory) {
+                    l1_norm_of_all_multipliers += s_t.lpNorm<1>();
+                }
+            }
+            double scaling_1 = std::max(options_.ipddp_scaling_max, l1_norm_of_all_multipliers / (total_dual_dim * horizon_)) / options_.ipddp_scaling_max;
+            double scaling_2 = std::max(options_.ipddp_scaling_max, l1_norm_of_all_multipliers / (total_dual_dim * horizon_)) / options_.ipddp_scaling_max;
+            double termination_metric = std::max(optimality_gap_ / scaling_1, kkt_error_ / scaling_2);
+
+            if (termination_metric <= options_.grad_tolerance)
             {
                 if (options_.debug)
                 {
@@ -429,7 +442,7 @@ namespace cddp
                 solution.converged = true;
                 break;
             }
-            if (abs(dJ_) < options_.cost_tolerance && abs(dL_) < options_.cost_tolerance && mu_vs_kkt_error <= options_.grad_tolerance)
+            if (abs(dJ_) < options_.cost_tolerance && abs(dL_) < options_.cost_tolerance && termination_metric <= options_.grad_tolerance * 10)
             {
                 if (options_.debug)
                 {
@@ -440,33 +453,9 @@ namespace cddp
             }
 
             // Barrier update logic
-            if (kkt_error_ <= options_.barrier_update_factor * mu_)
+            if (termination_metric <= options_.barrier_update_factor * mu_)
             {
-                if (constraint_set_.empty())
-                {
-                }
-                else
-
-                {
-                    double linear_reduction_target_factor = options_.barrier_update_factor;
-                    if (mu_ > 1e-12)
-                    {
-                        double kkt_progress_metric = kkt_error_ / mu_;
-                        // Satisfying the KKT conditions for the current mu.
-                        // So, we can be more aggressive in reducing mu.
-                        if (kkt_progress_metric < 0.1 * options_.barrier_update_factor)
-                        {
-                            // Significantly better than threshold: make reduction factor more aggressive
-                            linear_reduction_target_factor = options_.barrier_update_factor * 0.5;
-                        }
-                        else if (kkt_progress_metric < 0.5 * options_.barrier_update_factor)
-                        {
-                            // Moderately better than threshold: make reduction factor slightly more aggressive
-                            linear_reduction_target_factor = options_.barrier_update_factor * 0.75;
-                        }
-                    }
-                    mu_ = std::max(options_.grad_tolerance / 10.0, std::min(linear_reduction_target_factor * mu_, std::pow(mu_, options_.barrier_update_power)));
-                }
+                mu_ = std::max(options_.grad_tolerance / 10.0, std::min(options_.barrier_update_factor * mu_, std::pow(mu_, options_.barrier_update_power)));
                 resetIPDDPFilter();
             }
         }
