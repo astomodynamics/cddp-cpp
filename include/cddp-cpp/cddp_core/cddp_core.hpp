@@ -17,364 +17,194 @@
 #define CDDP_CDDP_CORE_HPP
 
 #include <iostream> // For std::cout, std::cerr
-#include <string>  // For std::string
-#include <memory> // For std::unique_ptr
-#include <map>    // For std::map`
-#include <iomanip> // For std::setw
+#include <string>   // For std::string
+#include <memory>   // For std::unique_ptr
+#include <map>      // For std::map`
+#include <iomanip>  // For std::setw
+#include <any>      // For std::any
+#include <optional> // For std::optional
 #include <Eigen/Dense>
 #include <vector>
 #include <regex>
 #include <future>
 #include <thread>
-// #include "torch/torch.h"
 
-#include "cddp_core/dynamical_system.hpp" 
+#include "cddp_core/dynamical_system.hpp"
 #include "cddp_core/objective.hpp"
 #include "cddp_core/constraint.hpp"
 #include "cddp_core/barrier.hpp"
 #include "cddp_core/boxqp.hpp"
+#include "cddp_core/options.hpp"
 
-namespace cddp {
-    
-struct CDDPSolution {
-    std::vector<double> time_sequence;
-    std::vector<Eigen::VectorXd> control_sequence;
-    std::vector<Eigen::VectorXd> state_sequence;
-    std::vector<Eigen::VectorXd> dual_sequence;
-    std::vector<Eigen::VectorXd> slack_sequence;
-    std::vector<Eigen::VectorXd> costate_sequence;
-    std::vector<double> cost_sequence;
-    std::vector<double> lagrangian_sequence;
-    std::vector<Eigen::MatrixXd> control_gain;
-    std::vector<Eigen::MatrixXd> dual_gain;
-    std::vector<Eigen::MatrixXd> slack_gain;
-    std::vector<Eigen::MatrixXd> lambda_gain;
-    int iterations;
-    double alpha;
-    bool converged;
-    double solve_time;
-};
-
-struct ForwardPassResult {
-    std::vector<Eigen::VectorXd> state_sequence;
-    std::vector<Eigen::VectorXd> control_sequence;
-    std::vector<Eigen::VectorXd> dynamics_sequence;
-    std::vector<Eigen::VectorXd>  costate_sequence;
-    std::map<std::string, std::vector<Eigen::VectorXd>> dual_sequence;
-    std::map<std::string, std::vector<Eigen::VectorXd>> slack_sequence;
-    std::map<std::string, std::vector<Eigen::VectorXd>>  constraint_sequence;
-    double cost;
-    double lagrangian;
-    double alpha = 1.0;
-    bool success = false;
-    double constraint_violation = 0.0;
-    double defect_norm = 0.0; // L1 norm of defects (f(x,u) - x_next)
-};
-
-struct FilterPoint {
-    double log_cost;
-    double violation;
-    
-    // Default constructor
-    FilterPoint() : log_cost(0.0), violation(0.0) {}
-
-    // Constructor with parameters
-    FilterPoint(double lc, double v) : log_cost(lc), violation(v) {}
-
-    bool dominates(const FilterPoint& other) const {
-        return log_cost <= other.log_cost && violation <= other.violation;
-    }
-};
-
-class CDDP {
-public:
-    // Constructor
-    CDDP(const Eigen::VectorXd& initial_state, 
-         const Eigen::VectorXd& reference_state,
-         int horizon,
-         double timestep,
-         std::unique_ptr<DynamicalSystem> system = nullptr,
-        std::unique_ptr<Objective> objective = nullptr,
-        const CDDPOptions& options = CDDPOptions()); 
-
-    // Accessor methods
-
-    // Getters
-    const DynamicalSystem& getSystem() const { return *system_; }
-    const Objective& getObjective() const { return *objective_; }
-    const Eigen::VectorXd& getInitialState() const { return initial_state_; }
-    const Eigen::VectorXd& getReferenceState() const { return reference_state_; }
-    int getHorizon() const { return horizon_; }
-    double getTimestep() const { return timestep_; }
-    int getStateDim() const { return system_->getStateDim(); }
-    int getControlDim() const { return system_->getControlDim(); }
-    int getTotalDualDim() const { return total_dual_dim_; }
-    const CDDPOptions& getOptions() const { return options_; }
-
-    // Setters
-    /**
-     * @brief Set the Dynamical System object
-     * @param system Dynamical system object (unique_ptr)
-     */
-    void setDynamicalSystem(std::unique_ptr<DynamicalSystem> system) { system_ = std::move(system); }
+namespace cddp
+{
 
     /**
-     * @brief Set the Initial state
-     * @param initial_state Initial state
+     * @brief Solution data from the CDDP solver, as a map of string keys to `std::any` values.
+     *
+     * Retrieve values using `std::any_cast<Type>(solution.at("key"))`.
+     * Always check `solution.count("key")` before `.at()` to prevent `std::out_of_range`.
+     * Handle `std::bad_any_cast` for type mismatches.
+     * Optional keys are present only if computed by the specific solver.
+     *
+     * --- General Information ---
+     * - "solver_name":                   std::string (Name of the solver used, e.g., "IPDDP")
+     * - "status_message":                std::string (Termination status, e.g., "OptimalSolutionFound")
+     * - "iterations_completed":          int (Number of iterations)
+     * - "solve_time_ms":                 double (Total solver time in milliseconds)
+     * - "final_objective":               double (Final objective cost J(x,u))
+     * - "final_step_length":             double (Final line search step size; use "final_step_length_primal" / "_dual" if distinct)
+     *
+     * --- Primary Solution Trajectories ---
+     * - "time_points":                   std::vector<double> (Time points t_0..t_N)
+     * - "state_trajectory":              std::vector<Eigen::VectorXd> (States X_0..X_N)
+     * - "control_trajectory":            std::vector<Eigen::VectorXd> (Controls U_0..U_{N-1})
+     *
+     * --- Iteration History (Optional) ---
+     *   (Vectors indexed by iteration number)
+     * - "history_objective":             std::vector<double> (Objective J)
+     * - "history_merit_function":        std::vector<double> (Merit function value, e.g., for IPMs)
+     * - "history_primal_infeasibility":  std::vector<double> (Primal constraint violation norm (inf_pr), including dynamics defects)
+     * - "history_dual_infeasibility":    std::vector<double> (Lagrangian gradient norm (inf_du) or other dual infeasibility)
+     * - "history_barrier_mu":            std::vector<double> (Barrier parameter (mu) for IPMs; user can log10 for "lg(mu)")
+     * - "history_regularization":        std::map<std::string, std::vector<double>> (Regularization values; user can log10 for "lg(rg)")
+     * - "history_step_length_primal":    std::vector<double> (Primal step length (alpha_pr))
+     * - "history_step_length_dual":      std::vector<double> (Dual step length (alpha_du))
+     * - "history_linesearch_iterations": std::vector<int> (Line search sub-iterations (ls))
+     *
+     * --- Final Metrics (at termination, Optional) ---
+     * - "final_primal_infeasibility":    double (Total primal constraint violation norm, including dynamics defects)
+     * - "final_dual_infeasibility":      double (Lagrangian gradient norm or other dual infeasibility metric)
+     *
+     * --- Controller Gains (Feedback Policy, Optional) ---
+     * - "control_feedforward_gains_k":   std::vector<Eigen::VectorXd> (Feedforward gains k_u)
+     *
+     * --- Solver-Specific Internal Metrics (at termination, Optional) ---
+     * - "final_barrier_parameter_mu":    double (Barrier parameter mu for IPMs; smallness implies complementarity)
+     * - "final_regularization_values":   std::map<std::string, double> (Final regularization values, e.g., {"control_rg": value})
+     * - "total_linesearch_sub_iterations": int (Total line search sub-iterations over all main iterations)
      */
-    void setInitialState(const Eigen::VectorXd& initial_state) { initial_state_ = initial_state; }
+    using CDDPSolution = std::map<std::string, std::any>;
 
-    /**
-     * @brief Set the Reference state
-     * @param reference_state  Reference state
-     */
-    void setReferenceState(const Eigen::VectorXd& reference_state) {        
-        reference_state_ = reference_state; 
-        // Update the objective reference state
-        objective_->setReferenceState(reference_state);   
-    }
+    struct ForwardPassResult
+    {
+        // Core trajectories always computed in a forward pass
+        std::vector<Eigen::VectorXd> state_trajectory;
+        std::vector<Eigen::VectorXd> control_trajectory;
 
-    void setReferenceStates(const std::vector<Eigen::VectorXd>& reference_states) {
-        reference_states_ = reference_states;
-        // Update the objective reference states
-        objective_->setReferenceStates(reference_states);
-    }
+        // Cost and merit function values
+        double cost = 0.0;
+        double merit_function = 0.0;
 
-    /**
-     * @brief Set the time horizon for the problem
-     * @param horizon Time horizon
-     */
-    void setHorizon(int horizon) { horizon_ = horizon; }
+        // Line search step size that produced this result
+        double alpha = 1.0;
 
-    /**
-     * @brief Set the time step for the problem
-     * @param timestep Time step
-     */
-    void setTimestep(double timestep) { timestep_ = timestep; }
+        // Status of this particular forward pass trial
+        bool success = false;
 
-    /**
-     * @brief Set the options for the solver
-     * @param options Solver options
-     */
-    void setOptions(const CDDPOptions& options) { options_ = options; }
+        // Metrics specific to this trial
+        double constraint_violation_inf_norm = 0.0;
+        double dynamics_defect_inf_norm = 0.0;
+        double slack_variable_1_norm = 0.0;
 
-    /**
-     * @brief Set the Objective function
-     * @param objective Objective function object (unique_ptr)
-     */
-    void setObjective(std::unique_ptr<Objective> objective) { objective_ = std::move(objective); }
+        // Optional: Only relevant for certain solver strategies during their forward pass
+        std::optional<std::vector<Eigen::VectorXd>> dynamics_trajectory;
+        std::optional<std::vector<Eigen::VectorXd>> costate_trajectory;
+        std::optional<std::map<std::string, std::vector<Eigen::VectorXd>>> dual_trajectory;
+        std::optional<std::map<std::string, std::vector<Eigen::VectorXd>>> slack_trajectory;
+        std::optional<std::map<std::string, std::vector<Eigen::VectorXd>>> constraint_eval_trajectory;
 
-    /**
-     * @brief Set the Initial Trajectory 
-     * @param X state trajectory
-     * @param U control trajectory
-     */
-    void setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U);
-    
-    /**
-     * @brief Add a constraint to the problem
-     * 
-     * @param constraint_name constraint name given by the user
-     * @param constraint constraint object
-     */
-    void addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
-        // Insert into the map
-        constraint_set_[constraint_name] = std::move(constraint);
+        // Default constructor
+        ForwardPassResult() = default;
+    };
 
-        // Increment total_dual_dim_
-        int dim = constraint_set_[constraint_name]->getDualDim();
-        total_dual_dim_ += dim;
+    class CDDP
+    {
+    public:
+        // Constructor
+        CDDP(const Eigen::VectorXd &initial_state,
+             const Eigen::VectorXd &reference_state,
+             int horizon,
+             double timestep,
+             std::unique_ptr<DynamicalSystem> system = nullptr,
+             std::unique_ptr<Objective> objective = nullptr,
+             const CDDPOptions &options = CDDPOptions());
 
-        initialized_ = false; // Reset the initialization flag
-    }
+        // --- Accessor methods ---
+        // Getters for problem definition
+        const DynamicalSystem &getSystem() const { return *system_; }
+        const Objective &getObjective() const { return *objective_; }
+        const Eigen::VectorXd &getInitialState() const { return initial_state_; }
+        const Eigen::VectorXd &getReferenceState() const { return reference_state_; } // Potentially multiple reference states
+        const std::vector<Eigen::VectorXd> &getReferenceStates() const { return reference_states_; }
+        int getHorizon() const { return horizon_; }
+        double getTimestep() const { return timestep_; }
+        int getStateDim() const;
+        int getControlDim() const;
+        int getTotalDualDim() const;
+        const CDDPOptions &getOptions() const { return options_; }
+        const std::map<std::string, std::unique_ptr<Constraint>> &getConstraintSet() const { return path_constraint_set_; }
 
-    /**
-     * @brief Get a specific constraint by name
-     * 
-     * @tparam T Type of constraint
-     * @param name Name of the constraint
-     * @return T* Pointer to the constraint 
-     */
-    // Get a specific constraint by name
-    template <typename T>
-    T* getConstraint(const std::string& name) const {
-        auto it = constraint_set_.find(name);
-        
-        // For other constraints, return nullptr if not found
-        if (it == constraint_set_.end()) {
-            return nullptr;
+        // Setters for problem definition
+        void setDynamicalSystem(std::unique_ptr<DynamicalSystem> system);
+        void setInitialState(const Eigen::VectorXd &initial_state);
+        void setReferenceState(const Eigen::VectorXd &reference_state);
+        void setReferenceStates(const std::vector<Eigen::VectorXd> &reference_states);
+        void setHorizon(int horizon);
+        void setTimestep(double timestep);
+        void setOptions(const CDDPOptions &options);
+        void setObjective(std::unique_ptr<Objective> objective);
+        void setInitialTrajectory(const std::vector<Eigen::VectorXd> &X, const std::vector<Eigen::VectorXd> &U);
+        void addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint);
+
+        template <typename T>
+        T *getConstraint(const std::string &name) const
+        {
+            auto it = path_constraint_set_.find(name);
+            if (it == path_constraint_set_.end())
+                return nullptr;
+            T *cast_constraint = dynamic_cast<T *>(it->second.get());
+            return cast_constraint;
         }
 
-        // Try to cast to the requested type
-        T* cast_constraint = dynamic_cast<T*>(it->second.get());
-        if (!cast_constraint) {
-            return nullptr;
-        }
+        // --- Core Solver Invocation ---
+        /**
+         * @brief Solves the optimal control problem using the specified algorithm.
+         * @param solver_type A string identifying the solver algorithm to use (e.g., "CLDDP", "ASDDP", "LOGDDP", "IPDDP", "MSIPDDP").
+         * @return CDDPSolution A map containing the solution details.
+         */
+        CDDPSolution solve(std::string solver_type = "CLDDP"); // Default solver can be set
 
-        return cast_constraint;
-    }
+        // --- Public members for strategy access (or provide getters/setters) ---
+        // These are the core iterative variables shared across solver strategies.
+        std::vector<Eigen::VectorXd> X_; ///< State trajectory (nominal)
+        std::vector<Eigen::VectorXd> U_; ///< Control trajectory (nominal)
+        double J_;                       ///< Current total cost
+        double dJ_;                      ///< Expected cost improvement
+        bool initialized_ = false;       ///< Overall CDDP problem initialization flag
 
+        // Common Line Search parameters that might be managed by CDDP context or passed to strategies
+        std::vector<double> alphas_; // Potential alpha values for line search, configured by options_.line_search
+        double alpha_;               // Accepted step size for the current iteration
 
-    // Getter for the constraint set
-    const std::map<std::string, std::unique_ptr<Constraint>>& getConstraintSet() const { 
-        return constraint_set_; 
-    }
+    private:
+        // Problem Definition Data
+        std::unique_ptr<DynamicalSystem> system_;
+        std::unique_ptr<Objective> objective_;
+        std::map<std::string, std::unique_ptr<Constraint>> path_constraint_set_;
+        Eigen::VectorXd initial_state_;
+        Eigen::VectorXd reference_state_;               // Single desired reference state (if applicable)
+        std::vector<Eigen::VectorXd> reference_states_; // Desired reference state trajectory (if applicable)
+        int horizon_;
+        double timestep_;
+        CDDPOptions options_;
 
-    // Initialization methods
-    void initializeCDDP();
+        int total_dual_dim_ = 0;
 
-    // Solve the problem
-    CDDPSolution solve(std::string solver_type = "CLCDDP");
-    
-private:
-    // Solver methods
-    // CLCDDP methods
-    CDDPSolution solveCLCDDP();
-    ForwardPassResult solveCLCDDPForwardPass(double alpha);
-    bool solveCLCDDPBackwardPass();
+        void initializeProblemIfNecessary();
+        void printSolverInfo();
+        void printOptions(const CDDPOptions &options);
+    };
 
-    // LogCDDP methods
-    void initializeLogDDP();
-    CDDPSolution solveLogDDP();
-    ForwardPassResult solveLogDDPForwardPass(double alpha);
-    bool solveLogDDPBackwardPass();
-    void resetLogDDPFilter();
-    void initialLogDDPRollout();
-
-    // ASCDDP methods
-    CDDPSolution solveASCDDP();
-    ForwardPassResult solveASCDDPForwardPass(double alpha);
-    bool solveASCDDPBackwardPass();
-    
-    // IPDDP methods
-    void initializeIPDDP();
-    CDDPSolution solveIPDDP();
-    ForwardPassResult solveIPDDPForwardPass(double alpha);
-    bool solveIPDDPBackwardPass();
-    void resetIPDDPFilter();
-    void initialIPDDPRollout();
-
-    // MSIPDDP methods
-    void initializeMSIPDDP();
-    CDDPSolution solveMSIPDDP();
-    ForwardPassResult solveMSIPDDPForwardPass(double alpha);
-    bool solveMSIPDDPBackwardPass();
-    void resetMSIPDDPFilter();
-    void initialMSIPDDPRollout();
-
-    // Feasible IPDDP methods
-    void initializeFeasibleIPDDP();
-    CDDPSolution solveFeasibleIPDDP();
-    ForwardPassResult solveFeasibleIPDDPForwardPass(double alpha);
-    bool solveFeasibleIPDDPBackwardPass();
-    
-
-    // Helper methods
-    double computeConstraintViolation(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) const;
-    double calculate_defect_norm(const std::vector<Eigen::VectorXd>& X,
-                                   const std::vector<Eigen::VectorXd>& U,
-                                   const std::vector<Eigen::VectorXd>& F) const;
-
-    bool checkConvergence(double J_new, double J_old, double dJ, double expected_dV, double gradient_norm);
-
-    // Regularization methods
-    void increaseRegularization();
-    void decreaseRegularization();
-    bool isRegularizationLimitReached() const;
-
-    // Print methods
-    void printSolverInfo();
-    void printOptions(const CDDPOptions& options);
-    void printIteration(int iter, double cost, double lagrangian, 
-                        double grad_norm, double lambda_state, 
-                        double lambda_control, double alpha, double mu, double constraint_violation);
-    void printSolution(const CDDPSolution& solution);
-
-private:
-    bool initialized_ = false; // Initialization flag
-
-    // Problem Data
-    std::unique_ptr<DynamicalSystem> system_;        
-    std::unique_ptr<Objective> objective_;
-    std::map<std::string, std::unique_ptr<Constraint>> constraint_set_; 
-    std::unique_ptr<RelaxedLogBarrier> relaxed_log_barrier_;
-    Eigen::VectorXd initial_state_;      
-    Eigen::VectorXd reference_state_;      // Desired reference state
-    std::vector<Eigen::VectorXd> reference_states_;     // Desired reference states (trajectory)
-    int horizon_;                      // Time horizon for the problem
-    double timestep_;                  // Time step for the problem
-    CDDPOptions options_;              // Options for the solver
-
-    int total_dual_dim_ = 0; // Number of total dual variables across constraints
-
-    // Intermediate trajectories
-    std::vector<Eigen::VectorXd> X_;                            // State trajectory
-    std::vector<Eigen::VectorXd> U_;                            // Control trajectory
-    std::vector<Eigen::VectorXd> Lambda_;                       // Costate trajectory
-    std::vector<Eigen::VectorXd> F_;                            // Dynamics trajectory
-    std::vector<Eigen::MatrixXd> Fx_;                           // Dynamics Jacobian trajectory (Fx)
-    std::vector<Eigen::MatrixXd> Fu_;                           // Dynamics Jacobian trajectory (Fu)
-    std::vector<Eigen::MatrixXd> A_;                            // Linearized state transition matrix trajectory
-    std::vector<Eigen::MatrixXd> B_;                            // Linearized control matrix trajectory
-    std::vector<std::vector<Eigen::MatrixXd>> Fxx_;            // Dynamics state Hessian trajectory (if not iLQR)
-    std::vector<std::vector<Eigen::MatrixXd>> Fuu_;            // Dynamics control Hessian trajectory (if not iLQR)
-    std::vector<std::vector<Eigen::MatrixXd>> Fux_;            // Dynamics cross Hessian trajectory (if not iLQR)
-    std::map<std::string, std::vector<Eigen::VectorXd>> G_;    // Constraint trajectory
-    std::map<std::string, std::vector<Eigen::VectorXd>> Y_;  // Dual trajectory
-    std::map<std::string, std::vector<Eigen::VectorXd>> S_; // Slack trajectory 
-
-    // Cost and Lagrangian
-    double J_; // Cost 
-    double dJ_; // Cost improvement
-    double L_; // Lagrangian
-    double dL_; // Lagrangian improvement
-    Eigen::VectorXd dV_;
-
-    // Line search
-    double alpha_; // Line search step size
-    std::vector<double> alphas_;
-    int ms_segment_length_ = 5;             // Number of initial steps to use nonlinear dynamics in hybrid rollout (0=fully linear, horizon=fully nonlinear)
-    bool ms_lambda_initialization_ = false; // Initialize Lambda at the first backward pass
-
-    // Log-barrier
-    double mu_; // Barrier coefficient
-    double constraint_violation_; // Current constraint violation measure
-    double gamma_; // Small value for filter acceptance
-    double relaxation_delta_; // Relaxation parameter delta for relaxed log barrier
-    
-    // Feedforward and feedback gains
-    std::vector<Eigen::VectorXd> k_u_;
-    std::vector<Eigen::MatrixXd> K_u_;
-    std::vector<Eigen::VectorXd> k_x_;
-    std::vector<Eigen::MatrixXd> K_x_;
-    std::vector<Eigen::VectorXd> k_lambda_;
-    std::vector<Eigen::MatrixXd> K_lambda_;
-    std::map<std::string, std::vector<Eigen::VectorXd>> k_y_;
-    std::map<std::string, std::vector<Eigen::MatrixXd>> K_y_;
-    std::map<std::string, std::vector<Eigen::VectorXd>> k_s_;
-    std::map<std::string, std::vector<Eigen::MatrixXd>> K_s_;
-
-    // Q-function matrices
-    std::vector<Eigen::MatrixXd> Q_UU_;
-    std::vector<Eigen::MatrixXd> Q_UX_;
-    std::vector<Eigen::VectorXd> Q_U_;     
-
-    // Regularization parameters
-    double regularization_control_;
-    double regularization_control_step_;   
-
-    // Boxqp solver
-    BoxQPOptions boxqp_options_;
-    BoxQPSolver boxqp_solver_;
-
-    // double inf_pr_ = std::numeric_limits<double>::infinity();
-    // double inf_du_ = std::numeric_limits<double>::infinity();
-    // double barrier_param_ = std::numeric_limits<double>::infinity();
-    // double ku_norm_ = std::numeric_limits<double>::infinity();
-    // double regularization_control_ = std::numeric_limits<double>::infinity();
-    // double alpha_du_ = std::numeric_limits<double>::infinity();
-    // double alpha_pr_ = std::numeric_limits<double>::infinity();
-    // int alpha
-};
 } // namespace cddp
 #endif // CDDP_CDDP_CORE_HPP

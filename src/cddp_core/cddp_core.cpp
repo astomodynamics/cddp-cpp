@@ -246,9 +246,6 @@ void CDDP::printOptions(const CDDPOptions& options) {
     std::cout << "  Step Reduction Factor: " << std::setw(10) << options.line_search.step_reduction_factor << "\n";
 
     std::cout << "\n--- Regularization Options ---\n";
-    // Note: The new RegularizationOptions is generic. The 'type' (state/control) is not part of options.hpp.
-    // This will print the generic values. The active regularization (state/control) would be
-    // determined by the solver strategy based on options_.regularization.type if it were present.
     std::cout << "  Initial Value: " << std::setw(10) << options.regularization.initial_value << "\n";
     std::cout << "  Update Factor: " << std::setw(10) << options.regularization.update_factor << "\n";
     std::cout << "  Max Value: " << std::setw(10) << options.regularization.max_value << "\n";

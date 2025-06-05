@@ -26,6 +26,7 @@
 #include "cddp_core/objective.hpp"
 #include "cddp_core/constraint.hpp"
 #include "cddp_core/barrier.hpp"
+#include "cddp_core/options.hpp"
 #include "cddp_core/cddp_core.hpp"
 #include "cddp_core/helper.hpp"
 #include "cddp_core/boxqp.hpp"
