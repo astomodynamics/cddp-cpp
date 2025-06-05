@@ -166,10 +166,14 @@ void CDDP::addConstraint(std::string constraint_name, std::unique_ptr<Constraint
     if (!constraint) {
         throw std::runtime_error("Cannot add null constraint.");
     }
+    
+    // Get dual dimension BEFORE moving the constraint
+    int dual_dim = constraint->getDualDim();
+    
     path_constraint_set_[constraint_name] = std::move(constraint);
 
     // Increment total dual dimension
-    total_dual_dim_ += constraint->getDualDim();
+    total_dual_dim_ += dual_dim;
     
     initialized_ = false; // Constraint set changed, need to reinitialize
 }
@@ -307,7 +311,7 @@ void CDDP::increaseRegularization() {
     regularization_ = std::min(regularization_, options_.regularization.max_value);
     
     if (options_.debug) {
-        std::cout << "CDDP: Increased regularization: " << regularization_ << std::endl;
+        std::cout << "CDDP: Increased regularization: " << std::log(regularization_) << std::endl;
     }
 }
 
@@ -318,7 +322,7 @@ void CDDP::decreaseRegularization() {
     regularization_ = std::max(regularization_, options_.regularization.min_value);
     
     if (options_.debug) {
-        std::cout << "CDDP: Decreased regularization: " << regularization_ << std::endl;
+        std::cout << "CDDP: Decreased regularization: " << std::log(regularization_) << std::endl;
     }
 }
 

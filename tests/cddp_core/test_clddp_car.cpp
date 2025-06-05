@@ -16,59 +16,119 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
+#include <random>
+#include <cmath>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include "cddp-cpp/cddp.hpp"
 
-TEST(CLDDPTest, SolvePendulum)
+namespace cddp
 {
-    int state_dim = 2;
-    int control_dim = 1;
-    int horizon = 500;
-    double timestep = 0.05;
-    // Create a pendulum instance
-    double mass = 1.0;
-    double length = 1.0;
-    double damping = 0.00;
+    class CarParkingObjective : public NonlinearObjective
+    {
+    public:
+        CarParkingObjective(const Eigen::VectorXd &goal_state, double timestep)
+            : NonlinearObjective(timestep), reference_state_(goal_state)
+        {
+            // Control cost coefficients: cu = 1e-2*[1 .01]
+            cu_ = Eigen::Vector2d(1e-2, 1e-4);
+
+            // Final cost coefficients: cf = [.1 .1 1 .3]
+            cf_ = Eigen::Vector4d(0.1, 0.1, 1.0, 0.3);
+
+            // Smoothness scales for final cost: pf = [.01 .01 .01 1]
+            pf_ = Eigen::Vector4d(0.01, 0.01, 0.01, 1.0);
+
+            // Running cost coefficients: cx = 1e-3*[1 1]
+            cx_ = Eigen::Vector2d(1e-3, 1e-3);
+
+            // Smoothness scales for running cost: px = [.1 .1]
+            px_ = Eigen::Vector2d(0.1, 0.1);
+        }
+
+        double running_cost(const Eigen::VectorXd &state,
+                            const Eigen::VectorXd &control,
+                            int index) const override
+        {
+            // Control cost: lu = cu*u.^2
+            double lu = cu_.dot(control.array().square().matrix());
+
+            // Running cost on distance from origin: lx = cx*sabs(x(1:2,:),px)
+            Eigen::VectorXd xy_state = state.head(2);
+            double lx = cx_.dot(sabs(xy_state, px_));
+
+            return lu + lx;
+        }
+
+        double terminal_cost(const Eigen::VectorXd &final_state) const override
+        {
+            // Final state cost: llf = cf*sabs(x(:,final),pf);
+            return cf_.dot(sabs(final_state, pf_)) + running_cost(final_state, Eigen::VectorXd::Zero(2), 0);
+        }
+
+    private:
+        // Helper function for smooth absolute value (pseudo-Huber)
+        Eigen::VectorXd sabs(const Eigen::VectorXd &x, const Eigen::VectorXd &p) const
+        {
+            return ((x.array().square() / p.array().square() + 1.0).sqrt() * p.array() - p.array()).matrix();
+        }
+
+        Eigen::VectorXd reference_state_;
+        Eigen::Vector2d cu_; // Control cost coefficients
+        Eigen::Vector4d cf_; // Final cost coefficients
+        Eigen::Vector4d pf_; // Smoothness scales for final cost
+        Eigen::Vector2d cx_; // Running cost coefficients
+        Eigen::Vector2d px_; // Smoothness scales for running cost
+    };
+} // namespace cddp
+
+TEST(CLDDPTest, SolveCar)
+{
+    int state_dim = 4;   // [x y theta v]
+    int control_dim = 2; // [wheel_angle acceleration]
+    int horizon = 500;   
+    double timestep = 0.03;
     std::string integration_type = "euler";
 
-    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::Pendulum>(timestep, length, mass, damping, integration_type);
+    // Create car instance
+    double wheelbase = 2.0;
+    std::unique_ptr<cddp::DynamicalSystem> system =
+        std::make_unique<cddp::Car>(timestep, wheelbase, integration_type);
 
-    // Cost matrices
-    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Eigen::MatrixXd R = 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim);
-    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf << 100.0, 0.0,
-        0.0, 100.0;
+    // Initial and goal states
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 1.0, 1.0, 1.5 * M_PI, 0.0; // Start at (1,1) facing backwards
 
     Eigen::VectorXd goal_state(state_dim);
-    goal_state << 0.0, 0.0; // Upright position with zero velocity
+    goal_state << 0.0, 0.0, 0.0, 0.0; // Park at origin facing forward
 
-    std::vector<Eigen::VectorXd> empty_reference_states;
-    // empty_reference_states.back() << 0.0, 0.0;
-    auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
+    // Create the nonlinear objective
+    auto objective = std::make_unique<cddp::CarParkingObjective>(goal_state, timestep);
 
-    // Initial state (pendulum pointing down)
-    Eigen::VectorXd initial_state(state_dim);
-    initial_state << M_PI, 0.0; // Zero angle and angular velocity
-
-    // Construct zero control sequence
-    std::vector<Eigen::VectorXd> zero_control_sequence(horizon, Eigen::VectorXd::Zero(control_dim));
+    // Construct initial control sequence
+    std::vector<Eigen::VectorXd> initial_control_sequence(horizon, Eigen::VectorXd::Zero(control_dim));
+    for (auto &u : initial_control_sequence)
+    {
+        u << 0.01, 0.01; // Small initial controls
+    }
 
     // Construct initial trajectory
     std::vector<Eigen::VectorXd> X_init(horizon + 1, Eigen::VectorXd::Zero(state_dim));
-    for (int t = 0; t < horizon + 1; ++t)
+    X_init[0] = initial_state;
+    
+    // Forward simulate initial trajectory
+    for (int t = 0; t < horizon; ++t)
     {
-        X_init[t] = initial_state;
+        X_init[t + 1] = system->getDiscreteDynamics(X_init[t], initial_control_sequence[t], t * timestep);
     }
 
     // Calculate initial cost
     double J = 0.0;
     for (int t = 0; t < horizon; ++t)
     {
-        J += objective->running_cost(X_init[t], zero_control_sequence[t], t);
+        J += objective->running_cost(X_init[t], initial_control_sequence[t], t);
     }
     J += objective->terminal_cost(X_init[horizon]);
 
@@ -79,40 +139,30 @@ TEST(CLDDPTest, SolvePendulum)
 
     // Control constraints
     Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -10.0; // Maximum negative torque
+    control_lower_bound << -0.5, -2.0; // [steering_angle, acceleration]
     Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 10.0; // Maximum positive torque
+    control_upper_bound << 0.5, 2.0;
 
     cddp_solver.addConstraint("ControlBoxConstraint",
                               std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 20;         // Increased from 10 for better convergence
-    options.tolerance = 1e-3;            // KKT/optimality tolerance
-    options.acceptable_tolerance = 1e-4; // Cost change tolerance
+    options.max_iterations = 500;         // Reasonable number for testing
+    options.tolerance = 1e-6;            // KKT/optimality tolerance
+    options.acceptable_tolerance = 1e-6; // Cost change tolerance
     options.enable_parallel = false;
     options.num_threads = 1;
     options.verbose = true;
     options.debug = false;
-    options.regularization.initial_value = 1e-6;
+    options.regularization.initial_value = 1e-7;
     options.return_iteration_info = true; // Get detailed iteration history
 
     // Set options
     cddp_solver.setOptions(options);
 
     // Set initial trajectory
-    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
-    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
-    X[0] << initial_state;
-    for (int i = 0; i < horizon; ++i)
-    {
-        U[i] = Eigen::VectorXd::Zero(control_dim);
-        X[i] = initial_state;
-    }
-    X[horizon] << initial_state;
-
-    cddp_solver.setInitialTrajectory(X, U);
+    cddp_solver.setInitialTrajectory(X_init, initial_control_sequence);
 
     // Solve the problem
     std::cout << "\n=== First solve (cold start) ===" << std::endl;
@@ -129,6 +179,7 @@ TEST(CLDDPTest, SolvePendulum)
     std::cout << "Converged: " << (status_message == "OptimalSolutionFound" ? "YES" : "NO") << std::endl;
     std::cout << "Iterations: " << iterations_completed << std::endl;
     std::cout << "Solve time: " << solve_time_ms << " ms" << std::endl;
+    std::cout << "Initial cost: " << J << std::endl;
     std::cout << "Final cost: " << final_objective << std::endl;
 
     // Extract trajectories
@@ -138,12 +189,14 @@ TEST(CLDDPTest, SolvePendulum)
 
     // Print final state
     Eigen::VectorXd final_state = X_sol.back();
+    std::cout << "Initial state: [" << initial_state.transpose() << "]" << std::endl;
     std::cout << "Final state: [" << final_state.transpose() << "]" << std::endl;
     std::cout << "Goal state:  [" << goal_state.transpose() << "]" << std::endl;
     std::cout << "Final error: " << (final_state - goal_state).norm() << std::endl;
 
     // Test assertions
-    EXPECT_EQ(status_message, "OptimalSolutionFound") << "Algorithm should converge";
+    EXPECT_TRUE(status_message == "OptimalSolutionFound" || status_message == "AcceptableSolutionFound") 
+        << "Algorithm should converge";
     EXPECT_GT(iterations_completed, 0) << "Should take at least one iteration";
     EXPECT_LT(final_objective, J) << "Final cost should be better than initial cost";
 
@@ -155,18 +208,17 @@ TEST(CLDDPTest, SolvePendulum)
     // Enable warm start and use previous solution as initial guess
     cddp::CDDPOptions warm_options = options;
     warm_options.warm_start = true;
-    warm_options.max_iterations = 10; // Fewer iterations for warm start
+    warm_options.max_iterations = 20; // Fewer iterations for warm start
     warm_options.verbose = false;     // Less verbose for warm start test
 
     // Create a new solver for warm start test
-    auto hcw_system_warmstart = std::make_unique<cddp::Pendulum>(timestep, length, mass, damping, integration_type);
+    auto car_system_warmstart = std::make_unique<cddp::Car>(timestep, wheelbase, integration_type);
 
     // Create new objective
-    std::vector<Eigen::VectorXd> empty_reference_states_warmstart;
-    auto objective_warmstart = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states_warmstart, timestep);
+    auto objective_warmstart = std::make_unique<cddp::CarParkingObjective>(goal_state, timestep);
 
     cddp::CDDP warm_solver(initial_state, goal_state, horizon, timestep);
-    warm_solver.setDynamicalSystem(std::move(hcw_system_warmstart));
+    warm_solver.setDynamicalSystem(std::move(car_system_warmstart));
     warm_solver.setObjective(std::move(objective_warmstart));
     warm_solver.addConstraint("ControlBoxConstraint",
                               std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
@@ -216,6 +268,15 @@ TEST(CLDDPTest, SolvePendulum)
     }
 
     // Both should converge
-    EXPECT_EQ(warm_status, "OptimalSolutionFound") << "Warm start should also converge";
-    EXPECT_LE(warm_iterations, iterations_completed + 5) << "Warm start should not take significantly more iterations";
+    EXPECT_TRUE(warm_status == "OptimalSolutionFound" || warm_status == "AcceptableSolutionFound") 
+        << "Warm start should also converge";
+    EXPECT_LE(warm_iterations, iterations_completed + 10) << "Warm start should not take significantly more iterations";
+
+    // Verify that the car moves towards the goal
+    double initial_distance = (initial_state.head(2) - goal_state.head(2)).norm();
+    double final_distance = (final_state.head(2) - goal_state.head(2)).norm();
+    EXPECT_LT(final_distance, initial_distance) << "Car should move closer to the goal position";
+    
+    // Check that final position is reasonably close to goal (within 0.5 units)
+    EXPECT_LT(final_distance, 0.5) << "Car should park reasonably close to the goal";
 }

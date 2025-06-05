@@ -22,7 +22,7 @@
 
 #include "cddp.hpp"
 
-TEST(CDDPTest, Solve) {
+TEST(CLDDPTest, SolveUnicycle) {
     // Problem parameters
     int state_dim = 3;
     int control_dim = 2;
@@ -59,17 +59,10 @@ TEST(CDDPTest, Solve) {
     options.enable_parallel = true;
     options.num_threads = 10;
     options.verbose = true;
-    options.debug = true;
+    options.debug = false;
 
     // Create CDDP solver
-    cddp::CDDP cddp_solver(
-      initial_state, 
-      goal_state, 
-      horizon, 
-      timestep, 
-      std::make_unique<cddp::Unicycle>(timestep, integration_type), 
-      std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep), 
-      options);
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
     cddp_solver.setDynamicalSystem(std::move(system));
     cddp_solver.setObjective(std::move(objective));
 
@@ -80,8 +73,7 @@ TEST(CDDPTest, Solve) {
     control_upper_bound << 1.0, M_PI;
     
     // Add the constraint to the solver
-    cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-    auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    cddp_solver.addConstraint("ControlBoxConstraint", std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
 
     // Set options
     cddp_solver.setOptions(options);

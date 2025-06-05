@@ -246,9 +246,13 @@ namespace cddp
                 // Check if regularization limit reached
                 if (context.isRegularizationLimitReached())
                 {
-                    double dJ = 0.0; // No cost improvement
-                    if (dJ < options.acceptable_tolerance)
+                    if (context.cost_ - best_result.cost < options.acceptable_tolerance)
                     {
+                        context.X_ = best_result.state_trajectory;
+                        context.U_ = best_result.control_trajectory;
+                        context.cost_ = best_result.cost;
+                        context.merit_function_ = best_result.merit_function;
+                        context.alpha_ = best_result.alpha;
                         converged = true;
                         termination_reason = "RegularizationLimitReached_Converged";
                     }
@@ -501,10 +505,6 @@ namespace cddp
                     best_result = result;
                     if (result.success)
                     {
-                        if (options.debug)
-                        {
-                            std::cout << "CLDDP: Early termination due to successful forward pass" << std::endl;
-                        }
                         break; // Early termination
                     }
                 }

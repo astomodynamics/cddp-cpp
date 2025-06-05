@@ -119,6 +119,10 @@ add_executable(test_clddp_unicycle cddp_core/test_clddp_unicycle.cpp)
 target_link_libraries(test_clddp_unicycle gtest gmock gtest_main cddp)
 gtest_discover_tests(test_clddp_unicycle)
 
+add_executable(test_clddp_car cddp_core/test_clddp_car.cpp)
+target_link_libraries(test_clddp_car gtest gmock gtest_main cddp)
+gtest_discover_tests(test_clddp_car)
+
 # add_executable(test_clddp_solver cddp_core/test_clddp_solver.cpp)
 # target_link_libraries(test_clddp_solver gtest gmock gtest_main cddp)
 # gtest_discover_tests(test_clddp_solver)
