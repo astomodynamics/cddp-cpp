@@ -148,6 +148,7 @@ namespace cddp
         bool enable_parallel = true;            ///< Enable parallel computation for line search.
         int num_threads = 11;                   ///< Number of threads for parallel computation.
         bool return_iteration_info = false;     ///< Return detailed iteration info in the solution.
+        bool warm_start = false;                ///< Use warm start (preserve existing solver state and gains).
 
         // General sub-configurations (used by potentially multiple solvers)
         LineSearchOptions line_search;        ///< General line search parameters.
