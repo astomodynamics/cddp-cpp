@@ -82,11 +82,11 @@ namespace cddp
      * - "final_dual_infeasibility":      double (Lagrangian gradient norm or other dual infeasibility metric)
      *
      * --- Controller Gains (Feedback Policy, Optional) ---
-     * - "control_feedforward_gains_k":   std::vector<Eigen::VectorXd> (Feedforward gains k_u)
+     * - "control_feedback_gains_k":   std::vector<Eigen::MatrixXd> (Feedback gains K_u)
      *
      * --- Solver-Specific Internal Metrics (at termination, Optional) ---
      * - "final_barrier_parameter_mu":    double (Barrier parameter mu for IPMs; smallness implies complementarity)
-     * - "final_regularization_values":   std::map<std::string, double> (Final regularization values, e.g., {"control_rg": value})
+     * - "final_regularization":   double (Final regularization value)
      * - "total_linesearch_sub_iterations": int (Total line search sub-iterations over all main iterations)
      */
     using CDDPSolution = std::map<std::string, std::any>;

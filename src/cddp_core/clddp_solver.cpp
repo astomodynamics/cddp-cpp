@@ -316,9 +316,7 @@ namespace cddp
         solution["control_feedback_gains_K"] = K_u_;
 
         // Final metrics
-        std::map<std::string, double> final_regularization;
-        final_regularization["control"] = context.regularization_;
-        solution["final_regularization_values"] = final_regularization;
+        solution["final_regularization"] = context.regularization_;
 
         if (options.verbose)
         {
