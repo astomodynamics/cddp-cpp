@@ -200,10 +200,7 @@ namespace cddp
                 break;
 
             // Check convergence
-            double scaling_factor = 100.0;
-            scaling_factor = std::max(scaling_factor, norm_Vx_ / (context.getHorizon() * context.getStateDim())) / scaling_factor;
-
-            if (context.inf_du_ / scaling_factor < options.tolerance)
+            if (context.inf_du_ < options.tolerance)
             {
                 converged = true;
                 termination_reason = "OptimalSolutionFound";
