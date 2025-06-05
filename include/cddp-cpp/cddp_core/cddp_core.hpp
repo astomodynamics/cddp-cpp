@@ -224,7 +224,7 @@ namespace cddp
         double alpha_;               // Accepted step size for the current iteration
 
         // Regularization management
-        double regularization_;   ///< Current regularization parameter
+        double regularization_; ///< Current regularization parameter
 
         // Getters for current iteration metrics
         double getCurrentCost() const { return cost_; }

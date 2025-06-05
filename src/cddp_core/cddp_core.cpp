@@ -26,18 +26,18 @@ namespace cddp
 // Constructor
 CDDP::CDDP(const Eigen::VectorXd& initial_state, 
            const Eigen::VectorXd& reference_state,
-           int horizon,
-           double timestep,
-           std::unique_ptr<DynamicalSystem> system,
-           std::unique_ptr<Objective> objective,
+            int horizon,
+            double timestep,
+            std::unique_ptr<DynamicalSystem> system,
+            std::unique_ptr<Objective> objective,
            const CDDPOptions& options)
     : initial_state_(initial_state),
-      reference_state_(reference_state),
-      horizon_(horizon),
-      timestep_(timestep),
-      system_(std::move(system)),
-      objective_(std::move(objective)),
-      options_(options),
+        reference_state_(reference_state),
+        horizon_(horizon),
+        timestep_(timestep),
+        system_(std::move(system)),
+        objective_(std::move(objective)),
+        options_(options),
       initialized_(false), // Will be set true by initializeProblemIfNecessary or by strategies
       cost_(0.0), 
       merit_function_(0.0),
@@ -255,7 +255,7 @@ void CDDP::initializeProblemIfNecessary() {
         // This will need to be adjusted based on your Constraint class interface
         // total_dual_dim_ += constraint->getDimension();
     }
-
+    
     initialized_ = true;
 }
 
