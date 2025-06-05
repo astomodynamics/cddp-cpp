@@ -118,6 +118,40 @@ namespace cddp
         ForwardPassResult() = default;
     };
 
+    // Forward declaration
+    class CDDP;
+
+    /**
+     * @brief Abstract base class for solver algorithm strategies.
+     *
+     * This interface defines the common operations that any solver algorithm
+     * (CLDDP, IPDDP, MSIPDDP, etc.) must implement.
+     */
+    class ISolverAlgorithm
+    {
+    public:
+        virtual ~ISolverAlgorithm() = default;
+
+        /**
+         * @brief Initialize the solver algorithm with the given CDDP context.
+         * @param context Reference to the CDDP instance containing problem data and options.
+         */
+        virtual void initialize(CDDP &context) = 0;
+
+        /**
+         * @brief Execute the solver algorithm and return the solution.
+         * @param context Reference to the CDDP instance containing problem data and options.
+         * @return CDDPSolution containing the results.
+         */
+        virtual CDDPSolution solve(CDDP &context) = 0;
+
+        /**
+         * @brief Get the name of the solver algorithm.
+         * @return String identifier for this solver type.
+         */
+        virtual std::string getSolverName() const = 0;
+    };
+
     class CDDP
     {
     public:
@@ -179,8 +213,8 @@ namespace cddp
         // These are the core iterative variables shared across solver strategies.
         std::vector<Eigen::VectorXd> X_; ///< State trajectory (nominal)
         std::vector<Eigen::VectorXd> U_; ///< Control trajectory (nominal)
-        double J_;                       ///< Current total cost
-        double dJ_;                      ///< Expected cost improvement
+        double cost_;                    ///< Current total cost
+        double merit_function_;          ///< Merit function value
         bool initialized_ = false;       ///< Overall CDDP problem initialization flag
 
         // Common Line Search parameters that might be managed by CDDP context or passed to strategies
@@ -200,6 +234,9 @@ namespace cddp
         CDDPOptions options_;
 
         int total_dual_dim_ = 0;
+
+        // Strategy pattern for different solver algorithms
+        std::unique_ptr<ISolverAlgorithm> solver_;
 
         void initializeProblemIfNecessary();
         void printSolverInfo();

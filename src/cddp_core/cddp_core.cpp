@@ -157,30 +157,113 @@ int CDDP::getTotalDualDim() const {
     return total_dual_dim_;
 }
 
+void CDDP::addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
+    if (!constraint) {
+        throw std::runtime_error("Cannot add null constraint.");
+    }
+    path_constraint_set_[constraint_name] = std::move(constraint);
+    initialized_ = false; // Constraint set changed, need to reinitialize
+}
+
 CDDPSolution CDDP::solve(std::string solver_type) {
     // This is where strategy selection and invocation will happen.
-    // For now, a placeholder:
+    // For now, a placeholder implementation since concrete strategy classes don't exist yet:
+    
+    initializeProblemIfNecessary(); // Ensure X_, U_ are sized etc.
+    
+    // Placeholder solution until concrete strategies are implemented
+    CDDPSolution solution;
+    solution["solver_name"] = solver_type;
+    solution["status_message"] = std::string("NotImplemented - Strategy classes need to be created");
+    solution["iterations_completed"] = 0;
+    solution["solve_time_ms"] = 0.0;
+    solution["final_objective"] = 0.0;
+    solution["final_step_length"] = 1.0;
+    
+    // Add empty trajectories 
+    solution["time_points"] = std::vector<double>();
+    solution["state_trajectory"] = std::vector<Eigen::VectorXd>();
+    solution["control_trajectory"] = std::vector<Eigen::VectorXd>();
+    
+    if (options_.verbose) {
+        std::cout << "Placeholder solve() called for solver type: " << solver_type << std::endl;
+        std::cout << "Concrete strategy classes need to be implemented." << std::endl;
+    }
+
+    /* TODO: Once concrete strategy classes are implemented, uncomment and use this pattern:
+    
     if (solver_type == "CLCDDP") {
-        // solver_strategy_ = std::make_unique<CLCDDPSolverStrategy>(); // Once CLCDDPSolverStrategy exists
+        solver_ = std::make_unique<CLCDDPSolverStrategy>();
     } else if (solver_type == "ASDDP") {
-        // solver_strategy_ = std::make_unique<ASDDPSolverStrategy>(); // Once ASDDPSolverStrategy exists
+        solver_ = std::make_unique<ASDDPSolverStrategy>();
     } else if (solver_type == "LOGDDP") {
-        // solver_strategy_ = std::make_unique<LOGDDPSolverStrategy>(); // Once LOGDDPSolverStrategy exists
+        solver_ = std::make_unique<LOGDDPSolverStrategy>();
     } else if (solver_type == "IPDDP") {
-        // solver_strategy_ = std::make_unique<IPDDPSolverStrategy>(); // Once IPDDPSolverStrategy exists
+        solver_ = std::make_unique<IPDDPSolverStrategy>();
     } else if (solver_type == "MSIPDDP") {
-        // solver_strategy_ = std::make_unique<MSIPDDPSolverStrategy>(); // Once MSIPDDPSolverStrategy exists
+        solver_ = std::make_unique<MSIPDDPSolverStrategy>();
     } else {
         throw std::runtime_error("Unsupported solver type: " + solver_type);
     }
 
-    initializeProblemIfNecessary(); // Ensure X_, U_ are sized etc.
-    
     // Pass the CDDP instance itself as context to the strategy
-    // The strategy will have methods to access problem_context.X_, problem_context.U_, 
-    // problem_context.options_, problem_context.system_, etc.
-    solver_strategy_->initialize(*this); 
-    return solver_strategy_->solve(*this);
+    solver_->initialize(*this); 
+    return solver_->solve(*this);
+    */
+    
+    return solution;
+}
+
+void CDDP::initializeProblemIfNecessary() {
+    if (initialized_) {
+        return; // Already initialized
+    }
+
+    if (!system_) {
+        throw std::runtime_error("Dynamical system must be set before solving.");
+    }
+    if (!objective_) {
+        throw std::runtime_error("Objective function must be set before solving.");
+    }
+
+    int state_dim = system_->getStateDim();
+    int control_dim = system_->getControlDim();
+
+    // Initialize state trajectory
+    if (X_.empty() || static_cast<int>(X_.size()) != horizon_ + 1) {
+        X_.clear();
+        X_.resize(horizon_ + 1);
+        for (int k = 0; k <= horizon_; ++k) {
+            X_[k] = Eigen::VectorXd::Zero(state_dim);
+        }
+    }
+    
+    // Ensure initial state is set correctly
+    X_[0] = initial_state_;
+
+    // Initialize control trajectory  
+    if (U_.empty() || static_cast<int>(U_.size()) != horizon_) {
+        U_.clear();
+        U_.resize(horizon_);
+        for (int k = 0; k < horizon_; ++k) {
+            U_[k] = Eigen::VectorXd::Zero(control_dim);
+        }
+    }
+
+    // Initialize cost and merit function
+    cost_ = 0.0;
+    merit_function_ = 0.0;
+
+    // Calculate total dual dimension for constraints
+    total_dual_dim_ = 0;
+    for (const auto& constraint_pair : path_constraint_set_) {
+        const auto& constraint = constraint_pair.second;
+        // Assume each constraint has a method to get its dimension
+        // This will need to be adjusted based on your Constraint class interface
+        // total_dual_dim_ += constraint->getDimension();
+    }
+
+    initialized_ = true;
 }
 
 void CDDP::printSolverInfo()
