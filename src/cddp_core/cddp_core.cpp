@@ -16,6 +16,7 @@
 
 #include "cddp_core/cddp_core.hpp" // For CDDP class declaration
 #include "cddp_core/options.hpp"   // For CDDPOptions structure
+#include "cddp_core/clddp_solver.hpp" // For CLDDPSolver
 #include <iostream>
 #include <iomanip> // For std::setw
 #include <cmath>   // For std::min, std::max
@@ -40,6 +41,8 @@ CDDP::CDDP(const Eigen::VectorXd& initial_state,
       initialized_(false), // Will be set true by initializeProblemIfNecessary or by strategies
       cost_(0.0), 
       merit_function_(0.0),
+      inf_pr_(0.0),
+      inf_du_(0.0),
       alpha_(options.line_search.initial_step_size), // Initialize from options
       regularization_(options.regularization.initial_value),
       total_dual_dim_(0) {
@@ -169,51 +172,37 @@ void CDDP::addConstraint(std::string constraint_name, std::unique_ptr<Constraint
 
 CDDPSolution CDDP::solve(std::string solver_type) {
     // This is where strategy selection and invocation will happen.
-    // For now, a placeholder implementation since concrete strategy classes don't exist yet:
     
     initializeProblemIfNecessary(); // Ensure X_, U_ are sized etc.
     
-    // Placeholder solution until concrete strategies are implemented
-    CDDPSolution solution;
-    solution["solver_name"] = solver_type;
-    solution["status_message"] = std::string("NotImplemented - Strategy classes need to be created");
-    solution["iterations_completed"] = 0;
-    solution["solve_time_ms"] = 0.0;
-    solution["final_objective"] = 0.0;
-    solution["final_step_length"] = 1.0;
-    
-    // Add empty trajectories 
-    solution["time_points"] = std::vector<double>();
-    solution["state_trajectory"] = std::vector<Eigen::VectorXd>();
-    solution["control_trajectory"] = std::vector<Eigen::VectorXd>();
-    
-    if (options_.verbose) {
-        std::cout << "Placeholder solve() called for solver type: " << solver_type << std::endl;
-        std::cout << "Concrete strategy classes need to be implemented." << std::endl;
-    }
-
-    /* TODO: Once concrete strategy classes are implemented, uncomment and use this pattern:
-    
-    if (solver_type == "CLCDDP") {
-        solver_ = std::make_unique<CLCDDPSolverStrategy>();
-    } else if (solver_type == "ASDDP") {
-        solver_ = std::make_unique<ASDDPSolverStrategy>();
-    } else if (solver_type == "LOGDDP") {
-        solver_ = std::make_unique<LOGDDPSolverStrategy>();
-    } else if (solver_type == "IPDDP") {
-        solver_ = std::make_unique<IPDDPSolverStrategy>();
-    } else if (solver_type == "MSIPDDP") {
-        solver_ = std::make_unique<MSIPDDPSolverStrategy>();
+    // Strategy selection and instantiation
+    if (solver_type == "CLCDDP" || solver_type == "CLDDP") {
+        solver_ = std::make_unique<CLDDPSolver>();
     } else {
-        throw std::runtime_error("Unsupported solver type: " + solver_type);
+        // For now, return placeholder for other solver types
+        CDDPSolution solution;
+        solution["solver_name"] = solver_type;
+        solution["status_message"] = std::string("NotImplemented - Strategy class not yet created for ") + solver_type;
+        solution["iterations_completed"] = 0;
+        solution["solve_time_ms"] = 0.0;
+        solution["final_objective"] = 0.0;
+        solution["final_step_length"] = 1.0;
+        
+        // Add empty trajectories 
+        solution["time_points"] = std::vector<double>();
+        solution["state_trajectory"] = std::vector<Eigen::VectorXd>();
+        solution["control_trajectory"] = std::vector<Eigen::VectorXd>();
+        
+        if (options_.verbose) {
+            std::cout << "Solver type '" << solver_type << "' not yet implemented." << std::endl;
+        }
+        
+        return solution;
     }
 
-    // Pass the CDDP instance itself as context to the strategy
-    solver_->initialize(*this); 
+    // Use the strategy to solve the problem
+    solver_->initialize(*this);
     return solver_->solve(*this);
-    */
-    
-    return solution;
 }
 
 void CDDP::initializeProblemIfNecessary() {
@@ -255,6 +244,8 @@ void CDDP::initializeProblemIfNecessary() {
     // Initialize cost and merit function
     cost_ = 0.0;
     merit_function_ = 0.0;
+    inf_pr_ = 0.0;
+    inf_du_ = 0.0;
 
     // Calculate total dual dimension for constraints
     total_dual_dim_ = 0;
@@ -292,6 +283,10 @@ void CDDP::decreaseRegularization() {
 
 bool CDDP::isRegularizationLimitReached() const {
     return regularization_ >= options_.regularization.max_value;
+}
+
+bool CDDP::isKKTToleranceSatisfied() const {
+    return (inf_pr_ <= options_.tolerance && inf_du_ <= options_.tolerance);
 }
 
 void CDDP::printSolverInfo()

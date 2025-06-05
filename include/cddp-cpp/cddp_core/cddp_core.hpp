@@ -215,6 +215,8 @@ namespace cddp
         std::vector<Eigen::VectorXd> U_; ///< Control trajectory (nominal)
         double cost_;                    ///< Current total cost
         double merit_function_;          ///< Merit function value
+        double inf_pr_;                  ///< Current primal infeasibility (constraint violation norm)
+        double inf_du_;                  ///< Current dual infeasibility (Lagrangian gradient norm)
         bool initialized_ = false;       ///< Overall CDDP problem initialization flag
 
         // Common Line Search parameters that might be managed by CDDP context or passed to strategies
@@ -223,6 +225,20 @@ namespace cddp
 
         // Regularization management
         double regularization_;   ///< Current regularization parameter
+
+        // Getters for current iteration metrics
+        double getCurrentCost() const { return cost_; }
+        double getCurrentMeritFunction() const { return merit_function_; }
+        double getCurrentPrimalInfeasibility() const { return inf_pr_; }
+        double getCurrentDualInfeasibility() const { return inf_du_; }
+        double getCurrentAlpha() const { return alpha_; }
+        double getCurrentRegularization() const { return regularization_; }
+
+        /**
+         * @brief Check if KKT conditions are satisfied within tolerance.
+         * @return True if both inf_pr and inf_du are below tolerance, false otherwise.
+         */
+        bool isKKTToleranceSatisfied() const;
 
         /**
          * @brief Increase regularization parameters.
