@@ -313,7 +313,7 @@ namespace cddp
         }
 
         // Add control gains
-        solution["control_feedforward_gains_k"] = k_u_;
+        solution["control_feedback_gains_K"] = K_u_;
 
         // Final metrics
         std::map<std::string, double> final_regularization;
