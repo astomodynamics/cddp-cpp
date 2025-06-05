@@ -17,6 +17,7 @@
 #include "cddp_core/cddp_core.hpp" // For CDDP class declaration
 #include "cddp_core/options.hpp"   // For CDDPOptions structure
 #include "cddp_core/clddp_solver.hpp" // For CLDDPSolver
+#include "cddp_core/asddp_solver.hpp" // For ASDDPSolver
 #include <iostream>
 #include <iomanip> // For std::setw
 #include <cmath>   // For std::min, std::max
@@ -204,6 +205,8 @@ CDDPSolution CDDP::solve(std::string solver_type) {
     // Strategy selection and instantiation
     if (solver_type == "CLCDDP" || solver_type == "CLDDP") {
         solver_ = std::make_unique<CLDDPSolver>();
+    } else if (solver_type == "ASDDP") {
+        solver_ = std::make_unique<ASDDPSolver>();
     } else {
         // For now, return placeholder for other solver types
         CDDPSolution solution;

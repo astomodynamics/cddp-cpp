@@ -115,6 +115,10 @@ add_executable(test_clddp_solver cddp_core/test_clddp_solver.cpp)
 target_link_libraries(test_clddp_solver gtest gmock gtest_main cddp)
 gtest_discover_tests(test_clddp_solver)
 
+add_executable(test_asddp_solver cddp_core/test_asddp_solver.cpp)
+target_link_libraries(test_asddp_solver gtest gmock gtest_main cddp)
+gtest_discover_tests(test_asddp_solver)
+
 # add_executable(test_asddp_core cddp_core/test_asddp_core.cpp)
 
 # add_executable(test_logcddp_core cddp_core/test_logcddp_core.cpp)
