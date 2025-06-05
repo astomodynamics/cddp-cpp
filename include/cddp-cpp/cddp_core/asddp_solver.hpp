@@ -68,8 +68,7 @@ namespace cddp
         std::vector<Eigen::VectorXd> k_u_; ///< Feedforward control gains
         std::vector<Eigen::MatrixXd> K_u_; ///< Feedback control gains
         Eigen::Vector2d dV_;               ///< Expected value function change
-        double norm_Vx_;                   ///< Norm of the value function gradient
-        
+
         // Q-function matrices for active set method
         std::vector<Eigen::MatrixXd> Q_UU_; ///< Control Hessian matrices
         std::vector<Eigen::MatrixXd> Q_UX_; ///< Control-state cross-derivatives

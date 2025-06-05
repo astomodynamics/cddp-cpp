@@ -206,11 +206,8 @@ namespace cddp
             if (!backward_pass_success)
                 break;
 
-            // Check convergence
-            double scaling_factor = 100.0;
-            scaling_factor = std::max(scaling_factor, norm_Vx_ / (context.getHorizon() * context.getStateDim())) / scaling_factor;
-
-            if (context.inf_du_ / scaling_factor < options.tolerance)
+            // Check convergence 
+            if (context.inf_du_ < options.tolerance)
             {
                 converged = true;
                 termination_reason = "OptimalSolutionFound";
@@ -354,7 +351,7 @@ namespace cddp
         Eigen::MatrixXd K(control_dim, state_dim);
 
         dV_ = Eigen::Vector2d::Zero();
-        norm_Vx_ = V_x.lpNorm<1>();
+        double norm_Vx = V_x.lpNorm<1>();
         double Qu_error = 0.0;
 
         // Backward Riccati recursion
@@ -466,13 +463,16 @@ namespace cddp
             V_xx = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
             V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
 
-            norm_Vx_ += V_x.lpNorm<1>();
+            norm_Vx += V_x.lpNorm<1>();
 
             // Update optimality gap
             Qu_error = std::max(Qu_error, Q_u.lpNorm<Eigen::Infinity>());
         }
 
-        context.inf_du_ = Qu_error;
+        // Normalize dual infeasibility 
+        double scaling_factor = options.termination_scaling_max_factor;
+        scaling_factor = std::max(scaling_factor, norm_Vx / (horizon * state_dim)) / scaling_factor;
+        context.inf_du_ = Qu_error / scaling_factor;
 
         if (options.debug)
         {

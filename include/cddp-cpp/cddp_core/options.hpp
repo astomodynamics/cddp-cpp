@@ -99,9 +99,6 @@ namespace cddp
         double dual_var_init_scale = 1e-1;  ///< Initial scale for dual variables.
         double slack_var_init_scale = 1e-2; ///< Initial scale for slack variables.
 
-        // Termination scaling
-        double termination_scaling_max_factor = 100.0; ///< Max scaling factor for KKT error in termination.
-
         SolverSpecificBarrierOptions barrier; ///< Barrier method parameters for IPDDP.
         SolverSpecificFilterOptions filter;   ///< Filter line search parameters for IPDDP.
     };
@@ -121,9 +118,6 @@ namespace cddp
         int segment_length = 5;                 ///< Number of shooting intervals before a gap-closing constraint.
         std::string rollout_type = "nonlinear"; ///< Rollout type: "nonlinear", "hybrid".
         bool use_controlled_rollout = false;    ///< Use controlled rollout (propagates x_{k+1} = f(x_k, u_k) during initial rollout).
-
-        // Termination scaling
-        double termination_scaling_max_factor = 100.0; ///< Max scaling factor for KKT error in MSIPDDP termination.
 
         SolverSpecificBarrierOptions barrier; ///< Barrier method parameters for MSIPDDP.
         SolverSpecificFilterOptions filter;   ///< Filter line search parameters for MSIPDDP.
@@ -149,6 +143,7 @@ namespace cddp
         int num_threads = 11;                   ///< Number of threads for parallel computation.
         bool return_iteration_info = false;     ///< Return detailed iteration info in the solution.
         bool warm_start = false;                ///< Use warm start (preserve existing solver state and gains).
+        double termination_scaling_max_factor = 100.0; ///< Max scaling factor for KKT error in termination.
 
         // General sub-configurations (used by potentially multiple solvers)
         LineSearchOptions line_search;                ///< General line search parameters.
