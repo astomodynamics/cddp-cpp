@@ -64,6 +64,7 @@ namespace cddp
         std::vector<Eigen::VectorXd> k_u_; ///< Feedforward control gains
         std::vector<Eigen::MatrixXd> K_u_; ///< Feedback control gains
         Eigen::Vector2d dV_;               ///< Expected value function change
+        double norm_Vx_;                   ///< Norm of the value function gradient
 
         // Constraint solver
         BoxQPSolver boxqp_solver_; ///< Box QP solver for control constraints

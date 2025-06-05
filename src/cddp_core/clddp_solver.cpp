@@ -206,6 +206,17 @@ namespace cddp
             if (!backward_pass_success)
                 break;
 
+            // Check convergence
+            double scaling_factor = 100.0;
+            scaling_factor = std::max(scaling_factor, norm_Vx_ / (context.getHorizon() * context.getStateDim())) / scaling_factor;
+
+            if (context.inf_du_ / scaling_factor < options.tolerance)
+            {
+                converged = true;
+                termination_reason = "OptimalSolutionFound";
+                break;
+            }
+
             // 2. Forward pass
             ForwardPassResult best_result = performForwardPass(context);
 
@@ -232,10 +243,10 @@ namespace cddp
                 context.decreaseRegularization();
 
                 // Check convergence
-                if (context.inf_du_ < options.tolerance)
+                if (dJ < options.acceptable_tolerance)
                 {
                     converged = true;
-                    termination_reason = "OptimalSolutionFound";
+                    termination_reason = "AcceptableSolutionFound";
                     break;
                 }
             }
@@ -246,26 +257,11 @@ namespace cddp
                 // Check if regularization limit reached
                 if (context.isRegularizationLimitReached())
                 {
-                    if (context.cost_ - best_result.cost < options.acceptable_tolerance)
-                    {
-                        context.X_ = best_result.state_trajectory;
-                        context.U_ = best_result.control_trajectory;
-                        context.cost_ = best_result.cost;
-                        context.merit_function_ = best_result.merit_function;
-                        context.alpha_ = best_result.alpha;
-                        converged = true;
-                        termination_reason = "RegularizationLimitReached_Converged";
-                    }
-                    else
-                    {
-                        converged = false;
-                        termination_reason = "RegularizationLimitReached_NotConverged";
-                    }
+                    termination_reason = "RegularizationLimitReached_NotConverged";
+                    converged = false;
                     if (options.verbose)
                     {
-                        std::cerr << "CLDDP: Regularization limit reached. "
-                                  << (converged ? "Treating as converged." : "Not converged.")
-                                  << std::endl;
+                        std::cerr << "CLDDP: Regularization limit reached. Not converged." << std::endl;
                     }
                     break;
                 }
@@ -358,6 +354,7 @@ namespace cddp
         Eigen::MatrixXd K(control_dim, state_dim);
 
         dV_ = Eigen::Vector2d::Zero();
+        norm_Vx_ = V_x.lpNorm<1>();
         double Qu_error = 0.0;
 
         // Backward Riccati recursion
@@ -468,6 +465,8 @@ namespace cddp
             V_x = Q_x + K.transpose() * Q_uu * k + Q_ux.transpose() * k + K.transpose() * Q_u;
             V_xx = Q_xx + K.transpose() * Q_uu * K + Q_ux.transpose() * K + K.transpose() * Q_ux;
             V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
+
+            norm_Vx_ += V_x.lpNorm<1>();
 
             // Update optimality gap
             Qu_error = std::max(Qu_error, Q_u.lpNorm<Eigen::Infinity>());

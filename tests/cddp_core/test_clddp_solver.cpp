@@ -92,7 +92,7 @@ TEST(CLDDPTest, SolvePendulum)
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 20;         // Increased from 10 for better convergence
+    options.max_iterations = 100;       
     options.tolerance = 1e-3;            // KKT/optimality tolerance
     options.acceptable_tolerance = 1e-4; // Cost change tolerance
     options.enable_parallel = false;
@@ -130,7 +130,7 @@ TEST(CLDDPTest, SolvePendulum)
 
     std::cout << "\n=== Convergence Analysis ===" << std::endl;
     std::cout << "Status: " << status_message << std::endl;
-    std::cout << "Converged: " << (status_message == "OptimalSolutionFound" ? "YES" : "NO") << std::endl;
+    std::cout << "Converged: " << (status_message == "OptimalSolutionFound" || status_message == "AcceptableSolutionFound" ? "YES" : "NO") << std::endl;
     std::cout << "Iterations: " << iterations_completed << std::endl;
     std::cout << "Solve time: " << solve_time_ms << " ms" << std::endl;
     std::cout << "Final cost: " << final_objective << std::endl;
@@ -147,7 +147,7 @@ TEST(CLDDPTest, SolvePendulum)
     std::cout << "Final error: " << (final_state - goal_state).norm() << std::endl;
 
     // Test assertions
-    EXPECT_EQ(status_message, "OptimalSolutionFound") << "Algorithm should converge";
+    EXPECT_TRUE(status_message == "OptimalSolutionFound" || status_message == "AcceptableSolutionFound") << "Algorithm should converge";
     EXPECT_GT(iterations_completed, 0) << "Should take at least one iteration";
     EXPECT_LT(final_objective, J) << "Final cost should be better than initial cost";
 
@@ -161,7 +161,12 @@ TEST(CLDDPTest, SolvePendulum)
     warm_options.warm_start = true;
     warm_options.max_iterations = 10; // Fewer iterations for warm start
     warm_options.verbose = false;     // Less verbose for warm start test
-
+    warm_options.tolerance = 1e-3;            // KKT/optimality tolerance
+    warm_options.acceptable_tolerance = 1e-4; // Cost change tolerance
+    warm_options.enable_parallel = false;
+    warm_options.num_threads = 1;
+    warm_options.debug = false;
+    
     // Create a new solver for warm start test
     auto hcw_system_warmstart = std::make_unique<cddp::Pendulum>(timestep, length, mass, damping, integration_type);
 
@@ -220,7 +225,7 @@ TEST(CLDDPTest, SolvePendulum)
     }
 
     // Both should converge
-    EXPECT_EQ(warm_status, "OptimalSolutionFound") << "Warm start should also converge";
+    EXPECT_TRUE(warm_status == "OptimalSolutionFound" || warm_status == "AcceptableSolutionFound") << "Warm start should also converge";
     EXPECT_LE(warm_iterations, iterations_completed + 5) << "Warm start should not take significantly more iterations";
 }
 
@@ -290,7 +295,7 @@ TEST(CLDDPTest, SolveUnicycle) {
     // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
 
     auto status = std::any_cast<std::string>(solution.at("status_message"));
-    ASSERT_TRUE(status == "OptimalSolutionFound" || status == "MaxIterationsReached");
+    ASSERT_TRUE(status == "OptimalSolutionFound" || status == "AcceptableSolutionFound");
 
     // Extract solution
     auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory")); // size: horizon + 1
@@ -450,7 +455,7 @@ TEST(CLDDPTest, SolveCar)
 
     std::cout << "\n=== Convergence Analysis ===" << std::endl;
     std::cout << "Status: " << status_message << std::endl;
-    std::cout << "Converged: " << (status_message == "OptimalSolutionFound" ? "YES" : "NO") << std::endl;
+    std::cout << "Converged: " << (status_message == "OptimalSolutionFound" || status_message == "AcceptableSolutionFound" ? "YES" : "NO") << std::endl;
     std::cout << "Iterations: " << iterations_completed << std::endl;
     std::cout << "Solve time: " << solve_time_ms << " ms" << std::endl;
     std::cout << "Initial cost: " << J << std::endl;
