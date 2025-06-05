@@ -87,7 +87,6 @@ namespace cddp
      * --- Solver-Specific Internal Metrics (at termination, Optional) ---
      * - "final_barrier_parameter_mu":    double (Barrier parameter mu for IPMs; smallness implies complementarity)
      * - "final_regularization":   double (Final regularization value)
-     * - "total_linesearch_sub_iterations": int (Total line search sub-iterations over all main iterations)
      */
     using CDDPSolution = std::map<std::string, std::any>;
 
