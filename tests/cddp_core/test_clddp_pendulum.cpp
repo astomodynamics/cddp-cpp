@@ -87,12 +87,11 @@ TEST(CDDPTest, Solve) {
     cddp::CDDPOptions options;
     options.max_iterations = 10;
     // options.cost_tolerance = 1e-2;
-    options.use_parallel = false;
+    options.enable_parallel = false;
     options.num_threads = 1;
     options.verbose = true;
     options.debug = true;
-    options.regularization_type = "none";
-    options.regularization_control = 1e-2;
+    options.regularization.initial_value = 1e-6;
     // options.mu_initial= 1e-8;
     
     // Set options
@@ -111,11 +110,11 @@ TEST(CDDPTest, Solve) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("CLDDP");
 
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
-    auto t_sol = solution.time_sequence;
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
 
 
 

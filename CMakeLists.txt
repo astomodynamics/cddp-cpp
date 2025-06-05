@@ -288,11 +288,11 @@ set(cddp_core_srcs
   src/cddp_core/boxqp.cpp
   src/cddp_core/qp_solver.cpp
   src/cddp_core/cddp_core.cpp
-  src/cddp_core/clddp_core.cpp
-  src/cddp_core/asddp_core.cpp
-  src/cddp_core/logddp_core.cpp
-  src/cddp_core/ipddp_core.cpp
-  src/cddp_core/msipddp_core.cpp
+  src/cddp_core/clddp_solver.cpp
+  # src/cddp_core/asddp_core.cpp
+  # src/cddp_core/logddp_core.cpp
+  # src/cddp_core/ipddp_core.cpp
+  # src/cddp_core/msipddp_core.cpp
 )
 
 if (CDDP_CPP_TORCH)
@@ -398,8 +398,8 @@ if (CDDP_CPP_BUILD_TESTS)
   add_subdirectory(tests) 
 endif()
 
-# Build examples
-add_subdirectory(examples)
+# # Build examples
+# add_subdirectory(examples)
 
 # Cmake compile commmand:
 # $ mkdir build

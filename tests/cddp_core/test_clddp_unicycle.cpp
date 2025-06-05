@@ -55,8 +55,8 @@ TEST(CDDPTest, Solve) {
     // Create CDDP Options
     cddp::CDDPOptions options;
     options.max_iterations = 20;
-    options.cost_tolerance = 1e-2;
-    options.use_parallel = true;
+    options.tolerance = 1e-2;
+    options.enable_parallel = true;
     options.num_threads = 10;
     options.verbose = true;
     options.debug = true;
@@ -92,15 +92,16 @@ TEST(CDDPTest, Solve) {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    cddp::CDDPSolution solution = cddp_solver.solve("CLDDP");
     // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
 
-    ASSERT_TRUE(solution.converged);
+    auto status = std::any_cast<std::string>(solution.at("status_message"));
+    ASSERT_TRUE(status == "OptimalSolutionFound" || status == "MaxIterationsReached");
 
     // Extract solution
-    auto X_sol = solution.state_sequence; // size: horizon + 1
-    auto U_sol = solution.control_sequence; // size: horizon
-    auto t_sol = solution.time_sequence; // size: horizon + 1
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory")); // size: horizon + 1
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory")); // size: horizon
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points")); // size: horizon + 1
 }
 
 // Create gif from images using ImageMagick

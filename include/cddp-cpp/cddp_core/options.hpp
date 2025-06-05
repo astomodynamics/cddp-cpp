@@ -151,9 +151,10 @@ namespace cddp
         bool warm_start = false;                ///< Use warm start (preserve existing solver state and gains).
 
         // General sub-configurations (used by potentially multiple solvers)
-        LineSearchOptions line_search;        ///< General line search parameters.
-        RegularizationOptions regularization; ///< General regularization parameters.
-        BoxQPOptions box_qp;                  ///< General BoxQP solver parameters.
+        LineSearchOptions line_search;                ///< General line search parameters.
+        RegularizationOptions regularization;         ///< General regularization parameters.
+        BoxQPOptions box_qp;                          ///< General BoxQP solver parameters.
+        SolverSpecificFilterOptions filter;           ///< General filter line search parameters.
 
         // Solver-specific comprehensive options
         LogBarrierOptions log_barrier;   ///< Comprehensive options for the log-barrier method.
