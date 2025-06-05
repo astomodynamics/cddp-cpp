@@ -40,6 +40,17 @@ namespace cddp
 {
 
     /**
+     * @brief Enumeration of available solver types.
+     */
+    enum class SolverType {
+        CLDDP,    ///< Control-Limited Differential Dynamic Programming
+        ASDDP,    ///< Active Set Differential Dynamic Programming  
+        LogDDP,   ///< Log-Barrier Differential Dynamic Programming
+        IPDDP,    ///< Interior Point Differential Dynamic Programming
+        MSIPDDP   ///< Multi-Shooting Interior Point Differential Dynamic Programming
+    };
+
+    /**
      * @brief Solution data from the CDDP solver, as a map of string keys to `std::any` values.
      *
      * Retrieve values using `std::any_cast<Type>(solution.at("key"))`.
@@ -210,10 +221,17 @@ namespace cddp
         // --- Core Solver Invocation ---
         /**
          * @brief Solves the optimal control problem using the specified algorithm.
+         * @param solver_type Enum identifying the solver algorithm to use.
+         * @return CDDPSolution A map containing the solution details.
+         */
+        CDDPSolution solve(SolverType solver_type = SolverType::CLDDP);
+        
+        /**
+         * @brief Solves the optimal control problem using the specified algorithm (string version for backward compatibility).
          * @param solver_type A string identifying the solver algorithm to use (e.g., "CLDDP", "ASDDP", "LOGDDP", "IPDDP", "MSIPDDP").
          * @return CDDPSolution A map containing the solution details.
          */
-        CDDPSolution solve(std::string solver_type = "CLDDP"); // Default solver can be set
+        CDDPSolution solve(const std::string& solver_type);
 
         // --- Public members for strategy access (or provide getters/setters) ---
         // These are the core iterative variables shared across solver strategies.
