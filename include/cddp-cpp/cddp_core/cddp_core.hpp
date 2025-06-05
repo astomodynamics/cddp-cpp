@@ -49,7 +49,13 @@ namespace cddp
      *
      * --- General Information ---
      * - "solver_name":                   std::string (Name of the solver used, e.g., "IPDDP")
-     * - "status_message":                std::string (Termination status, e.g., "OptimalSolutionFound")
+     * - "status_message":                std::string (Termination status; possible values:)
+     *                                      • "OptimalSolutionFound" - Converged to optimal solution
+     *                                      • "MaxIterationsReached" - Reached maximum iteration limit
+     *                                      • "MaxCpuTimeReached" - Exceeded maximum CPU time limit
+     *                                      • "RegularizationLimitReached_Converged" - Reached regularization limit but solution acceptable
+     *                                      • "RegularizationLimitReached_NotConverged" - Reached regularization limit, solution not acceptable
+     *                                      • "BackwardPassRegularizationLimitReached" - Backward pass failed due to regularization limit
      * - "iterations_completed":          int (Number of iterations)
      * - "solve_time_ms":                 double (Total solver time in milliseconds)
      * - "final_objective":               double (Final objective cost J(x,u))
