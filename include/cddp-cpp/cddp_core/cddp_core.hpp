@@ -190,6 +190,7 @@ namespace cddp
         void setObjective(std::unique_ptr<Objective> objective);
         void setInitialTrajectory(const std::vector<Eigen::VectorXd> &X, const std::vector<Eigen::VectorXd> &U);
         void addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint);
+        bool removeConstraint(const std::string &constraint_name);
 
         template <typename T>
         T *getConstraint(const std::string &name) const

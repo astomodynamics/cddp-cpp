@@ -167,7 +167,29 @@ void CDDP::addConstraint(std::string constraint_name, std::unique_ptr<Constraint
         throw std::runtime_error("Cannot add null constraint.");
     }
     path_constraint_set_[constraint_name] = std::move(constraint);
+
+    // Increment total dual dimension
+    total_dual_dim_ += constraint->getDualDim();
+    
     initialized_ = false; // Constraint set changed, need to reinitialize
+}
+
+bool CDDP::removeConstraint(const std::string &constraint_name) {
+    auto it = path_constraint_set_.find(constraint_name);
+    if (it != path_constraint_set_.end()) {
+        // Decrement total dual dimension
+        total_dual_dim_ -= it->second->getDualDim();
+        
+        // Remove the constraint from the set
+        path_constraint_set_.erase(it);
+        
+        // Mark as needing reinitialization since constraint set changed
+        initialized_ = false;
+        
+        return true; // Successfully removed
+    }
+    
+    return false; // Constraint not found
 }
 
 CDDPSolution CDDP::solve(std::string solver_type) {
@@ -220,24 +242,52 @@ void CDDP::initializeProblemIfNecessary() {
     int state_dim = system_->getStateDim();
     int control_dim = system_->getControlDim();
 
+    // For warm start: preserve existing trajectories if they have compatible dimensions
+    bool preserve_trajectories = options_.warm_start && 
+                                !X_.empty() && !U_.empty() &&
+                                static_cast<int>(X_.size()) == horizon_ + 1 &&
+                                static_cast<int>(U_.size()) == horizon_ &&
+                                X_[0].size() == state_dim &&
+                                U_[0].size() == control_dim;
+
     // Initialize state trajectory
     if (X_.empty() || static_cast<int>(X_.size()) != horizon_ + 1) {
-        X_.clear();
-        X_.resize(horizon_ + 1);
-        for (int k = 0; k <= horizon_; ++k) {
-            X_[k] = Eigen::VectorXd::Zero(state_dim);
+        if (preserve_trajectories) {
+            // Warm start: resize existing trajectory carefully
+            if (options_.verbose) {
+                std::cout << "CDDP: Warm start detected - preserving existing state trajectory" << std::endl;
+            }
+            // Keep existing X_ but ensure correct size
+            X_.resize(horizon_ + 1);
+        } else {
+            // Cold start: initialize with zeros
+            X_.clear();
+            X_.resize(horizon_ + 1);
+            for (int k = 0; k <= horizon_; ++k) {
+                X_[k] = Eigen::VectorXd::Zero(state_dim);
+            }
         }
     }
     
-    // Ensure initial state is set correctly
+    // Ensure initial state is set correctly (always required)
     X_[0] = initial_state_;
 
     // Initialize control trajectory  
     if (U_.empty() || static_cast<int>(U_.size()) != horizon_) {
-        U_.clear();
-        U_.resize(horizon_);
-        for (int k = 0; k < horizon_; ++k) {
-            U_[k] = Eigen::VectorXd::Zero(control_dim);
+        if (preserve_trajectories) {
+            // Warm start: resize existing trajectory carefully
+            if (options_.verbose) {
+                std::cout << "CDDP: Warm start detected - preserving existing control trajectory" << std::endl;
+            }
+            // Keep existing U_ but ensure correct size
+            U_.resize(horizon_);
+        } else {
+            // Cold start: initialize with zeros
+            U_.clear();
+            U_.resize(horizon_);
+            for (int k = 0; k < horizon_; ++k) {
+                U_[k] = Eigen::VectorXd::Zero(control_dim);
+            }
         }
     }
 
@@ -246,15 +296,6 @@ void CDDP::initializeProblemIfNecessary() {
     merit_function_ = 0.0;
     inf_pr_ = 0.0;
     inf_du_ = 0.0;
-
-    // Calculate total dual dimension for constraints
-    total_dual_dim_ = 0;
-    for (const auto& constraint_pair : path_constraint_set_) {
-        const auto& constraint = constraint_pair.second;
-        // Assume each constraint has a method to get its dimension
-        // This will need to be adjusted based on your Constraint class interface
-        // total_dual_dim_ += constraint->getDimension();
-    }
     
     initialized_ = true;
 }
