@@ -145,7 +145,7 @@ namespace cddp
         if (options.verbose)
         {
             printIteration(0, context.cost_, context.merit_function_, context.inf_du_,
-                           context.regularization_, context.alpha_);
+                           context.regularization_, context.alpha_pr_);
         }
 
         // Start timer
@@ -221,14 +221,14 @@ namespace cddp
                 double dJ = context.cost_ - best_result.cost;
                 context.cost_ = best_result.cost;
                 context.merit_function_ = best_result.cost; // For ASDDP, merit function equals cost
-                context.alpha_ = best_result.alpha;
+                context.alpha_pr_ = best_result.alpha_pr;
 
                 // Store history only if requested
                 if (options.return_iteration_info)
                 {
                     history_objective.push_back(context.cost_);
                     history_merit_function.push_back(context.merit_function_);
-                    history_step_length_primal.push_back(context.alpha_);
+                    history_step_length_primal.push_back(context.alpha_pr_);
                     history_dual_infeasibility.push_back(context.inf_du_);
                     history_regularization.push_back(context.regularization_);
                 }
@@ -264,7 +264,7 @@ namespace cddp
             if (options.verbose)
             {
                 printIteration(iter, context.cost_, context.merit_function_, context.inf_du_,
-                               context.regularization_, context.alpha_);
+                               context.regularization_, context.alpha_pr_);
             }
         }
 
@@ -277,7 +277,7 @@ namespace cddp
         solution["iterations_completed"] = iter;
         solution["solve_time_ms"] = static_cast<double>(duration.count());
         solution["final_objective"] = context.cost_;
-        solution["final_step_length"] = context.alpha_;
+        solution["final_step_length"] = context.alpha_pr_;
         solution["final_dual_infeasibility"] = context.inf_du_;
         solution["final_primal_infeasibility"] = context.inf_pr_;
 
@@ -572,11 +572,11 @@ namespace cddp
             std::vector<std::future<ForwardPassResult>> futures;
             futures.reserve(context.alphas_.size());
 
-            for (double alpha : context.alphas_)
+            for (double alpha_pr : context.alphas_)
             {
                 futures.push_back(std::async(std::launch::async,
-                                             [this, &context, alpha]()
-                                             { return forwardPass(context, alpha); }));
+                                             [this, &context, alpha_pr]()
+                                             { return forwardPass(context, alpha_pr); }));
             }
 
             for (auto &future : futures)
@@ -605,7 +605,7 @@ namespace cddp
         return best_result;
     }
 
-    ForwardPassResult ASDDPSolver::forwardPass(CDDP &context, double alpha)
+    ForwardPassResult ASDDPSolver::forwardPass(CDDP &context, double alpha_pr)
     {
         const CDDPOptions &options = context.getOptions();
 
@@ -613,7 +613,7 @@ namespace cddp
         result.success = false;
         result.cost = std::numeric_limits<double>::infinity();
         result.merit_function = std::numeric_limits<double>::infinity();
-        result.alpha = alpha;
+        result.alpha_pr = alpha_pr;
 
         const int state_dim = context.getStateDim();
         const int control_dim = context.getControlDim();
@@ -647,7 +647,7 @@ namespace cddp
             P.makeCompressed();
 
             // Form the gradient of the QP objective: q = alpha * Q_u + Q_ux * delta_x
-            Eigen::VectorXd q = alpha * Q_u + Q_ux * delta_x;
+            Eigen::VectorXd q = alpha_pr * Q_u + Q_ux * delta_x;
 
             // Create QP constraints
             Eigen::MatrixXd A_dense = Eigen::MatrixXd::Identity(control_dim, control_dim);
@@ -747,7 +747,7 @@ namespace cddp
 
         // Compute actual cost reduction and the predicted improvement
         double dJ = context.cost_ - J_new;
-        double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
+        double expected = -alpha_pr * (dV_(0) + 0.5 * alpha_pr * dV_(1));
         double reduction_ratio = (expected > 0.0) ? dJ / expected : std::copysign(1.0, dJ);
 
         // Acceptance criterion

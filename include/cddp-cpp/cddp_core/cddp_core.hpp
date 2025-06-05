@@ -113,7 +113,8 @@ namespace cddp
         double merit_function = 0.0;
 
         // Line search step size that produced this result
-        double alpha = 1.0;
+        double alpha_pr = 1.0;
+        double alpha_du = 1.0;
 
         // Status of this particular forward pass trial
         bool success = false;
@@ -245,7 +246,8 @@ namespace cddp
 
         // Common Line Search parameters that might be managed by CDDP context or passed to strategies
         std::vector<double> alphas_; // Potential alpha values for line search, configured by options_.line_search
-        double alpha_;               // Accepted step size for the current iteration
+        double alpha_pr_;            // Accepted primal step size for the current iteration
+        double alpha_du_;            // Accepted dual step size for the current iteration
 
         // Regularization management
         double regularization_; ///< Current regularization parameter
@@ -255,7 +257,8 @@ namespace cddp
         double getCurrentMeritFunction() const { return merit_function_; }
         double getCurrentPrimalInfeasibility() const { return inf_pr_; }
         double getCurrentDualInfeasibility() const { return inf_du_; }
-        double getCurrentAlpha() const { return alpha_; }
+        double getCurrentPrimalStepSize() const { return alpha_pr_; }
+        double getCurrentDualStepSize() const { return alpha_du_; }
         double getCurrentRegularization() const { return regularization_; }
 
         /**

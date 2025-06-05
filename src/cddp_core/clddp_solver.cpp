@@ -152,7 +152,7 @@ namespace cddp
 
         if (options.verbose)
         {
-            printIteration(0, context.cost_, context.merit_function_, context.inf_du_, context.regularization_, context.alpha_);
+            printIteration(0, context.cost_, context.merit_function_, context.inf_du_, context.regularization_, context.alpha_pr_);
         }
 
         // Start timer
@@ -225,14 +225,14 @@ namespace cddp
                 double dJ = context.cost_ - best_result.cost;
                 context.cost_ = best_result.cost;
                 context.merit_function_ = best_result.merit_function;
-                context.alpha_ = best_result.alpha;
+                context.alpha_pr_ = best_result.alpha_pr;
 
                 // Store history only if requested
                 if (options.return_iteration_info)
                 {
                     history_objective.push_back(context.cost_);
                     history_merit_function.push_back(context.merit_function_);
-                    history_step_length_primal.push_back(context.alpha_);
+                    history_step_length_primal.push_back(context.getCurrentPrimalStepSize());
                     history_dual_infeasibility.push_back(context.inf_du_);
                     history_regularization.push_back(context.regularization_);
                 }
@@ -267,7 +267,7 @@ namespace cddp
             // Print iteration info
             if (options.verbose)
             {
-                printIteration(iter, context.cost_, context.merit_function_, context.inf_du_, context.regularization_, context.alpha_);
+                printIteration(iter, context.cost_, context.merit_function_, context.inf_du_, context.regularization_, context.alpha_pr_);
             }
         }
 
@@ -280,7 +280,7 @@ namespace cddp
         solution["iterations_completed"] = iter;
         solution["solve_time_ms"] = static_cast<double>(duration.count());
         solution["final_objective"] = context.cost_;
-        solution["final_step_length"] = context.alpha_;
+        solution["final_step_length"] = context.alpha_pr_;
 
         // Add trajectories
         std::vector<double> time_points;
@@ -493,9 +493,9 @@ namespace cddp
         if (!options.enable_parallel)
         {
             // Single-threaded execution with early termination
-            for (double alpha : context.alphas_)
+            for (double alpha_pr : context.alphas_)
             {
-                ForwardPassResult result = forwardPass(context, alpha);
+                ForwardPassResult result = forwardPass(context, alpha_pr);
 
                 if (result.success && result.cost < best_result.cost)
                 {
@@ -513,11 +513,11 @@ namespace cddp
             std::vector<std::future<ForwardPassResult>> futures;
             futures.reserve(context.alphas_.size());
 
-            for (double alpha : context.alphas_)
+            for (double alpha_pr : context.alphas_)
             {
                 futures.push_back(std::async(std::launch::async,
-                                             [this, &context, alpha]()
-                                             { return forwardPass(context, alpha); }));
+                                             [this, &context, alpha_pr]()
+                                             { return forwardPass(context, alpha_pr); }));
             }
 
             for (auto &future : futures)
@@ -546,7 +546,7 @@ namespace cddp
         return best_result;
     }
 
-    ForwardPassResult CLDDPSolver::forwardPass(CDDP &context, double alpha)
+    ForwardPassResult CLDDPSolver::forwardPass(CDDP &context, double alpha_pr)
     {
         const CDDPOptions &options = context.getOptions();
 
@@ -554,7 +554,7 @@ namespace cddp
         result.success = false;
         result.cost = std::numeric_limits<double>::infinity();
         result.merit_function = std::numeric_limits<double>::infinity();
-        result.alpha = alpha;
+        result.alpha_pr = alpha_pr;
 
         // Initialize trajectories
         result.state_trajectory = context.X_;
@@ -572,7 +572,7 @@ namespace cddp
             const Eigen::VectorXd delta_x = x - context.X_[t];
 
             // Apply control update
-            result.control_trajectory[t] = u + alpha * k_u_[t] + K_u_[t] * delta_x;
+            result.control_trajectory[t] = u + alpha_pr * k_u_[t] + K_u_[t] * delta_x;
 
             // Apply control constraints
             if (control_box_constraint != nullptr)
@@ -593,7 +593,7 @@ namespace cddp
 
         // Check improvement
         double dJ = context.cost_ - J_new;
-        double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
+        double expected = -alpha_pr * (dV_(0) + 0.5 * alpha_pr * dV_(1));
         double reduction_ratio = expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
 
         // Use the Armijo constant from filter options for line search acceptance
