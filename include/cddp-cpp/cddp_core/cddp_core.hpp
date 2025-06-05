@@ -221,6 +221,25 @@ namespace cddp
         std::vector<double> alphas_; // Potential alpha values for line search, configured by options_.line_search
         double alpha_;               // Accepted step size for the current iteration
 
+        // Regularization management
+        double regularization_;   ///< Current regularization parameter
+
+        /**
+         * @brief Increase regularization parameters.
+         */
+        void increaseRegularization();
+
+        /**
+         * @brief Decrease regularization parameters.
+         */
+        void decreaseRegularization();
+
+        /**
+         * @brief Check if regularization limit has been reached.
+         * @return True if limit reached, false otherwise.
+         */
+        bool isRegularizationLimitReached() const;
+
     private:
         // Problem Definition Data
         std::unique_ptr<DynamicalSystem> system_;

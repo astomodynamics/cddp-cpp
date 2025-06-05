@@ -18,6 +18,7 @@
 #include "cddp_core/options.hpp"   // For CDDPOptions structure
 #include <iostream>
 #include <iomanip> // For std::setw
+#include <cmath>   // For std::min, std::max
 
 namespace cddp
 {
@@ -40,6 +41,7 @@ CDDP::CDDP(const Eigen::VectorXd& initial_state,
       cost_(0.0), 
       merit_function_(0.0),
       alpha_(options.line_search.initial_step_size), // Initialize from options
+      regularization_(options.regularization.initial_value),
       total_dual_dim_(0) {
 
     if (objective_ && !reference_state.isZero() && reference_state.size() > 0) { // Check if reference_state is valid before setting
@@ -264,6 +266,32 @@ void CDDP::initializeProblemIfNecessary() {
     }
 
     initialized_ = true;
+}
+
+void CDDP::increaseRegularization() {
+    regularization_ *= options_.regularization.update_factor;
+    
+    // Clamp to maximum value
+    regularization_ = std::min(regularization_, options_.regularization.max_value);
+    
+    if (options_.debug) {
+        std::cout << "CDDP: Increased regularization: " << regularization_ << std::endl;
+    }
+}
+
+void CDDP::decreaseRegularization() {
+    regularization_ /= options_.regularization.update_factor;
+    
+    // Clamp to minimum value
+    regularization_ = std::max(regularization_, options_.regularization.min_value);
+    
+    if (options_.debug) {
+        std::cout << "CDDP: Decreased regularization: " << regularization_ << std::endl;
+    }
+}
+
+bool CDDP::isRegularizationLimitReached() const {
+    return regularization_ >= options_.regularization.max_value;
 }
 
 void CDDP::printSolverInfo()
