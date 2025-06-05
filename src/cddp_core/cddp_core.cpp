@@ -14,323 +14,173 @@
  limitations under the License.
 */
 
-#include <iostream> // For std::cout, std::cerr
-#include <Eigen/Dense>
-#include <vector>
-#include <string>
-#include <memory> // For std::unique_ptr
-#include <map>    // For std::map
-
-#include "cddp_core/cddp_core.hpp"
-#include "cddp_core/boxqp.hpp"
+#include "cddp_core/cddp_core.hpp" // For CDDP class declaration
+#include "cddp_core/options.hpp"   // For CDDPOptions structure
+#include <iostream>
+#include <iomanip> // For std::setw
 
 namespace cddp
 {
 // Constructor
-CDDP::CDDP(const Eigen::VectorXd &initial_state,
-            const Eigen::VectorXd &reference_state,
-            int horizon,
-            double timestep,
-            std::unique_ptr<DynamicalSystem> system,
-            std::unique_ptr<Objective> objective,
-            const CDDPOptions &options)
+CDDP::CDDP(const Eigen::VectorXd& initial_state, 
+           const Eigen::VectorXd& reference_state,
+           int horizon,
+           double timestep,
+           std::unique_ptr<DynamicalSystem> system,
+           std::unique_ptr<Objective> objective,
+           const CDDPOptions& options)
     : initial_state_(initial_state),
-        reference_state_(reference_state),
-        horizon_(horizon),
-        timestep_(timestep),
-        system_(std::move(system)),
-        objective_(std::move(objective)),
-        options_(options),
-        initialized_(false)
-{
-    initializeCDDP();
-    if (options_.header_and_footer) {
-        printSolverInfo();
-        printOptions(options_);
+      reference_state_(reference_state),
+      horizon_(horizon),
+      timestep_(timestep),
+      system_(std::move(system)),
+      objective_(std::move(objective)),
+      options_(options),
+      initialized_(false), // Will be set true by initializeProblemIfNecessary or by strategies
+      cost_(0.0), 
+      merit_function_(0.0),
+      alpha_(options.line_search.initial_step_size), // Initialize from options
+      total_dual_dim_(0) {
+
+    if (objective_ && !reference_state.isZero() && reference_state.size() > 0) { // Check if reference_state is valid before setting
+        objective_->setReferenceState(reference_state_);
+    }
+    // Basic alpha sequence for line search
+    alphas_.clear();
+    double current_alpha = options_.line_search.initial_step_size;
+    for(int i=0; i < options_.line_search.max_iterations; ++i) {
+        alphas_.push_back(current_alpha);
+        current_alpha *= options_.line_search.step_reduction_factor;
+        if (current_alpha < options_.line_search.min_step_size && i < options_.line_search.max_iterations -1) {
+            alphas_.push_back(options_.line_search.min_step_size); // Ensure min_step_size is tried
+            break;
+        }
+    }
+    if (alphas_.empty()) { // Ensure at least one alpha if max_iterations is 0 or 1
+        alphas_.push_back(options_.line_search.initial_step_size);
+    }
+}
+// --- Setters ---
+void CDDP::setDynamicalSystem(std::unique_ptr<DynamicalSystem> system) {
+    system_ = std::move(system);
+    initialized_ = false; // Dimensions might change
+}
+
+void CDDP::setInitialState(const Eigen::VectorXd& initial_state) {
+    initial_state_ = initial_state;
+    if (X_.empty() || X_[0].size() != initial_state.size()) {
+         // If X_ is not compatible, it will be handled by initializeProblemIfNecessary
+    } else {
+        X_[0] = initial_state_;
     }
 }
 
-cddp::CDDPSolution CDDP::solve(std::string solver_type) {
-    if (solver_type == "CLCDDP" || solver_type == "CLDDP") {
-        if (options_.verbose) {
-            std::cout << "--------------------" << std::endl;
-            std::cout << "Solving with CLCDDP" << std::endl;
-            std::cout << "--------------------" << std::endl;
-        }
-        return solveCLCDDP();
-    } else if (solver_type == "LogCDDP" || solver_type == "LogDDP") {
-        if (options_.verbose) {
-            std::cout << "--------------------" << std::endl;
-            std::cout << "Solving with LogDDP" << std::endl;
-            std::cout << "--------------------" << std::endl;
-        }
-        return solveLogDDP();
-    } else if (solver_type == "ASCDDP" || solver_type == "ASDDP") {
-        if (options_.verbose) {
-            std::cout << "--------------------" << std::endl;
-            std::cout << "Solving with ASCDDP" << std::endl;
-            std::cout << "--------------------" << std::endl;
-        }
-        return solveASCDDP();
-    } else if (solver_type == "IPDDP") {
-        if (options_.verbose) {
-            std::cout << "--------------------" << std::endl;
-            std::cout << "Solving with IPDDP" << std::endl;
-            std::cout << "--------------------" << std::endl;
-        }
-        return solveIPDDP();
-    } else if (solver_type == "MSIPDDP") {
-        if (options_.verbose) {
-            std::cout << "--------------------" << std::endl;
-            std::cout << "Solving with MSIPDDP" << std::endl;
-            std::cout << "--------------------" << std::endl;
-        }
-        return solveMSIPDDP();
-    } else
-    {
-        std::cerr << "CDDP::solve: Unknown solver type" << std::endl;
-        throw std::runtime_error("CDDP::solve: Unknown solver type");
+void CDDP::setReferenceState(const Eigen::VectorXd& reference_state) {
+    reference_state_ = reference_state;
+    if (objective_) {
+        objective_->setReferenceState(reference_state_);
+    }
+    reference_states_.clear(); // Clear trajectory if single ref state is set
+    reference_states_.push_back(reference_state_); // For consistency if getReferenceStates is used
+}
+
+void CDDP::setReferenceStates(const std::vector<Eigen::VectorXd>& reference_states) {
+    reference_states_ = reference_states;
+    if (objective_) {
+        objective_->setReferenceStates(reference_states_);
+    }
+    if (!reference_states_.empty()) {
+        reference_state_ = reference_states_.back(); // Update single reference state to the final one
     }
 }
 
-void CDDP::setInitialTrajectory(const std::vector<Eigen::VectorXd> &X, const std::vector<Eigen::VectorXd> &U)
-{
-    if (!system_) {
-        std::cerr << "CDDP::setInitialTrajectory: No dynamical system provided." << std::endl;
-        throw std::runtime_error("CDDP::setInitialTrajectory: No dynamical system provided.");
-    }
+void CDDP::setHorizon(int horizon) {
+    horizon_ = horizon;
+    initialized_ = false; // Trajectory sizes will change
+}
 
-    if (!objective_) {
-        std::cerr << "CDDP::setInitialTrajectory: No objective function provided." << std::endl;
-        throw std::runtime_error("CDDP::setInitialTrajectory: No objective function provided.");
-    }
+void CDDP::setTimestep(double timestep) {
+    timestep_ = timestep;
+}
 
-    if (X.size() != horizon_ + 1)
-    {
-        std::cerr << "CDDP::setInitialTrajectory: X has wrong #timesteps" << std::endl;
-        throw std::runtime_error("CDDP::setInitialTrajectory: X has wrong #timesteps");
+void CDDP::setOptions(const CDDPOptions& options) {
+    options_ = options;
+    // Re-initialize alpha sequence if line search options changed
+    alphas_.clear();
+    double current_alpha = options_.line_search.initial_step_size;
+    for(int i=0; i < options_.line_search.max_iterations; ++i) {
+        alphas_.push_back(current_alpha);
+        current_alpha *= options_.line_search.step_reduction_factor;
+         if (current_alpha < options_.line_search.min_step_size && i < options_.line_search.max_iterations -1) {
+            alphas_.push_back(options_.line_search.min_step_size);
+            break;
+        }
     }
-    if (U.size() != horizon_)
-    {
-        std::cerr << "CDDP::setInitialTrajectory: U has wrong #timesteps" << std::endl;
-        throw std::runtime_error("CDDP::setInitialTrajectory: U has wrong #timesteps");
+     if (alphas_.empty()) {
+        alphas_.push_back(options_.line_search.initial_step_size);
     }
+    alpha_ = options_.line_search.initial_step_size;
+}
 
+void CDDP::setObjective(std::unique_ptr<Objective> objective) {
+    objective_ = std::move(objective);
+    if (objective_ && !reference_state_.isZero() && reference_state_.size() > 0) { // Check if reference_state is valid
+        objective_->setReferenceState(reference_state_);
+    }
+    if (objective_ && !reference_states_.empty()){
+         objective_->setReferenceStates(reference_states_);
+    }
+}
+
+void CDDP::setInitialTrajectory(const std::vector<Eigen::VectorXd>& X, const std::vector<Eigen::VectorXd>& U) {
+    if (X.size() != static_cast<size_t>(horizon_ + 1) || U.size() != static_cast<size_t>(horizon_)) {
+        // Or throw error, or just warn and let initializeProblemIfNecessary handle it
+        std::cerr << "Warning: Provided initial trajectory dimensions do not match horizon." << std::endl;
+    }
     X_ = X;
     U_ = U;
-    J_ = objective_->evaluate(X_, U_);
+    if (!X_.empty()) { // Ensure initial state is consistent
+        initial_state_ = X_[0];
+    }
 }
 
-// Initialize the CDDP solver
-void CDDP::initializeCDDP()
-{
-    if (initialized_)
-    {
-        // Already done—return.
-        return;
-    }
+// Placeholder Getters for dimensions (assuming system_ is valid)
+int CDDP::getStateDim() const {
+    if (!system_) throw std::runtime_error("Dynamical system not set.");
+    return system_->getStateDim();
+}
+int CDDP::getControlDim() const {
+    if (!system_) throw std::runtime_error("Dynamical system not set.");
+    return system_->getControlDim();
+}
+int CDDP::getTotalDualDim() const {
+    return total_dual_dim_;
+}
 
-    if (!system_)
-    {
-        initialized_ = false;
-        if (options_.verbose) {
-            std::cerr << "CDDP::initializeCDDP: No dynamical system provided." << std::endl;
-        }
-        return;
-    }
-
-    if (!objective_)
-    {
-        initialized_ = false;
-        if (options_.verbose) {
-            std::cerr << "CDDP::initializeCDDP: No objective function provided." << std::endl;
-        }
-        return;
-    }
-
-    const int state_dim = system_->getStateDim();
-    const int control_dim = system_->getControlDim();
-
-    // Check if reference_state in objective and reference_state in CDDP are the same
-    if ((reference_state_ - objective_->getReferenceState()).norm() > 1e-6)
-    {
-        std::cerr << "CDDP: Initial state and goal state in the objective function do not match" << std::endl;
-        throw std::runtime_error("Initial state and goal state in the objective function do not match");
-    }
-
-    // Initialize trajectories (X_ and U_ are std::vectors of Eigen::VectorXd)
-    if (X_.size() != horizon_ + 1 && U_.size() != horizon_)
-    {
-        X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(state_dim));
-        U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
-    }
-    else if (X_.size() != horizon_ + 1)
-    {
-        X_.resize(horizon_ + 1, Eigen::VectorXd::Zero(state_dim));
-    }
-    else if (U_.size() != horizon_)
-    {
-        U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
-    }
-
-    // Initialize cost
-    J_ = objective_->evaluate(X_, U_);
-
-    alpha_ = options_.backtracking_coeff;
-    for (int i = 0; i < options_.max_line_search_iterations; ++i)
-    {
-        alphas_.push_back(alpha_);
-        alpha_ *= options_.backtracking_factor;
-    }
-    alpha_ = options_.backtracking_coeff;
-
-    if (options_.regularization_type == "state" || options_.regularization_type == "both")
-    {
-        regularization_state_ = options_.regularization_state;
-        regularization_state_step_ = options_.regularization_state_step;
+CDDPSolution CDDP::solve(std::string solver_type) {
+    // This is where strategy selection and invocation will happen.
+    // For now, a placeholder:
+    if (solver_type == "CLCDDP") {
+        // solver_strategy_ = std::make_unique<CLCDDPSolverStrategy>(); // Once CLCDDPSolverStrategy exists
+    } else if (solver_type == "ASDDP") {
+        // solver_strategy_ = std::make_unique<ASDDPSolverStrategy>(); // Once ASDDPSolverStrategy exists
+    } else if (solver_type == "LOGDDP") {
+        // solver_strategy_ = std::make_unique<LOGDDPSolverStrategy>(); // Once LOGDDPSolverStrategy exists
+    } else if (solver_type == "IPDDP") {
+        // solver_strategy_ = std::make_unique<IPDDPSolverStrategy>(); // Once IPDDPSolverStrategy exists
+    } else if (solver_type == "MSIPDDP") {
+        // solver_strategy_ = std::make_unique<MSIPDDPSolverStrategy>(); // Once MSIPDDPSolverStrategy exists
     } else {
-        regularization_state_ = 0.0;
-        regularization_state_step_ = 1.0;
+        throw std::runtime_error("Unsupported solver type: " + solver_type);
     }
+
+    initializeProblemIfNecessary(); // Ensure X_, U_ are sized etc.
     
-    if (options_.regularization_type == "control" || options_.regularization_type == "both")
-    {
-        regularization_control_ = options_.regularization_control;
-        regularization_control_step_ = options_.regularization_control_step;
-    } else {
-        regularization_control_ = 0.0;
-        regularization_control_step_ = 1.0;
-    }
-
-
-    // Initialize gains and value reduction
-    k_u_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
-    K_u_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, state_dim));
-    dV_.resize(2);
-
-    // Initialize Q-function matrices: USED ONLY FOR ASCDDP
-    Q_UU_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, control_dim));
-    Q_UX_.resize(horizon_, Eigen::MatrixXd::Zero(control_dim, state_dim));
-    Q_U_.resize(horizon_, Eigen::VectorXd::Zero(control_dim));
-
-    // Check if ControlBoxConstraint is set
-    if (constraint_set_.find("ControlBoxConstraint") != constraint_set_.end())
-    {
-        std::cout << "ControlBoxConstraint is set" << std::endl;
-    }
-
-    // Initialize Log-barrier object
-    mu_ = options_.barrier_coeff;
-    constraint_violation_ = 0.0;
-
-    // Initialize boxqp options
-    boxqp_options_.max_iterations = options_.boxqp_max_iterations;
-    boxqp_options_.min_grad = options_.boxqp_min_grad;
-    boxqp_options_.min_rel_improve = options_.boxqp_min_rel_improve;    
-    boxqp_options_.step_dec = options_.boxqp_step_dec;
-    boxqp_options_.min_step = options_.boxqp_min_step;
-    boxqp_options_.armijo = options_.boxqp_armijo;
-    boxqp_options_.verbose = options_.boxqp_verbose;
-
-    boxqp_solver_ = BoxQPSolver(boxqp_options_);
-    
-    initialized_ = true;
-}
-
-double CDDP::computeConstraintViolation(const std::vector<Eigen::VectorXd>& X,
-                                      const std::vector<Eigen::VectorXd>& U) const {
-    double total_violation = 0.0;
-    for (const auto& constraint : constraint_set_) {
-        for (size_t t = 0; t < U.size(); ++t) {
-            total_violation += constraint.second->computeViolation(X[t], U[t]);
-        }
-    }
-    return total_violation;
-}
-
-
-void CDDP::increaseRegularization()
-{
-    // For "state" or "both"
-    if (options_.regularization_type == "state" ||
-        options_.regularization_type == "both")
-    {
-        // Increase step
-        regularization_state_step_ = std::max(
-            regularization_state_step_ * options_.regularization_state_factor,
-            options_.regularization_state_factor);
-
-        // Increase actual regularization
-        regularization_state_ = std::max(
-            regularization_state_ * regularization_state_step_,
-            options_.regularization_state_min);
-    }
-
-    // For "control" or "both"
-    if (options_.regularization_type == "control" ||
-        options_.regularization_type == "both")
-    {
-        // Increase step
-        regularization_control_step_ = std::max(
-            regularization_control_step_ * options_.regularization_control_factor,
-            options_.regularization_control_factor);
-
-        // Increase actual regularization
-        regularization_control_ = std::max(
-            regularization_control_ * regularization_control_step_,
-            options_.regularization_control_min);
-    }
-}
-
-
-void CDDP::decreaseRegularization()
-{
-    // For "state" or "both"
-    if (options_.regularization_type == "state" ||
-        options_.regularization_type == "both")
-    {
-        // Decrease step
-        regularization_state_step_ = std::min(
-            regularization_state_step_ / options_.regularization_state_factor,
-            1.0 / options_.regularization_state_factor);
-
-        // Decrease actual regularization
-        regularization_state_ = std::max(
-            regularization_state_ * regularization_state_step_,
-            options_.regularization_state_min);
-    }
-
-    // For "control" or "both"
-    if (options_.regularization_type == "control" ||
-        options_.regularization_type == "both")
-    {
-        // Decrease step
-        regularization_control_step_ = std::min(
-            regularization_control_step_ / options_.regularization_control_factor,
-            1.0 / options_.regularization_control_factor);
-
-        // Decrease actual regularization
-        regularization_control_ = std::max(
-            regularization_control_ * regularization_control_step_,
-            options_.regularization_control_min);
-    }
-}
-
-
-bool CDDP::isRegularizationLimitReached() const
-{
-    bool state_limit   = (regularization_state_   >= options_.regularization_state_max);
-    bool control_limit = (regularization_control_ >= options_.regularization_control_max);
-
-    if (options_.regularization_type == "state")
-        return state_limit;
-    else if (options_.regularization_type == "control")
-        return control_limit;
-    else if (options_.regularization_type == "both")
-        return (state_limit || control_limit);
-
-    // For "none" or unknown, no limit in practice
-    return false;
+    // Pass the CDDP instance itself as context to the strategy
+    // The strategy will have methods to access problem_context.X_, problem_context.U_, 
+    // problem_context.options_, problem_context.system_, etc.
+    solver_strategy_->initialize(*this); 
+    return solver_strategy_->solve(*this);
 }
 
 void CDDP::printSolverInfo()
@@ -352,117 +202,112 @@ void CDDP::printSolverInfo()
     std::cout << "\n";
 }
 
-void CDDP::printOptions(const CDDPOptions &options)
-{
+
+// Helper function to print SolverSpecificBarrierOptions
+void print_solver_specific_barrier_options(const SolverSpecificBarrierOptions& barrier_opts, const std::string& prefix = "  ") {
+    std::cout << prefix << "Barrier Mu Initial: " << std::setw(10) << barrier_opts.mu_initial << "\n";
+    std::cout << prefix << "Barrier Mu Min Value: " << std::setw(10) << barrier_opts.mu_min_value << "\n";
+    std::cout << prefix << "Barrier Mu Update Factor: " << std::setw(10) << barrier_opts.mu_update_factor << "\n";
+    std::cout << prefix << "Barrier Mu Update Power: " << std::setw(10) << barrier_opts.mu_update_power << "\n";
+    std::cout << prefix << "Min Fraction to Boundary: " << std::setw(10) << barrier_opts.min_fraction_to_boundary << "\n";
+}
+
+// Helper function to print SolverSpecificFilterOptions
+void print_solver_specific_filter_options(const SolverSpecificFilterOptions& filter_opts, const std::string& prefix = "  ") {
+    std::cout << prefix << "Filter Merit Accept Thresh: " << std::setw(10) << filter_opts.merit_acceptance_threshold << "\n";
+    std::cout << prefix << "Filter Violation Accept Thresh: " << std::setw(10) << filter_opts.violation_acceptance_threshold << "\n";
+    std::cout << prefix << "Filter Max Violation Thresh: " << std::setw(10) << filter_opts.max_violation_threshold << "\n";
+    std::cout << prefix << "Filter Min Violation for Armijo: " << std::setw(10) << filter_opts.min_violation_for_armijo_check << "\n";
+    std::cout << prefix << "Filter Armijo Constant: " << std::setw(10) << filter_opts.armijo_constant << "\n";
+}
+
+void CDDP::printOptions(const CDDPOptions& options) {
     std::cout << "\n========================================\n";
-    std::cout << "           CDDP Options\n";
+    std::cout << "           CDDP Options Overview\n";
     std::cout << "========================================\n";
 
-    std::cout << "Cost Tolerance: " << std::setw(10) << options.cost_tolerance << "\n";
-    std::cout << "Grad Tolerance: " << std::setw(10) << options.grad_tolerance << "\n";
-    std::cout << "Max Iterations: " << std::setw(10) << options.max_iterations << "\n";
-    std::cout << "Max CPU Time: " << std::setw(10) << options.max_cpu_time << "\n";
+    std::cout << "--- General Solver Configuration ---\n";
+    std::cout << "  KKT/Optimality Tolerance: " << std::setw(10) << options.tolerance << "\n";
+    std::cout << "  Cost Change Tolerance: " << std::setw(10) << options.acceptable_tolerance << "\n";
+    std::cout << "  Max Iterations: " << std::setw(10) << options.max_iterations << "\n";
+    std::cout << "  Max CPU Time (s): " << std::setw(10) << options.max_cpu_time << "\n";
+    std::cout << "  Verbose Output: " << std::setw(10) << (options.verbose ? "Yes" : "No") << "\n";
+    std::cout << "  Debug Mode: " << std::setw(10) << (options.debug ? "Yes" : "No") << "\n";
+    std::cout << "  Print Header/Footer: " << std::setw(10) << (options.print_solver_header_footer ? "Yes" : "No") << "\n";
+    std::cout << "  Use iLQR Approximations: " << std::setw(10) << (options.use_ilqr ? "Yes" : "No") << "\n";
+    std::cout << "  Enable Parallel Computation: " << std::setw(10) << (options.enable_parallel ? "Yes" : "No") << "\n";
+    std::cout << "  Number of Threads: " << std::setw(10) << options.num_threads << "\n";
+    std::cout << "  Return Iteration Info: " << std::setw(10) << (options.return_iteration_info ? "Yes" : "No") << "\n";
 
-    std::cout << "\nLine Search:\n";
-    std::cout << "  Max Iterations: " << std::setw(5) << options.max_line_search_iterations << "\n";
-    std::cout << "  Backtracking Coeff: " << std::setw(5) << options.backtracking_coeff << "\n";
-    std::cout << "  Backtracking Min: " << std::setw(5) << options.backtracking_min << "\n";
-    std::cout << "  Backtracking Factor: " << std::setw(5) << options.backtracking_factor << "\n";
+    std::cout << "\n--- Line Search Options ---\n";
+    std::cout << "  Max Iterations: " << std::setw(10) << options.line_search.max_iterations << "\n";
+    std::cout << "  Initial Step Size: " << std::setw(10) << options.line_search.initial_step_size << "\n";
+    std::cout << "  Min Step Size: " << std::setw(10) << options.line_search.min_step_size << "\n";
+    std::cout << "  Step Reduction Factor: " << std::setw(10) << options.line_search.step_reduction_factor << "\n";
 
-    std::cout << "\nLog-Barrier:\n";
-    std::cout << "  Barrier Coeff: " << std::setw(5) << options.barrier_coeff << "\n";
-    std::cout << "  Barrier Factor: " << std::setw(5) << options.barrier_factor << "\n";
-    std::cout << "  Barrier Tolerance: " << std::setw(5) << options.barrier_tolerance << "\n";
-    std::cout << "  Relaxation Coeff: " << std::setw(5) << options.relaxation_coeff << "\n";
-    std::cout << "  Barrier Order: " << std::setw(5) << options.barrier_order << "\n";
-    std::cout << "  Filter Acceptance: " << std::setw(5) << options.filter_acceptance << "\n";
-    std::cout << "  Constraint Tolerance: " << std::setw(5) << options.constraint_tolerance << "\n";
+    std::cout << "\n--- Regularization Options ---\n";
+    // Note: The new RegularizationOptions is generic. The 'type' (state/control) is not part of options.hpp.
+    // This will print the generic values. The active regularization (state/control) would be
+    // determined by the solver strategy based on options_.regularization.type if it were present.
+    std::cout << "  Initial Value: " << std::setw(10) << options.regularization.initial_value << "\n";
+    std::cout << "  Update Factor: " << std::setw(10) << options.regularization.update_factor << "\n";
+    std::cout << "  Max Value: " << std::setw(10) << options.regularization.max_value << "\n";
+    std::cout << "  Min Value: " << std::setw(10) << options.regularization.min_value << "\n";
+    std::cout << "  Step Initial Value: " << std::setw(10) << options.regularization.step_initial_value << "\n";
 
-    std::cout << "\nRegularization:\n";
-    std::cout << "  Regularization Type: " << options.regularization_type << "\n";
-    std::cout << "  Regularization State: " << std::setw(5) << options.regularization_state << "\n";
-    std::cout << "  Regularization State Step: " << std::setw(5) << options.regularization_state_step << "\n";
-    std::cout << "  Regularization State Max: " << std::setw(5) << options.regularization_state_max << "\n";
-    std::cout << "  Regularization State Min: " << std::setw(5) << options.regularization_state_min << "\n";
-    std::cout << "  Regularization State Factor: " << std::setw(5) << options.regularization_state_factor << "\n";
+    std::cout << "\n--- BoxQP Options ---\n";
+    std::cout << "  Max Iterations: " << std::setw(10) << options.box_qp.max_iterations << "\n";
+    std::cout << "  Min Gradient Norm: " << std::setw(10) << options.box_qp.min_gradient_norm << "\n";
+    std::cout << "  Min Relative Improvement: " << std::setw(10) << options.box_qp.min_relative_improvement << "\n";
+    std::cout << "  Step Decrease Factor: " << std::setw(10) << options.box_qp.step_decrease_factor << "\n";
+    std::cout << "  Min Step Size: " << std::setw(10) << options.box_qp.min_step_size << "\n";
+    std::cout << "  Armijo Constant: " << std::setw(10) << options.box_qp.armijo_constant << "\n";
+    std::cout << "  Verbose: " << std::setw(10) << (options.box_qp.verbose ? "Yes" : "No") << "\n";
 
-    std::cout << "  Regularization Control: " << std::setw(5) << options.regularization_control << "\n";
-    std::cout << "  Regularization Control Step: " << std::setw(5) << options.regularization_control_step << "\n";
-    std::cout << "  Regularization Control Max: " << std::setw(5) << options.regularization_control_max << "\n";
-    std::cout << "  Regularization Control Min: " << std::setw(5) << options.regularization_control_min << "\n";
-    std::cout << "  Regularization Control Factor: " << std::setw(5) << options.regularization_control_factor << "\n";
+    std::cout << "\n--- Log-Barrier Method Options ---\n";
+    std::cout << "  Use Relaxed Log-Barrier Penalty: " << (options.log_barrier.use_relaxed_log_barrier_penalty ? "Yes" : "No") << "\n";
+    std::cout << "  Relaxed Log-Barrier Delta: " << std::setw(10) << options.log_barrier.relaxed_log_barrier_delta << "\n";
+    std::cout << "  Barrier Parameters (for Log-Barrier):\n";
+    print_solver_specific_barrier_options(options.log_barrier.barrier, "    ");
 
-    std::cout << "\nOther:\n";
-    std::cout << "  Print Iterations: " << (options.verbose ? "Yes" : "No") << "\n";
-    std::cout << "  iLQR: " << (options.is_ilqr ? "Yes" : "No") << "\n";
-    std::cout << "  Use Parallel: " << (options.use_parallel ? "Yes" : "No") << "\n";
-    std::cout << "  Num Threads: " << options.num_threads << "\n";
-    std::cout << "  Relaxed Log-Barrier: " << (options.is_relaxed_log_barrier ? "Yes" : "No") << "\n";
-    std::cout << "  Early Termination: " << (options.early_termination ? "Yes" : "No") << "\n";
+    std::cout << "\n--- IPDDP Algorithm Options ---\n";
+    std::cout << "  Dual Variable Init Scale: " << std::setw(10) << options.ipddp.dual_var_init_scale << "\n";
+    std::cout << "  Slack Variable Init Scale: " << std::setw(10) << options.ipddp.slack_var_init_scale << "\n";
+    std::cout << "  Termination Scaling Max Factor: " << std::setw(10) << options.ipddp.termination_scaling_max_factor << "\n";
+    std::cout << "  Barrier Parameters (for IPDDP):\n";
+    print_solver_specific_barrier_options(options.ipddp.barrier, "    ");
+    std::cout << "  Filter Parameters (for IPDDP):\n";
+    print_solver_specific_filter_options(options.ipddp.filter, "    ");
 
-    std::cout << "\nBoxQP:\n";
-    std::cout << "  BoxQP Max Iterations: " << options.boxqp_max_iterations << "\n";
-    std::cout << "  BoxQP Min Grad: " << options.boxqp_min_grad << "\n";
-    std::cout << "  BoxQP Min Rel Improve: " << options.boxqp_min_rel_improve << "\n";
-    std::cout << "  BoxQP Step Dec: " << options.boxqp_step_dec << "\n";
-    std::cout << "  BoxQP Min Step: " << options.boxqp_min_step << "\n";
-    std::cout << "  BoxQP Armijo: " << options.boxqp_armijo << "\n";
-    std::cout << "  BoxQP Verbose: " << (options.boxqp_verbose ? "Yes" : "No") << "\n";
-
-    std::cout << "\nMSIPDDP:\n";
-    std::cout << "  MS Segment Length: " << options.ms_segment_length << "\n";
-    std::cout << "  MS Rollout Type: " << options.ms_rollout_type << "\n";
-    std::cout << "  MS Defect Tolerance: " << options.ms_defect_tolerance_for_single_shooting << "\n";
-    std::cout << "  Barrier Update Factor: " << options.barrier_update_factor << "\n";
-    std::cout << "  Barrier Update Power: " << options.barrier_update_power << "\n";
-
+    std::cout << "\n--- MSIPDDP Algorithm Options ---\n";
+    std::cout << "  Dual Variable Init Scale: " << std::setw(10) << options.msipddp.dual_var_init_scale << "\n";
+    std::cout << "  Slack Variable Init Scale: " << std::setw(10) << options.msipddp.slack_var_init_scale << "\n";
+    std::cout << "  Costate Variable Init Scale: " << std::setw(10) << options.msipddp.costate_var_init_scale << "\n";
+    std::cout << "  Segment Length: " << std::setw(10) << options.msipddp.segment_length << "\n";
+    std::cout << "  Rollout Type: " << std::setw(10) << options.msipddp.rollout_type << "\n";
+    std::cout << "  Use Controlled Rollout: " << std::setw(10) << (options.msipddp.use_controlled_rollout ? "Yes" : "No") << "\n";
+    std::cout << "  Termination Scaling Max Factor: " << std::setw(10) << options.msipddp.termination_scaling_max_factor << "\n";
+    std::cout << "  Barrier Parameters (for MSIPDDP):\n";
+    print_solver_specific_barrier_options(options.msipddp.barrier, "    ");
+    std::cout << "  Filter Parameters (for MSIPDDP):\n";
+    print_solver_specific_filter_options(options.msipddp.filter, "    ");
 
     std::cout << "========================================\n\n";
 }
 
-void CDDP::printIteration(int iter, double cost, double lagrangian, double grad_norm,
-               double lambda_state, double lambda_control, double step_size, 
-               double mu, double constraint_violation)
-{
-   if (iter % 10 == 0)
-   {
-       std::cout << std::setw(5) << "Iter"
-               << std::setw(12) << "Cost"
-               << std::setw(12) << "Lagr"
-               << std::setw(10) << "Grad"
-               << std::setw(10) << "Step"
-               << std::setw(10) << "RegS"
-               << std::setw(10) << "RegC" 
-               << std::setw(10) << "Mu"
-               << std::setw(10) << "Viol"
-               << std::endl;
-       std::cout << std::string(89, '-') << std::endl;
-   }
 
-   std::cout << std::setw(5) << iter
-           << std::setw(12) << std::scientific << std::setprecision(3) << cost
-           << std::setw(12) << std::scientific << std::setprecision(3) << lagrangian
-           << std::setw(10) << std::scientific << std::setprecision(2) << grad_norm
-           << std::setw(10) << std::fixed << std::setprecision(3) << step_size
-           << std::setw(10) << std::scientific << std::setprecision(2) << lambda_state
-           << std::setw(10) << std::scientific << std::setprecision(2) << lambda_control
-           << std::setw(10) << std::scientific << std::setprecision(2) << mu
-           << std::setw(10) << std::scientific << std::setprecision(2) << constraint_violation
-           << std::endl;
-}
+// void CDDP::printSolution(const CDDPSolution &solution)
+// {
+//     std::cout << "\n========================================\n";
+//     std::cout << "           CDDP Solution\n";
+//     std::cout << "========================================\n";
 
-void CDDP::printSolution(const CDDPSolution &solution)
-{
-    std::cout << "\n========================================\n";
-    std::cout << "           CDDP Solution\n";
-    std::cout << "========================================\n";
+//     std::cout << "Converged: " << (solution.converged ? "Yes" : "No") << "\n";
+//     std::cout << "Iterations: " << solution.iterations << "\n";
+//     std::cout << "Solve Time: " << std::setprecision(4) << solution.solve_time << " micro sec\n";
+//     std::cout << "Final Cost: " << std::setprecision(6) << solution.cost_sequence.back() << "\n"; // Assuming cost_sequence is not empty
 
-    std::cout << "Converged: " << (solution.converged ? "Yes" : "No") << "\n";
-    std::cout << "Iterations: " << solution.iterations << "\n";
-    std::cout << "Solve Time: " << std::setprecision(4) << solution.solve_time << " micro sec\n";
-    std::cout << "Final Cost: " << std::setprecision(6) << solution.cost_sequence.back() << "\n"; // Assuming cost_sequence is not empty
-
-    std::cout << "========================================\n\n";
-}
+//     std::cout << "========================================\n\n";
+// }
 
 } // namespace cddp

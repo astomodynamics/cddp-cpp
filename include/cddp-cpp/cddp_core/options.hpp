@@ -18,6 +18,7 @@
 
 #include <iostream> // For std::cout, std::cerr
 #include <string>   // For std::string
+#include "cddp_core/boxqp.hpp"
 
 namespace cddp
 {
@@ -48,22 +49,6 @@ namespace cddp
         double max_value = 1e7;          ///< Maximum allowed regularization value.
         double min_value = 1e-8;         ///< Minimum allowed regularization value.
         double step_initial_value = 1.0; ///< Initial step/rate for changing regularization.
-    };
-
-    /**
-     * @brief Options for the BoxQP (Box-constrained Quadratic Program) solver.
-     *
-     * These parameters are used when solving the QP subproblem with box constraints on controls.
-     */
-    struct BoxQPOptions
-    {
-        int max_iterations = 100;               ///< Maximum iterations for the BoxQP solver.
-        double min_gradient_norm = 1e-8;        ///< Minimum gradient norm for BoxQP convergence.
-        double min_relative_improvement = 1e-8; ///< Minimum relative improvement for BoxQP convergence.
-        double step_decrease_factor = 0.6;      ///< Step decrease factor in BoxQP line search.
-        double min_step_size = 1e-22;           ///< Minimum step size in BoxQP line search.
-        double armijo_constant = 0.1;           ///< Armijo constant for BoxQP line search.
-        bool verbose = false;                   ///< Enable verbose output for the BoxQP solver.
     };
 
     /**

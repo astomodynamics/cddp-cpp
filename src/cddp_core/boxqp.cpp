@@ -47,7 +47,7 @@ BoxQPResult BoxQPSolver::solve(const Eigen::MatrixXd& H, const Eigen::VectorXd& 
         result.iterations = iter + 1;
         
         // Check relative improvement
-        if (iter > 0 && std::abs(old_value - value) < options_.min_rel_improve * std::abs(old_value)) {
+        if (iter > 0 && std::abs(old_value - value) < options_.min_relative_improvement * std::abs(old_value)) {
             result.status = BoxQPStatus::SUCCESS;
             break;
         }
@@ -113,7 +113,7 @@ BoxQPResult BoxQPSolver::solve(const Eigen::MatrixXd& H, const Eigen::VectorXd& 
         grad_norm = std::sqrt(grad_norm);
         result.final_grad_norm = grad_norm;
 
-        if (grad_norm < options_.min_grad) {
+        if (grad_norm < options_.min_gradient_norm) {
             result.status = BoxQPStatus::SUCCESS;
             break;
         }
@@ -210,7 +210,7 @@ std::pair<bool, std::pair<double, Eigen::VectorXd>> BoxQPSolver::lineSearch(
     double step = 1.0;
     const double sdotg = search.dot(gradient);
     
-    while (step > options_.min_step) {
+    while (step > options_.min_step_size) {
         // Compute candidate
         Eigen::VectorXd x_new = projectOntoBox(x + step * search, lower, upper);
         
@@ -218,11 +218,11 @@ std::pair<bool, std::pair<double, Eigen::VectorXd>> BoxQPSolver::lineSearch(
         double value_new = evaluateObjective(x_new, H, g);
         
         // Check Armijo condition
-        if ((value_new - value) <= options_.armijo * step * sdotg) {
+        if ((value_new - value) <= options_.armijo_constant * step * sdotg) {
             return {true, {step, x_new}};
         }
         
-        step *= options_.step_dec;
+        step *= options_.step_decrease_factor;
     }
     
     return {false, {0.0, x}};
