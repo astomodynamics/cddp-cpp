@@ -232,7 +232,7 @@ namespace cddp
                 context.decreaseRegularization();
 
                 // Check convergence
-                if (dJ < options.tolerance)
+                if (context.inf_du_ < options.tolerance)
                 {
                     converged = true;
                     termination_reason = "OptimalSolutionFound";
