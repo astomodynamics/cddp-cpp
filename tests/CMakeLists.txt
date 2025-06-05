@@ -111,21 +111,9 @@ add_executable(test_constraint cddp_core/test_constraint.cpp)
 target_link_libraries(test_constraint gtest gmock gtest_main cddp)
 gtest_discover_tests(test_constraint)
 
-add_executable(test_clddp_pendulum cddp_core/test_clddp_pendulum.cpp)
-target_link_libraries(test_clddp_pendulum gtest gmock gtest_main cddp)
-gtest_discover_tests(test_clddp_pendulum)
-
-add_executable(test_clddp_unicycle cddp_core/test_clddp_unicycle.cpp)
-target_link_libraries(test_clddp_unicycle gtest gmock gtest_main cddp)
-gtest_discover_tests(test_clddp_unicycle)
-
-add_executable(test_clddp_car cddp_core/test_clddp_car.cpp)
-target_link_libraries(test_clddp_car gtest gmock gtest_main cddp)
-gtest_discover_tests(test_clddp_car)
-
-# add_executable(test_clddp_solver cddp_core/test_clddp_solver.cpp)
-# target_link_libraries(test_clddp_solver gtest gmock gtest_main cddp)
-# gtest_discover_tests(test_clddp_solver)
+add_executable(test_clddp_solver cddp_core/test_clddp_solver.cpp)
+target_link_libraries(test_clddp_solver gtest gmock gtest_main cddp)
+gtest_discover_tests(test_clddp_solver)
 
 # add_executable(test_asddp_core cddp_core/test_asddp_core.cpp)
 
