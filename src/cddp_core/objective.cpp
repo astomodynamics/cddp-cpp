@@ -66,16 +66,6 @@ QuadraticObjective::QuadraticObjective(
             throw std::invalid_argument("Last reference state must be same as the reference state");
         }
     }
-    
-    // print to tell single reference state or multiple reference states
-    if (reference_states_.size() > 0)
-    {
-        std::cout << "QuadraticObjective: Using multiple reference states" << std::endl;
-    }
-    else
-    {
-        std::cout << "QuadraticObjective: Using single reference state" << std::endl;
-    }
 }
 
 // Evaluate the total cost: terminal cost + running cost
