@@ -55,7 +55,6 @@ namespace cddp
      *                                      • "MaxCpuTimeReached" - Exceeded maximum CPU time limit
      *                                      • "RegularizationLimitReached_Converged" - Reached regularization limit but solution acceptable
      *                                      • "RegularizationLimitReached_NotConverged" - Reached regularization limit, solution not acceptable
-     *                                      • "BackwardPassRegularizationLimitReached" - Backward pass failed due to regularization limit
      * - "iterations_completed":          int (Number of iterations)
      * - "solve_time_ms":                 double (Total solver time in milliseconds)
      * - "final_objective":               double (Final objective cost J(x,u))
