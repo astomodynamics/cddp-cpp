@@ -18,6 +18,7 @@
 #include "cddp_core/options.hpp"   // For CDDPOptions structure
 #include "cddp_core/clddp_solver.hpp" // For CLDDPSolver
 #include "cddp_core/asddp_solver.hpp" // For ASDDPSolver
+#include "cddp_core/logddp_solver.hpp" // For LogDDPSolver
 #include <iostream>
 #include <iomanip> // For std::setw
 #include <cmath>   // For std::min, std::max
@@ -44,7 +45,8 @@ CDDP::CDDP(const Eigen::VectorXd& initial_state,
       merit_function_(0.0),
       inf_pr_(0.0),
       inf_du_(0.0),
-      alpha_(options.line_search.initial_step_size), // Initialize from options
+      alpha_pr_(options.line_search.initial_step_size), // Initialize from options
+      alpha_du_(0.0),
       regularization_(options.regularization.initial_value),
       total_dual_dim_(0) {
 
@@ -125,7 +127,7 @@ void CDDP::setOptions(const CDDPOptions& options) {
      if (alphas_.empty()) {
         alphas_.push_back(options_.line_search.initial_step_size);
     }
-    alpha_ = options_.line_search.initial_step_size;
+    alpha_pr_ = options_.line_search.initial_step_size;
 }
 
 void CDDP::setObjective(std::unique_ptr<Objective> objective) {
@@ -197,7 +199,24 @@ bool CDDP::removeConstraint(const std::string &constraint_name) {
     return false; // Constraint not found
 }
 
-CDDPSolution CDDP::solve(std::string solver_type) {
+namespace {
+    std::string solverTypeToString(SolverType solver_type) {
+        switch (solver_type) {
+            case SolverType::CLDDP:   return "CLDDP";
+            case SolverType::ASDDP:   return "ASDDP";
+            case SolverType::LogDDP:  return "LogDDP";
+            case SolverType::IPDDP:   return "IPDDP";
+            case SolverType::MSIPDDP: return "MSIPDDP";
+            default: return "CLDDP"; // Default fallback
+        }
+    }
+}
+
+CDDPSolution CDDP::solve(SolverType solver_type) {
+    return solve(solverTypeToString(solver_type));
+}
+
+CDDPSolution CDDP::solve(const std::string& solver_type) {
     // This is where strategy selection and invocation will happen.
     
     initializeProblemIfNecessary(); // Ensure X_, U_ are sized etc.
@@ -207,6 +226,8 @@ CDDPSolution CDDP::solve(std::string solver_type) {
         solver_ = std::make_unique<CLDDPSolver>();
     } else if (solver_type == "ASDDP") {
         solver_ = std::make_unique<ASDDPSolver>();
+    } else if (solver_type == "LogDDP" || solver_type == "LOGDDP") {
+        solver_ = std::make_unique<LogDDPSolver>();
     } else {
         // For now, return placeholder for other solver types
         CDDPSolution solution;
@@ -312,10 +333,6 @@ void CDDP::increaseRegularization() {
     
     // Clamp to maximum value
     regularization_ = std::min(regularization_, options_.regularization.max_value);
-    
-    if (options_.debug) {
-        std::cout << "CDDP: Increased regularization: " << std::log(regularization_) << std::endl;
-    }
 }
 
 void CDDP::decreaseRegularization() {
@@ -323,10 +340,6 @@ void CDDP::decreaseRegularization() {
     
     // Clamp to minimum value
     regularization_ = std::max(regularization_, options_.regularization.min_value);
-    
-    if (options_.debug) {
-        std::cout << "CDDP: Decreased regularization: " << std::log(regularization_) << std::endl;
-    }
 }
 
 bool CDDP::isRegularizationLimitReached() const {
@@ -418,17 +431,20 @@ void CDDP::printOptions(const CDDPOptions& options) {
     std::cout << "\n--- Log-Barrier Method Options ---\n";
     std::cout << "  Use Relaxed Log-Barrier Penalty: " << (options.log_barrier.use_relaxed_log_barrier_penalty ? "Yes" : "No") << "\n";
     std::cout << "  Relaxed Log-Barrier Delta: " << std::setw(10) << options.log_barrier.relaxed_log_barrier_delta << "\n";
+    std::cout << "  Termination Scaling Max Factor: " << std::setw(10) << options.termination_scaling_max_factor << "\n";
     std::cout << "  Barrier Parameters (for Log-Barrier):\n";
     print_solver_specific_barrier_options(options.log_barrier.barrier, "    ");
+    std::cout << "  Filter Parameters (for Log-Barrier):\n";
+    print_solver_specific_filter_options(options.filter, "    ");
 
     std::cout << "\n--- IPDDP Algorithm Options ---\n";
     std::cout << "  Dual Variable Init Scale: " << std::setw(10) << options.ipddp.dual_var_init_scale << "\n";
     std::cout << "  Slack Variable Init Scale: " << std::setw(10) << options.ipddp.slack_var_init_scale << "\n";
-    std::cout << "  Termination Scaling Max Factor: " << std::setw(10) << options.ipddp.termination_scaling_max_factor << "\n";
+    std::cout << "  Termination Scaling Max Factor: " << std::setw(10) << options.termination_scaling_max_factor << "\n";
     std::cout << "  Barrier Parameters (for IPDDP):\n";
     print_solver_specific_barrier_options(options.ipddp.barrier, "    ");
     std::cout << "  Filter Parameters (for IPDDP):\n";
-    print_solver_specific_filter_options(options.ipddp.filter, "    ");
+    print_solver_specific_filter_options(options.filter, "    ");
 
     std::cout << "\n--- MSIPDDP Algorithm Options ---\n";
     std::cout << "  Dual Variable Init Scale: " << std::setw(10) << options.msipddp.dual_var_init_scale << "\n";
@@ -437,11 +453,11 @@ void CDDP::printOptions(const CDDPOptions& options) {
     std::cout << "  Segment Length: " << std::setw(10) << options.msipddp.segment_length << "\n";
     std::cout << "  Rollout Type: " << std::setw(10) << options.msipddp.rollout_type << "\n";
     std::cout << "  Use Controlled Rollout: " << std::setw(10) << (options.msipddp.use_controlled_rollout ? "Yes" : "No") << "\n";
-    std::cout << "  Termination Scaling Max Factor: " << std::setw(10) << options.msipddp.termination_scaling_max_factor << "\n";
+    std::cout << "  Termination Scaling Max Factor: " << std::setw(10) << options.termination_scaling_max_factor << "\n";
     std::cout << "  Barrier Parameters (for MSIPDDP):\n";
     print_solver_specific_barrier_options(options.msipddp.barrier, "    ");
     std::cout << "  Filter Parameters (for MSIPDDP):\n";
-    print_solver_specific_filter_options(options.msipddp.filter, "    ");
+    print_solver_specific_filter_options(options.filter, "    ");
 
     std::cout << "========================================\n\n";
 }
