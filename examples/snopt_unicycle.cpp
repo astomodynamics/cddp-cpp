@@ -1,5 +1,5 @@
 /*
- Copyright 2024 Tomo Sasaki
+ Copyright 2025 Tomo Sasaki
 
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
@@ -173,20 +173,26 @@ int main() {
     }
     // The control part of the initial guess remains zero.
 
-    ////////// NLP Definition and IPOPT Solver Setup //////////
+    ////////// NLP Definition and SNOPT Solver Setup //////////
     std::map<std::string, casadi::MX> nlp;
     nlp["x"] = z;
     nlp["f"] = cost;
     nlp["g"] = g;
 
     casadi::Dict solver_opts;
-    solver_opts["print_time"]       = true;
-    solver_opts["ipopt.print_level"]  = 5;
-    solver_opts["ipopt.max_iter"]     = 500;
-    solver_opts["ipopt.tol"]          = 1e-6;
+    solver_opts["print_time"] = true;
+    // SNOPT-specific options
+    solver_opts["snopt.print_level"] = 1;
+    solver_opts["snopt.major_iterations_limit"] = 500;
+    solver_opts["snopt.minor_iterations_limit"] = 500;
+    // solver_opts["snopt.major_optimality_tolerance"] = 1e-6;
+    // solver_opts["snopt.major_feasibility_tolerance"] = 1e-6;
+    // solver_opts["snopt.minor_feasibility_tolerance"] = 1e-6;
+    // solver_opts["snopt.verify_level"] = 0;  // 0 = no verification, -1 = cheap test, 1 = individual gradients
+    // solver_opts["start"] = "cold";    // cold or warm start
 
-    // Create the NLP solver instance using IPOPT.
-    casadi::Function solver = casadi::nlpsol("solver", "ipopt", nlp, solver_opts);
+    // Create the NLP solver instance using SNOPT.
+    casadi::Function solver = casadi::nlpsol("solver", "snopt", nlp, solver_opts);
 
     // Convert the initial guess and bounds into DM objects.
     casadi::DM x0_dm = casadi::DM(x0);
@@ -208,7 +214,7 @@ int main() {
     casadi::DMDict res = solver(arg);
     auto end_time = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end_time - start_time;
-    std::cout << "Solver elapsed time: " << elapsed.count() << " s" << std::endl;
+    std::cout << "SNOPT Solver elapsed time: " << elapsed.count() << " s" << std::endl;
 
     ////////// Extract and Display the Solution //////////
     // The result 'res["x"]' is a DM vector with the optimized decision variables.
@@ -269,7 +275,7 @@ int main() {
     auto ax1 = subplot(3, 1, 0);
     auto plot_handle = plot(ax1, x_arr, y_arr, "-b");
     plot_handle->line_width(3);
-    title(ax1, "Position Trajectory");
+    title(ax1, "Position Trajectory (SNOPT)");
     xlabel(ax1, "x [m]");
     ylabel(ax1, "y [m]");
 
@@ -277,7 +283,7 @@ int main() {
     auto ax2 = subplot(3, 1, 1);
     auto heading_plot_handle = plot(ax2, t_sol, theta_arr);
     heading_plot_handle->line_width(3);
-    title(ax2, "Heading Angle");
+    title(ax2, "Heading Angle (SNOPT)");
     xlabel(ax2, "Time [s]");
     ylabel(ax2, "theta [rad]");
 
@@ -292,13 +298,13 @@ int main() {
     p2->line_width(3);
     p2->display_name("Steering");
 
-    title(ax4, "Control Inputs");
+    title(ax4, "Control Inputs (SNOPT)");
     xlabel(ax4, "Step");
     ylabel(ax4, "Control");
     matplot::legend(ax4);
 
     f1->draw();
-    f1->save(plotDirectory + "/unicycle_ipopt_results.png");
+    f1->save(plotDirectory + "/unicycle_snopt_results.png");
 
     // -----------------------------
     // Animation: unicycle Trajectory
@@ -353,14 +359,14 @@ int main() {
             traj_line->line_width(1.5);
             traj_line->display_name("Trajectory");
 
-            title(ax_anim, "unicycle Trajectory");
+            title(ax_anim, "Unicycle Trajectory (SNOPT)");
             xlabel(ax_anim, "x [m]");
             ylabel(ax_anim, "y [m]");
             xlim(ax_anim, {-1, 2.2});
             ylim(ax_anim, {-1, 2.2});
             // legend(ax_anim);
 
-            std::string filename = plotDirectory + "/unicycle_frame_" + std::to_string(i) + ".png";
+            std::string filename = plotDirectory + "/unicycle_snopt_frame_" + std::to_string(i) + ".png";
             f2->draw();
             f2->save(filename);
             std::this_thread::sleep_for(std::chrono::milliseconds(80));
@@ -370,90 +376,94 @@ int main() {
     // -----------------------------
     // Generate GIF from frames using ImageMagick
     // -----------------------------
-    std::string gif_command = "convert -delay 30 " + plotDirectory + "/unicycle_frame_*.png " + plotDirectory + "/unicycle_ipopt.gif";
+    std::string gif_command = "convert -delay 30 " + plotDirectory + "/unicycle_snopt_frame_*.png " + plotDirectory + "/unicycle_snopt.gif";
     std::system(gif_command.c_str());
 
-    std::string cleanup_command = "rm " + plotDirectory + "/unicycle_frame_*.png";
+    std::string cleanup_command = "rm " + plotDirectory + "/unicycle_snopt_frame_*.png";
     std::system(cleanup_command.c_str());
 
-
-    std::cout << "GIF animation created successfully: " << plotDirectory + "/unicycle_ipopt.gif" << std::endl;
+    std::cout << "GIF animation created successfully: " << plotDirectory + "/unicycle_snopt.gif" << std::endl;
 
     return 0;
 }
 
-// :~/github/cddp-cpp/build$ ./examples/ipopt_unicycle 
+// :~/github/cddp-cpp/build$ ./examples/snopt_unicycle 
+//  ==============================
+//     SNOPT  C interface  2.2.0   
+//  ==============================
+//  S N O P T  7.7.7    (Feb 2021)
+//  ==============================
 
-// ******************************************************************************
-// This program contains Ipopt, a library for large-scale nonlinear optimization.
-//  Ipopt is released as open source code under the Eclipse Public License (EPL).
-//          For more information visit http://projects.coin-or.org/Ipopt
-// ******************************************************************************
+//  SNMEMB EXIT 100 -- finished successfully
+//  SNMEMB INFO 104 -- memory requirements estimated
 
-// This is Ipopt version 3.11.9, running with linear solver mumps.
-// NOTE: Other linear solvers might be more efficient (see Ipopt documentation).
-
-// Number of nonzeros in equality constraint Jacobian...:     1106
-// Number of nonzeros in inequality constraint Jacobian.:        0
-// Number of nonzeros in Lagrangian Hessian.............:      506
-
-// Total number of variables............................:      503
-//                      variables with only lower bounds:        0
-//                 variables with lower and upper bounds:      200
-//                      variables with only upper bounds:        0
-// Total number of equality constraints.................:      306
-// Total number of inequality constraints...............:        0
-//         inequality constraints with only lower bounds:        0
-//    inequality constraints with lower and upper bounds:        0
-//         inequality constraints with only upper bounds:        0
-
-// iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
-//    0  0.0000000e+00 2.00e-02 0.00e+00  -1.0 0.00e+00    -  0.00e+00 0.00e+00   0
-//    1  1.3213637e+01 1.45e-02 5.18e+00  -1.0 3.57e+00    -  2.22e-01 2.77e-01h  1
-//    2  4.8004394e+01 2.56e-02 3.60e+00  -1.0 2.64e+00   0.0 2.24e-01 3.65e-01h  1
-//    3  6.2828049e+01 2.00e-02 3.08e+00  -1.0 3.97e+00    -  1.91e-01 2.19e-01h  1
-//    4  5.3377401e+01 1.25e-02 1.56e+00  -1.0 1.01e+00    -  3.34e-01 3.98e-01f  1
-//    5  5.6693670e+01 3.61e-03 6.71e-01  -1.0 1.78e+00    -  9.31e-01 7.28e-01h  1
-//    6  6.0580150e+01 2.37e-04 4.35e-02  -1.7 1.95e-01    -  9.48e-01 1.00e+00h  1
-//    7  6.0448863e+01 2.28e-05 2.20e-01  -2.5 1.36e-01    -  6.39e-01 1.00e+00f  1
-//    8  6.0165740e+01 1.35e-05 6.29e-02  -2.5 1.28e-01    -  7.42e-01 1.00e+00f  1
-//    9  6.0066412e+01 4.10e-06 5.07e-04  -2.5 5.72e-02    -  1.00e+00 1.00e+00f  1
-// iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
-//   10  5.9914306e+01 9.25e-06 2.97e-02  -3.8 5.45e-02    -  6.88e-01 1.00e+00f  1
-//   11  5.9875609e+01 1.08e-06 3.38e-03  -3.8 2.49e-02    -  9.21e-01 1.00e+00f  1
-//   12  5.9869812e+01 6.18e-08 7.97e-06  -3.8 7.32e-03    -  1.00e+00 1.00e+00h  1
-//   13  5.9857746e+01 9.70e-08 5.52e-04  -5.7 5.35e-03    -  9.49e-01 1.00e+00f  1
-//   14  5.9857287e+01 2.38e-09 5.54e-07  -5.7 2.47e-03    -  1.00e+00 1.00e+00h  1
-//   15  5.9857127e+01 3.02e-10 6.60e-08  -7.0 9.07e-04    -  1.00e+00 1.00e+00h  1
-//   16  5.9857126e+01 1.05e-12 3.89e-10  -7.0 1.04e-04    -  1.00e+00 1.00e+00h  1
-
-// Number of Iterations....: 16
-
-//                                    (scaled)                 (unscaled)
-// Objective...............:   5.9857125548898239e+01    5.9857125548898239e+01
-// Dual infeasibility......:   3.8946268432482611e-10    3.8946268432482611e-10
-// Constraint violation....:   1.0502709812953981e-12    1.0502709812953981e-12
-// Complementarity.........:   1.0259906103085439e-07    1.0259906103085439e-07
-// Overall NLP error.......:   1.0259906103085439e-07    1.0259906103085439e-07
+//  Trial version of SNOPT -- for evaluation or academic purposes only
 
 
-// Number of objective function evaluations             = 17
-// Number of objective gradient evaluations             = 17
-// Number of equality constraint evaluations            = 17
-// Number of inequality constraint evaluations          = 0
-// Number of equality constraint Jacobian evaluations   = 17
-// Number of inequality constraint Jacobian evaluations = 0
-// Number of Lagrangian Hessian evaluations             = 16
-// Total CPU secs in IPOPT (w/o function evaluations)   =      0.017
-// Total CPU secs in NLP function evaluations           =      0.004
 
-// EXIT: Optimal Solution Found.
+//  Nonlinear constraints     306     Linear constraints       0
+//  Nonlinear variables       503     Linear variables         0
+//  Jacobian  variables       503     Objective variables    503
+//  Total constraints         306     Total variables        503
+
+
+
+//  The user has defined    1106   out of    1106   constraint gradients.
+//  The user has defined     503   out of     503   objective  gradients.
+
+
+//         Minor NumInf  FP mult  FP step   rgNorm         SumInf     nS
+//           100      1  1.3E-01  3.2E-01           5.1588740E+01
+
+//         Minor NonOpt  QP mult  QP step   rgNorm Elastic QP obj     nS
+//           200    102 -4.1E-01  1.0E+00  2.9E-11  9.0584333E+04     72
+
+//  Major Minors     Step   nCon Feasible  Optimal  MeritFunction     nS Penalty
+//      0    227               1  1.0E-02  2.2E-02  0.0000000E+00     99           r iT
+//      1     64  1.0E+00      2  8.2E-02  2.7E+00  9.1086436E+04    109 4.8E+07   rl
+//      2      4  8.9E-01      3  8.3E-03  1.4E+00  1.0615859E+04    108 2.7E+04 s  l
+//      3     56  1.0E+00      4  7.7E-04  3.9E+00  6.7037234E+01    163 9.4E+02
+//      4     24  1.0E+00      5 (1.4E-07) 1.3E-02  6.1572688E+01    140 1.8E+02
+//      5     27  1.0E+00      6 (5.3E-08) 2.5E-02  6.1489200E+01    114 7.8E+01
+//      6      3  1.0E+00      7 (7.0E-07) 2.9E-02  6.1150122E+01    112 7.8E+01
+//      7      1  1.0E+00      8  1.3E-05  6.1E-02  6.0022814E+01    112 7.8E+01
+//      8      2  1.0E+00      9  3.8E-06  1.8E-02  5.9907766E+01    113 7.8E+01
+//      9      1  1.0E+00     10 (2.7E-09) 7.3E-03  5.9906665E+01    113 7.8E+01
+
+//  Major Minors     Step   nCon Feasible  Optimal  MeritFunction     nS Penalty
+//     10      1  1.0E+00     11 (9.1E-07) 4.3E-03  5.9880339E+01    113 7.8E+01
+//     11      1  1.0E+00     12  3.7E-06  1.7E-02  5.9858922E+01    113 7.8E+01
+//     12      1  1.0E+00     13 (4.0E-09) 2.8E-04  5.9858653E+01    113 7.8E+01   R
+//     13      2  1.0E+00     14 (4.9E-11) 3.9E-04  5.9858608E+01    112 7.8E+01 s
+//     14      1  1.0E+00     15 (3.1E-07) 4.7E-06  5.9857118E+01    112 7.8E+01
+//     15      1  1.0E+00     16 (1.2E-11)(7.7E-07) 5.9857118E+01    112 7.8E+01
+
+//  SNOPTC EXIT   0 -- finished successfully
+//  SNOPTC INFO   1 -- optimality conditions satisfied
+
+//  Problem name                 solver
+//  No. of iterations                 416   Objective            5.9857118027E+01
+//  No. of major iterations            15   Linear    obj. term  0.0000000000E+00
+//  Penalty parameter           7.838E+01   Nonlinear obj. term  5.9857118027E+01
+//  User function calls (total)        17
+//  No. of superbasics                112   No. of basic nonlinears           306
+//  No. of degenerate steps             1   Percentage                       0.24
+//  Max x                     301 2.0E+00   Max pi                    250 4.2E+01
+//  Max Primal infeas         786 2.5E-11   Max Dual infeas           501 3.3E-05
+//  Nonlinear constraint violn    2.5E-11
+
+
+
+//  Solution printed on file  10
+
+//  Time for MPS input                             0.00 seconds
+//  Time for solving problem                       0.03 seconds
+//  Time for solution output                       0.00 seconds
+//  Time for constraint functions                  0.00 seconds
+//  Time for objective function                    0.00 seconds
 //       solver  :   t_proc      (avg)   t_wall      (avg)    n_eval
-//        nlp_f  | 242.00us ( 14.24us) 241.34us ( 14.20us)        17
-//        nlp_g  | 503.00us ( 29.59us) 503.62us ( 29.62us)        17
-//   nlp_grad_f  | 493.00us ( 27.39us) 490.74us ( 27.26us)        18
-//   nlp_hess_l  |   1.71ms (106.69us)   1.71ms (106.86us)        16
-//    nlp_jac_g  |   1.85ms (102.56us)   1.85ms (102.81us)        18
-//        total  |  23.72ms ( 23.72ms)  23.73ms ( 23.73ms)         1
-// Solver elapsed time: 0.0238267 s
-// GIF animation created successfully: ../results/tests/unicycle_ipopt.gif
+//    nlp_jac_f  | 627.00us ( 33.00us) 625.49us ( 32.92us)        19
+//    nlp_jac_g  |   2.19ms (115.26us)   2.19ms (115.40us)        19
+//        total  |  31.82ms ( 31.82ms)  31.82ms ( 31.82ms)         1
+// SNOPT Solver elapsed time: 0.0319228 s
+// GIF animation created successfully: ../results/tests/unicycle_snopt.gif
