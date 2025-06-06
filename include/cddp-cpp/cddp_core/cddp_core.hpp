@@ -119,10 +119,7 @@ namespace cddp
         // Status of this particular forward pass trial
         bool success = false;
 
-        // Metrics specific to this trial
-        double constraint_violation_inf_norm = 0.0;
-        double dynamics_defect_inf_norm = 0.0;
-        double slack_variable_1_norm = 0.0;
+        double constraint_violation = 0.0;
 
         // Optional: Only relevant for certain solver strategies during their forward pass
         std::optional<std::vector<Eigen::VectorXd>> dynamics_trajectory;
@@ -133,6 +130,33 @@ namespace cddp
 
         // Default constructor
         ForwardPassResult() = default;
+    };
+
+    /**
+     * @brief Filter point for filter-based line search.
+     * 
+     * Each filter point represents a (merit_function, constraint_violation) pair.
+     * The filter maintains a set of non-dominated points to guide the line search.
+     */
+    struct FilterPoint
+    {
+        double merit_function;        ///< Merit function value (objective + log-barrier terms)
+        double constraint_violation;  ///< Constraint violation measure
+
+        // Default constructor
+        FilterPoint() : merit_function(0.0), constraint_violation(0.0) {}
+
+        // Constructor with parameters
+        FilterPoint(double mf, double cv) : merit_function(mf), constraint_violation(cv) {}
+
+        /**
+         * @brief Check if this point dominates another point.
+         * @param other The other filter point to compare against.
+         * @return True if this point dominates the other (better in both merit and violation).
+         */
+        bool dominates(const FilterPoint& other) const {
+            return merit_function <= other.merit_function && constraint_violation <= other.constraint_violation;
+        }
     };
 
     // Forward declaration

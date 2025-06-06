@@ -57,10 +57,10 @@ namespace cddp
      */
     struct SolverSpecificBarrierOptions
     {
-        double mu_initial = 1e-1;               ///< Initial barrier coefficient (mu).
+        double mu_initial = 1e-0;               ///< Initial barrier coefficient (mu).
         double mu_min_value = 1e-8;             ///< Minimum allowed value for mu.
         double mu_update_factor = 0.2;          ///< Factor to reduce mu when KKT error improves sufficiently.
-        double mu_update_power = 1.5;           ///< Power for mu update rule (mu_new = mu^power or factor*mu).
+        double mu_update_power = 1.2;           ///< Power for mu update rule (mu_new = mu^power or factor*mu).
         double min_fraction_to_boundary = 0.99; ///< Minimum fraction to boundary for primal/dual step calculation (tau).
     };
 
@@ -84,7 +84,12 @@ namespace cddp
     struct LogBarrierOptions
     {
         bool use_relaxed_log_barrier_penalty = false; ///< Use relaxed log-barrier method (if applicable to the solver).
-        double relaxed_log_barrier_delta = 1e-1;      ///< Relaxation delta for relaxed log-barrier (if applicable).
+        double relaxed_log_barrier_delta = 1e-5;      ///< Relaxation delta for relaxed log-barrier (if applicable).
+
+        // Multi-shooting specific
+        int segment_length = 5;                 ///< Number of shooting intervals before a gap-closing constraint.
+        std::string rollout_type = "nonlinear"; ///< Rollout type: "nonlinear", "hybrid".
+        bool use_controlled_rollout = true;    ///< Use controlled rollout (propagates x_{k+1} = f(x_k, u_k) during initial rollout).
 
         SolverSpecificBarrierOptions barrier; ///< Barrier method parameters for relaxed log-barrier.
     };
@@ -100,7 +105,6 @@ namespace cddp
         double slack_var_init_scale = 1e-2; ///< Initial scale for slack variables.
 
         SolverSpecificBarrierOptions barrier; ///< Barrier method parameters for IPDDP.
-        SolverSpecificFilterOptions filter;   ///< Filter line search parameters for IPDDP.
     };
 
     /**
@@ -119,8 +123,7 @@ namespace cddp
         std::string rollout_type = "nonlinear"; ///< Rollout type: "nonlinear", "hybrid".
         bool use_controlled_rollout = false;    ///< Use controlled rollout (propagates x_{k+1} = f(x_k, u_k) during initial rollout).
 
-        SolverSpecificBarrierOptions barrier; ///< Barrier method parameters for MSIPDDP.
-        SolverSpecificFilterOptions filter;   ///< Filter line search parameters for MSIPDDP.
+        SolverSpecificBarrierOptions barrier; ///< Barrier method parameters for MSIPDDP..
     };
 
     /**
