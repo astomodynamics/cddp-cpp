@@ -386,3 +386,84 @@ int main() {
 
     return 0;
 }
+
+// :~/github/cddp-cpp/build$ ./examples/snopt_unicycle 
+//  ==============================
+//     SNOPT  C interface  2.2.0   
+//  ==============================
+//  S N O P T  7.7.7    (Feb 2021)
+//  ==============================
+
+//  SNMEMB EXIT 100 -- finished successfully
+//  SNMEMB INFO 104 -- memory requirements estimated
+
+//  Trial version of SNOPT -- for evaluation or academic purposes only
+
+
+
+//  Nonlinear constraints     306     Linear constraints       0
+//  Nonlinear variables       503     Linear variables         0
+//  Jacobian  variables       503     Objective variables    503
+//  Total constraints         306     Total variables        503
+
+
+
+//  The user has defined    1106   out of    1106   constraint gradients.
+//  The user has defined     503   out of     503   objective  gradients.
+
+
+//         Minor NumInf  FP mult  FP step   rgNorm         SumInf     nS
+//           100      1  1.3E-01  3.2E-01           5.1588740E+01
+
+//         Minor NonOpt  QP mult  QP step   rgNorm Elastic QP obj     nS
+//           200    102 -4.1E-01  1.0E+00  2.9E-11  9.0584333E+04     72
+
+//  Major Minors     Step   nCon Feasible  Optimal  MeritFunction     nS Penalty
+//      0    227               1  1.0E-02  2.2E-02  0.0000000E+00     99           r iT
+//      1     64  1.0E+00      2  8.2E-02  2.7E+00  9.1086436E+04    109 4.8E+07   rl
+//      2      4  8.9E-01      3  8.3E-03  1.4E+00  1.0615859E+04    108 2.7E+04 s  l
+//      3     56  1.0E+00      4  7.7E-04  3.9E+00  6.7037234E+01    163 9.4E+02
+//      4     24  1.0E+00      5 (1.4E-07) 1.3E-02  6.1572688E+01    140 1.8E+02
+//      5     27  1.0E+00      6 (5.3E-08) 2.5E-02  6.1489200E+01    114 7.8E+01
+//      6      3  1.0E+00      7 (7.0E-07) 2.9E-02  6.1150122E+01    112 7.8E+01
+//      7      1  1.0E+00      8  1.3E-05  6.1E-02  6.0022814E+01    112 7.8E+01
+//      8      2  1.0E+00      9  3.8E-06  1.8E-02  5.9907766E+01    113 7.8E+01
+//      9      1  1.0E+00     10 (2.7E-09) 7.3E-03  5.9906665E+01    113 7.8E+01
+
+//  Major Minors     Step   nCon Feasible  Optimal  MeritFunction     nS Penalty
+//     10      1  1.0E+00     11 (9.1E-07) 4.3E-03  5.9880339E+01    113 7.8E+01
+//     11      1  1.0E+00     12  3.7E-06  1.7E-02  5.9858922E+01    113 7.8E+01
+//     12      1  1.0E+00     13 (4.0E-09) 2.8E-04  5.9858653E+01    113 7.8E+01   R
+//     13      2  1.0E+00     14 (4.9E-11) 3.9E-04  5.9858608E+01    112 7.8E+01 s
+//     14      1  1.0E+00     15 (3.1E-07) 4.7E-06  5.9857118E+01    112 7.8E+01
+//     15      1  1.0E+00     16 (1.2E-11)(7.7E-07) 5.9857118E+01    112 7.8E+01
+
+//  SNOPTC EXIT   0 -- finished successfully
+//  SNOPTC INFO   1 -- optimality conditions satisfied
+
+//  Problem name                 solver
+//  No. of iterations                 416   Objective            5.9857118027E+01
+//  No. of major iterations            15   Linear    obj. term  0.0000000000E+00
+//  Penalty parameter           7.838E+01   Nonlinear obj. term  5.9857118027E+01
+//  User function calls (total)        17
+//  No. of superbasics                112   No. of basic nonlinears           306
+//  No. of degenerate steps             1   Percentage                       0.24
+//  Max x                     301 2.0E+00   Max pi                    250 4.2E+01
+//  Max Primal infeas         786 2.5E-11   Max Dual infeas           501 3.3E-05
+//  Nonlinear constraint violn    2.5E-11
+
+
+
+//  Solution printed on file  10
+
+//  Time for MPS input                             0.00 seconds
+//  Time for solving problem                       0.03 seconds
+//  Time for solution output                       0.00 seconds
+//  Time for constraint functions                  0.00 seconds
+//  Time for objective function                    0.00 seconds
+//       solver  :   t_proc      (avg)   t_wall      (avg)    n_eval
+//    nlp_jac_f  | 627.00us ( 33.00us) 625.49us ( 32.92us)        19
+//    nlp_jac_g  |   2.19ms (115.26us)   2.19ms (115.40us)        19
+//        total  |  31.82ms ( 31.82ms)  31.82ms ( 31.82ms)         1
+// SNOPT Solver elapsed time: 0.0319228 s
+// GIF animation created successfully: ../results/tests/unicycle_snopt.gif

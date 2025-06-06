@@ -381,3 +381,79 @@ int main() {
 
     return 0;
 }
+
+// :~/github/cddp-cpp/build$ ./examples/ipopt_unicycle 
+
+// ******************************************************************************
+// This program contains Ipopt, a library for large-scale nonlinear optimization.
+//  Ipopt is released as open source code under the Eclipse Public License (EPL).
+//          For more information visit http://projects.coin-or.org/Ipopt
+// ******************************************************************************
+
+// This is Ipopt version 3.11.9, running with linear solver mumps.
+// NOTE: Other linear solvers might be more efficient (see Ipopt documentation).
+
+// Number of nonzeros in equality constraint Jacobian...:     1106
+// Number of nonzeros in inequality constraint Jacobian.:        0
+// Number of nonzeros in Lagrangian Hessian.............:      506
+
+// Total number of variables............................:      503
+//                      variables with only lower bounds:        0
+//                 variables with lower and upper bounds:      200
+//                      variables with only upper bounds:        0
+// Total number of equality constraints.................:      306
+// Total number of inequality constraints...............:        0
+//         inequality constraints with only lower bounds:        0
+//    inequality constraints with lower and upper bounds:        0
+//         inequality constraints with only upper bounds:        0
+
+// iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+//    0  0.0000000e+00 2.00e-02 0.00e+00  -1.0 0.00e+00    -  0.00e+00 0.00e+00   0
+//    1  1.3213637e+01 1.45e-02 5.18e+00  -1.0 3.57e+00    -  2.22e-01 2.77e-01h  1
+//    2  4.8004394e+01 2.56e-02 3.60e+00  -1.0 2.64e+00   0.0 2.24e-01 3.65e-01h  1
+//    3  6.2828049e+01 2.00e-02 3.08e+00  -1.0 3.97e+00    -  1.91e-01 2.19e-01h  1
+//    4  5.3377401e+01 1.25e-02 1.56e+00  -1.0 1.01e+00    -  3.34e-01 3.98e-01f  1
+//    5  5.6693670e+01 3.61e-03 6.71e-01  -1.0 1.78e+00    -  9.31e-01 7.28e-01h  1
+//    6  6.0580150e+01 2.37e-04 4.35e-02  -1.7 1.95e-01    -  9.48e-01 1.00e+00h  1
+//    7  6.0448863e+01 2.28e-05 2.20e-01  -2.5 1.36e-01    -  6.39e-01 1.00e+00f  1
+//    8  6.0165740e+01 1.35e-05 6.29e-02  -2.5 1.28e-01    -  7.42e-01 1.00e+00f  1
+//    9  6.0066412e+01 4.10e-06 5.07e-04  -2.5 5.72e-02    -  1.00e+00 1.00e+00f  1
+// iter    objective    inf_pr   inf_du lg(mu)  ||d||  lg(rg) alpha_du alpha_pr  ls
+//   10  5.9914306e+01 9.25e-06 2.97e-02  -3.8 5.45e-02    -  6.88e-01 1.00e+00f  1
+//   11  5.9875609e+01 1.08e-06 3.38e-03  -3.8 2.49e-02    -  9.21e-01 1.00e+00f  1
+//   12  5.9869812e+01 6.18e-08 7.97e-06  -3.8 7.32e-03    -  1.00e+00 1.00e+00h  1
+//   13  5.9857746e+01 9.70e-08 5.52e-04  -5.7 5.35e-03    -  9.49e-01 1.00e+00f  1
+//   14  5.9857287e+01 2.38e-09 5.54e-07  -5.7 2.47e-03    -  1.00e+00 1.00e+00h  1
+//   15  5.9857127e+01 3.02e-10 6.60e-08  -7.0 9.07e-04    -  1.00e+00 1.00e+00h  1
+//   16  5.9857126e+01 1.05e-12 3.89e-10  -7.0 1.04e-04    -  1.00e+00 1.00e+00h  1
+
+// Number of Iterations....: 16
+
+//                                    (scaled)                 (unscaled)
+// Objective...............:   5.9857125548898239e+01    5.9857125548898239e+01
+// Dual infeasibility......:   3.8946268432482611e-10    3.8946268432482611e-10
+// Constraint violation....:   1.0502709812953981e-12    1.0502709812953981e-12
+// Complementarity.........:   1.0259906103085439e-07    1.0259906103085439e-07
+// Overall NLP error.......:   1.0259906103085439e-07    1.0259906103085439e-07
+
+
+// Number of objective function evaluations             = 17
+// Number of objective gradient evaluations             = 17
+// Number of equality constraint evaluations            = 17
+// Number of inequality constraint evaluations          = 0
+// Number of equality constraint Jacobian evaluations   = 17
+// Number of inequality constraint Jacobian evaluations = 0
+// Number of Lagrangian Hessian evaluations             = 16
+// Total CPU secs in IPOPT (w/o function evaluations)   =      0.017
+// Total CPU secs in NLP function evaluations           =      0.004
+
+// EXIT: Optimal Solution Found.
+//       solver  :   t_proc      (avg)   t_wall      (avg)    n_eval
+//        nlp_f  | 242.00us ( 14.24us) 241.34us ( 14.20us)        17
+//        nlp_g  | 503.00us ( 29.59us) 503.62us ( 29.62us)        17
+//   nlp_grad_f  | 493.00us ( 27.39us) 490.74us ( 27.26us)        18
+//   nlp_hess_l  |   1.71ms (106.69us)   1.71ms (106.86us)        16
+//    nlp_jac_g  |   1.85ms (102.56us)   1.85ms (102.81us)        18
+//        total  |  23.72ms ( 23.72ms)  23.73ms ( 23.73ms)         1
+// Solver elapsed time: 0.0238267 s
+// GIF animation created successfully: ../results/tests/unicycle_ipopt.gif
