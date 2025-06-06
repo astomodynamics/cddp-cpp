@@ -19,6 +19,7 @@
 #include "cddp_core/clddp_solver.hpp" // For CLDDPSolver
 #include "cddp_core/asddp_solver.hpp" // For ASDDPSolver
 #include "cddp_core/logddp_solver.hpp" // For LogDDPSolver
+#include "cddp_core/ipddp_solver.hpp" // For IPDDPSolver
 #include <iostream>
 #include <iomanip> // For std::setw
 #include <cmath>   // For std::min, std::max
@@ -228,6 +229,8 @@ CDDPSolution CDDP::solve(const std::string& solver_type) {
         solver_ = std::make_unique<ASDDPSolver>();
     } else if (solver_type == "LogDDP" || solver_type == "LOGDDP") {
         solver_ = std::make_unique<LogDDPSolver>();
+    } else if (solver_type == "IPDDP") {
+        solver_ = std::make_unique<IPDDPSolver>();
     } else {
         // For now, return placeholder for other solver types
         CDDPSolution solution;
@@ -320,10 +323,11 @@ void CDDP::initializeProblemIfNecessary() {
     }
 
     // Initialize cost and merit function
-    cost_ = 0.0;
-    merit_function_ = 0.0;
-    inf_pr_ = 0.0;
-    inf_du_ = 0.0;
+    cost_ = std::numeric_limits<double>::infinity();
+    merit_function_ = std::numeric_limits<double>::infinity();
+    inf_pr_ = std::numeric_limits<double>::infinity();
+    inf_du_ = std::numeric_limits<double>::infinity();
+    regularization_ = options_.regularization.initial_value;
     
     initialized_ = true;
 }
