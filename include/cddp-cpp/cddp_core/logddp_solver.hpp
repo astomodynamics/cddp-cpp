@@ -62,6 +62,15 @@ namespace cddp
     private:
         // Dynamics storage
         std::vector<Eigen::VectorXd> F_; ///< Dynamics evaluations
+        std::vector<Eigen::MatrixXd> Fx_; ///< State Jacobians
+        std::vector<Eigen::MatrixXd> Fu_; ///< Control Jacobians
+        std::vector<Eigen::MatrixXd> A_; ///< Linearized state transition matrices
+        std::vector<Eigen::MatrixXd> B_; ///< Linearized control matrices
+        
+        // Second-order dynamics terms (for non-iLQR)
+        std::vector<std::vector<Eigen::MatrixXd>> Fxx_; ///< State Hessians
+        std::vector<std::vector<Eigen::MatrixXd>> Fuu_; ///< Control Hessians
+        std::vector<std::vector<Eigen::MatrixXd>> Fux_; ///< Mixed Hessians
 
         // Control law parameters
         std::vector<Eigen::VectorXd> k_u_; ///< Feedforward control gains
@@ -71,16 +80,21 @@ namespace cddp
         // Log-barrier method
         std::unique_ptr<RelaxedLogBarrier> relaxed_log_barrier_; ///< Log barrier object
         double mu_;                                              ///< Barrier parameter
+        double mu_initial_;                                      ///< Initial barrier parameter
         double relaxation_delta_;                                ///< Relaxation parameter
 
         // Filter-based line search
+        double L_;                         ///< Augmented Lagrangian value (cost + log-barrier terms)
+        double dL_;                        ///< Change in Lagrangian
+        double dJ_;                        ///< Change in cost
+        double optimality_gap_;            ///< Current optimality gap
         double constraint_violation_;      ///< Current constraint violation measure
 
         // Multi-shooting parameters
         int ms_segment_length_; ///< Multi-shooting segment length
 
         /**
-         * @brief Evaluate trajectory by computing cost, dynamics, merit function, and constraint violations.
+         * @brief Evaluate trajectory by computing cost, dynamics, and merit function.
          * @param context Reference to the CDDP context.
          */
         void evaluateTrajectory(CDDP &context);
@@ -124,8 +138,8 @@ namespace cddp
         /**
          * @brief Print iteration information.
          */
-        void printIteration(int iter, double cost, double inf_pr, double inf_du,
-                            double regularization, double alpha_pr, double mu) const;
+        void printIteration(int iter, double cost, double lagrangian, double opt_gap,
+                            double regularization, double alpha, double mu, double constraint_violation) const;
 
         /**
          * @brief Print solution summary.
