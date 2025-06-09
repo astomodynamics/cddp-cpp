@@ -127,6 +127,44 @@ namespace cddp
     };
 
     /**
+     * @brief Comprehensive options specifically for the ALTRO (Augmented Lagrangian Trajectory Optimizer) algorithm.
+     * ALTRO uses augmented Lagrangian methods to handle constraints through penalty terms and dual variable updates.
+     */
+    struct AltroAlgorithmOptions
+    {
+        // Penalty parameters
+        double penalty_scaling = 10.0;                ///< Initial penalty scaling parameter (rho) for augmented Lagrangian.
+        double penalty_scaling_increase_factor = 10.0; ///< Factor to increase penalty when constraints are violated.
+        double penalty_scaling_max = 1e8;             ///< Maximum allowed penalty scaling parameter.
+        double penalty_scaling_min = 1e-6;            ///< Minimum allowed penalty scaling parameter.
+
+        // Dual variable parameters
+        double dual_var_init_scale = 0.1;             ///< Initial scale for dual variables (Lagrange multipliers).
+        double dual_var_max = 1e6;                    ///< Maximum allowed magnitude for dual variables.
+        double dual_var_min = -1e6;                   ///< Minimum allowed magnitude for dual variables.
+        double dual_update_factor = 1.0;              ///< Factor for dual variable updates.
+
+        // Defect constraint parameters
+        double defect_dual_init_scale = 0.01;         ///< Initial scale for defect constraint dual variables.
+        double defect_penalty_scaling = 1.0;          ///< Penalty scaling for dynamics defect constraints.
+
+        // Convergence parameters
+        double constraint_tolerance = 1e-6;           ///< Tolerance for constraint violation.
+        double dual_feasibility_tolerance = 1e-6;     ///< Tolerance for dual feasibility.
+        double complementarity_tolerance = 1e-6;      ///< Tolerance for complementarity conditions.
+
+        // Penalty update strategy
+        bool adaptive_penalty_update = true;          ///< Use adaptive penalty parameter updates.
+        double penalty_update_threshold = 0.25;       ///< Threshold for penalty parameter updates (relative to constraint violation reduction).
+        int max_penalty_increases = 5;                ///< Maximum number of consecutive penalty increases per iteration.
+
+        // AL-specific convergence criteria
+        double al_convergence_tolerance = 1e-4;       ///< Convergence tolerance for augmented Lagrangian subproblems.
+        int max_al_iterations = 1;                    ///< Maximum iterations for augmented Lagrangian outer loop.
+        bool use_constraint_norm_termination = true;  ///< Use constraint norm for termination criteria.
+    };
+
+    /**
      * @brief Main options structure for the CDDP solver.
      *
      * This structure holds all configurable parameters for the CDDP algorithm and its variants.
@@ -158,6 +196,7 @@ namespace cddp
         LogBarrierOptions log_barrier;   ///< Comprehensive options for the log-barrier method.
         IPDDPAlgorithmOptions ipddp;     ///< Comprehensive options for the IPDDP solver.
         MSIPDDPAlgorithmOptions msipddp; ///< Comprehensive options for the MSIPDDP solver.
+        AltroAlgorithmOptions altro;     ///< Comprehensive options for the ALTRO solver.
 
         // Constructor with defaults (relies on member initializers)
         CDDPOptions() = default;
