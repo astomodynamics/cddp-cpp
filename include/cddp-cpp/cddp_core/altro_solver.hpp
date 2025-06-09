@@ -18,7 +18,6 @@
 #define CDDP_ALTRO_SOLVER_HPP
 
 #include "cddp_core/cddp_core.hpp"
-#include "cddp_core/augmented_lagrangian.hpp"
 #include <Eigen/Dense>
 #include <vector>
 #include <memory>
@@ -69,10 +68,12 @@ namespace cddp
 
         // Altro-specific variables (constraint name -> time trajectory)
         std::map<std::string, std::vector<Eigen::VectorXd>> Y_; ///< Dual variables (Lagrange multipliers)
+        std::vector<Eigen::VectorXd> Lambda_; ///< Lagrange multipliers for defect constraints
 
         double cost_;                                               ///< Current total cost
         double constraint_violation_;                               ///< Current constraint violation measure
         double lagrangian_value_;                                   ///< Augmented Lagrangian value (cost + penalty terms)
+        double optimality_gap_;                                     ///< Norm of the gradient of the Lagrangian
 
         /**
          * @brief Evaluate the trajectory, computing cost, dynamics, and augmented lagrangian.

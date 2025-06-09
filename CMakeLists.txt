@@ -291,6 +291,7 @@ set(cddp_core_srcs
   src/cddp_core/asddp_solver.cpp
   src/cddp_core/logddp_solver.cpp
   src/cddp_core/ipddp_solver.cpp
+  src/cddp_core/altro_solver.cpp
   # src/cddp_core/logddp_core.cpp
   # src/cddp_core/ipddp_core.cpp
   # src/cddp_core/msipddp_core.cpp
