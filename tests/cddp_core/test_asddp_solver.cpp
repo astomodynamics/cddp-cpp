@@ -87,7 +87,7 @@ TEST(ASDDPTest, SolvePendulum)
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 10.0; // Maximum positive torque
 
-    cddp_solver.addConstraint("ControlBoxConstraint",
+    cddp_solver.addPathConstraint("ControlBoxConstraint",
                               std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
 
     // Create CDDP Options
@@ -177,7 +177,7 @@ TEST(ASDDPTest, SolvePendulum)
     cddp::CDDP warm_solver(initial_state, goal_state, horizon, timestep);
     warm_solver.setDynamicalSystem(std::move(hcw_system_warmstart));
     warm_solver.setObjective(std::move(objective_warmstart));
-    warm_solver.addConstraint("ControlBoxConstraint",
+    warm_solver.addPathConstraint("ControlBoxConstraint",
                               std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
     warm_solver.setOptions(warm_options);
 
@@ -281,7 +281,7 @@ TEST(ASDDPTest, SolveUnicycle) {
     control_upper_bound << 1.0, M_PI;
     
     // Add the constraint to the solver
-    cddp_solver.addConstraint("ControlBoxConstraint", std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+    cddp_solver.addPathConstraint("ControlBoxConstraint", std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
 
     // Set options
     cddp_solver.setOptions(options);

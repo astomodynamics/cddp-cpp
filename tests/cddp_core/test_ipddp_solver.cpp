@@ -87,7 +87,7 @@ TEST(IPDDPTest, SolvePendulum)
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 10.0; // Maximum positive torque
 
-    cddp_solver.addConstraint("ControlConstraint",
+    cddp_solver.addPathConstraint("ControlConstraint",
                               std::make_unique<cddp::ControlConstraint>( control_upper_bound));
 
     // Create CDDP Options
@@ -177,7 +177,7 @@ TEST(IPDDPTest, SolvePendulum)
     cddp::CDDP warm_solver(initial_state, goal_state, horizon, timestep);
     warm_solver.setDynamicalSystem(std::move(hcw_system_warmstart));
     warm_solver.setObjective(std::move(objective_warmstart));
-    warm_solver.addConstraint("ControlConstraint",
+    warm_solver.addPathConstraint("ControlConstraint",
                               std::make_unique<cddp::ControlConstraint>( control_upper_bound));
     warm_solver.setOptions(warm_options);
 
@@ -280,7 +280,7 @@ TEST(IPDDPTest, SolveUnicycle) {
     control_upper_bound << 1.0, M_PI;
     
     // Add the constraint to the solver
-    cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound));
 
     // Set options
     cddp_solver.setOptions(options);
@@ -422,7 +422,7 @@ TEST(IPDDPTest, SolveCar)
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 0.5, 2.0;
 
-    cddp_solver.addConstraint("ControlConstraint",
+    cddp_solver.addPathConstraint("ControlConstraint",
                               std::make_unique<cddp::ControlConstraint>(control_upper_bound));
 
     // Create CDDP Options
@@ -499,7 +499,7 @@ TEST(IPDDPTest, SolveCar)
     cddp::CDDP warm_solver(initial_state, goal_state, horizon, timestep);
     warm_solver.setDynamicalSystem(std::move(car_system_warmstart));
     warm_solver.setObjective(std::move(objective_warmstart));
-    warm_solver.addConstraint("ControlConstraint",
+    warm_solver.addPathConstraint("ControlConstraint",
                               std::make_unique<cddp::ControlConstraint>(control_upper_bound));
     warm_solver.setOptions(warm_options);
 

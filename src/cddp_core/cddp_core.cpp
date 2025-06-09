@@ -167,7 +167,7 @@ int CDDP::getTotalDualDim() const {
     return total_dual_dim_;
 }
 
-void CDDP::addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
+void CDDP::addPathConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
     if (!constraint) {
         throw std::runtime_error("Cannot add null constraint.");
     }
@@ -183,7 +183,7 @@ void CDDP::addConstraint(std::string constraint_name, std::unique_ptr<Constraint
     initialized_ = false; // Constraint set changed, need to reinitialize
 }
 
-bool CDDP::removeConstraint(const std::string &constraint_name) {
+bool CDDP::removePathConstraint(const std::string &constraint_name) {
     auto it = path_constraint_set_.find(constraint_name);
     if (it != path_constraint_set_.end()) {
         // Decrement total dual dimension
@@ -200,6 +200,40 @@ bool CDDP::removeConstraint(const std::string &constraint_name) {
     
     return false; // Constraint not found
 }
+
+// void CDDP::addTerminalConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint) {
+//     if (!constraint) {
+//         throw std::runtime_error("Cannot add null constraint.");
+//     }
+
+//     // Get dual dimension BEFORE moving the constraint
+//     int dual_dim = constraint->getDualDim();
+    
+//     terminal_constraint_set_[constraint_name] = std::move(constraint);
+
+//     // Increment total dual dimension
+//     total_dual_dim_ += dual_dim;
+
+//     initialized_ = false; // Constraint set changed, need to reinitialize
+// }
+
+// bool CDDP::removeTerminalConstraint(const std::string &constraint_name) {
+//     auto it = terminal_constraint_set_.find(constraint_name);
+//     if (it != terminal_constraint_set_.end()) {
+//         // Decrement total dual dimension
+//         total_dual_dim_ -= it->second->getDualDim();
+
+//         // Remove the constraint from the set
+//         terminal_constraint_set_.erase(it);
+        
+//         // Mark as needing reinitialization since constraint set changed
+//         initialized_ = false;
+
+//         return true; // Successfully removed
+//     }
+    
+//     return false; // Constraint not found
+// }
 
 namespace {
     std::string solverTypeToString(SolverType solver_type) {

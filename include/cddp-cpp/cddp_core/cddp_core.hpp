@@ -220,7 +220,8 @@ namespace cddp
         int getTotalDualDim() const;
         const CDDPOptions &getOptions() const { return options_; }
         const std::map<std::string, std::unique_ptr<Constraint>> &getConstraintSet() const { return path_constraint_set_; }
-
+        const std::map<std::string, std::unique_ptr<Constraint>> &getTerminalConstraintSet() const { return terminal_constraint_set_; }
+        
         // Setters for problem definition
         void setDynamicalSystem(std::unique_ptr<DynamicalSystem> system);
         void setInitialState(const Eigen::VectorXd &initial_state);
@@ -231,14 +232,26 @@ namespace cddp
         void setOptions(const CDDPOptions &options);
         void setObjective(std::unique_ptr<Objective> objective);
         void setInitialTrajectory(const std::vector<Eigen::VectorXd> &X, const std::vector<Eigen::VectorXd> &U);
-        void addConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint);
-        bool removeConstraint(const std::string &constraint_name);
+        void addPathConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint);
+        void addTerminalConstraint(std::string constraint_name, std::unique_ptr<Constraint> constraint);
+        bool removePathConstraint(const std::string &constraint_name);
+        bool removeTerminalConstraint(const std::string &constraint_name);
 
         template <typename T>
         T *getConstraint(const std::string &name) const
         {
             auto it = path_constraint_set_.find(name);
             if (it == path_constraint_set_.end())
+                return nullptr;
+            T *cast_constraint = dynamic_cast<T *>(it->second.get());
+            return cast_constraint;
+        }
+
+        template <typename T>
+        T *getTerminalConstraint(const std::string &name) const
+        {
+            auto it = terminal_constraint_set_.find(name);
+            if (it == terminal_constraint_set_.end())
                 return nullptr;
             T *cast_constraint = dynamic_cast<T *>(it->second.get());
             return cast_constraint;
@@ -313,6 +326,7 @@ namespace cddp
         std::unique_ptr<DynamicalSystem> system_;
         std::unique_ptr<Objective> objective_;
         std::map<std::string, std::unique_ptr<Constraint>> path_constraint_set_;
+        std::map<std::string, std::unique_ptr<Constraint>> terminal_constraint_set_;
         Eigen::VectorXd initial_state_;
         Eigen::VectorXd reference_state_;               // Single desired reference state (if applicable)
         std::vector<Eigen::VectorXd> reference_states_; // Desired reference state trajectory (if applicable)
