@@ -341,6 +341,7 @@ namespace cddp
                 resetFilter(context);
             }
             else
+            {
                 mu_ = std::min(mu_initial_, mu_ * 2.0);
                 resetFilter(context);
             }
