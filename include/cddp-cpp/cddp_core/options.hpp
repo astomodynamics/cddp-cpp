@@ -47,7 +47,7 @@ namespace cddp
         double initial_value = 1e-6;     ///< Initial regularization value.
         double update_factor = 10.0;     ///< Factor to increase/decrease regularization.
         double max_value = 1e7;          ///< Maximum allowed regularization value.
-        double min_value = 1e-8;         ///< Minimum allowed regularization value.
+        double min_value = 1e-10;         ///< Minimum allowed regularization value.
         double step_initial_value = 1.0; ///< Initial step/rate for changing regularization.
     };
 

@@ -90,9 +90,7 @@ namespace cddp
 
         // Interior point method parameters
         double mu_;                    ///< Barrier parameter
-        double optimality_gap_;        ///< Current optimality gap (dual infeasibility)
-        double kkt_error_;             ///< KKT error measure
-        double constraint_violation_;  ///< Current constraint violation measure
+        std::vector<FilterPoint> filter_;  ///< Filter points for line search
 
         /**
          * @brief Pre-compute dynamics jacobians and hessians for all time steps in parallel.
@@ -117,6 +115,12 @@ namespace cddp
          * @param context Reference to the CDDP context.
          */
         void resetBarrierFilter(CDDP &context);
+
+        /**
+         * @brief Reset the filter for line search.
+         * @param context Reference to the CDDP context.
+         */
+        void resetFilter(CDDP &context);
 
         /**
          * @brief Perform backward pass (primal-dual Riccati recursion).

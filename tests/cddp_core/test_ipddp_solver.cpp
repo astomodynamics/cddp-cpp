@@ -665,12 +665,9 @@ TEST(IPDDPTest, SolveQuadrotor)
     options.num_threads = 1;
     options.verbose = true;
     options.debug = false;
-    options.log_barrier.segment_length = horizon;
-    options.log_barrier.rollout_type = "nonlinear";
-    options.log_barrier.barrier.mu_initial = 1e-1;
-    options.log_barrier.relaxed_log_barrier_delta = 1e-5;
-    options.log_barrier.barrier.mu_update_factor = 0.2;
-    options.log_barrier.barrier.mu_update_power = 1.2;
+    options.ipddp.barrier.mu_initial = 1e-1;
+    options.ipddp.barrier.mu_update_factor = 0.2;
+    options.ipddp.barrier.mu_update_power = 1.2;
     options.regularization.initial_value = 1e-4;
     options.return_iteration_info = true;
 

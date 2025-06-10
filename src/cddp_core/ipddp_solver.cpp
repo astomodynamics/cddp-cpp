@@ -28,7 +28,7 @@ namespace cddp
 {
 
     IPDDPSolver::IPDDPSolver() 
-        : mu_(1e-1), optimality_gap_(0.0), kkt_error_(0.0), constraint_violation_(0.0) {}
+        : mu_(1e-1) {}
 
     void IPDDPSolver::initialize(CDDP &context)
     {
@@ -71,6 +71,7 @@ namespace cddp
                 mu_ = options.ipddp.barrier.mu_initial;
                 context.step_norm_ = 0.0; // Initialize for warm start
                 evaluateTrajectory(context);
+                resetFilter(context);
                 return;
             }
             else if (options.verbose)
@@ -175,7 +176,7 @@ namespace cddp
 
         // Evaluate initial trajectory
         evaluateTrajectory(context);
-        resetBarrierFilter(context);
+        resetFilter(context);
     }
 
     std::string IPDDPSolver::getSolverName() const
@@ -321,7 +322,6 @@ namespace cddp
                 context.merit_function_ = best_result.merit_function;
                 context.alpha_pr_ = best_result.alpha_pr;
                 context.inf_pr_ = best_result.constraint_violation;
-                constraint_violation_ = best_result.constraint_violation;
 
                 // Store history only if requested
                 if (options.return_iteration_info)
@@ -338,20 +338,21 @@ namespace cddp
                 context.decreaseRegularization();
 
                 // Check convergence
-                const int total_dual_dim = getTotalDualDim(context);
-                double l1_norm_multipliers = 0.0;
-                for (const auto& s_map_entry : S_)
-                {
-                    for (const Eigen::VectorXd& s_t : s_map_entry.second)
-                    {
-                        l1_norm_multipliers += s_t.lpNorm<1>();
-                    }
-                }
+                // const int total_dual_dim = getTotalDualDim(context);
+                // double l1_norm_multipliers = 0.0;
+                // for (const auto& s_map_entry : S_)
+                // {
+                //     for (const Eigen::VectorXd& s_t : s_map_entry.second)
+                //     {
+                //         l1_norm_multipliers += s_t.lpNorm<1>();
+                //     }
+                // }
                 
-                double scaling_factor = std::max(options.termination_scaling_max_factor, 
-                                                l1_norm_multipliers / (total_dual_dim * context.getHorizon())) / 
-                                       options.termination_scaling_max_factor;
-                double termination_metric = std::max(optimality_gap_ / scaling_factor, kkt_error_ / scaling_factor);
+                // double scaling_factor = std::max(options.termination_scaling_max_factor, 
+                //                                 l1_norm_multipliers / (total_dual_dim * context.getHorizon())) / 
+                //                        options.termination_scaling_max_factor;
+                double scaling_factor = 1.0;
+                double termination_metric = std::max(context.inf_du_ / scaling_factor, context.inf_pr_ / scaling_factor);
 
                 if (termination_metric <= options.tolerance)
                 {
@@ -404,7 +405,7 @@ namespace cddp
             double scaling_factor = std::max(options.termination_scaling_max_factor, 
                                             l1_norm_multipliers / (total_dual_dim * context.getHorizon())) / 
                                    options.termination_scaling_max_factor;
-            double termination_metric = std::max(optimality_gap_ / scaling_factor, kkt_error_ / scaling_factor);
+            double termination_metric = std::max(context.inf_du_ / scaling_factor, context.inf_pr_ / scaling_factor);
 
             updateBarrierParameters(context, best_result.success, termination_metric);
         }
@@ -523,8 +524,16 @@ namespace cddp
         }
         
         context.merit_function_ = merit_function;
-        constraint_violation_ = constraint_violation;
         context.inf_pr_ = constraint_violation;
+        
+        // Reset filter with initial point
+        filter_.clear();
+        filter_.push_back(FilterPoint(merit_function, constraint_violation));
+    }
+
+    void IPDDPSolver::resetFilter(CDDP &context)
+    {
+        resetBarrierFilter(context);
     }
 
     void IPDDPSolver::precomputeDynamicsDerivatives(CDDP &context)
@@ -849,8 +858,7 @@ namespace cddp
                 step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
             }
 
-            optimality_gap_ = Qu_err;
-            kkt_error_ = Qu_err;
+            // Update termination metrics
             context.inf_du_ = Qu_err;
             context.step_norm_ = step_norm;
 
@@ -1021,12 +1029,10 @@ namespace cddp
                 step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
             }
 
-            // Compute optimality gap and KKT error
-            optimality_gap_ = Qu_err;
-            kkt_error_ = std::max(rp_err, rd_err);
-            context.inf_du_ = optimality_gap_;
+            // Update termination metrics
+            context.inf_pr_ = std::max(rp_err, rd_err);
+            context.inf_du_ = Qu_err;
             context.step_norm_ = step_norm;
-
 
             if (options.debug)
             {
@@ -1281,40 +1287,40 @@ namespace cddp
         cost_new += context.getObjective().terminal_cost(result.state_trajectory.back());
         merit_function_new += cost_new;
 
-        // Filter-based acceptance
-        const auto &filter_opts = options.filter;
-        double constraint_violation_old = constraint_violation_;
-        double merit_function_old = context.merit_function_;
-        double expected_improvement = alpha * dV_(0);
+        // Ensure constraint violation is at least tolerance for proper filter behavior
+        constraint_violation_new = std::max(constraint_violation_new, options.tolerance);
+
+        // Filter class-based acceptance (based on ipddp_core_old.cpp)
+        FilterPoint candidate(merit_function_new, constraint_violation_new);
+        bool candidateDominated = false;
         
-        bool filter_acceptance = false;
-
-        if (constraint_violation_new > filter_opts.max_violation_threshold)
+        for (const auto &fp : filter_)
         {
-            if (constraint_violation_new < (1.0 - filter_opts.violation_acceptance_threshold) * constraint_violation_old)
+            if (candidate.merit_function >= fp.merit_function && candidate.constraint_violation >= fp.constraint_violation)
             {
-                filter_acceptance = true;
-            }
-        }
-        else if (std::max(constraint_violation_new, constraint_violation_old) < filter_opts.min_violation_for_armijo_check && 
-                 expected_improvement < 0)
-        {
-            if (merit_function_new < merit_function_old + filter_opts.armijo_constant * expected_improvement)
-            {
-                filter_acceptance = true;
-            }
-        }
-        else
-        {
-            if (merit_function_new < merit_function_old - filter_opts.merit_acceptance_threshold * constraint_violation_old ||
-                constraint_violation_new < (1.0 - filter_opts.violation_acceptance_threshold) * constraint_violation_old)
-            {
-                filter_acceptance = true;
+                candidateDominated = true;
+                break;
             }
         }
 
-        if (filter_acceptance)
+        if (!candidateDominated)
         {
+            // Remove any filter points that are dominated by the candidate
+            for (auto it = filter_.begin(); it != filter_.end();)
+            {
+                if (candidate.merit_function <= it->merit_function && candidate.constraint_violation <= it->constraint_violation)
+                {
+                    it = filter_.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+            
+            // Add candidate to filter and mark as successful
+            filter_.push_back(candidate);
+            
             result.success = true;
             result.cost = cost_new;
             result.merit_function = merit_function_new;
@@ -1337,7 +1343,7 @@ namespace cddp
             mu_ = std::max(options.tolerance / 10.0, 
                           std::min(barrier_opts.mu_update_factor * mu_, 
                                   std::pow(mu_, barrier_opts.mu_update_power)));
-            resetBarrierFilter(context);
+            resetFilter(context);
         }
     }
 
