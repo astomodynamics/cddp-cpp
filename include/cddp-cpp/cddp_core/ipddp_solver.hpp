@@ -61,6 +61,13 @@ namespace cddp
         std::string getSolverName() const override;
 
     private:
+        // Dynamics storage
+        std::vector<Eigen::MatrixXd> F_x_; ///< State jacobians (Fx)
+        std::vector<Eigen::MatrixXd> F_u_; ///< Control jacobians (Fu)
+        std::vector<std::vector<Eigen::MatrixXd>> F_xx_; ///< State hessians (Fxx)
+        std::vector<std::vector<Eigen::MatrixXd>> F_uu_; ///< Control hessians (Fuu)
+        std::vector<std::vector<Eigen::MatrixXd>> F_ux_; ///< Mixed hessians (Fux)
+        
         // Control law parameters
         std::vector<Eigen::VectorXd> k_u_; ///< Feedforward control gains
         std::vector<Eigen::MatrixXd> K_u_; ///< Feedback control gains
@@ -82,6 +89,12 @@ namespace cddp
         double optimality_gap_;        ///< Current optimality gap (dual infeasibility)
         double kkt_error_;             ///< KKT error measure
         double constraint_violation_;  ///< Current constraint violation measure
+
+        /**
+         * @brief Pre-compute dynamics jacobians and hessians for all time steps in parallel.
+         * @param context Reference to the CDDP context.
+         */
+        void precomputeDynamicsDerivatives(CDDP &context);
 
         /**
          * @brief Evaluate trajectory by computing cost, constraint values, and merit function.

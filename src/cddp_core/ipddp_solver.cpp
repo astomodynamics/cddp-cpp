@@ -22,6 +22,7 @@
 #include <cmath>
 #include <future>
 #include <execution>
+#include <thread>
 
 namespace cddp
 {
@@ -514,6 +515,132 @@ namespace cddp
         context.inf_pr_ = constraint_violation;
     }
 
+    void IPDDPSolver::precomputeDynamicsDerivatives(CDDP &context)
+    {
+        const CDDPOptions &options = context.getOptions();
+        const int horizon = context.getHorizon();
+        const int state_dim = context.getStateDim();
+        const double timestep = context.getTimestep();
+
+        // Resize storage
+        F_x_.resize(horizon);
+        F_u_.resize(horizon);
+        F_xx_.resize(horizon);
+        F_uu_.resize(horizon);
+        F_ux_.resize(horizon);
+
+        // Threshold for when parallelization is worth it
+        const int MIN_HORIZON_FOR_PARALLEL = 20;
+        const bool use_parallel = options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;
+
+        if (!use_parallel)
+        {
+            // Single-threaded computation - always efficient for small horizons
+            for (int t = 0; t < horizon; ++t)
+            {
+                const Eigen::VectorXd &x = context.X_[t];
+                const Eigen::VectorXd &u = context.U_[t];
+
+                // Compute jacobians
+                const auto [Fx, Fu] = context.getSystem().getJacobians(x, u, t * timestep);
+                F_x_[t] = Fx;
+                F_u_[t] = Fu;
+
+                // Compute hessians if not using iLQR
+                if (!options.use_ilqr)
+                {
+                    const auto hessians = context.getSystem().getHessians(x, u, t * timestep);
+                    F_xx_[t] = std::get<0>(hessians);
+                    F_uu_[t] = std::get<1>(hessians);
+                    F_ux_[t] = std::get<2>(hessians);
+                }
+                else
+                {
+                    // Initialize empty hessians for iLQR
+                    F_xx_[t] = std::vector<Eigen::MatrixXd>();
+                    F_uu_[t] = std::vector<Eigen::MatrixXd>();
+                    F_ux_[t] = std::vector<Eigen::MatrixXd>();
+                }
+            }
+        }
+        else
+        {
+            // Chunked parallel computation - much more efficient
+            const int num_threads = std::min(options.num_threads, 
+                                            static_cast<int>(std::thread::hardware_concurrency()));
+            const int chunk_size = std::max(1, horizon / num_threads);
+            
+            std::vector<std::future<void>> futures;
+            futures.reserve(num_threads);
+
+            for (int thread_id = 0; thread_id < num_threads; ++thread_id)
+            {
+                int start_t = thread_id * chunk_size;
+                int end_t = (thread_id == num_threads - 1) ? horizon : (thread_id + 1) * chunk_size;
+                
+                if (start_t >= horizon) break;
+                
+                futures.push_back(std::async(std::launch::async, 
+                    [this, &context, &options, start_t, end_t, timestep]() {
+                        // Process a chunk of time steps
+                        for (int t = start_t; t < end_t; ++t)
+                        {
+                            const Eigen::VectorXd &x = context.X_[t];
+                            const Eigen::VectorXd &u = context.U_[t];
+
+                            // Compute jacobians
+                            const auto [Fx, Fu] = context.getSystem().getJacobians(x, u, t * timestep);
+                            F_x_[t] = Fx;
+                            F_u_[t] = Fu;
+
+                            // Compute hessians if not using iLQR
+                            if (!options.use_ilqr)
+                            {
+                                const auto hessians = context.getSystem().getHessians(x, u, t * timestep);
+                                F_xx_[t] = std::get<0>(hessians);
+                                F_uu_[t] = std::get<1>(hessians);
+                                F_ux_[t] = std::get<2>(hessians);
+                            }
+                            else
+                            {
+                                // Initialize empty hessians for iLQR
+                                F_xx_[t] = std::vector<Eigen::MatrixXd>();
+                                F_uu_[t] = std::vector<Eigen::MatrixXd>();
+                                F_ux_[t] = std::vector<Eigen::MatrixXd>();
+                            }
+                        }
+                    }));
+            }
+
+            // Wait for all computations to complete
+            for (auto &future : futures)
+            {
+                try
+                {
+                    if (future.valid())
+                    {
+                        future.get();
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    if (options.verbose)
+                    {
+                        std::cerr << "IPDDP: Dynamics derivatives computation thread failed: " << e.what() << std::endl;
+                    }
+                    throw;
+                }
+            }
+        }
+
+        if (options.debug)
+        {
+            std::cout << "[IPDDP] Pre-computed dynamics derivatives for " << horizon 
+                      << " time steps using " << (use_parallel ? "parallel" : "sequential") 
+                      << " computation" << std::endl;
+        }
+    }
+
     bool IPDDPSolver::backwardPass(CDDP &context)
     {
         const CDDPOptions &options = context.getOptions();
@@ -523,6 +650,9 @@ namespace cddp
         const double timestep = context.getTimestep();
         const auto &constraint_set = context.getConstraintSet();
         const int total_dual_dim = getTotalDualDim(context);
+
+        // Pre-compute dynamics jacobians and hessians for all time steps
+        precomputeDynamicsDerivatives(context);
 
         // Terminal cost and its derivatives
         Eigen::VectorXd V_x = context.getObjective().getFinalCostGradient(context.X_.back());
@@ -541,7 +671,10 @@ namespace cddp
             {
                 const Eigen::VectorXd &x = context.X_[t];
                 const Eigen::VectorXd &u = context.U_[t];
-                const auto [Fx, Fu] = context.getSystem().getJacobians(x, u, t * timestep);
+                
+                // Use pre-computed dynamics Jacobians
+                const Eigen::MatrixXd &Fx = F_x_[t];
+                const Eigen::MatrixXd &Fu = F_u_[t];
                 Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep * Fx;
                 Eigen::MatrixXd B = timestep * Fu;
 
@@ -559,10 +692,10 @@ namespace cddp
                 // Add state hessian term if not using iLQR
                 if (!options.use_ilqr)
                 {
-                    const auto hessians = context.getSystem().getHessians(x, u, t * timestep);
-                    const auto &Fxx = std::get<0>(hessians);
-                    const auto &Fuu = std::get<1>(hessians);
-                    const auto &Fux = std::get<2>(hessians);
+                    // Use pre-computed hessians
+                    const auto &Fxx = F_xx_[t];
+                    const auto &Fuu = F_uu_[t];
+                    const auto &Fux = F_ux_[t];
                     
                     for (int i = 0; i < state_dim; ++i)
                     {
@@ -625,8 +758,9 @@ namespace cddp
                 const Eigen::VectorXd &x = context.X_[t];
                 const Eigen::VectorXd &u = context.U_[t];
 
-                // Continuous dynamics
-                const auto [Fx, Fu] = context.getSystem().getJacobians(x, u, t * timestep);
+                // Use pre-computed dynamics Jacobians
+                const Eigen::MatrixXd &Fx = F_x_[t];
+                const Eigen::MatrixXd &Fu = F_u_[t];
                 Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep * Fx;
                 Eigen::MatrixXd B = timestep * Fu;
 
@@ -672,10 +806,10 @@ namespace cddp
                 // Add state hessian term if not using iLQR
                 if (!options.use_ilqr)
                 {
-                    const auto hessians = context.getSystem().getHessians(x, u, t * timestep);
-                    const auto &Fxx = std::get<0>(hessians);
-                    const auto &Fuu = std::get<1>(hessians);
-                    const auto &Fux = std::get<2>(hessians);
+                    // Use pre-computed hessians
+                    const auto &Fxx = F_xx_[t];
+                    const auto &Fuu = F_uu_[t];
+                    const auto &Fux = F_ux_[t];
                     
                     for (int i = 0; i < state_dim; ++i)
                     {
