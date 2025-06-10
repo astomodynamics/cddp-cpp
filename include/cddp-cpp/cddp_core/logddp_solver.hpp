@@ -62,36 +62,46 @@ namespace cddp
     private:
         // Dynamics storage
         std::vector<Eigen::VectorXd> F_; ///< Dynamics evaluations
-        std::vector<Eigen::MatrixXd> Fx_; ///< State Jacobians
-        std::vector<Eigen::MatrixXd> Fu_; ///< Control Jacobians
-        std::vector<Eigen::MatrixXd> A_; ///< Linearized state transition matrices
-        std::vector<Eigen::MatrixXd> B_; ///< Linearized control matrices
+        std::vector<Eigen::MatrixXd> F_x_; ///< State jacobians (Fx)
+        std::vector<Eigen::MatrixXd> F_u_; ///< Control jacobians (Fu)
+        std::vector<std::vector<Eigen::MatrixXd>> F_xx_; ///< State hessians (Fxx)
+        std::vector<std::vector<Eigen::MatrixXd>> F_uu_; ///< Control hessians (Fuu)
+        std::vector<std::vector<Eigen::MatrixXd>> F_ux_; ///< Mixed hessians (Fux)
         
-        // Second-order dynamics terms (for non-iLQR)
-        std::vector<std::vector<Eigen::MatrixXd>> Fxx_; ///< State Hessians
-        std::vector<std::vector<Eigen::MatrixXd>> Fuu_; ///< Control Hessians
-        std::vector<std::vector<Eigen::MatrixXd>> Fux_; ///< Mixed Hessians
-
         // Control law parameters
         std::vector<Eigen::VectorXd> k_u_; ///< Feedforward control gains
         std::vector<Eigen::MatrixXd> K_u_; ///< Feedback control gains
         Eigen::Vector2d dV_;               ///< Expected value function change
 
         // Log-barrier method
+        std::map<std::string, std::vector<Eigen::VectorXd>> G_; ///< Constraint values g(x,u) - g_ub
         std::unique_ptr<RelaxedLogBarrier> relaxed_log_barrier_; ///< Log barrier object
         double mu_;                                              ///< Barrier parameter
-        double mu_initial_;                                      ///< Initial barrier parameter
         double relaxation_delta_;                                ///< Relaxation parameter
 
         // Filter-based line search
-        double L_;                         ///< Augmented Lagrangian value (cost + log-barrier terms)
-        double dL_;                        ///< Change in Lagrangian
-        double dJ_;                        ///< Change in cost
-        double optimality_gap_;            ///< Current optimality gap
         double constraint_violation_;      ///< Current constraint violation measure
 
         // Multi-shooting parameters
         int ms_segment_length_; ///< Multi-shooting segment length
+
+        /**
+         * @brief Pre-compute dynamics jacobians and hessians for all time steps in parallel.
+         * @param context Reference to the CDDP context.
+         */
+        void precomputeDynamicsDerivatives(CDDP &context);
+
+        /**
+         * @brief Efficiently compute only jacobians using execution policies.
+         * @param context Reference to the CDDP context.
+         */
+        void precomputeJacobiansOnly(CDDP &context);
+
+        /**
+         * @brief Cache-friendly sequential computation with better memory access patterns.
+         * @param context Reference to the CDDP context.
+         */
+        void precomputeDynamicsDerivativesOptimized(CDDP &context);
 
         /**
          * @brief Evaluate trajectory by computing cost, dynamics, and merit function.
