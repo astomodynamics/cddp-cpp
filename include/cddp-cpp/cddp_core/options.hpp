@@ -170,6 +170,51 @@ namespace cddp
     };
 
     /**
+     * @brief Comprehensive options specifically for the DBAS-DDP (Discrete Barrier State DDP) algorithm.
+     * DBAS-DDP augments the state space with explicit barrier states to handle inequality constraints.
+     * 
+     * Key Design Principles:
+     * - Barrier states evolve as: s_{k+1} = decay_factor * s_k + weight * violation * dt
+     * - Cost includes: original_cost + barrier_log_terms + barrier_state_penalty
+     * - Requires feasible initial guess since state space is augmented
+     */
+    struct DbasDdpAlgorithmOptions
+    {
+        // Barrier state initialization parameters
+        double barrier_state_init_value = 0.1;        ///< Initial value for barrier state variables (smaller values encourage faster constraint satisfaction).
+        double barrier_state_weight = 10.0;           ///< Weight for barrier state dynamics penalty in the cost function (higher values respond faster to violations).
+        double barrier_state_decay_rate = 0.05;       ///< Decay rate for barrier state evolution dynamics (smaller values provide longer memory).
+        
+        // Adaptive parameters
+        bool use_adaptive_barrier_weights = true;     ///< Enable adaptive adjustment of barrier state weights based on constraint satisfaction.
+        double barrier_weight_increase_factor = 1.5;  ///< Factor to increase barrier weights when constraints are consistently violated.
+        double barrier_weight_decrease_factor = 0.9;  ///< Factor to decrease barrier weights when making consistent progress.
+        double barrier_weight_max = 1e4;              ///< Maximum allowed barrier weight (prevents numerical issues).
+        double barrier_weight_min = 1e-2;             ///< Minimum allowed barrier weight (maintains constraint awareness).
+        
+        // Log-barrier integration parameters
+        double mu_initial = 1e-2;                     ///< Initial barrier coefficient for log-barrier terms (smaller values are more aggressive).
+        double mu_min_value = 1e-6;                   ///< Minimum allowed value for barrier coefficient.
+        double mu_update_factor = 0.2;                ///< Factor to reduce barrier coefficient (smaller values reduce mu more aggressively).
+        double relaxed_log_barrier_delta = 1e-4;      ///< Relaxation delta for relaxed log-barrier method (balance between accuracy and robustness).
+        
+        // Constraint violation handling
+        double constraint_violation_tolerance = 1e-6; ///< Tolerance for constraint violations in barrier state updates.
+        double barrier_state_convergence_tol = 1e-4;  ///< Convergence tolerance for barrier state changes (when to consider barrier states converged).
+        double max_barrier_state_norm = 100.0;        ///< Maximum allowed norm for barrier states (prevents runaway growth).
+        
+        // Cost function parameters
+        bool penalize_barrier_state_deviation = true; ///< Penalize deviation of barrier states from zero in the cost function.
+        double barrier_state_reference_weight = 1.0;  ///< Weight for barrier state reference tracking cost (drives barrier states toward zero).
+        
+        // Numerical stability parameters
+        double min_barrier_state_value = 1e-8;        ///< Minimum allowed value for barrier state variables (prevents numerical issues).
+        double max_barrier_state_value = 1e6;         ///< Maximum allowed value for barrier state variables (prevents overflow).
+        bool enable_barrier_state_regularization = true; ///< Add small regularization to barrier state dynamics for numerical stability.
+        double barrier_state_regularization = 1e-6;   ///< Regularization value for barrier state dynamics.
+    };
+
+    /**
      * @brief Main options structure for the CDDP solver.
      *
      * This structure holds all configurable parameters for the CDDP algorithm and its variants.
@@ -198,10 +243,11 @@ namespace cddp
         SolverSpecificFilterOptions filter;           ///< General filter line search parameters.
 
         // Solver-specific comprehensive options
-        LogBarrierOptions log_barrier;   ///< Comprehensive options for the log-barrier method.
-        IPDDPAlgorithmOptions ipddp;     ///< Comprehensive options for the IPDDP solver.
-        MSIPDDPAlgorithmOptions msipddp; ///< Comprehensive options for the MSIPDDP solver.
-        AltroAlgorithmOptions altro;     ///< Comprehensive options for the ALTRO solver.
+        LogBarrierOptions log_barrier;        ///< Comprehensive options for the log-barrier method.
+        IPDDPAlgorithmOptions ipddp;          ///< Comprehensive options for the IPDDP solver.
+        MSIPDDPAlgorithmOptions msipddp;      ///< Comprehensive options for the MSIPDDP solver.
+        AltroAlgorithmOptions altro;          ///< Comprehensive options for the ALTRO solver.
+        DbasDdpAlgorithmOptions dbas_ddp;     ///< Comprehensive options for the DBAS-DDP solver.
 
         // Constructor with defaults (relies on member initializers)
         CDDPOptions() = default;

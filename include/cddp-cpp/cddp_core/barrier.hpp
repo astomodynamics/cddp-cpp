@@ -18,6 +18,9 @@
 
 #include <Eigen/Dense>
 #include <tuple>
+#include <stdexcept>
+#include <algorithm>
+#include <cmath>
 
 namespace cddp {
 
@@ -289,6 +292,225 @@ private:
 
     double barrier_coeff_;    ///< Coefficient multiplying the barrier penalty (mu_penalty)
     double relaxation_delta_; ///< The relaxation parameter delta
+};
+
+/**
+ * @class DiscreteBarrierState
+ * @brief Manages discrete barrier states for DBAS-DDP implementation.
+ * 
+ * This class handles the evolution and management of discrete barrier states
+ * that are explicitly integrated as part of the augmented state in DBAS-DDP.
+ */
+class DiscreteBarrierState {
+public:
+    /**
+     * @brief Construct discrete barrier state manager.
+     * 
+     * @param constraint_dim Dimension of the constraint being handled.
+     * @param init_value Initial value for barrier states.
+     * @param decay_rate Decay rate for barrier state evolution.
+     * @param weight Weight for barrier state dynamics penalty.
+     */
+    DiscreteBarrierState(int constraint_dim,
+                         double init_value = 1.0,
+                         double decay_rate = 0.1,
+                         double weight = 1.0)
+        : constraint_dim_(constraint_dim), 
+          init_value_(init_value),
+          decay_rate_(decay_rate),
+          weight_(weight) {
+        if (constraint_dim <= 0) {
+            throw std::invalid_argument("Constraint dimension must be positive.");
+        }
+        if (init_value <= 0.0) {
+            throw std::invalid_argument("Initial value must be positive.");
+        }
+        if (decay_rate < 0.0) {
+            throw std::invalid_argument("Decay rate must be non-negative.");
+        }
+        if (weight <= 0.0) {
+            throw std::invalid_argument("Weight must be positive.");
+        }
+    }
+
+    /**
+     * @brief Initialize barrier states for a given horizon.
+     * 
+     * @param horizon Time horizon.
+     * @return Vector of initialized barrier state vectors.
+     */
+    std::vector<Eigen::VectorXd> initializeBarrierStates(int horizon) const {
+        std::vector<Eigen::VectorXd> barrier_states(horizon);
+        for (int t = 0; t < horizon; ++t) {
+            barrier_states[t] = Eigen::VectorXd::Constant(constraint_dim_, init_value_);
+        }
+        return barrier_states;
+    }
+
+    /**
+     * @brief Compute constraint violations from constraint evaluation and bounds.
+     * 
+     * @param g_val Constraint evaluation g(x,u).
+     * @param lower_bound Lower bounds for constraints.
+     * @param upper_bound Upper bounds for constraints.
+     * @return Constraint violations (positive values indicate violations).
+     */
+    Eigen::VectorXd computeConstraintViolations(const Eigen::VectorXd& g_val,
+                                                 const Eigen::VectorXd& lower_bound,
+                                                 const Eigen::VectorXd& upper_bound) const {
+        if (g_val.size() != constraint_dim_ || 
+            lower_bound.size() != constraint_dim_ || 
+            upper_bound.size() != constraint_dim_) {
+            throw std::invalid_argument("Dimension mismatch in constraint violation computation.");
+        }
+
+        Eigen::VectorXd violations = Eigen::VectorXd::Zero(constraint_dim_);
+        
+        for (int i = 0; i < constraint_dim_; ++i) {
+            // Lower bound violation
+            if (g_val(i) < lower_bound(i)) {
+                violations(i) = lower_bound(i) - g_val(i);
+            }
+            // Upper bound violation
+            else if (g_val(i) > upper_bound(i)) {
+                violations(i) = g_val(i) - upper_bound(i);
+            }
+            // No violation
+            else {
+                violations(i) = 0.0;
+            }
+        }
+        
+        return violations;
+    }
+
+    /**
+     * @brief Update barrier state based on constraint violation.
+     * 
+     * @param current_barrier_state Current barrier state.
+     * @param constraint_violation Current constraint violation.
+     * @param timestep Integration timestep.
+     * @return Updated barrier state.
+     */
+    Eigen::VectorXd updateBarrierState(const Eigen::VectorXd& current_barrier_state,
+                                       const Eigen::VectorXd& constraint_violation,
+                                       double timestep) const {
+        if (current_barrier_state.size() != constraint_dim_ || 
+            constraint_violation.size() != constraint_dim_) {
+            throw std::invalid_argument("Dimension mismatch in barrier state update.");
+        }
+        if (timestep < 0.0) {
+            throw std::invalid_argument("Timestep must be non-negative.");
+        }
+
+        Eigen::VectorXd next_state = current_barrier_state;
+        
+        // Discrete barrier state dynamics: exponential decay with constraint-based updates
+        for (int i = 0; i < constraint_dim_; ++i) {
+            // Exponential decay with numerical stability
+            double decay_factor = std::exp(-decay_rate_ * timestep);
+            decay_factor = std::max(decay_factor, 1e-10); // Prevent complete decay
+            next_state(i) *= decay_factor;
+            
+            // Add constraint violation feedback
+            if (constraint_violation(i) > 0.0) {
+                double violation_term = weight_ * constraint_violation(i) * timestep;
+                next_state(i) += violation_term;
+            }
+            
+            // Ensure barrier state remains positive and bounded
+            next_state(i) = std::clamp(next_state(i), 1e-8, 1e8);
+        }
+        
+        return next_state;
+    }
+
+    /**
+     * @brief Compute barrier state dynamics jacobian w.r.t. constraint violation.
+     * 
+     * @param current_barrier_state Current barrier state.
+     * @param timestep Integration timestep.
+     * @return Jacobian matrix.
+     */
+    Eigen::MatrixXd getBarrierStateDynamicsJacobian(const Eigen::VectorXd& current_barrier_state,
+                                                     double timestep) const {
+        Eigen::MatrixXd jacobian = Eigen::MatrixXd::Zero(constraint_dim_, constraint_dim_);
+        
+        for (int i = 0; i < constraint_dim_; ++i) {
+            jacobian(i, i) = weight_ * timestep; // Derivative w.r.t. constraint violation
+        }
+        
+        return jacobian;
+    }
+
+    /**
+     * @brief Compute barrier state penalty cost.
+     * 
+     * @param barrier_state Current barrier state.
+     * @param reference_barrier_state Reference barrier state (typically zero).
+     * @return Barrier state penalty cost.
+     */
+    double evaluateBarrierStateCost(const Eigen::VectorXd& barrier_state,
+                                    const Eigen::VectorXd& reference_barrier_state = Eigen::VectorXd()) const {
+        Eigen::VectorXd ref = reference_barrier_state;
+        if (ref.size() == 0) {
+            ref = Eigen::VectorXd::Zero(constraint_dim_);
+        }
+        
+        if (barrier_state.size() != constraint_dim_ || ref.size() != constraint_dim_) {
+            throw std::invalid_argument("Dimension mismatch in barrier state cost evaluation.");
+        }
+        
+        Eigen::VectorXd diff = barrier_state - ref;
+        return 0.5 * weight_ * diff.squaredNorm();
+    }
+
+    /**
+     * @brief Compute gradient of barrier state cost w.r.t. barrier state.
+     * 
+     * @param barrier_state Current barrier state.
+     * @param reference_barrier_state Reference barrier state.
+     * @return Gradient vector.
+     */
+    Eigen::VectorXd getBarrierStateCostGradient(const Eigen::VectorXd& barrier_state,
+                                                 const Eigen::VectorXd& reference_barrier_state = Eigen::VectorXd()) const {
+        Eigen::VectorXd ref = reference_barrier_state;
+        if (ref.size() == 0) {
+            ref = Eigen::VectorXd::Zero(constraint_dim_);
+        }
+        
+        if (barrier_state.size() != constraint_dim_ || ref.size() != constraint_dim_) {
+            throw std::invalid_argument("Dimension mismatch in barrier state gradient computation.");
+        }
+        
+        return weight_ * (barrier_state - ref);
+    }
+
+    /**
+     * @brief Compute Hessian of barrier state cost w.r.t. barrier state.
+     * 
+     * @param barrier_state Current barrier state (unused for quadratic cost).
+     * @return Hessian matrix.
+     */
+    Eigen::MatrixXd getBarrierStateCostHessian(const Eigen::VectorXd& barrier_state) const {
+        return weight_ * Eigen::MatrixXd::Identity(constraint_dim_, constraint_dim_);
+    }
+
+    // Getters and setters
+    int getConstraintDim() const { return constraint_dim_; }
+    double getInitValue() const { return init_value_; }
+    double getDecayRate() const { return decay_rate_; }
+    double getWeight() const { return weight_; }
+    
+    void setInitValue(double init_value) { init_value_ = init_value; }
+    void setDecayRate(double decay_rate) { decay_rate_ = decay_rate; }
+    void setWeight(double weight) { weight_ = weight; }
+
+private:
+    int constraint_dim_;     ///< Dimension of the constraint
+    double init_value_;      ///< Initial value for barrier states
+    double decay_rate_;      ///< Decay rate for barrier state evolution
+    double weight_;          ///< Weight for barrier state dynamics penalty
 };
 
 } // namespace cddp
