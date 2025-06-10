@@ -48,7 +48,7 @@ namespace cddp
         LogDDP,   ///< Log-Barrier Differential Dynamic Programming
         IPDDP,    ///< Interior Point Differential Dynamic Programming
         MSIPDDP,  ///< Multi-Shooting Interior Point Differential Dynamic Programming
-        ALTRO     ///< Augmented Lagrangian Trajectory Optimizer
+        ALDDP     ///< Augmented Lagrangian Differential Dynamic Programming
     };
 
     /**

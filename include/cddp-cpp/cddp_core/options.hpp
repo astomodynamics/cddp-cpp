@@ -162,6 +162,11 @@ namespace cddp
         double al_convergence_tolerance = 1e-4;       ///< Convergence tolerance for augmented Lagrangian subproblems.
         int max_al_iterations = 1;                    ///< Maximum iterations for augmented Lagrangian outer loop.
         bool use_constraint_norm_termination = true;  ///< Use constraint norm for termination criteria.
+
+        // Multiple-shooting parameters
+        bool use_multiple_shooting = false;           ///< Enable multiple-shooting approach for forward pass.
+        int segment_length = 5;                       ///< Number of shooting intervals before a gap-closing constraint.
+        std::string rollout_type = "nonlinear";       ///< Rollout type: "nonlinear", "hybrid".
     };
 
     /**

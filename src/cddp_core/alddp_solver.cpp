@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "cddp_core/altro_solver.hpp"
+#include "cddp_core/alddp_solver.hpp"
 #include <iostream>
 #include <iomanip>
 #include <cmath>
@@ -24,11 +24,11 @@
 
 namespace cddp {
 
-AltroSolver::AltroSolver() 
+AlddpSolver::AlddpSolver() 
     : cost_(0.0), constraint_violation_(0.0), lagrangian_value_(0.0), optimality_gap_(0.0) {
 }
 
-void AltroSolver::initialize(CDDP& context) {
+void AlddpSolver::initialize(CDDP& context) {
     const CDDPOptions& options = context.getOptions();
     const int state_dim = context.getStateDim();
     const int control_dim = context.getControlDim();
@@ -78,17 +78,17 @@ void AltroSolver::initialize(CDDP& context) {
         }
 
         if (valid_warm_start) {
-            if (options.verbose) {
-                std::cout << "ALTRO: Using warm start with existing control gains, dual variables, and defect multipliers" << std::endl;
-            }
-            // Initialize dynamics storage for warm start
-            F_.resize(horizon, Eigen::VectorXd::Zero(state_dim));
-            evaluateTrajectory(context);
-            return;
-        } else if (options.verbose) {
-            std::cout << "ALTRO: Warning - warm start requested but no valid solver state found. "
-                      << "Falling back to cold start initialization." << std::endl;
+                    if (options.verbose) {
+            std::cout << "ALDDP: Using warm start with existing control gains, dual variables, and defect multipliers" << std::endl;
         }
+        // Initialize dynamics storage for warm start
+        F_.resize(horizon, Eigen::VectorXd::Zero(state_dim));
+        evaluateTrajectory(context);
+        return;
+    } else if (options.verbose) {
+        std::cout << "ALDDP: Warning - warm start requested but no valid solver state found. "
+                  << "Falling back to cold start initialization." << std::endl;
+    }
     }
 
     // Cold start: full initialization
@@ -124,17 +124,28 @@ void AltroSolver::initialize(CDDP& context) {
         for (int t = 0; t < horizon; ++t) {
             Y_[constraint_name][t] = Eigen::VectorXd::Constant(dual_dim, options.altro.dual_var_init_scale);
         }
+        
+        // Initialize path constraint penalty parameter (scalar for ALDDP)
+        rho_path_[constraint_name] = options.altro.penalty_scaling;
     }
+    
+    // Initialize defect constraint penalty parameter (scalar for ALDDP)
+    rho_defect_ = options.altro.defect_penalty_scaling;
 
     // Initialize regularization
     context.regularization_ = options.regularization.initial_value;
+    
+    // ALDDP uses single-shooting only (simplified approach)
+    if (options.verbose) {
+        std::cout << "ALDDP: Single-shooting mode (standard dynamics propagation)" << std::endl;
+    }
 }
 
-std::string AltroSolver::getSolverName() const {
-    return "Altro";
+std::string AlddpSolver::getSolverName() const {
+    return "ALDDP";
 }
 
-CDDPSolution AltroSolver::solve(CDDP& context) {
+CDDPSolution AlddpSolver::solve(CDDP& context) {
     const CDDPOptions& options = context.getOptions();
 
     // Prepare solution map
@@ -151,6 +162,9 @@ CDDPSolution AltroSolver::solve(CDDP& context) {
     std::vector<double> history_dual_infeasibility;
     std::vector<double> history_primal_infeasibility;
     std::vector<double> history_penalty_parameter;
+
+    // Initial trajectory evaluation
+    evaluateTrajectory(context);
 
     if (options.return_iteration_info) {
         const size_t expected_size = static_cast<size_t>(options.max_iterations + 1);
@@ -170,32 +184,29 @@ CDDPSolution AltroSolver::solve(CDDP& context) {
         history_penalty_parameter.push_back(options.altro.penalty_scaling);
     }
 
-    if (options.verbose) {
-        printIteration(0, cost_, lagrangian_value_, 0.0, context.regularization_, 
-                      1.0, options.altro.penalty_scaling, constraint_violation_);
-    }
-
     // Start timer
     auto start_time = std::chrono::high_resolution_clock::now();
     int iter = 0;
     bool converged = false;
     std::string termination_reason = "MaxIterationsReached";
 
-    // Initial trajectory evaluation
-    evaluateTrajectory(context);
+    if (options.verbose) {
+        printIteration(0, cost_, lagrangian_value_, 0.0, context.regularization_, 
+                      1.0, options.altro.penalty_scaling, constraint_violation_);
+    }
 
     // Main ALTRO loop
     while (iter < options.max_iterations) {
         ++iter;
 
         // Check maximum CPU time
-        if (options.max_cpu_time > 0) {
+                    if (options.max_cpu_time > 0) {
             auto current_time = std::chrono::high_resolution_clock::now();
             auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(current_time - start_time);
             if (duration.count() > options.max_cpu_time * 1000) {
                 termination_reason = "MaxCpuTimeReached";
                 if (options.verbose) {
-                    std::cerr << "ALTRO: Maximum CPU time reached. Returning current solution" << std::endl;
+                    std::cerr << "ALDDP: Maximum CPU time reached. Returning current solution" << std::endl;
                 }
                 break;
             }
@@ -209,11 +220,11 @@ CDDPSolution AltroSolver::solve(CDDP& context) {
             if (!backward_pass_success) {
                 context.increaseRegularization();
                 if (context.isRegularizationLimitReached()) {
-                    termination_reason = "RegularizationLimitReached_NotConverged";
-                    if (options.verbose) {
-                        std::cerr << "ALTRO: Backward pass regularization limit reached" << std::endl;
-                    }
-                    break;
+                                    termination_reason = "RegularizationLimitReached_NotConverged";
+                if (options.verbose) {
+                    std::cerr << "ALDDP: Backward pass regularization limit reached" << std::endl;
+                }
+                break;
                 }
             }
         }
@@ -226,13 +237,13 @@ CDDPSolution AltroSolver::solve(CDDP& context) {
 
         // Update solution if forward pass succeeded
         if (best_result.success) {
-            if (options.debug) {
-                std::cout << "[ALTRO: Forward pass] " << std::endl;
-                std::cout << "    cost: " << best_result.cost << std::endl;
-                std::cout << "    merit_function: " << best_result.merit_function << std::endl;
-                std::cout << "    alpha: " << best_result.alpha_pr << std::endl;
-                std::cout << "    cv_err: " << best_result.constraint_violation << std::endl;
-            }
+                    if (options.debug) {
+            std::cout << "[ALDDP: Forward pass] " << std::endl;
+            std::cout << "    cost: " << best_result.cost << std::endl;
+            std::cout << "    merit_function: " << best_result.merit_function << std::endl;
+            std::cout << "    alpha: " << best_result.alpha_pr << std::endl;
+            std::cout << "    cv_err: " << best_result.constraint_violation << std::endl;
+        }
             
             context.X_ = best_result.state_trajectory;
             context.U_ = best_result.control_trajectory;
@@ -259,8 +270,10 @@ CDDPSolution AltroSolver::solve(CDDP& context) {
 
             context.decreaseRegularization();
 
-            // Check convergence
-            optimality_gap_ = std::abs(dJ) + std::abs(dL);
+            // Check convergence using proper gradient norm (optimality_gap_ is set by backwardPass)
+            // Note: optimality_gap_ contains the gradient norm (Qu_err) from backward pass
+            double cost_change = std::abs(dJ);
+            double lagrangian_change = std::abs(dL);
             
             if (optimality_gap_ <= options.tolerance && 
                 constraint_violation_ <= options.altro.constraint_tolerance) {
@@ -269,7 +282,7 @@ CDDPSolution AltroSolver::solve(CDDP& context) {
                 break;
             }
             
-            if (std::abs(dJ) < options.acceptable_tolerance && 
+            if (cost_change < options.acceptable_tolerance && 
                 constraint_violation_ <= options.altro.constraint_tolerance) {
                 converged = true;
                 termination_reason = "AcceptableSolutionFound";
@@ -282,7 +295,7 @@ CDDPSolution AltroSolver::solve(CDDP& context) {
                 termination_reason = "RegularizationLimitReached_NotConverged";
                 converged = false;
                 if (options.verbose) {
-                    std::cerr << "ALTRO: Regularization limit reached. Not converged." << std::endl;
+                    std::cerr << "ALDDP: Regularization limit reached. Not converged." << std::endl;
                 }
                 break;
             }
@@ -347,7 +360,7 @@ CDDPSolution AltroSolver::solve(CDDP& context) {
     return solution;
 }
 
-void AltroSolver::evaluateTrajectory(CDDP& context) {
+void AlddpSolver::evaluateTrajectory(CDDP& context) {
     const auto& X = context.X_;
     const auto& U = context.U_;
     const auto& objective = context.getObjective();
@@ -356,6 +369,7 @@ void AltroSolver::evaluateTrajectory(CDDP& context) {
     const int horizon = context.getHorizon();
     const double timestep = context.getTimestep();
     const double penalty_scaling = context.getOptions().altro.penalty_scaling;
+    const double defect_penalty_scaling = context.getOptions().altro.defect_penalty_scaling;
     
     // Compute cost
     cost_ = 0.0;
@@ -371,6 +385,22 @@ void AltroSolver::evaluateTrajectory(CDDP& context) {
     constraint_violation_ = 0.0;
     double penalty_cost = 0.0;
     
+    // Add defect constraint Lagrangian terms
+    for (int t = 0; t < horizon; ++t) {
+        // Compute defect: d_t = x_{t+1} - f(x_t, u_t)
+        Eigen::VectorXd defect = X[t + 1] - F_[t];
+        
+        // Add Lagrangian term: λ_t^T * d_t
+        penalty_cost += Lambda_[t].dot(defect);
+        
+        // Add quadratic penalty term: 0.5 * ρ_defect * ||d_t||^2 (simplified for ALDDP)
+        penalty_cost += 0.5 * rho_defect_ * defect.squaredNorm();
+        
+        // Update constraint violation with defect norm
+        constraint_violation_ += defect.norm();
+    }
+    
+    // Add path constraint terms
     for (const auto& constraint_pair : constraint_set) {
         const std::string& constraint_name = constraint_pair.first;
         const auto& constraint = constraint_pair.second;
@@ -378,22 +408,24 @@ void AltroSolver::evaluateTrajectory(CDDP& context) {
         for (int t = 0; t < horizon; ++t) {
             // Evaluate constraint
             Eigen::VectorXd g = constraint->evaluate(X[t], U[t]) - constraint->getUpperBound();
+            const Eigen::VectorXd& y = Y_[constraint_name][t];
+            const double rho_path = rho_path_[constraint_name];
             
             // Update constraint violation
             constraint_violation_ += std::max(0.0, g.maxCoeff());
             
-            // Augmented Lagrangian terms
-            const Eigen::VectorXd& y = Y_[constraint_name][t];
-            
+            // Simplified augmented Lagrangian terms for ALDDP
             for (int i = 0; i < g.size(); ++i) {
-                if (g(i) > 0) {
+                const double constraint_tolerance = 1e-12; // Small tolerance for numerical stability
+                
+                if (g(i) > constraint_tolerance) {
                     // Active constraint: add linear and quadratic penalty terms
-                    penalty_cost += y(i) * g(i) + 0.5 * penalty_scaling * g(i) * g(i);
+                    penalty_cost += y(i) * g(i) + 0.5 * rho_path * g(i) * g(i);
                 } else {
                     // Inactive constraint: only quadratic penalty if multiplier is large
-                    double projected_multiplier = std::max(0.0, y(i) + penalty_scaling * g(i));
-                    if (projected_multiplier > 0) {
-                        penalty_cost += 0.5 * penalty_scaling * g(i) * g(i);
+                    double projected_multiplier = std::max(0.0, y(i) + rho_path * g(i));
+                    if (projected_multiplier > constraint_tolerance) {
+                        penalty_cost += 0.5 * rho_path * g(i) * g(i);
                     }
                 }
             }
@@ -403,7 +435,9 @@ void AltroSolver::evaluateTrajectory(CDDP& context) {
     lagrangian_value_ = cost_ + penalty_cost;
 }
 
-bool AltroSolver::backwardPass(CDDP& context) {
+bool AlddpSolver::backwardPass(CDDP& context) {
+    const auto& options = context.getOptions();
+
     const auto& X = context.X_;
     const auto& U = context.U_;
     const auto& objective = context.getObjective();
@@ -414,7 +448,10 @@ bool AltroSolver::backwardPass(CDDP& context) {
     const int control_dim = context.getControlDim();
     const double timestep = context.getTimestep();
     const double penalty_scaling = context.getOptions().altro.penalty_scaling;
+    const double defect_penalty_scaling = context.getOptions().altro.defect_penalty_scaling;
     const bool is_ilqr = context.getOptions().use_ilqr;
+
+    double Qu_err = 0.0;
     
     // Terminal cost derivatives
     Eigen::VectorXd V_x = objective.getFinalCostGradient(X.back());
@@ -425,28 +462,33 @@ bool AltroSolver::backwardPass(CDDP& context) {
     for (int t = horizon - 1; t >= 0; --t) {
         const Eigen::VectorXd& x = X[t];
         const Eigen::VectorXd& u = U[t];
+        const Eigen::VectorXd& f = F_[t];
+        const Eigen::VectorXd& d = f - context.X_[t + 1]; // Defect
+        const Eigen::VectorXd& lambda = Lambda_[t];
         
         // Get dynamics derivatives
         const auto [Fx, Fu] = system.getJacobians(x, u, t * timestep);
         Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep * Fx;
         Eigen::MatrixXd B = timestep * Fu;
         
-        // Cost derivatives
+        // Cost derivatives at (x_t, u_t)
         auto [l_x, l_u] = objective.getRunningCostGradients(x, u, t);
         auto [l_xx, l_uu, l_ux] = objective.getRunningCostHessians(x, u, t);
+
+        // Initialize Q-function with cost and dynamics terms (simplified for ALDDP)
+        Eigen::VectorXd Q_x = l_x + A.transpose() * V_x + A.transpose() * (lambda + rho_defect_ * d);
+        Eigen::VectorXd Q_u = l_u + B.transpose() * V_x + B.transpose() * (lambda + rho_defect_ * d);
+        Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A + rho_defect_ * A.transpose() * A;
+        Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A + rho_defect_ * B.transpose() * A;
+        Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B + rho_defect_ * B.transpose() * B;
+
         
-        // Initialize Q-function with cost terms
-        Eigen::VectorXd Q_x = l_x + A.transpose() * V_x;
-        Eigen::VectorXd Q_u = l_u + B.transpose() * V_x;
-        Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
-        Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
-        Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
-        
-        // Add constraint terms to Q-function
+        // Add path constraint terms to Q-function
         for (const auto& constraint_pair : constraint_set) {
             const std::string& constraint_name = constraint_pair.first;
             const auto& constraint = constraint_pair.second;
             const Eigen::VectorXd& y = Y_[constraint_name][t];
+            const double rho_path = rho_path_[constraint_name];
             
             // Evaluate constraint and its derivatives
             Eigen::VectorXd g = constraint->evaluate(x, u) - constraint->getUpperBound();
@@ -454,15 +496,19 @@ bool AltroSolver::backwardPass(CDDP& context) {
             Eigen::MatrixXd g_u = constraint->getControlJacobian(x, u);
             
             for (int i = 0; i < g.size(); ++i) {
-                if (g(i) > 0 || (g(i) <= 0 && y(i) + penalty_scaling * g(i) > 0)) {
-                    // Add first-order terms
-                    Q_x += (y(i) + penalty_scaling * g(i)) * g_x.row(i).transpose();
-                    Q_u += (y(i) + penalty_scaling * g(i)) * g_u.row(i).transpose();
+                const double constraint_tolerance = 1e-12; // Small tolerance for numerical stability
+                
+                if (g(i) > constraint_tolerance || 
+                    (g(i) <= constraint_tolerance && y(i) + rho_path * g(i) > constraint_tolerance)) {
+                    // Add first-order terms to Q-function (simplified for ALDDP)
+                    double weight = y(i) + rho_path * g(i);
+                    Q_x += weight * g_x.row(i).transpose();
+                    Q_u += weight * g_u.row(i).transpose();
                     
                     // Add second-order terms (Gauss-Newton approximation)
-                    Q_xx += penalty_scaling * g_x.row(i).transpose() * g_x.row(i);
-                    Q_ux += penalty_scaling * g_u.row(i).transpose() * g_x.row(i);
-                    Q_uu += penalty_scaling * g_u.row(i).transpose() * g_u.row(i);
+                    Q_xx += rho_path * g_x.row(i).transpose() * g_x.row(i);
+                    Q_ux += rho_path * g_u.row(i).transpose() * g_x.row(i);
+                    Q_uu += rho_path * g_u.row(i).transpose() * g_u.row(i);
                 }
             }
         }
@@ -476,22 +522,53 @@ bool AltroSolver::backwardPass(CDDP& context) {
         // Solve for control law
         Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
         if (ldlt.info() != Eigen::Success) {
+            if (options.debug) {
+                std::cerr << "ALDDP: Backward pass failed at time " << t << std::endl;
+            }
             return false;
         }
         
-        k_u_[t] = -ldlt.solve(Q_u);
-        K_u_[t] = -ldlt.solve(Q_ux);
+        Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
+        bigRHS.col(0) = Q_u;
+        Eigen::MatrixXd M = Q_ux;
+        for (int col = 0; col < state_dim; col++) {
+            bigRHS.col(col + 1) = M.col(col);
+        }
+
+        Eigen::MatrixXd kK = -ldlt.solve(bigRHS);
+
+        // parse out feedforward (ku) and feedback (Ku)
+        Eigen::VectorXd k_u = kK.col(0);
+        Eigen::MatrixXd K_u(control_dim, state_dim);
+        for (int col = 0; col < state_dim; col++) {
+            K_u.col(col) = kK.col(col + 1);
+        }
+        
+        // Save gains
+        k_u_[t] = k_u;
+        K_u_[t] = K_u;
         
         // Update value function
         V_x = Q_x + K_u_[t].transpose() * Q_u + Q_ux.transpose() * k_u_[t] + K_u_[t].transpose() * Q_uu * k_u_[t];
         V_xx = Q_xx + K_u_[t].transpose() * Q_ux + Q_ux.transpose() * K_u_[t] + K_u_[t].transpose() * Q_uu * K_u_[t];
         V_xx = 0.5 * (V_xx + V_xx.transpose());
+
+        // Compute optimality gap (Inf-norm) for convergence check
+        Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
     }
     
+    optimality_gap_ = Qu_err;
+    context.inf_du_ = optimality_gap_;
+
+    if (options.debug) {
+        std::cout << "[ALDDP Backward Pass]\n"
+                  << "    Qu_err:  " << std::scientific << std::setprecision(4) << Qu_err << std::endl;
+    }
+
     return true;
 }
 
-ForwardPassResult AltroSolver::performForwardPass(CDDP& context) {
+ForwardPassResult AlddpSolver::performForwardPass(CDDP& context) {
     const auto& options = context.getOptions();
     
     ForwardPassResult best_result;
@@ -515,7 +592,9 @@ ForwardPassResult AltroSolver::performForwardPass(CDDP& context) {
     return best_result;
 }
 
-ForwardPassResult AltroSolver::forwardPass(CDDP& context, double alpha) {
+ForwardPassResult AlddpSolver::forwardPass(CDDP& context, double alpha) {
+    const auto& options = context.getOptions();
+    
     ForwardPassResult result;
     result.success = false;
     result.alpha_pr = alpha;
@@ -530,7 +609,6 @@ ForwardPassResult AltroSolver::forwardPass(CDDP& context, double alpha) {
     const int horizon = context.getHorizon();
     const int state_dim = context.getStateDim();
     const double timestep = context.getTimestep();
-    const double penalty_scaling = context.getOptions().altro.penalty_scaling;
     
     // Initialize new trajectories
     std::vector<Eigen::VectorXd> X_new = X;
@@ -540,15 +618,18 @@ ForwardPassResult AltroSolver::forwardPass(CDDP& context, double alpha) {
     // Set initial state
     X_new[0] = context.getInitialState();
     
-    // Forward rollout
+    // Forward rollout with control law (with optional multiple-shooting)
     for (int t = 0; t < horizon; ++t) {
         Eigen::VectorXd dx = X_new[t] - X[t];
         
-        // Apply control law
+        // Apply control law: u_new = u + α*k + K*dx
         U_new[t] = U[t] + alpha * k_u_[t] + K_u_[t] * dx;
         
-        // Check for NaN/Inf
+        // Check for numerical issues
         if (!U_new[t].allFinite()) {
+            if (options.debug) {
+                std::cerr << "ALDDP: Forward pass - control NaN/Inf at time " << t << std::endl;
+            }
             return result;
         }
         
@@ -556,10 +637,22 @@ ForwardPassResult AltroSolver::forwardPass(CDDP& context, double alpha) {
         F_new[t] = system.getDiscreteDynamics(X_new[t], U_new[t], t * timestep);
         
         if (!F_new[t].allFinite()) {
+            if (options.debug) {
+                std::cerr << "ALDDP: Forward pass - dynamics NaN/Inf at time " << t << std::endl;
+            }
             return result;
         }
         
+        // ALDDP uses single-shooting only: direct dynamics propagation
         X_new[t + 1] = F_new[t];
+        
+        // Check for numerical issues
+        if (!X_new[t + 1].allFinite()) {
+            if (options.debug) {
+                std::cerr << "ALDDP: Forward pass - state NaN/Inf at time " << t << std::endl;
+            }
+            return result;
+        }
     }
     
     // Evaluate new trajectory
@@ -567,13 +660,29 @@ ForwardPassResult AltroSolver::forwardPass(CDDP& context, double alpha) {
     double constraint_violation_new = 0.0;
     double penalty_cost = 0.0;
     
-    // Compute cost
+    // 1. Compute cost
     for (int t = 0; t < horizon; ++t) {
         cost_new += objective.running_cost(X_new[t], U_new[t], t);
     }
     cost_new += objective.terminal_cost(X_new.back());
     
-    // Compute constraint terms
+    // 2. Add defect constraint Lagrangian terms
+    for (int t = 0; t < horizon; ++t) {
+        // Compute defect for new trajectory: d_t = x_{t+1} - f(x_t, u_t)
+        Eigen::VectorXd defect_new = X_new[t + 1] - F_new[t];
+        const Eigen::VectorXd& lambda = Lambda_[t];
+        
+        // Lagrangian term: λ_t^T * defect_new
+        penalty_cost += lambda.dot(defect_new);
+        
+        // Quadratic penalty: 0.5 * ρ_defect * ||defect_new||^2 (simplified for ALDDP)
+        penalty_cost += 0.5 * rho_defect_ * defect_new.squaredNorm();
+        
+        // Update constraint violation
+        constraint_violation_new += defect_new.norm();
+    }
+    
+    // 3. Add path constraint Lagrangian terms
     for (const auto& constraint_pair : constraint_set) {
         const std::string& constraint_name = constraint_pair.first;
         const auto& constraint = constraint_pair.second;
@@ -581,16 +690,22 @@ ForwardPassResult AltroSolver::forwardPass(CDDP& context, double alpha) {
         for (int t = 0; t < horizon; ++t) {
             Eigen::VectorXd g = constraint->evaluate(X_new[t], U_new[t]) - constraint->getUpperBound();
             const Eigen::VectorXd& y = Y_[constraint_name][t];
+            const double rho_path = rho_path_[constraint_name];
             
             constraint_violation_new += std::max(0.0, g.maxCoeff());
             
+            // Apply simplified augmented Lagrangian terms for ALDDP
             for (int i = 0; i < g.size(); ++i) {
-                if (g(i) > 0) {
-                    penalty_cost += y(i) * g(i) + 0.5 * penalty_scaling * g(i) * g(i);
+                const double constraint_tolerance = 1e-12; // Small tolerance for numerical stability
+                
+                if (g(i) > constraint_tolerance) {
+                    // Active constraint: linear + quadratic penalty terms
+                    penalty_cost += y(i) * g(i) + 0.5 * rho_path * g(i) * g(i);
                 } else {
-                    double projected_multiplier = std::max(0.0, y(i) + penalty_scaling * g(i));
-                    if (projected_multiplier > 0) {
-                        penalty_cost += 0.5 * penalty_scaling * g(i) * g(i);
+                    // Inactive constraint: only quadratic penalty if projected multiplier is positive
+                    double projected_multiplier = std::max(0.0, y(i) + rho_path * g(i));
+                    if (projected_multiplier > constraint_tolerance) {
+                        penalty_cost += 0.5 * rho_path * g(i) * g(i);
                     }
                 }
             }
@@ -599,7 +714,7 @@ ForwardPassResult AltroSolver::forwardPass(CDDP& context, double alpha) {
     
     double merit_function_new = cost_new + penalty_cost;
     
-    // Simple acceptance test
+    // Acceptance test: accept if merit function improves or constraint violation decreases
     if (merit_function_new < lagrangian_value_ || constraint_violation_new < constraint_violation_) {
         result.success = true;
         result.state_trajectory = X_new;
@@ -608,19 +723,42 @@ ForwardPassResult AltroSolver::forwardPass(CDDP& context, double alpha) {
         result.cost = cost_new;
         result.merit_function = merit_function_new;
         result.constraint_violation = constraint_violation_new;
+        
+        if (options.debug) {
+            std::cout << "[ALDDP Forward Pass]\n"
+                      << "    alpha: " << std::fixed << std::setprecision(4) << alpha << "\n"
+                      << "    cost: " << std::scientific << std::setprecision(4) << cost_new << "\n"
+                      << "    merit: " << std::scientific << std::setprecision(4) << merit_function_new << "\n"
+                      << "    cv_err: " << std::scientific << std::setprecision(4) << constraint_violation_new << std::endl;
+        }
     }
     
     return result;
 }
 
-void AltroSolver::updateAugmentedLagrangian(CDDP& context) {
+void AlddpSolver::updateAugmentedLagrangian(CDDP& context) {
+    const auto& options = context.getOptions();
     const auto& X = context.X_;
     const auto& U = context.U_;
     const auto& constraint_set = context.getConstraintSet();
     const int horizon = context.getHorizon();
-    const double penalty_scaling = context.getOptions().altro.penalty_scaling;
     
-    // Update dual variables (multipliers)
+    double max_defect_violation = 0.0;
+    double max_path_violation = 0.0;
+    
+    // 1. Update defect constraint Lagrange multipliers (simplified for ALDDP)
+    for (int t = 0; t < horizon; ++t) {
+        // Compute defect: d_t = x_{t+1} - f(x_t, u_t)
+        Eigen::VectorXd defect = X[t + 1] - F_[t];
+        
+        // Update multipliers: λ_new = λ_old + ρ_defect * defect (scalar penalty)
+        Lambda_[t] += rho_defect_ * defect;
+        
+        // Track maximum defect violation for debugging
+        max_defect_violation = std::max(max_defect_violation, defect.norm());
+    }
+    
+    // 2. Update path constraint dual variables (Lagrange multipliers)
     for (const auto& constraint_pair : constraint_set) {
         const std::string& constraint_name = constraint_pair.first;
         const auto& constraint = constraint_pair.second;
@@ -628,16 +766,28 @@ void AltroSolver::updateAugmentedLagrangian(CDDP& context) {
         for (int t = 0; t < horizon; ++t) {
             Eigen::VectorXd g = constraint->evaluate(X[t], U[t]) - constraint->getUpperBound();
             Eigen::VectorXd& y = Y_[constraint_name][t];
+            const double rho_path = rho_path_[constraint_name];
             
-            // Update multipliers: y_new = max(0, y_old + penalty_scaling * g)
+            // Update multipliers: y_new = max(0, y_old + rho_path * g) (simplified for ALDDP)
             for (int i = 0; i < g.size(); ++i) {
-                y(i) = std::max(0.0, y(i) + penalty_scaling * g(i));
+                y(i) = std::max(0.0, y(i) + rho_path * g(i));
+                
+                // Track maximum path constraint violation
+                if (g(i) > 0.0) {
+                    max_path_violation = std::max(max_path_violation, g(i));
+                }
             }
         }
     }
+    
+    if (options.debug) {
+        std::cout << "[ALDDP Multiplier Update]\n"
+                  << "    max_defect_viol: " << std::scientific << std::setprecision(4) << max_defect_violation << "\n"
+                  << "    max_path_viol:   " << std::scientific << std::setprecision(4) << max_path_violation << std::endl;
+    }
 }
 
-void AltroSolver::printIteration(int iter, double cost, double lagrangian, double grad_norm,
+void AlddpSolver::printIteration(int iter, double cost, double lagrangian, double grad_norm,
                                 double regularization, double alpha, double mu, double constraint_violation) const {
     if (iter == 0) {
         std::cout << std::setw(4) << "iter" 
@@ -660,8 +810,8 @@ void AltroSolver::printIteration(int iter, double cost, double lagrangian, doubl
               << std::endl;
 }
 
-void AltroSolver::printSolutionSummary(const CDDPSolution& solution) const {
-    std::cout << "\n=== ALTRO Solution Summary ===" << std::endl;
+void AlddpSolver::printSolutionSummary(const CDDPSolution& solution) const {
+    std::cout << "\n=== ALDDP Solution Summary ===" << std::endl;
     auto status_it = solution.find("status_message");
     auto iterations_it = solution.find("iterations_completed");
     auto solve_time_it = solution.find("solve_time_ms");

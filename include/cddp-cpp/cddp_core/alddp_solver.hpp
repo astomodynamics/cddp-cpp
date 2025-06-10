@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef CDDP_ALTRO_SOLVER_HPP
-#define CDDP_ALTRO_SOLVER_HPP
+#ifndef CDDP_ALDDP_SOLVER_HPP
+#define CDDP_ALDDP_SOLVER_HPP
 
 #include "cddp_core/cddp_core.hpp"
 #include <Eigen/Dense>
@@ -26,18 +26,18 @@ namespace cddp
 {
 
     /**
-     * @brief Augmented Lagrangian Trajectory Optimizer (ALTRO) solver implementation.
+     * @brief Augmented Lagrangian Differential Dynamic Programming (ALDDP) solver implementation.
      *
      * This class implements the ISolverAlgorithm interface to provide
-     * an augmented lagrangian-based DDP solver for handling constraints.
+     * a simplified augmented lagrangian-based DDP solver for handling constraints.
      */
-    class AltroSolver : public ISolverAlgorithm
+    class AlddpSolver : public ISolverAlgorithm
     {
     public:
         /**
          * @brief Default constructor.
          */
-        AltroSolver();
+        AlddpSolver();
 
         /**
          * @brief Initialize the solver with the given CDDP context.
@@ -46,7 +46,7 @@ namespace cddp
         void initialize(CDDP &context) override;
 
         /**
-         * @brief Execute the ALTRO algorithm and return the solution.
+         * @brief Execute the ALDDP algorithm and return the solution.
          * @param context Reference to the CDDP instance containing problem data and options.
          * @return CDDPSolution containing the results.
          */
@@ -54,7 +54,7 @@ namespace cddp
 
         /**
          * @brief Get the name of the solver algorithm.
-         * @return String identifier "Altro".
+         * @return String identifier "ALDDP".
          */
         std::string getSolverName() const override;
 
@@ -66,9 +66,13 @@ namespace cddp
         // Dynamics storage
         std::vector<Eigen::VectorXd> F_;  ///< Dynamics evaluations
 
-        // Altro-specific variables (constraint name -> time trajectory)
+        // ALDDP-specific variables (constraint name -> time trajectory)
         std::map<std::string, std::vector<Eigen::VectorXd>> Y_; ///< Dual variables (Lagrange multipliers)
         std::vector<Eigen::VectorXd> Lambda_; ///< Lagrange multipliers for defect constraints
+        
+        // Penalty parameters (simplified for ALDDP)
+        double rho_defect_; ///< Defect constraint penalty parameter (scalar, constant)
+        std::map<std::string, double> rho_path_; ///< Path constraint penalty parameters (constraint name -> scalar)
 
         double cost_;                                               ///< Current total cost
         double constraint_violation_;                               ///< Current constraint violation measure
@@ -89,14 +93,14 @@ namespace cddp
         bool backwardPass(CDDP &context);
 
         /**
-         * @brief Perform the forward pass with a line search to find an acceptable step size.
+         * @brief Perform the forward pass with line search (single-shooting only).
          * @param context Reference to the CDDP context.
          * @return The result of the best forward pass.
          */
         ForwardPassResult performForwardPass(CDDP &context);
 
         /**
-         * @brief Perform a single forward pass with a given step size alpha.
+         * @brief Perform a single forward pass with a given step size alpha (single-shooting).
          * @param context Reference to the CDDP context.
          * @param alpha The step size for the forward pass.
          * @return The result of the forward pass.
@@ -104,7 +108,7 @@ namespace cddp
         ForwardPassResult forwardPass(CDDP &context, double alpha);
 
         /**
-         * @brief Update augmented Lagrangian parameters (multipliers and penalties).
+         * @brief Update augmented Lagrangian parameters (simplified ALDDP approach).
          * @param context Reference to the CDDP context.
          */
         void updateAugmentedLagrangian(CDDP &context);
@@ -124,4 +128,4 @@ namespace cddp
 
 } // namespace cddp
 
-#endif // CDDP_ALTRO_SOLVER_HPP
+#endif // CDDP_ALDDP_SOLVER_HPP
