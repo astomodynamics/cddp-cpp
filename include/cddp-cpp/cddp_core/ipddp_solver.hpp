@@ -68,6 +68,10 @@ namespace cddp
         std::vector<std::vector<Eigen::MatrixXd>> F_uu_; ///< Control hessians (Fuu)
         std::vector<std::vector<Eigen::MatrixXd>> F_ux_; ///< Mixed hessians (Fux)
         
+        // Constraint gradients storage (constraint name -> time trajectory)
+        std::map<std::string, std::vector<Eigen::MatrixXd>> G_x_; ///< Constraint state jacobians
+        std::map<std::string, std::vector<Eigen::MatrixXd>> G_u_; ///< Constraint control jacobians
+        
         // Control law parameters
         std::vector<Eigen::VectorXd> k_u_; ///< Feedforward control gains
         std::vector<Eigen::MatrixXd> K_u_; ///< Feedback control gains
@@ -95,6 +99,12 @@ namespace cddp
          * @param context Reference to the CDDP context.
          */
         void precomputeDynamicsDerivatives(CDDP &context);
+
+        /**
+         * @brief Pre-compute constraint jacobians for all time steps and constraints in parallel.
+         * @param context Reference to the CDDP context.
+         */
+        void precomputeConstraintGradients(CDDP &context);
 
         /**
          * @brief Evaluate trajectory by computing cost, constraint values, and merit function.
@@ -146,10 +156,12 @@ namespace cddp
         int getTotalDualDim(const CDDP &context) const;
 
         /**
-         * @brief Print iteration information.
+         * @brief Print iteration information in IPOPT style.
          */
-        void printIteration(int iter, double cost, double merit_function, double optimality_gap,
-                            double regularization, double alpha_pr, double mu, double constraint_violation) const;
+        void printIteration(int iter, double objective, double inf_pr, double inf_du, 
+                            double mu, double step_norm, double regularization, 
+                            double alpha_du, double alpha_pr, int ls_iterations = 0, 
+                            const std::string& status = "") const;
 
         /**
          * @brief Print solution summary.

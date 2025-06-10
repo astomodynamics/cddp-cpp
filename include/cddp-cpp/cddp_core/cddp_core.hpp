@@ -280,6 +280,7 @@ namespace cddp
         double merit_function_;          ///< Merit function value
         double inf_pr_;                  ///< Current primal infeasibility (constraint violation norm)
         double inf_du_;                  ///< Current dual infeasibility (Lagrangian gradient norm)
+        double step_norm_;               ///< Current step norm ||d|| (primal step magnitude)
         bool initialized_ = false;       ///< Overall CDDP problem initialization flag
 
         // Common Line Search parameters that might be managed by CDDP context or passed to strategies
@@ -295,6 +296,7 @@ namespace cddp
         double getCurrentMeritFunction() const { return merit_function_; }
         double getCurrentPrimalInfeasibility() const { return inf_pr_; }
         double getCurrentDualInfeasibility() const { return inf_du_; }
+        double getCurrentStepNorm() const { return step_norm_; }
         double getCurrentPrimalStepSize() const { return alpha_pr_; }
         double getCurrentDualStepSize() const { return alpha_du_; }
         double getCurrentRegularization() const { return regularization_; }

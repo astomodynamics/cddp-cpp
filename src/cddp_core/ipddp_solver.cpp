@@ -69,6 +69,7 @@ namespace cddp
                     std::cout << "IPDDP: Using warm start with existing control gains" << std::endl;
                 }
                 mu_ = options.ipddp.barrier.mu_initial;
+                context.step_norm_ = 0.0; // Initialize for warm start
                 evaluateTrajectory(context);
                 return;
             }
@@ -93,6 +94,8 @@ namespace cddp
 
         // Clear constraint-related variables
         G_.clear();
+        G_x_.clear();
+        G_u_.clear();
         Y_.clear();
         S_.clear();
         k_y_.clear();
@@ -167,6 +170,9 @@ namespace cddp
         // Initialize regularization
         context.regularization_ = options.regularization.initial_value;
 
+        // Initialize step norm
+        context.step_norm_ = 0.0;
+
         // Evaluate initial trajectory
         evaluateTrajectory(context);
         resetBarrierFilter(context);
@@ -203,6 +209,7 @@ namespace cddp
         std::vector<double> history_objective;
         std::vector<double> history_merit_function;
         std::vector<double> history_step_length_primal;
+        std::vector<double> history_step_length_dual;
         std::vector<double> history_dual_infeasibility;
         std::vector<double> history_primal_infeasibility;
         std::vector<double> history_barrier_mu;
@@ -213,6 +220,7 @@ namespace cddp
             history_objective.reserve(expected_size);
             history_merit_function.reserve(expected_size);
             history_step_length_primal.reserve(expected_size);
+            history_step_length_dual.reserve(expected_size);
             history_dual_infeasibility.reserve(expected_size);
             history_primal_infeasibility.reserve(expected_size);
             history_barrier_mu.reserve(expected_size);
@@ -220,6 +228,8 @@ namespace cddp
             // Initial iteration values
             history_objective.push_back(context.cost_);
             history_merit_function.push_back(context.merit_function_);
+            history_step_length_primal.push_back(1.0); // Initial step length
+            history_step_length_dual.push_back(1.0); // Initial dual step length
             history_dual_infeasibility.push_back(context.inf_du_);
             history_primal_infeasibility.push_back(context.inf_pr_);
             history_barrier_mu.push_back(mu_);
@@ -227,8 +237,8 @@ namespace cddp
 
         if (options.verbose)
         {
-            printIteration(0, context.cost_, context.merit_function_, optimality_gap_,
-                          context.regularization_, context.alpha_pr_, mu_, constraint_violation_);
+            printIteration(0, context.cost_, context.inf_pr_, context.inf_du_, 
+                          mu_, context.step_norm_, context.regularization_, 1.0, context.alpha_pr_);
         }
 
         // Start timer
@@ -319,6 +329,7 @@ namespace cddp
                     history_objective.push_back(context.cost_);
                     history_merit_function.push_back(context.merit_function_);
                     history_step_length_primal.push_back(context.alpha_pr_);
+                    history_step_length_dual.push_back(best_result.alpha_du);
                     history_dual_infeasibility.push_back(context.inf_du_);
                     history_primal_infeasibility.push_back(context.inf_pr_);
                     history_barrier_mu.push_back(mu_);
@@ -375,8 +386,8 @@ namespace cddp
             // Print iteration info
             if (options.verbose)
             {
-                printIteration(iter, context.cost_, context.merit_function_, optimality_gap_,
-                              context.regularization_, context.alpha_pr_, mu_, constraint_violation_);
+                printIteration(iter, context.cost_, context.inf_pr_, context.inf_du_, 
+                              mu_, context.step_norm_, context.regularization_, best_result.alpha_du, context.alpha_pr_);
             }
 
             // Update barrier parameters
@@ -426,6 +437,7 @@ namespace cddp
             solution["history_objective"] = history_objective;
             solution["history_merit_function"] = history_merit_function;
             solution["history_step_length_primal"] = history_step_length_primal;
+            solution["history_step_length_dual"] = history_step_length_dual;
             solution["history_dual_infeasibility"] = history_dual_infeasibility;
             solution["history_primal_infeasibility"] = history_primal_infeasibility;
             solution["history_barrier_mu"] = history_barrier_mu;
@@ -632,12 +644,106 @@ namespace cddp
                 }
             }
         }
+    }
 
-        if (options.debug)
+    void IPDDPSolver::precomputeConstraintGradients(CDDP &context)
+    {
+        const CDDPOptions &options = context.getOptions();
+        const int horizon = context.getHorizon();
+        const auto &constraint_set = context.getConstraintSet();
+
+        // Clear and resize storage
+        G_x_.clear();
+        G_u_.clear();
+
+        // If no constraints, return early
+        if (constraint_set.empty())
         {
-            std::cout << "[IPDDP] Pre-computed dynamics derivatives for " << horizon 
-                      << " time steps using " << (use_parallel ? "parallel" : "sequential") 
-                      << " computation" << std::endl;
+            return;
+        }
+
+        // Initialize storage for each constraint
+        for (const auto &constraint_pair : constraint_set)
+        {
+            const std::string &constraint_name = constraint_pair.first;
+            G_x_[constraint_name].resize(horizon);
+            G_u_[constraint_name].resize(horizon);
+        }
+
+        // Threshold for when parallelization is worth it
+        const int MIN_HORIZON_FOR_PARALLEL = 20;
+        const bool use_parallel = options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;
+
+        if (!use_parallel)
+        {
+            // Single-threaded computation
+            for (int t = 0; t < horizon; ++t)
+            {
+                const Eigen::VectorXd &x = context.X_[t];
+                const Eigen::VectorXd &u = context.U_[t];
+
+                for (const auto &constraint_pair : constraint_set)
+                {
+                    const std::string &constraint_name = constraint_pair.first;
+                    G_x_[constraint_name][t] = constraint_pair.second->getStateJacobian(x, u);
+                    G_u_[constraint_name][t] = constraint_pair.second->getControlJacobian(x, u);
+                }
+            }
+        }
+        else
+        {
+            // Chunked parallel computation
+            const int num_threads = std::min(options.num_threads, 
+                                            static_cast<int>(std::thread::hardware_concurrency()));
+            const int chunk_size = std::max(1, horizon / num_threads);
+            
+            std::vector<std::future<void>> futures;
+            futures.reserve(num_threads);
+
+            for (int thread_id = 0; thread_id < num_threads; ++thread_id)
+            {
+                int start_t = thread_id * chunk_size;
+                int end_t = (thread_id == num_threads - 1) ? horizon : (thread_id + 1) * chunk_size;
+                
+                if (start_t >= horizon) break;
+                
+                futures.push_back(std::async(std::launch::async, 
+                    [this, &context, &constraint_set, start_t, end_t]() {
+                        // Process a chunk of time steps
+                        for (int t = start_t; t < end_t; ++t)
+                        {
+                            const Eigen::VectorXd &x = context.X_[t];
+                            const Eigen::VectorXd &u = context.U_[t];
+
+                            for (const auto &constraint_pair : constraint_set)
+                            {
+                                const std::string &constraint_name = constraint_pair.first;
+                                G_x_[constraint_name][t] = constraint_pair.second->getStateJacobian(x, u);
+                                G_u_[constraint_name][t] = constraint_pair.second->getControlJacobian(x, u);
+                            }
+                        }
+                    }));
+            }
+
+            // Wait for all computations to complete
+            for (auto &future : futures)
+            {
+                try
+                {
+                    if (future.valid())
+                    {
+                        future.get();
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    if (options.verbose)
+                    {
+                        std::cerr << "IPDDP: Constraint gradients computation thread failed: " << e.what() << std::endl;
+                    }
+                    throw;
+                }
+            }
         }
     }
 
@@ -653,6 +759,9 @@ namespace cddp
 
         // Pre-compute dynamics jacobians and hessians for all time steps
         precomputeDynamicsDerivatives(context);
+        
+        // Pre-compute constraint gradients for all time steps and constraints
+        precomputeConstraintGradients(context);
 
         // Terminal cost and its derivatives
         Eigen::VectorXd V_x = context.getObjective().getFinalCostGradient(context.X_.back());
@@ -663,6 +772,7 @@ namespace cddp
         double Qu_err = 0.0;
         double rp_err = 0.0; // primal feasibility
         double rd_err = 0.0; // dual feasibility
+        double step_norm = 0.0;
 
         // If no constraints, use standard DDP recursion
         if (constraint_set.empty())
@@ -736,16 +846,19 @@ namespace cddp
 
                 // Error tracking
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
+                step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
             }
 
             optimality_gap_ = Qu_err;
             kkt_error_ = Qu_err;
             context.inf_du_ = Qu_err;
+            context.step_norm_ = step_norm;
 
             if (options.debug)
             {
                 std::cout << "[IPDDP Backward Pass]\n"
                           << "    Qu_err:  " << Qu_err << "\n"
+                          << "    step_norm: " << context.step_norm_ << "\n"
                           << "    dV:      " << dV_.transpose() << std::endl;
             }
             return true;
@@ -780,8 +893,8 @@ namespace cddp
                     const Eigen::VectorXd &y_vec = Y_[constraint_name][t];
                     const Eigen::VectorXd &s_vec = S_[constraint_name][t];
                     const Eigen::VectorXd &g_vec = G_[constraint_name][t];
-                    const Eigen::MatrixXd &g_x = constraint_pair.second->getStateJacobian(x, u);
-                    const Eigen::MatrixXd &g_u = constraint_pair.second->getControlJacobian(x, u);
+                    const Eigen::MatrixXd &g_x = G_x_[constraint_name][t];
+                    const Eigen::MatrixXd &g_u = G_u_[constraint_name][t];
 
                     y.segment(offset, dual_dim) = y_vec;
                     s.segment(offset, dual_dim) = s_vec;
@@ -905,12 +1018,15 @@ namespace cddp
                 Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
                 rp_err = std::max(rp_err, r_p.lpNorm<Eigen::Infinity>());
                 rd_err = std::max(rd_err, r_d.lpNorm<Eigen::Infinity>());
+                step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
             }
 
             // Compute optimality gap and KKT error
             optimality_gap_ = Qu_err;
             kkt_error_ = std::max(rp_err, rd_err);
             context.inf_du_ = optimality_gap_;
+            context.step_norm_ = step_norm;
+
 
             if (options.debug)
             {
@@ -918,6 +1034,7 @@ namespace cddp
                           << "    Qu_err:  " << std::scientific << std::setprecision(4) << Qu_err << "\n"
                           << "    rp_err:  " << std::scientific << std::setprecision(4) << rp_err << "\n"
                           << "    rd_err:  " << std::scientific << std::setprecision(4) << rd_err << "\n"
+                          << "    step_norm: " << std::scientific << std::setprecision(4) << context.step_norm_ << "\n"
                           << "    dV:      " << std::scientific << std::setprecision(4) << dV_.transpose() << std::endl;
             }
             return true;
@@ -1040,6 +1157,7 @@ namespace cddp
             result.cost = cost_new;
             result.merit_function = cost_new;
             result.constraint_violation = 0.0;
+            result.alpha_du = 1.0; // No dual variables for unconstrained case
             return result;
         }
 
@@ -1088,6 +1206,7 @@ namespace cddp
         // Update dual variables
         bool suitable_alpha_y_found = false;
         std::map<std::string, std::vector<Eigen::VectorXd>> Y_trial;
+        double selected_alpha_y = 0.0;
 
         for (double alpha_y_candidate : context.alphas_)
         {
@@ -1125,6 +1244,7 @@ namespace cddp
             if (current_alpha_y_globally_feasible)
             {
                 suitable_alpha_y_found = true;
+                selected_alpha_y = alpha_y_candidate;
                 Y_new = Y_trial;
                 break;
             }
@@ -1134,6 +1254,9 @@ namespace cddp
         {
             return result; // Failed
         }
+
+        // Store the selected dual step length
+        result.alpha_du = selected_alpha_y;
 
         // Cost computation and filter line-search
         for (int t = 0; t < horizon; ++t)
@@ -1218,29 +1341,69 @@ namespace cddp
         }
     }
 
-    void IPDDPSolver::printIteration(int iter, double cost, double merit_function, double optimality_gap,
-                                     double regularization, double alpha_pr, double mu, double constraint_violation) const
+    void IPDDPSolver::printIteration(int iter, double objective, double inf_pr, double inf_du, 
+                                     double mu, double step_norm, double regularization, 
+                                     double alpha_du, double alpha_pr, int ls_iterations, 
+                                     const std::string& status) const
     {
         if (iter == 0)
         {
             std::cout << std::setw(4) << "iter" << " "
                       << std::setw(12) << "objective" << " "
-                      << std::setw(12) << "merit_func" << " "
-                      << std::setw(10) << "opt_gap" << " "
-                      << std::setw(8) << "lg(rg)" << " "
-                      << std::setw(8) << "alpha" << " "
-                      << std::setw(8) << "lg(mu)" << " "
-                      << std::setw(10) << "cv_viol" << std::endl;
+                      << std::setw(9) << "inf_pr" << " "
+                      << std::setw(9) << "inf_du" << " "
+                      << std::setw(7) << "lg(mu)" << " "
+                      << std::setw(9) << "||d||" << " "
+                      << std::setw(7) << "lg(rg)" << " "
+                      << std::setw(9) << "alpha_du" << " "
+                      << std::setw(9) << "alpha_pr" << " "
+                      << std::setw(3) << "ls" << std::endl;
         }
 
-        std::cout << std::setw(4) << iter << " "
-                  << std::setw(12) << std::scientific << std::setprecision(4) << cost << " "
-                  << std::setw(12) << std::scientific << std::setprecision(4) << merit_function << " "
-                  << std::setw(10) << std::scientific << std::setprecision(2) << optimality_gap << " "
-                  << std::setw(8) << std::fixed << std::setprecision(1) << std::log10(regularization) << " "
-                  << std::setw(8) << std::fixed << std::setprecision(4) << alpha_pr << " "
-                  << std::setw(8) << std::fixed << std::setprecision(1) << std::log10(mu) << " "
-                  << std::setw(10) << std::scientific << std::setprecision(2) << constraint_violation << std::endl;
+        // Format numbers with appropriate precision
+        std::cout << std::setw(4) << iter << " ";
+        
+        // Objective value
+        std::cout << std::setw(12) << std::scientific << std::setprecision(6) << objective << " ";
+        
+        // Primal infeasibility (constraint violation)
+        std::cout << std::setw(9) << std::scientific << std::setprecision(2) << inf_pr << " ";
+        
+        // Dual infeasibility (optimality gap)
+        std::cout << std::setw(9) << std::scientific << std::setprecision(2) << inf_du << " ";
+        
+        // Log of barrier parameter
+        if (mu > 0.0) {
+            std::cout << std::setw(7) << std::fixed << std::setprecision(1) << std::log10(mu) << " ";
+        } else {
+            std::cout << std::setw(7) << "-inf" << " ";
+        }
+        
+        // Step norm
+        std::cout << std::setw(9) << std::scientific << std::setprecision(2) << step_norm << " ";
+        
+        // Log of regularization
+        if (regularization > 0.0) {
+            std::cout << std::setw(7) << std::fixed << std::setprecision(1) << std::log10(regularization) << " ";
+        } else {
+            std::cout << std::setw(7) << "-" << " ";
+        }
+        
+        // Dual step length
+        std::cout << std::setw(9) << std::fixed << std::setprecision(6) << alpha_du << " ";
+        
+        // Primal step length
+        std::cout << std::setw(9) << std::fixed << std::setprecision(6) << alpha_pr << " ";
+        
+        // Line search iterations
+        std::cout << std::setw(3) << ls_iterations;
+        
+        // Status indicator (if provided)
+        if (!status.empty()) {
+            std::cout << status;
+        }
+        
+        std::cout << std::endl;
     }
 
     void IPDDPSolver::printSolutionSummary(const CDDPSolution &solution) const
