@@ -127,6 +127,10 @@ add_executable(test_ipddp_solver cddp_core/test_ipddp_solver.cpp)
 target_link_libraries(test_ipddp_solver gtest gmock gtest_main cddp)
 gtest_discover_tests(test_ipddp_solver)
 
+add_executable(test_msipddp_solver cddp_core/test_msipddp_solver.cpp)
+target_link_libraries(test_msipddp_solver gtest gmock gtest_main cddp)
+gtest_discover_tests(test_msipddp_solver)
+
 add_executable(test_alddp_solver cddp_core/test_alddp_solver.cpp)
 target_link_libraries(test_alddp_solver gtest gmock gtest_main cddp)
 gtest_discover_tests(test_alddp_solver)

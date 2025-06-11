@@ -622,7 +622,8 @@ namespace cddp
                     G_ = *best_result.constraint_eval_trajectory;
                 
                 // Update dynamics storage
-                F_ = best_result.dynamics_sequence;
+                if (best_result.dynamics_trajectory)
+                    F_ = *best_result.dynamics_trajectory;
 
                 dJ = context.cost_ - best_result.cost;
                 context.cost_ = best_result.cost;
@@ -1095,13 +1096,13 @@ namespace cddp
         // Initialize trajectories
         result.state_trajectory = context.X_;
         result.control_trajectory = context.U_;
-        result.dynamics_sequence = F_;
         result.state_trajectory[0] = context.getInitialState();
 
         std::map<std::string, std::vector<Eigen::VectorXd>> Y_new = Y_;
         std::map<std::string, std::vector<Eigen::VectorXd>> S_new = S_;
         std::map<std::string, std::vector<Eigen::VectorXd>> G_new = G_;
         std::vector<Eigen::VectorXd> Lambda_new = Lambda_;
+        std::vector<Eigen::VectorXd> F_new = F_;
 
         double cost_new = 0.0;
         double merit_function_new = 0.0;
@@ -1127,14 +1128,14 @@ namespace cddp
                 {
                     if (options.msipddp.rollout_type == "nonlinear")
                     {
-                        result.dynamics_sequence[t] = context.getSystem().getDiscreteDynamics(
+                        F_new[t] = context.getSystem().getDiscreteDynamics(
                             result.state_trajectory[t], result.control_trajectory[t], t * context.getTimestep());
                         result.state_trajectory[t + 1] = context.X_[t + 1] + 
-                            (result.dynamics_sequence[t] - F_[t]) + alpha * (F_[t] - context.X_[t + 1]);
+                            (F_new[t] - F_[t]) + alpha * (F_[t] - context.X_[t + 1]);
                     }
                     else if (options.msipddp.rollout_type == "hybrid")
                     {
-                        result.dynamics_sequence[t] = context.getSystem().getDiscreteDynamics(
+                        F_new[t] = context.getSystem().getDiscreteDynamics(
                             result.state_trajectory[t], result.control_trajectory[t], t * context.getTimestep());
 
                         // Continuous dynamics jacobians
@@ -1148,9 +1149,9 @@ namespace cddp
                 }
                 else
                 {
-                    result.dynamics_sequence[t] = context.getSystem().getDiscreteDynamics(
+                    F_new[t] = context.getSystem().getDiscreteDynamics(
                         result.state_trajectory[t], result.control_trajectory[t], t * context.getTimestep());
-                    result.state_trajectory[t + 1] = result.dynamics_sequence[t];
+                    result.state_trajectory[t + 1] = F_new[t];
                 }
 
                 // Costate update
@@ -1160,7 +1161,7 @@ namespace cddp
                 cost_new += context.getObjective().running_cost(result.state_trajectory[t], result.control_trajectory[t], t);
 
                 // Add defect norm
-                constraint_violation_new += (result.state_trajectory[t + 1] - result.dynamics_sequence[t]).lpNorm<1>();
+                constraint_violation_new += (result.state_trajectory[t + 1] - F_new[t]).lpNorm<1>();
             }
 
             cost_new += context.getObjective().terminal_cost(result.state_trajectory.back());
@@ -1201,7 +1202,8 @@ namespace cddp
                 result.merit_function = merit_function_new;
                 result.constraint_violation = constraint_violation_new;
                 result.alpha_du = 1.0; // No dual variables for unconstrained case
-                result.costate_sequence = Lambda_new;
+                result.dynamics_trajectory = F_new;
+                result.costate_trajectory = Lambda_new;
             }
 
             return result;
@@ -1254,14 +1256,14 @@ namespace cddp
             {
                 if (options.msipddp.rollout_type == "nonlinear")
                 {
-                    result.dynamics_sequence[t] = context.getSystem().getDiscreteDynamics(
+                    F_new[t] = context.getSystem().getDiscreteDynamics(
                         result.state_trajectory[t], result.control_trajectory[t], t * context.getTimestep());
                     result.state_trajectory[t + 1] = context.X_[t + 1] + 
-                        (result.dynamics_sequence[t] - F_[t]) + alpha_s * (F_[t] - context.X_[t + 1]);
+                        (F_new[t] - F_[t]) + alpha_s * (F_[t] - context.X_[t + 1]);
                 }
                 else if (options.msipddp.rollout_type == "hybrid")
                 {
-                    result.dynamics_sequence[t] = context.getSystem().getDiscreteDynamics(
+                    F_new[t] = context.getSystem().getDiscreteDynamics(
                         result.state_trajectory[t], result.control_trajectory[t], t * context.getTimestep());
 
                     // Continuous dynamics jacobians
@@ -1275,9 +1277,9 @@ namespace cddp
             }
             else
             {
-                result.dynamics_sequence[t] = context.getSystem().getDiscreteDynamics(
+                F_new[t] = context.getSystem().getDiscreteDynamics(
                     result.state_trajectory[t], result.control_trajectory[t], t * context.getTimestep());
-                result.state_trajectory[t + 1] = result.dynamics_sequence[t];
+                result.state_trajectory[t + 1] = F_new[t];
             }
 
             // Robustness check during rollout
@@ -1381,7 +1383,7 @@ namespace cddp
             }
 
             // Add defect norm
-            constraint_violation_new += (result.state_trajectory[t + 1] - result.dynamics_sequence[t]).lpNorm<1>();
+            constraint_violation_new += (result.state_trajectory[t + 1] - F_new[t]).lpNorm<1>();
         }
 
         cost_new += context.getObjective().terminal_cost(result.state_trajectory.back());
@@ -1424,7 +1426,8 @@ namespace cddp
             result.dual_trajectory = Y_new;
             result.slack_trajectory = S_new;
             result.constraint_eval_trajectory = G_new;
-            result.costate_sequence = Lambda_new;
+            result.dynamics_trajectory = F_new;
+            result.costate_trajectory = Lambda_new;
         }
 
         return result;

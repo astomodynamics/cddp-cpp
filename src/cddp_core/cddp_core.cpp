@@ -20,6 +20,7 @@
 #include "cddp_core/asddp_solver.hpp" // For ASDDPSolver
 #include "cddp_core/logddp_solver.hpp" // For LogDDPSolver
 #include "cddp_core/ipddp_solver.hpp" // For IPDDPSolver
+#include "cddp_core/msipddp_solver.hpp" // For MSIPDDPSolver
 #include "cddp_core/alddp_solver.hpp" // For AlddpSolver
 #include <iostream>
 #include <iomanip> // For std::setw
@@ -267,6 +268,8 @@ CDDPSolution CDDP::solve(const std::string& solver_type) {
         solver_ = std::make_unique<LogDDPSolver>();
     } else if (solver_type == "IPDDP") {
         solver_ = std::make_unique<IPDDPSolver>();
+    } else if (solver_type == "MSIPDDP") {
+        solver_ = std::make_unique<MSIPDDPSolver>();
     } else if (solver_type == "ALDDP") {
         solver_ = std::make_unique<AlddpSolver>();
     } else {
