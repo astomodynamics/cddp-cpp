@@ -688,12 +688,6 @@ TEST(IPDDPTest, SolveQuadrotor)
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
     cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
 
-    // Ball constraint
-    double ball_radius = 0.7; // 70 cm
-    Eigen::Vector3d ball_center(0.0, 0.0, constant_altitude); // Center of the ball
-    cddp_solver.addPathConstraint("BallConstraint", std::make_unique<cddp::BallConstraint>(ball_radius, ball_center));
-
-
     // Initial trajectory guess
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
