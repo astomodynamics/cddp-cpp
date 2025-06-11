@@ -59,7 +59,7 @@ namespace cddp
     {
         double mu_initial = 1e-0;               ///< Initial barrier coefficient (mu).
         double mu_min_value = 1e-8;             ///< Minimum allowed value for mu.
-        double mu_update_factor = 0.2;          ///< Factor to reduce mu when KKT error improves sufficiently.
+        double mu_update_factor = 0.5;          ///< Factor to reduce mu when KKT error improves sufficiently.
         double mu_update_power = 1.2;           ///< Power for mu update rule (mu_new = mu^power or factor*mu).
         double min_fraction_to_boundary = 0.99; ///< Minimum fraction to boundary for primal/dual step calculation (tau).
     };
