@@ -179,7 +179,7 @@ brew install imagemagick # For macOS
 
 ### Building
 ```bash
-git clone https://github.com/astomodynamics/cddp-cpp
+git clone -b v0.3.2 https://github.com/astomodynamics/cddp-cpp
 cd cddp-cpp
 mkdir build && cd build
 cmake ..
