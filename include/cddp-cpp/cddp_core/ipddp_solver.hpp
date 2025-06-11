@@ -111,6 +111,18 @@ namespace cddp
         void evaluateTrajectory(CDDP &context);
 
         /**
+         * @brief Evaluate trajectory for warm start without overwriting the state trajectory.
+         * @param context Reference to the CDDP context.
+         */
+        void evaluateTrajectoryWarmStart(CDDP &context);
+
+        /**
+         * @brief Initialize dual and slack variables for warm start consistently with provided trajectory.
+         * @param context Reference to the CDDP context.
+         */
+        void initializeDualSlackVariablesWarmStart(CDDP &context);
+
+        /**
          * @brief Reset/initialize barrier parameters and filter.
          * @param context Reference to the CDDP context.
          */

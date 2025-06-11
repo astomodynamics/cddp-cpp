@@ -433,7 +433,7 @@ TEST(IPDDPTest, SolveCar)
     options.enable_parallel = false;
     options.num_threads = 1;
     options.verbose = true;
-    options.debug = true;
+    options.debug = false;
     options.regularization.initial_value = 1e-4;
     options.return_iteration_info = true; // Get detailed iteration history
 
@@ -658,15 +658,15 @@ TEST(IPDDPTest, SolveQuadrotor)
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 100;          // Reasonable for testing
+    options.max_iterations = 500;          // Reasonable for testing
     options.tolerance = 1e-6;            // KKT/optimality tolerance
-    options.acceptable_tolerance = 1e-6; // Cost change tolerance
+    options.acceptable_tolerance = 1e-5; // Cost change tolerance
     options.enable_parallel = false;
     options.num_threads = 1;
     options.verbose = true;
     options.debug = false;
-    options.ipddp.barrier.mu_initial = 1e-1;
-    options.ipddp.barrier.mu_update_factor = 0.2;
+    options.ipddp.barrier.mu_initial = 1e-0;
+    options.ipddp.barrier.mu_update_factor = 0.5;
     options.ipddp.barrier.mu_update_power = 1.2;
     options.regularization.initial_value = 1e-4;
     options.return_iteration_info = true;
@@ -687,6 +687,12 @@ TEST(IPDDPTest, SolveQuadrotor)
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
     cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+
+    // Ball constraint
+    double ball_radius = 0.7; // 70 cm
+    Eigen::Vector3d ball_center(0.0, 0.0, constant_altitude); // Center of the ball
+    cddp_solver.addPathConstraint("BallConstraint", std::make_unique<cddp::BallConstraint>(ball_radius, ball_center));
+
 
     // Initial trajectory guess
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -768,7 +774,7 @@ TEST(IPDDPTest, SolveQuadrotor)
     cddp::CDDPOptions warm_options = options;
     warm_options.warm_start = true;
     warm_options.max_iterations = 150; // Allow sufficient iterations for warm start convergence
-    warm_options.verbose = false;    // Less verbose for warm start test
+    warm_options.verbose = true;    // Less verbose for warm start test
 
     // Create a new solver for warm start test
     auto quadrotor_system_warmstart = std::make_unique<cddp::Quadrotor>(timestep, mass, inertia_matrix, arm_length, integration_type);

@@ -222,7 +222,7 @@ namespace cddp
     struct CDDPOptions
     {
         // General Solver Configuration
-        double tolerance = 1e-4;                ///< Tolerance for KKT/optimality error magnitude for convergence.
+        double tolerance = 1e-5;                ///< Tolerance for KKT/optimality error magnitude for convergence.
         double acceptable_tolerance = 1e-6;     ///< Tolerance for changes in cost function for convergence.
         int max_iterations = 1;                 ///< Maximum number of CDDP iterations.
         double max_cpu_time = 0.0;              ///< Maximum CPU time for the solver in seconds (0 for unlimited).
