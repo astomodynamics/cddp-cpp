@@ -28,7 +28,7 @@ namespace cddp
 {
 
     MSIPDDPSolver::MSIPDDPSolver()
-        : mu_(1e-1), ms_segment_length_(5) {}
+        : mu_(1e-1), ms_segment_length_(5), costate_trajectory_norm_(1.0), slack_trajectory_norm_(1.0) {}
 
     void MSIPDDPSolver::initialize(CDDP &context)
     {
@@ -68,6 +68,9 @@ namespace cddp
                 valid_warm_start = false;
             }
 
+            // For constrained problems, we don't require pre-existing dual/slack variables
+            // They will be re-initialized properly during warm start
+
             if (valid_warm_start)
             {
                 if (options.verbose)
@@ -75,7 +78,7 @@ namespace cddp
                     std::cout << "MSIPDDP: Using warm start with existing control and costate gains" << std::endl;
                 }
                 mu_ = options.msipddp.barrier.mu_initial;
-                context.step_norm_ = 0.0;
+                context.step_norm_ = 0.0; // Initialize for warm start
                 evaluateTrajectoryWarmStart(context);
                 initializeDualSlackCostateVariablesWarmStart(context);
                 resetFilter(context);
@@ -83,10 +86,107 @@ namespace cddp
             }
             else
             {
+                // Even without existing solver state, we can still perform a warm start
+                // if we have a good initial trajectory (set via setInitialTrajectory)
                 if (options.verbose)
                 {
                     std::cout << "MSIPDDP: Using warm start with provided initial trajectory (no existing solver state)" << std::endl;
                 }
+
+                // Initialize control and costate gains to zero for warm start
+                k_u_.resize(horizon);
+                K_u_.resize(horizon);
+                Lambda_.resize(horizon);
+                k_lambda_.resize(horizon);
+                K_lambda_.resize(horizon);
+
+                for (int t = 0; t < horizon; ++t)
+                {
+                    k_u_[t] = Eigen::VectorXd::Zero(control_dim);
+                    K_u_[t] = Eigen::MatrixXd::Zero(control_dim, state_dim);
+                    Lambda_[t] = options.msipddp.costate_var_init_scale * Eigen::VectorXd::Ones(state_dim);
+                    k_lambda_[t] = Eigen::VectorXd::Zero(state_dim);
+                    K_lambda_[t] = Eigen::MatrixXd::Zero(state_dim, state_dim);
+                }
+                ms_lambda_initialization_ = true;
+
+                // Initialize dynamics storage
+                F_.resize(horizon);
+                F_x_.resize(horizon);
+                F_u_.resize(horizon);
+                A_.resize(horizon);
+                B_.resize(horizon);
+                if (!options.use_ilqr)
+                {
+                    F_xx_.resize(horizon);
+                    F_uu_.resize(horizon);
+                    F_ux_.resize(horizon);
+                }
+
+                dV_ = Eigen::Vector2d::Zero();
+
+                // Clear constraint-related variables
+                G_.clear();
+                G_x_.clear();
+                G_u_.clear();
+                Y_.clear();
+                S_.clear();
+                k_y_.clear();
+                K_y_.clear();
+                k_s_.clear();
+                K_s_.clear();
+
+                // Set barrier parameter based on constraint evaluation
+                if (constraint_set.empty())
+                {
+                    mu_ = 1e-8; // Small value if no constraints
+                    slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
+                }
+                else
+                {
+                    // For warm start: first evaluate constraints to set appropriate barrier parameter
+                    evaluateTrajectoryWarmStart(context);
+                    
+                    // Compute maximum constraint violation
+                    double max_constraint_violation = 0.0;
+                    for (const auto &constraint_pair : constraint_set)
+                    {
+                        const std::string &constraint_name = constraint_pair.first;
+                        for (int t = 0; t < horizon; ++t)
+                        {
+                            const Eigen::VectorXd &g_vec = G_[constraint_name][t];
+                            max_constraint_violation = std::max(max_constraint_violation, g_vec.maxCoeff());
+                        }
+                    }
+                    
+                    // Set barrier parameter based on constraint violation level (like IPDDP)
+                    if (max_constraint_violation <= options.tolerance)
+                    {
+                        // Trajectory is feasible: use very small barrier parameter
+                        mu_ = options.tolerance * 0.01;
+                    }
+                    else if (max_constraint_violation <= 0.1)
+                    {
+                        // Slightly infeasible: moderate barrier parameter
+                        mu_ = options.tolerance;
+                    }
+                    else
+                    {
+                        // Significantly infeasible: standard barrier parameter
+                        mu_ = options.msipddp.barrier.mu_initial * 0.1;
+                    }
+                }
+
+                // Initialize regularization to the same value as cold start
+                context.regularization_ = options.regularization.initial_value;
+
+                // Initialize step norm
+                context.step_norm_ = 0.0;
+
+                // Initialize dual/slack variables (trajectory already evaluated above)
+                initializeDualSlackCostateVariablesWarmStart(context);
+                resetFilter(context);
+                return;
             }
         }
 
@@ -137,10 +237,18 @@ namespace cddp
         if (constraint_set.empty())
         {
             mu_ = 1e-8; // Small value if no constraints
+            slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
         }
         else
         {
-            mu_ = options.msipddp.barrier.mu_initial;
+            if (options.warm_start)
+            {
+                mu_ = std::min(options.msipddp.barrier.mu_initial * 0.1, 1e-3); // Smaller mu for warm start
+            }
+            else
+            {
+                mu_ = options.msipddp.barrier.mu_initial;
+            }
         }
 
         // Initialize dual, slack, and costate variables
@@ -369,21 +477,33 @@ namespace cddp
                 const Eigen::VectorXd &g_val = G_[constraint_name][t];
 
                 bool need_reinit = false;
+                Eigen::VectorXd y_current, s_current;
+
                 if (has_existing_dual_slack)
                 {
-                    const Eigen::VectorXd &y_current = Y_[constraint_name][t];
-                    const Eigen::VectorXd &s_current = S_[constraint_name][t];
+                    y_current = Y_[constraint_name][t];
+                    s_current = S_[constraint_name][t];
 
-                    // Check if existing dual/slack variables are feasible
+                    // Check if existing dual/slack variables are feasible and compatible
                     if (y_current.size() != dual_dim || s_current.size() != dual_dim)
                     {
                         need_reinit = true;
                     }
                     else
                     {
+                        // Check feasibility conditions
                         for (int i = 0; i < dual_dim; ++i)
                         {
+                            // Check positivity: y_i > 0 and s_i > 0
                             if (y_current(i) <= 1e-12 || s_current(i) <= 1e-12)
+                            {
+                                need_reinit = true;
+                                break;
+                            }
+
+                            // Check if constraint is severely violated (slack should be reasonable)
+                            double required_slack = std::max(options.msipddp.slack_var_init_scale, -g_val(i));
+                            if (s_current(i) < 0.1 * required_slack)
                             {
                                 need_reinit = true;
                                 break;
@@ -398,23 +518,28 @@ namespace cddp
 
                 if (need_reinit)
                 {
-                    // Initialize for warm start with small slack variables
+                    // For warm start: assume trajectory is good, use minimal slack variables
                     Eigen::VectorXd s_init = Eigen::VectorXd::Zero(dual_dim);
                     Eigen::VectorXd y_init = Eigen::VectorXd::Zero(dual_dim);
 
                     for (int i = 0; i < dual_dim; ++i)
                     {
+                        // For warm start: initialize slack based on actual constraint violation
                         if (g_val(i) <= -options.tolerance)
                         {
+                            // Constraint is satisfied: use very small slack
                             s_init(i) = options.msipddp.slack_var_init_scale * 0.1;
                         }
                         else
                         {
-                            s_init(i) = std::max(options.msipddp.slack_var_init_scale, 
-                                                -g_val(i) + options.msipddp.slack_var_init_scale);
+                            // Constraint violated: set slack to make it nearly feasible
+                            s_init(i) = std::max(options.msipddp.slack_var_init_scale, -g_val(i) + options.msipddp.slack_var_init_scale);
                         }
                         
+                        // Small dual variables consistent with small barrier parameter
                         y_init(i) = mu_ / s_init(i);
+                        
+                        // Ensure reasonable bounds
                         y_init(i) = std::max(1e-8, std::min(y_init(i), 1e2));
                     }
                     Y_[constraint_name][t] = y_init;
@@ -431,8 +556,30 @@ namespace cddp
 
         if (options.verbose)
         {
-            std::cout << "MSIPDDP: Warm start initialized dual/slack/costate variables, μ = " 
-                      << std::scientific << std::setprecision(2) << mu_ << std::endl;
+            if (has_existing_dual_slack)
+            {
+                std::cout << "MSIPDDP: Warm start preserved existing dual/slack variables where feasible" << std::endl;
+            }
+            else
+            {
+                std::cout << "MSIPDDP: Warm start initialized dual/slack variables from scratch" << std::endl;
+            }
+
+            // Report barrier parameter chosen and initial constraint violation
+            std::cout << "MSIPDDP: Warm start barrier parameter μ = " << std::scientific << std::setprecision(2) << mu_ << std::endl;
+
+            // Report initial constraint violation
+            double max_constraint_violation = 0.0;
+            for (const auto &constraint_pair : constraint_set)
+            {
+                const std::string &constraint_name = constraint_pair.first;
+                for (int t = 0; t < horizon; ++t)
+                {
+                    const Eigen::VectorXd &g_vec = G_[constraint_name][t];
+                    max_constraint_violation = std::max(max_constraint_violation, g_vec.maxCoeff());
+                }
+            }
+            std::cout << "MSIPDDP: Warm start max constraint violation = " << std::scientific << std::setprecision(2) << max_constraint_violation << std::endl;
         }
     }
 
@@ -468,19 +615,28 @@ namespace cddp
                     dual_infeasibility = std::max(dual_infeasibility, r_d.lpNorm<Eigen::Infinity>());
                 }
 
-                // Add defect norm (dynamics constraint violation)
-                constraint_violation += (context.X_[t + 1] - F_[t]).lpNorm<1>();
+                // Only add defect norm for multi-shooting (when segment_length < horizon)
+                if (ms_segment_length_ < context.getHorizon())
+                {
+                    constraint_violation += (context.X_[t + 1] - F_[t]).lpNorm<1>();
+                }
             }
         }
         else
         {
-            // No constraints: only check defect norm
-            for (int t = 0; t < context.getHorizon(); ++t)
+            // No constraints: only check defect norm for multi-shooting
+            if (ms_segment_length_ < context.getHorizon())
             {
-                constraint_violation += (context.X_[t + 1] - F_[t]).lpNorm<1>();
+                for (int t = 0; t < context.getHorizon(); ++t)
+                {
+                    constraint_violation += (context.X_[t + 1] - F_[t]).lpNorm<1>();
+                }
             }
             dual_infeasibility = 0.0;
         }
+
+        // Ensure constraint violation is at least tolerance for proper filter behavior (like IPDDP)
+        constraint_violation = std::max(constraint_violation, context.getOptions().tolerance);
 
         context.merit_function_ = merit_function;
         context.inf_pr_ = constraint_violation;
@@ -494,6 +650,230 @@ namespace cddp
     void MSIPDDPSolver::resetFilter(CDDP &context)
     {
         resetBarrierFilter(context);
+    }
+
+    void MSIPDDPSolver::precomputeDynamicsDerivatives(CDDP &context)
+    {
+        const CDDPOptions &options = context.getOptions();
+        const int horizon = context.getHorizon();
+        const int state_dim = context.getStateDim();
+        const double timestep = context.getTimestep();
+
+        // Resize storage
+        F_x_.resize(horizon);
+        F_u_.resize(horizon);
+        F_xx_.resize(horizon);
+        F_uu_.resize(horizon);
+        F_ux_.resize(horizon);
+
+        // Threshold for when parallelization is worth it
+        const int MIN_HORIZON_FOR_PARALLEL = 20;
+        const bool use_parallel = options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;
+
+        if (!use_parallel)
+        {
+            // Single-threaded computation - always efficient for small horizons
+            for (int t = 0; t < horizon; ++t)
+            {
+                const Eigen::VectorXd &x = context.X_[t];
+                const Eigen::VectorXd &u = context.U_[t];
+
+                // Compute jacobians
+                const auto [Fx, Fu] = context.getSystem().getJacobians(x, u, t * timestep);
+                F_x_[t] = Fx;
+                F_u_[t] = Fu;
+
+                // Compute hessians if not using iLQR
+                if (!options.use_ilqr)
+                {
+                    const auto hessians = context.getSystem().getHessians(x, u, t * timestep);
+                    F_xx_[t] = std::get<0>(hessians);
+                    F_uu_[t] = std::get<1>(hessians);
+                    F_ux_[t] = std::get<2>(hessians);
+                }
+                else
+                {
+                    // Initialize empty hessians for iLQR
+                    F_xx_[t] = std::vector<Eigen::MatrixXd>();
+                    F_uu_[t] = std::vector<Eigen::MatrixXd>();
+                    F_ux_[t] = std::vector<Eigen::MatrixXd>();
+                }
+            }
+        }
+        else
+        {
+            // Chunked parallel computation - much more efficient
+            const int num_threads = std::min(options.num_threads,
+                                             static_cast<int>(std::thread::hardware_concurrency()));
+            const int chunk_size = std::max(1, horizon / num_threads);
+
+            std::vector<std::future<void>> futures;
+            futures.reserve(num_threads);
+
+            for (int thread_id = 0; thread_id < num_threads; ++thread_id)
+            {
+                int start_t = thread_id * chunk_size;
+                int end_t = (thread_id == num_threads - 1) ? horizon : (thread_id + 1) * chunk_size;
+
+                if (start_t >= horizon)
+                    break;
+
+                futures.push_back(std::async(std::launch::async,
+                                             [this, &context, &options, start_t, end_t, timestep]()
+                                             {
+                                                 // Process a chunk of time steps
+                                                 for (int t = start_t; t < end_t; ++t)
+                                                 {
+                                                     const Eigen::VectorXd &x = context.X_[t];
+                                                     const Eigen::VectorXd &u = context.U_[t];
+
+                                                     // Compute jacobians
+                                                     const auto [Fx, Fu] = context.getSystem().getJacobians(x, u, t * timestep);
+                                                     F_x_[t] = Fx;
+                                                     F_u_[t] = Fu;
+
+                                                     // Compute hessians if not using iLQR
+                                                     if (!options.use_ilqr)
+                                                     {
+                                                         const auto hessians = context.getSystem().getHessians(x, u, t * timestep);
+                                                         F_xx_[t] = std::get<0>(hessians);
+                                                         F_uu_[t] = std::get<1>(hessians);
+                                                         F_ux_[t] = std::get<2>(hessians);
+                                                     }
+                                                     else
+                                                     {
+                                                         // Initialize empty hessians for iLQR
+                                                         F_xx_[t] = std::vector<Eigen::MatrixXd>();
+                                                         F_uu_[t] = std::vector<Eigen::MatrixXd>();
+                                                         F_ux_[t] = std::vector<Eigen::MatrixXd>();
+                                                     }
+                                                 }
+                                             }));
+            }
+
+            // Wait for all computations to complete
+            for (auto &future : futures)
+            {
+                try
+                {
+                    if (future.valid())
+                    {
+                        future.get();
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    if (options.verbose)
+                    {
+                        std::cerr << "MSIPDDP: Dynamics derivatives computation thread failed: " << e.what() << std::endl;
+                    }
+                    throw;
+                }
+            }
+        }
+    }
+
+    void MSIPDDPSolver::precomputeConstraintGradients(CDDP &context)
+    {
+        const CDDPOptions &options = context.getOptions();
+        const int horizon = context.getHorizon();
+        const auto &constraint_set = context.getConstraintSet();
+
+        // Clear and resize storage
+        G_x_.clear();
+        G_u_.clear();
+
+        // If no constraints, return early
+        if (constraint_set.empty())
+        {
+            return;
+        }
+
+        // Initialize storage for each constraint
+        for (const auto &constraint_pair : constraint_set)
+        {
+            const std::string &constraint_name = constraint_pair.first;
+            G_x_[constraint_name].resize(horizon);
+            G_u_[constraint_name].resize(horizon);
+        }
+
+        // Threshold for when parallelization is worth it
+        const int MIN_HORIZON_FOR_PARALLEL = 20;
+        const bool use_parallel = options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;
+
+        if (!use_parallel)
+        {
+            // Single-threaded computation
+            for (int t = 0; t < horizon; ++t)
+            {
+                const Eigen::VectorXd &x = context.X_[t];
+                const Eigen::VectorXd &u = context.U_[t];
+
+                for (const auto &constraint_pair : constraint_set)
+                {
+                    const std::string &constraint_name = constraint_pair.first;
+                    G_x_[constraint_name][t] = constraint_pair.second->getStateJacobian(x, u);
+                    G_u_[constraint_name][t] = constraint_pair.second->getControlJacobian(x, u);
+                }
+            }
+        }
+        else
+        {
+            // Chunked parallel computation
+            const int num_threads = std::min(options.num_threads,
+                                             static_cast<int>(std::thread::hardware_concurrency()));
+            const int chunk_size = std::max(1, horizon / num_threads);
+
+            std::vector<std::future<void>> futures;
+            futures.reserve(num_threads);
+
+            for (int thread_id = 0; thread_id < num_threads; ++thread_id)
+            {
+                int start_t = thread_id * chunk_size;
+                int end_t = (thread_id == num_threads - 1) ? horizon : (thread_id + 1) * chunk_size;
+
+                if (start_t >= horizon)
+                    break;
+
+                futures.push_back(std::async(std::launch::async,
+                                             [this, &context, &constraint_set, start_t, end_t]()
+                                             {
+                                                 // Process a chunk of time steps
+                                                 for (int t = start_t; t < end_t; ++t)
+                                                 {
+                                                     const Eigen::VectorXd &x = context.X_[t];
+                                                     const Eigen::VectorXd &u = context.U_[t];
+
+                                                     for (const auto &constraint_pair : constraint_set)
+                                                     {
+                                                         const std::string &constraint_name = constraint_pair.first;
+                                                         G_x_[constraint_name][t] = constraint_pair.second->getStateJacobian(x, u);
+                                                         G_u_[constraint_name][t] = constraint_pair.second->getControlJacobian(x, u);
+                                                     }
+                                                 }
+                                             }));
+            }
+
+            // Wait for all computations to complete
+            for (auto &future : futures)
+            {
+                try
+                {
+                    if (future.valid())
+                    {
+                        future.get();
+                    }
+                }
+                catch (const std::exception &e)
+                {
+                    if (options.verbose)
+                    {
+                        std::cerr << "MSIPDDP: Constraint gradients computation thread failed: " << e.what() << std::endl;
+                    }
+                    throw;
+                }
+            }
+        }
     }
 
     CDDPSolution MSIPDDPSolver::solve(CDDP &context)
@@ -540,7 +920,7 @@ namespace cddp
         if (options.verbose)
         {
             printIteration(0, context.cost_, context.inf_pr_, context.inf_du_,
-                           mu_, context.step_norm_, context.regularization_, 1.0, context.alpha_pr_);
+                           mu_, context.step_norm_, context.regularization_, context.alpha_du_, context.alpha_pr_);
         }
 
         // Start timer
@@ -603,14 +983,15 @@ namespace cddp
             // Update solution if forward pass succeeded
             if (best_result.success)
             {
-                if (options.debug)
-                {
-                    std::cout << "[MSIPDDP: Forward pass] " << std::endl;
-                    std::cout << "    cost: " << best_result.cost << std::endl;
-                    std::cout << "    merit: " << best_result.merit_function << std::endl;
-                    std::cout << "    alpha: " << best_result.alpha_pr << std::endl;
-                    std::cout << "    cv_err: " << best_result.constraint_violation << std::endl;
-                }
+                            if (options.debug)
+            {
+                std::cout << "[MSIPDDP: Forward pass] " << std::endl;
+                std::cout << "    cost: " << best_result.cost << std::endl;
+                std::cout << "    merit: " << best_result.merit_function << std::endl;
+                std::cout << "    alpha: " << best_result.alpha_pr << std::endl;
+                std::cout << "    cv_err: " << best_result.constraint_violation << std::endl;
+                std::cout << "    slack_norm: " << std::scientific << std::setprecision(4) << slack_trajectory_norm_ << std::endl;
+            }
 
                 context.X_ = best_result.state_trajectory;
                 context.U_ = best_result.control_trajectory;
@@ -624,6 +1005,34 @@ namespace cddp
                 // Update dynamics storage
                 if (best_result.dynamics_trajectory)
                     F_ = *best_result.dynamics_trajectory;
+
+                // Calculate slack trajectory norm for termination metric scaling (similar to IPDDP approach)
+                const auto &constraint_set_local = context.getConstraintSet();
+                const int horizon_local = context.getHorizon();
+                if (constraint_set_local.empty())
+                {
+                    slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
+                }
+                else
+                {
+                    // Use average slack norm instead of total to be comparable across different horizons
+                    slack_trajectory_norm_ = 0.0;
+                    int total_slack_vars = 0;
+                    for (const auto &constraint_pair : constraint_set_local)
+                    {
+                        const std::string &constraint_name = constraint_pair.first;
+                        for (int t = 0; t < horizon_local; ++t)
+                        {
+                            slack_trajectory_norm_ += S_[constraint_name][t].lpNorm<1>();
+                            total_slack_vars += S_[constraint_name][t].size();
+                        }
+                    }
+                    if (total_slack_vars > 0)
+                    {
+                        slack_trajectory_norm_ = slack_trajectory_norm_ / total_slack_vars;
+                    }
+                    slack_trajectory_norm_ = std::max(slack_trajectory_norm_, 1.0); // Avoid division by zero
+                }
 
                 dJ = context.cost_ - best_result.cost;
                 context.cost_ = best_result.cost;
@@ -661,9 +1070,10 @@ namespace cddp
                 }
             }
 
-            // Check convergence
-            scaling_factor = 1.0;
-            termination_metric = std::max(context.inf_du_ / scaling_factor, context.inf_pr_ / scaling_factor);
+            // Check convergence with proper scaling using trajectory norms
+            double dual_scaling = std::max(costate_trajectory_norm_, slack_trajectory_norm_);
+            double primal_scaling = std::max(costate_trajectory_norm_, 1.0);
+            termination_metric = std::max(context.inf_du_ / dual_scaling, context.inf_pr_ / primal_scaling);
 
             if (termination_metric <= options.tolerance)
             {
@@ -673,6 +1083,16 @@ namespace cddp
             }
 
             if (std::abs(dJ) < options.acceptable_tolerance)
+            {
+                converged = true;
+                termination_reason = "AcceptableSolutionFound";
+                break;
+            }
+
+            // Check step norm for early termination (general criterion - independent of forward pass success)
+            if (iter >= 10 &&
+                context.step_norm_ < options.tolerance * 10.0 && // Small step norm
+                context.inf_pr_ < 1e-4)                          // Reasonably feasible
             {
                 converged = true;
                 termination_reason = "AcceptableSolutionFound";
@@ -732,6 +1152,8 @@ namespace cddp
         solution["final_barrier_parameter_mu"] = mu_;
         solution["final_primal_infeasibility"] = context.inf_pr_;
         solution["final_dual_infeasibility"] = context.inf_du_;
+        solution["final_costate_trajectory_norm"] = costate_trajectory_norm_;
+        solution["final_slack_trajectory_norm"] = slack_trajectory_norm_;
 
         if (options.verbose)
         {
@@ -750,6 +1172,12 @@ namespace cddp
         const double timestep = context.getTimestep();
         const auto &constraint_set = context.getConstraintSet();
         const int total_dual_dim = getTotalDualDim(context);
+
+        // Pre-compute dynamics jacobians and hessians for all time steps
+        precomputeDynamicsDerivatives(context);
+
+        // Pre-compute constraint gradients for all time steps and constraints
+        precomputeConstraintGradients(context);
 
         // Terminal cost and derivatives
         Eigen::VectorXd V_x = context.getObjective().getFinalCostGradient(context.X_.back());
@@ -772,17 +1200,17 @@ namespace cddp
             const Eigen::VectorXd &f = F_[t];
             const Eigen::VectorXd &d = f - context.X_[t + 1];
 
-            // Continuous dynamics jacobians
-            const auto [Fx, Fu] = context.getSystem().getJacobians(x, u, t * timestep);
+            // Use pre-computed dynamics jacobians
+            const Eigen::MatrixXd &Fx = F_x_[t];
+            const Eigen::MatrixXd &Fu = F_u_[t];
 
-            // Get dynamics hessians if not using iLQR
+            // Use pre-computed dynamics hessians if not using iLQR
             std::vector<Eigen::MatrixXd> Fxx, Fuu, Fux;
             if (!options.use_ilqr)
             {
-                const auto hessians = context.getSystem().getHessians(x, u, t * timestep);
-                Fxx = std::get<0>(hessians);
-                Fuu = std::get<1>(hessians);
-                Fux = std::get<2>(hessians);
+                Fxx = F_xx_[t];
+                Fuu = F_uu_[t];
+                Fux = F_ux_[t];
             }
 
             // Discretize
@@ -870,8 +1298,8 @@ namespace cddp
                     const Eigen::VectorXd &y_vec = Y_[constraint_name][t];
                     const Eigen::VectorXd &s_vec = S_[constraint_name][t];
                     const Eigen::VectorXd &g_vec = G_[constraint_name][t];
-                    const Eigen::MatrixXd &g_x = constraint_pair.second->getStateJacobian(x, u);
-                    const Eigen::MatrixXd &g_u = constraint_pair.second->getControlJacobian(x, u);
+                    const Eigen::MatrixXd &g_x = G_x_[constraint_name][t];
+                    const Eigen::MatrixXd &g_u = G_u_[constraint_name][t];
 
                     y.segment(offset, dual_dim) = y_vec;
                     s.segment(offset, dual_dim) = s_vec;
@@ -996,6 +1424,14 @@ namespace cddp
             }
         }
 
+        // Calculate costate trajectory norm for termination metric scaling
+        costate_trajectory_norm_ = 0.0;
+        for (int t = 0; t < horizon; ++t)
+        {
+            costate_trajectory_norm_ += Lambda_[t].lpNorm<1>();
+        }
+        costate_trajectory_norm_ = std::max(costate_trajectory_norm_, 1.0); // Avoid division by zero
+
         // Update termination metrics
         context.inf_pr_ = std::max(rp_err, std::max(rd_err, rf_err));
         context.inf_du_ = Qu_err;
@@ -1009,6 +1445,7 @@ namespace cddp
                       << "    rd_err:  " << std::scientific << std::setprecision(4) << rd_err << "\n"
                       << "    rf_err:  " << std::scientific << std::setprecision(4) << rf_err << "\n"
                       << "    step_norm: " << std::scientific << std::setprecision(4) << context.step_norm_ << "\n"
+                      << "    costate_norm: " << std::scientific << std::setprecision(4) << costate_trajectory_norm_ << "\n"
                       << "    dV:      " << std::scientific << std::setprecision(4) << dV_.transpose() << std::endl;
         }
         return true;
@@ -1361,6 +1798,7 @@ namespace cddp
         result.alpha_du = selected_alpha_y;
 
         // Cost computation and filter line-search
+        double dual_infeasibility_new = 0.0;
         for (int t = 0; t < horizon; ++t)
         {
             cost_new += context.getObjective().running_cost(result.state_trajectory[t], result.control_trajectory[t], t);
@@ -1378,16 +1816,23 @@ namespace cddp
                 Eigen::VectorXd r_p = G_new[constraint_name][t] + s_vec;
                 constraint_violation_new += r_p.lpNorm<1>();
 
+                // Track dual infeasibility separately (like IPDDP)
                 Eigen::VectorXd r_d = Y_new[constraint_name][t].cwiseProduct(s_vec).array() - mu_;
-                constraint_violation_new += r_d.lpNorm<1>();
+                dual_infeasibility_new = std::max(dual_infeasibility_new, r_d.lpNorm<Eigen::Infinity>());
             }
 
-            // Add defect norm
-            constraint_violation_new += (result.state_trajectory[t + 1] - F_new[t]).lpNorm<1>();
+            // Only add defect norm for multi-shooting (when segment_length < horizon)
+            if (ms_segment_length_ < horizon)
+            {
+                constraint_violation_new += (result.state_trajectory[t + 1] - F_new[t]).lpNorm<1>();
+            }
         }
 
         cost_new += context.getObjective().terminal_cost(result.state_trajectory.back());
         merit_function_new += cost_new;
+
+        // Ensure constraint violation is at least tolerance for proper filter behavior (like IPDDP)
+        constraint_violation_new = std::max(constraint_violation_new, options.tolerance);
 
         // Filter class-based acceptance
         FilterPoint candidate(merit_function_new, constraint_violation_new);
@@ -1537,6 +1982,11 @@ namespace cddp
         std::cout << "Final Cost: " << std::setprecision(6) << final_cost << "\n";
         std::cout << "Final Barrier μ: " << std::setprecision(2) << std::scientific << final_mu << "\n";
         std::cout << "Multi-shooting Segments: " << ms_segment_length_ << "\n";
+        
+        auto final_costate_norm = std::any_cast<double>(solution.at("final_costate_trajectory_norm"));
+        auto final_slack_norm = std::any_cast<double>(solution.at("final_slack_trajectory_norm"));
+        std::cout << "Final Costate Norm: " << std::setprecision(2) << std::scientific << final_costate_norm << "\n";
+        std::cout << "Final Slack Norm: " << std::setprecision(2) << std::scientific << final_slack_norm << "\n";
         std::cout << "========================================\n\n";
     }
 

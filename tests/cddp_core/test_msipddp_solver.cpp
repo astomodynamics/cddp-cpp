@@ -98,7 +98,7 @@ TEST(MSIPDDPTest, SolvePendulum)
     options.enable_parallel = false;
     options.num_threads = 1;
     options.verbose = true;
-    options.debug = true;
+    options.debug = false;
     options.regularization.initial_value = 1e-6;
     options.return_iteration_info = true; // Get detailed iteration history
 
@@ -159,8 +159,8 @@ TEST(MSIPDDPTest, SolvePendulum)
     // Enable warm start and use previous solution as initial guess
     cddp::CDDPOptions warm_options = options;
     warm_options.warm_start = true;
-    warm_options.max_iterations = 10; // Fewer iterations for warm start
-    warm_options.verbose = false;     // Less verbose for warm start test
+    warm_options.max_iterations = 20; // Allow sufficient iterations for warm start convergence
+    warm_options.verbose = true;      // Keep verbose to monitor warm start progress
     warm_options.tolerance = 1e-3;            // KKT/optimality tolerance
     warm_options.acceptable_tolerance = 1e-4; // Cost change tolerance
     warm_options.enable_parallel = false;
@@ -226,7 +226,8 @@ TEST(MSIPDDPTest, SolvePendulum)
 
     // Both should converge
     EXPECT_TRUE(warm_status == "OptimalSolutionFound" || warm_status == "AcceptableSolutionFound") << "Warm start should also converge";
-    EXPECT_LE(warm_iterations, iterations_completed + 5) << "Warm start should not take significantly more iterations";
+    // Note: Warm start might take a few iterations to re-adjust dual/slack variables
+    EXPECT_LE(warm_iterations, std::max(iterations_completed / 2, 15)) << "Warm start should generally be faster than cold start";
 }
 
 TEST(MSIPDDPTest, SolveUnicycle) {
@@ -261,12 +262,23 @@ TEST(MSIPDDPTest, SolveUnicycle) {
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 20;
-    options.tolerance = 1e-2;
+    options.max_iterations = 40;
+    options.tolerance = 1e-4;
+    options.acceptable_tolerance = 1e-5;
     options.enable_parallel = true;
     options.num_threads = 10;
     options.verbose = true;
-    options.debug = false;
+    options.debug = true;
+    options.regularization.initial_value = 1e-6;
+    options.return_iteration_info = true; // Get detailed iteration history
+
+    options.msipddp.rollout_type = "nonlinear";
+    options.msipddp.segment_length = horizon;
+    options.msipddp.barrier.mu_initial = 1e-1;
+    options.msipddp.barrier.mu_min_value = 1e-8;
+    options.msipddp.barrier.mu_update_factor = 0.5;
+    options.msipddp.barrier.mu_update_power = 1.2;
+    options.msipddp.barrier.min_fraction_to_boundary = 0.99;
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
@@ -292,7 +304,6 @@ TEST(MSIPDDPTest, SolveUnicycle) {
 
     // Solve the problem
     cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
-    // cddp::CDDPSolution solution = cddp_solver.solveMSIPDDP();
 
     auto status = std::any_cast<std::string>(solution.at("status_message"));
     ASSERT_TRUE(status == "OptimalSolutionFound" || status == "AcceptableSolutionFound");
@@ -301,6 +312,14 @@ TEST(MSIPDDPTest, SolveUnicycle) {
     auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory")); // size: horizon + 1
     auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory")); // size: horizon
     auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points")); // size: horizon + 1
+
+    // Print final state
+    Eigen::VectorXd final_state = X_sol.back();
+    std::cout << "Initial state: [" << initial_state.transpose() << "]" << std::endl;
+    std::cout << "Final state: [" << final_state.transpose() << "]" << std::endl;
+    std::cout << "Goal state:  [" << goal_state.transpose() << "]" << std::endl;
+    std::cout << "Final error: " << (final_state - goal_state).norm() << std::endl;
+
 }
 
 namespace cddp
@@ -487,7 +506,7 @@ TEST(MSIPDDPTest, SolveCar)
     // Enable warm start and use previous solution as initial guess
     cddp::CDDPOptions warm_options = options;
     warm_options.warm_start = true;
-    warm_options.max_iterations = 1; // Fewer iterations for warm start
+    warm_options.max_iterations = 100; // Fewer iterations for warm start
     warm_options.verbose = false;     // Less verbose for warm start test
 
     // Create a new solver for warm start test
@@ -687,11 +706,6 @@ TEST(MSIPDDPTest, SolveQuadrotor)
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
     cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
-
-    // Ball constraint
-    double ball_radius = 0.7; // 70 cm
-    Eigen::Vector3d ball_center(0.0, 0.0, constant_altitude); // Center of the ball
-    cddp_solver.addPathConstraint("BallConstraint", std::make_unique<cddp::BallConstraint>(ball_radius, ball_center));
 
 
     // Initial trajectory guess

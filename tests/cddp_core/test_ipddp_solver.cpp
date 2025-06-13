@@ -266,7 +266,7 @@ TEST(IPDDPTest, SolveUnicycle) {
     options.enable_parallel = true;
     options.num_threads = 10;
     options.verbose = true;
-    options.debug = false;
+    options.debug = true;
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);

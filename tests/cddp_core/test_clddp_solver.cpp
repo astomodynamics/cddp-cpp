@@ -301,6 +301,14 @@ TEST(CLDDPTest, SolveUnicycle) {
     auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory")); // size: horizon + 1
     auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory")); // size: horizon
     auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points")); // size: horizon + 1
+
+    // Print final state
+    Eigen::VectorXd final_state = X_sol.back();
+    std::cout << "Initial state: [" << initial_state.transpose() << "]" << std::endl;
+    std::cout << "Final state: [" << final_state.transpose() << "]" << std::endl;
+    std::cout << "Goal state:  [" << goal_state.transpose() << "]" << std::endl;
+    std::cout << "Final error: " << (final_state - goal_state).norm() << std::endl;
+
 }
 
 namespace cddp

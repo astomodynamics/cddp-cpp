@@ -104,6 +104,22 @@ namespace cddp
         // Interior point method parameters
         double mu_;                        ///< Barrier parameter
         std::vector<FilterPoint> filter_;  ///< Filter points for line search
+        
+        // Trajectory norms for termination metric scaling
+        double costate_trajectory_norm_;   ///< 1-norm of costate trajectory
+        double slack_trajectory_norm_;     ///< 1-norm of slack variable trajectory
+
+        /**
+         * @brief Pre-compute dynamics jacobians and hessians for all time steps in parallel.
+         * @param context Reference to the CDDP context.
+         */
+        void precomputeDynamicsDerivatives(CDDP &context);
+
+        /**
+         * @brief Pre-compute constraint jacobians for all time steps and constraints in parallel.
+         * @param context Reference to the CDDP context.
+         */
+        void precomputeConstraintGradients(CDDP &context);
 
         /**
          * @brief Evaluate initial trajectory by forward rollout.
