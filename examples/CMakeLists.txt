@@ -112,6 +112,12 @@ if (CDDP_CPP_CASADI)
     target_link_libraries(ipopt_spacecrat_linear_fuel cddp)
 endif()
 
+# SNOPT examples
+if (CDDP_CPP_CASADI AND CDDP_CPP_SNOPT)
+    add_executable(snopt_unicycle snopt_unicycle.cpp)
+    target_link_libraries(snopt_unicycle cddp)
+endif()
+
 if (CDDP_CPP_CASADI AND CDDP_CPP_SQP)
     add_executable(sqp_unicycle sqp_unicycle.cpp)
     target_link_libraries(sqp_unicycle cddp)
