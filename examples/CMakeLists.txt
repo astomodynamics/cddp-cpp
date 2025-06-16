@@ -108,6 +108,9 @@ if (CDDP_CPP_CASADI)
     add_executable(ipopt_cartpole ipopt_cartpole.cpp)
     target_link_libraries(ipopt_cartpole cddp)
 
+    add_executable(ipopt_quadrotor ipopt_quadrotor.cpp)
+    target_link_libraries(ipopt_quadrotor cddp)
+
     add_executable(ipopt_spacecrat_linear_fuel ipopt_spacecrat_linear_fuel.cpp)
     target_link_libraries(ipopt_spacecrat_linear_fuel cddp)
 endif()
