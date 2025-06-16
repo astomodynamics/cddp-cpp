@@ -398,8 +398,8 @@ if (CDDP_CPP_BUILD_TESTS)
   add_subdirectory(tests) 
 endif()
 
-# # Build examples
-# add_subdirectory(examples)
+# Build examples
+add_subdirectory(examples)
 
 # Cmake compile commmand:
 # $ mkdir build
