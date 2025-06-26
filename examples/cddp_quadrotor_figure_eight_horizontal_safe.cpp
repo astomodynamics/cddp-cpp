@@ -196,7 +196,7 @@ int main()
     options.num_threads = 10;
     options.tolerance = 1e-3;
     options.acceptable_tolerance = 1e-2;
-    options.use_ilqr = false; // Use full second-order derivatives for more accurate solutions
+    options.use_ilqr = true; // Use full second-order derivatives for more accurate solutions
     options.return_iteration_info = true;
     
     // Regularization options
@@ -320,7 +320,7 @@ int main()
     solver_ball.setInitialTrajectory(initial_X, initial_U);
     
     // Solve the problem (MSIPDDP, IPDDP)
-    cddp::CDDPSolution solution_ball = solver_ball.solve("MSIPDDP");
+    cddp::CDDPSolution solution_ball = solver_ball.solve("IPDDP");
 
     auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("state_trajectory"));
     auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("control_trajectory"));
