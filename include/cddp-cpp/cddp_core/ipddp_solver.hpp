@@ -176,8 +176,7 @@ namespace cddp
          */
         void printIteration(int iter, double objective, double inf_pr, double inf_du, 
                             double mu, double step_norm, double regularization, 
-                            double alpha_du, double alpha_pr, int ls_iterations = 0, 
-                            const std::string& status = "") const;
+                            double alpha_du, double alpha_pr) const;
 
         /**
          * @brief Print solution summary.
