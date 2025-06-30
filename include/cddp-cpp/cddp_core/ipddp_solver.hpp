@@ -92,6 +92,7 @@ namespace cddp
         double mu_;                    ///< Barrier parameter
         std::vector<FilterPoint> filter_;  ///< Filter points for line search
         double constraint_violation_ = 0.0;
+        double kkt_error_ = 1e10;      ///< KKT error for barrier updates (like ipddp_core.cpp)
 
         /**
          * @brief Pre-compute dynamics jacobians and hessians for all time steps in parallel.
@@ -157,13 +158,7 @@ namespace cddp
          */
         ForwardPassResult forwardPass(CDDP &context, double alpha);
 
-        /**
-         * @brief Update barrier parameter based on convergence progress.
-         * @param context Reference to the CDDP context.
-         * @param forward_pass_success Whether the forward pass was successful.
-         * @param termination_metric Current termination metric.
-         */
-        void updateBarrierParameters(CDDP &context, bool forward_pass_success, double termination_metric);
+
 
         /**
          * @brief Get total dual dimension across all constraints.
