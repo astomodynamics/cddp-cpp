@@ -139,8 +139,13 @@ namespace cddp
             }
         }
 
-        // Cold start: Initialize trajectories with interpolation between initial and reference states
-        if (context.X_.size() != static_cast<size_t>(horizon + 1) || context.U_.size() != static_cast<size_t>(horizon))
+        // Cold start: Initialize trajectories only if not already provided by setInitialTrajectory
+        bool trajectory_provided = (context.X_.size() == static_cast<size_t>(horizon + 1) && 
+                                    context.U_.size() == static_cast<size_t>(horizon) &&
+                                    context.X_[0].size() == state_dim &&
+                                    context.U_[0].size() == control_dim);
+
+        if (!trajectory_provided)
         {
             context.X_.resize(horizon + 1);
             context.U_.resize(horizon);
@@ -154,6 +159,18 @@ namespace cddp
             for (int t = 0; t < horizon; ++t)
             {
                 context.U_[t] = Eigen::VectorXd::Zero(control_dim);
+            }
+            
+            if (options.verbose)
+            {
+                std::cout << "IPDDP: Using interpolated initial trajectory (no setInitialTrajectory provided)" << std::endl;
+            }
+        }
+        else
+        {
+            if (options.verbose)
+            {
+                std::cout << "IPDDP: Using provided initial trajectory from setInitialTrajectory" << std::endl;
             }
         }
 
@@ -419,16 +436,8 @@ namespace cddp
                 context.inf_pr_ = best_result.constraint_violation;  // Actual constraint violation from forward pass
                 constraint_violation_ = best_result.constraint_violation;  // Update member variable like ipddp_core.cpp
                 
-                // Update KKT error with the latest constraint violation (like ipddp_core.cpp)
-                if (context.getConstraintSet().empty())
-                {
-                    kkt_error_ = context.inf_du_;  // Only dual infeasibility for unconstrained
-                }
-                else
-                {
-                    // Use the actual constraint violation from forward pass, not the backward pass residual
-                    kkt_error_ = std::max(best_result.constraint_violation, context.inf_du_);
-                }
+                // KKT error is already correctly computed in backward pass - don't overwrite it!
+                // The backward pass computes kkt_error_ = max(rp_err, rd_err) which is the correct linearized residual
 
                 // Store history only if requested
                 if (options.return_iteration_info)
@@ -850,8 +859,8 @@ namespace cddp
                     // Add log-barrier term
                     merit_function -= mu_ * s_vec.array().log().sum();
 
-                    // Compute actual constraint violation: ||g||_1 (not ||g + s||_1)
-                    constraint_violation += g_vec.lpNorm<1>();
+                    // Compute primal residual: ||g + s||_1 (match ipddp_core.cpp)
+                    constraint_violation += (g_vec + s_vec).lpNorm<1>();
 
                     // Compute dual feasibility: ||y .* s - mu||_inf
                     Eigen::VectorXd r_d = y_vec.cwiseProduct(s_vec).array() - mu_;
@@ -1638,8 +1647,9 @@ namespace cddp
                 const Eigen::VectorXd &s_vec = S_new[constraint_name][t];
                 merit_function_new -= mu_ * s_vec.array().log().sum();
 
-                // Actual constraint violation is just ||g||_1, not ||g + s||_1
-                constraint_violation_new += G_new[constraint_name][t].lpNorm<1>();
+                // Primal feasibility r_p: g + s (match ipddp_core.cpp)
+                Eigen::VectorXd r_p = G_new[constraint_name][t] + s_vec;
+                constraint_violation_new += r_p.lpNorm<1>();
             }
         }
 
