@@ -113,6 +113,9 @@ namespace cddp
                 context.regularization_ = options.regularization.initial_value;
                 context.step_norm_ = 0.0;
 
+                // Initialize KKT error
+                kkt_error_ = 1e10;
+
                 // Initialize line search parameters
                 context.alphas_.clear();
                 double alpha = options.line_search.initial_step_size;
@@ -259,6 +262,9 @@ namespace cddp
 
         // Initialize step norm
         context.step_norm_ = 0.0;
+
+        // Initialize KKT error
+        kkt_error_ = 1e10;
 
         // Evaluate initial trajectory
         evaluateTrajectory(context);
@@ -410,8 +416,19 @@ namespace cddp
                 context.cost_ = best_result.cost;
                 context.merit_function_ = best_result.merit_function;
                 context.alpha_pr_ = best_result.alpha_pr;
-                context.inf_pr_ = best_result.constraint_violation;
+                context.inf_pr_ = best_result.constraint_violation;  // Actual constraint violation from forward pass
                 constraint_violation_ = best_result.constraint_violation;  // Update member variable like ipddp_core.cpp
+                
+                // Update KKT error with the latest constraint violation (like ipddp_core.cpp)
+                if (context.getConstraintSet().empty())
+                {
+                    kkt_error_ = context.inf_du_;  // Only dual infeasibility for unconstrained
+                }
+                else
+                {
+                    // Use the actual constraint violation from forward pass, not the backward pass residual
+                    kkt_error_ = std::max(best_result.constraint_violation, context.inf_du_);
+                }
 
                 // Store history only if requested
                 if (options.return_iteration_info)
@@ -443,21 +460,27 @@ namespace cddp
                 }
             }
 
-            // Check convergence with warm start-aware criteria
-            scaling_factor = 1.0;
-            termination_metric = std::max(context.inf_du_ / scaling_factor, context.inf_pr_ / scaling_factor);
-
-            if (termination_metric <= options.tolerance)
+            // Check convergence (exactly like ipddp_core.cpp)
+            double mu_vs_kkt_error = std::max(mu_, kkt_error_);
+            if (std::max(context.inf_du_, mu_vs_kkt_error) <= options.tolerance)
             {
                 converged = true;
                 termination_reason = "OptimalSolutionFound";
+                if (options.verbose)
+                {
+                    std::cout << "IPDDP: Converged due to optimality gap and constraint violation." << std::endl;
+                }
                 break;
             }
 
-            if (std::abs(dJ) < options.acceptable_tolerance)
+            if (std::abs(dJ) < options.acceptable_tolerance && std::abs(context.cost_ - context.merit_function_) < options.acceptable_tolerance && mu_vs_kkt_error <= options.tolerance)
             {
                 converged = true;
                 termination_reason = "AcceptableSolutionFound";
+                if (options.verbose)
+                {
+                    std::cout << "IPDDP: Converged due to small change in cost and Lagrangian." << std::endl;
+                }
                 break;
             }
 
@@ -482,18 +505,39 @@ namespace cddp
                                mu_, context.step_norm_, context.regularization_, best_result.alpha_du, context.alpha_pr_);
             }
 
-            // Update barrier parameters
-            const int total_dual_dim = getTotalDualDim(context);
-            double l1_norm_multipliers = 0.0;
-            for (const auto &s_map_entry : S_)
+            // Update barrier parameters (like ipddp_core.cpp)
+            if (kkt_error_ <= options.ipddp.barrier.mu_update_factor * mu_)
             {
-                for (const Eigen::VectorXd &s_t : s_map_entry.second)
+                if (context.getConstraintSet().empty())
                 {
-                    l1_norm_multipliers += s_t.lpNorm<1>();
+                    // No constraints case - no barrier update needed
                 }
+                else
+                {
+                    // Adaptive barrier reduction like ipddp_core.cpp
+                    double linear_reduction_target_factor = options.ipddp.barrier.mu_update_factor;
+                    if (mu_ > 1e-12)
+                    {
+                        double kkt_progress_metric = kkt_error_ / mu_;
+                        // Satisfying the KKT conditions for the current mu.
+                        // So, we can be more aggressive in reducing mu.
+                        if (kkt_progress_metric < 0.1 * options.ipddp.barrier.mu_update_factor)
+                        {
+                            // Significantly better than threshold: make reduction factor more aggressive
+                            linear_reduction_target_factor = options.ipddp.barrier.mu_update_factor * 0.5;
+                        }
+                        else if (kkt_progress_metric < 0.5 * options.ipddp.barrier.mu_update_factor)
+                        {
+                            // Moderately better than threshold: make reduction factor slightly more aggressive
+                            linear_reduction_target_factor = options.ipddp.barrier.mu_update_factor * 0.75;
+                        }
+                    }
+                    mu_ = std::max(options.tolerance / 10.0, 
+                                   std::min(linear_reduction_target_factor * mu_, 
+                                           std::pow(mu_, options.ipddp.barrier.mu_update_power)));
+                }
+                resetFilter(context);
             }
-
-            updateBarrierParameters(context, best_result.success, termination_metric);
         }
 
         // Compute final timing
@@ -806,9 +850,8 @@ namespace cddp
                     // Add log-barrier term
                     merit_function -= mu_ * s_vec.array().log().sum();
 
-                    // Compute primal feasibility: ||g + s||_1
-                    Eigen::VectorXd r_p = g_vec + s_vec;
-                    constraint_violation += r_p.lpNorm<1>();
+                    // Compute actual constraint violation: ||g||_1 (not ||g + s||_1)
+                    constraint_violation += g_vec.lpNorm<1>();
 
                     // Compute dual feasibility: ||y .* s - mu||_inf
                     Eigen::VectorXd r_d = y_vec.cwiseProduct(s_vec).array() - mu_;
@@ -1167,6 +1210,8 @@ namespace cddp
             // Update termination metrics
             context.inf_du_ = Qu_err;
             context.step_norm_ = step_norm;
+            context.inf_pr_ = 0.0;  // No constraints
+            kkt_error_ = Qu_err;    // Only dual infeasibility for unconstrained case
 
             if (options.debug)
             {
@@ -1335,10 +1380,13 @@ namespace cddp
                 step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
             }
 
-            // Update termination metrics
-            context.inf_pr_ = std::max(rp_err, rd_err);
-            context.inf_du_ = Qu_err;
+            // Update termination metrics (like ipddp_core.cpp)
+            context.inf_pr_ = std::max(rp_err, rd_err);  // Primal infeasibility (constraint violation)
+            context.inf_du_ = Qu_err;  // Dual infeasibility (optimality gap)
             context.step_norm_ = step_norm;
+            
+            // Store KKT error like ipddp_core.cpp (both primal and dual feasibility)
+            kkt_error_ = std::max(rp_err, rd_err);
 
             if (options.debug)
             {
@@ -1465,8 +1513,8 @@ namespace cddp
             double expected = -alpha * (dV_(0) + 0.5 * alpha * dV_(1));
             double reduction_ratio = expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
 
-            // More aggressive acceptance criterion - use smaller threshold for better performance
-            result.success = reduction_ratio > 1e-4;
+            // Match ipddp_core.cpp line search acceptance (more lenient)
+            result.success = reduction_ratio > 1e-6;
             result.cost = cost_new;
             result.merit_function = cost_new;
             result.constraint_violation = 0.0;
@@ -1474,22 +1522,25 @@ namespace cddp
             return result;
         }
 
-        // Constrained forward pass
+        // Constrained forward pass - separate approach like ipddp_core.cpp
+        double alpha_s = alpha;
+
+        // Step 1: Update slack variables and state/control with alpha_s
         bool s_trajectory_feasible = true;
         for (int t = 0; t < horizon; ++t)
         {
             const Eigen::VectorXd delta_x = result.state_trajectory[t] - context.X_[t];
 
-            // Slack update and feasibility check
+            // Update slack variables first
             for (const auto &constraint_pair : constraint_set)
             {
                 const std::string &constraint_name = constraint_pair.first;
                 int dual_dim = constraint_pair.second->getDualDim();
                 const Eigen::VectorXd &s_old = S_[constraint_name][t];
 
-                Eigen::VectorXd s_new = s_old + alpha * k_s_[constraint_name][t] + K_s_[constraint_name][t] * delta_x;
+                Eigen::VectorXd s_new = s_old + alpha_s * k_s_[constraint_name][t] + K_s_[constraint_name][t] * delta_x;
                 Eigen::VectorXd s_min = (1.0 - tau) * s_old;
-
+                
                 for (int i = 0; i < dual_dim; ++i)
                 {
                     if (s_new[i] < s_min[i])
@@ -1500,13 +1551,14 @@ namespace cddp
                 }
                 if (!s_trajectory_feasible)
                     break;
+                    
                 S_new[constraint_name][t] = s_new;
             }
             if (!s_trajectory_feasible)
                 break;
 
             // Update control
-            result.control_trajectory[t] = context.U_[t] + alpha * k_u_[t] + K_u_[t] * delta_x;
+            result.control_trajectory[t] = context.U_[t] + alpha_s * k_u_[t] + K_u_[t] * delta_x;
 
             // Propagate dynamics
             result.state_trajectory[t + 1] = context.getSystem().getDiscreteDynamics(
@@ -1515,13 +1567,12 @@ namespace cddp
 
         if (!s_trajectory_feasible)
         {
-            return result; // Failed
+            return result; // Failed slack update
         }
 
-        // Separate line search for dual variables (like ipddp_core.cpp approach)
+        // Step 2: Separate line search for dual variables
         bool suitable_alpha_y_found = false;
         std::map<std::string, std::vector<Eigen::VectorXd>> Y_trial;
-        double alpha_du = alpha; // Start with same alpha as primal
 
         for (double alpha_y_candidate : context.alphas_)
         {
@@ -1538,43 +1589,39 @@ namespace cddp
                     int dual_dim = constraint_pair.second->getDualDim();
                     const Eigen::VectorXd &y_old = Y_[constraint_name][t];
 
-                    Eigen::VectorXd y_new = y_old + alpha_y_candidate * k_y_[constraint_name][t] +
-                                            K_y_[constraint_name][t] * delta_x;
+                    Eigen::VectorXd y_new = y_old + alpha_y_candidate * k_y_[constraint_name][t] + K_y_[constraint_name][t] * delta_x;
                     Eigen::VectorXd y_min = (1.0 - tau) * y_old;
-
+                    
                     for (int i = 0; i < dual_dim; ++i)
                     {
                         if (y_new[i] < y_min[i])
                         {
                             current_alpha_y_globally_feasible = false;
-                            break; // Exit i-loop
+                            break;
                         }
                     }
                     if (!current_alpha_y_globally_feasible)
-                        break; // Exit constraint-loop
-                    Y_trial[constraint_name][t] = y_new; // Store trial Y for this constraint
+                        break;
+                        
+                    Y_trial[constraint_name][t] = y_new;
                 }
                 if (!current_alpha_y_globally_feasible)
-                    break; // Exit t-loop
+                    break;
             }
 
             if (current_alpha_y_globally_feasible)
             {
                 suitable_alpha_y_found = true;
-                Y_new = Y_trial; // Commit the successful trial Y to Y_new
-                alpha_du = alpha_y_candidate; // Store the successful dual step length
-                break; // Found a good alpha_y, exit the inner line search loop
+                Y_new = Y_trial;
+                result.alpha_du = alpha_y_candidate; // Store the dual step size
+                break;
             }
         }
 
         if (!suitable_alpha_y_found)
         {
-            // No feasible alpha_y found for the current alpha_s (even though S was feasible)
-            return result; // result.success is already false
+            return result; // Failed dual variable update
         }
-
-        // Store the dual step length
-        result.alpha_du = alpha_du;
 
         // Cost computation and filter line-search
         for (int t = 0; t < horizon; ++t)
@@ -1591,34 +1638,27 @@ namespace cddp
                 const Eigen::VectorXd &s_vec = S_new[constraint_name][t];
                 merit_function_new -= mu_ * s_vec.array().log().sum();
 
-                Eigen::VectorXd r_p = G_new[constraint_name][t] + s_vec;
-                constraint_violation_new += r_p.lpNorm<1>();
+                // Actual constraint violation is just ||g||_1, not ||g + s||_1
+                constraint_violation_new += G_new[constraint_name][t].lpNorm<1>();
             }
         }
 
         cost_new += context.getObjective().terminal_cost(result.state_trajectory.back());
         merit_function_new += cost_new;
 
-        // Ensure constraint violation is at least tolerance for proper filter behavior
-        constraint_violation_new = std::max(constraint_violation_new, options.tolerance);
+        // Don't artificially inflate constraint violation - let it be computed naturally
 
-        // Filter acceptance logic (exact copy from ipddp_core.cpp)
+        // Filter acceptance logic (simplified like ipddp_core.cpp)
         bool filter_acceptance = false;
         double expected_improvement = alpha * dV_(0);
-        double constraint_violation_old = constraint_violation_;  // Use member variable like ipddp_core.cpp
+        double constraint_violation_old = constraint_violation_;
         double merit_function_old = context.merit_function_;
 
-        // Use hardcoded values that match the working behavior from ipddp_core.cpp
-        const double filter_maximum_violation = 1e4;
-        const double filter_acceptance_threshold = 0.95;  // (1 - 0.05) 
-        const double filter_minimum_violation = 1e-7;
-        const double armijo_constant = 1e-4;
-        const double filter_merit_acceptance = 1e-6;
-        const double filter_violation_acceptance = 0.05;
-
-        if (constraint_violation_new > filter_maximum_violation)
+        // Filter logic matching ipddp_core.cpp pattern with exact parameter values
+        if (constraint_violation_new > options.filter.max_violation_threshold)
         {
-            if (constraint_violation_new < filter_acceptance_threshold * constraint_violation_old)
+            // Use ipddp_core.cpp filter_acceptance value (1e-8, more lenient than 1e-6)
+            if (constraint_violation_new < 1e-8 * constraint_violation_old)
             {
                 filter_acceptance = true;
             }
@@ -1627,17 +1667,17 @@ namespace cddp
                 filter_acceptance = false;
             }
         }
-        else if (std::max(constraint_violation_new, constraint_violation_old) < filter_minimum_violation && expected_improvement < 0)
+        else if (std::max(constraint_violation_new, constraint_violation_old) < options.filter.min_violation_for_armijo_check && expected_improvement < 0)
         {
-            if (merit_function_new < merit_function_old + armijo_constant * expected_improvement)
+            if (merit_function_new < merit_function_old + options.filter.armijo_constant * expected_improvement)
             {
                 filter_acceptance = true;
             }
         }
         else
         {
-            if (merit_function_new < merit_function_old - filter_merit_acceptance * constraint_violation_new || 
-                constraint_violation_new < (1.0 - filter_violation_acceptance) * constraint_violation_old)
+            if (merit_function_new < merit_function_old - options.filter.merit_acceptance_threshold * constraint_violation_new || 
+                constraint_violation_new < (1 - options.filter.violation_acceptance_threshold) * constraint_violation_old)
             {
                 filter_acceptance = true;
             }
@@ -1645,24 +1685,6 @@ namespace cddp
 
         if (filter_acceptance)
         {
-            // Update filter by removing dominated points and adding new candidate
-            FilterPoint candidate(merit_function_new, constraint_violation_new);
-            
-            // Remove dominated filter points
-            for (auto it = filter_.begin(); it != filter_.end();)
-            {
-                if (candidate.merit_function <= it->merit_function && candidate.constraint_violation <= it->constraint_violation)
-                {
-                    it = filter_.erase(it);
-                }
-                else
-                {
-                    ++it;
-                }
-            }
-            
-            filter_.push_back(candidate);
-
             result.success = true;
             result.cost = cost_new;
             result.merit_function = merit_function_new;
@@ -1675,19 +1697,7 @@ namespace cddp
         return result;
     }
 
-    void IPDDPSolver::updateBarrierParameters(CDDP &context, bool forward_pass_success, double termination_metric)
-    {
-        const CDDPOptions &options = context.getOptions();
-        const auto &barrier_opts = options.ipddp.barrier;
 
-        if (termination_metric <= barrier_opts.mu_update_factor * mu_)
-        {
-            mu_ = std::max(options.tolerance / 10.0,
-                           std::min(barrier_opts.mu_update_factor * mu_,
-                                    std::pow(mu_, barrier_opts.mu_update_power)));
-            resetFilter(context);
-        }
-    }
 
     void IPDDPSolver::printIteration(int iter, double objective, double inf_pr, double inf_du,
                                      double mu, double step_norm, double regularization,
