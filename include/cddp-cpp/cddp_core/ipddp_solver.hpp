@@ -91,6 +91,7 @@ namespace cddp
         // Interior point method parameters
         double mu_;                    ///< Barrier parameter
         std::vector<FilterPoint> filter_;  ///< Filter points for line search
+        double constraint_violation_ = 0.0;
 
         /**
          * @brief Pre-compute dynamics jacobians and hessians for all time steps in parallel.
