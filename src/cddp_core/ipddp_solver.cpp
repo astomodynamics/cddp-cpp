@@ -48,12 +48,11 @@ namespace cddp
         // For warm starts, verify that existing state is valid
         if (options.warm_start)
         {
-            bool valid_warm_start = (k_u_.size() == static_cast<size_t>(horizon) &&
-                                     K_u_.size() == static_cast<size_t>(horizon) &&
-                                     context.X_.size() == static_cast<size_t>(horizon + 1) &&
-                                     context.U_.size() == static_cast<size_t>(horizon));
+            // Check if we have existing solver state (same solver instance)
+            bool has_existing_gains = (k_u_.size() == static_cast<size_t>(horizon) &&
+                                       K_u_.size() == static_cast<size_t>(horizon));
 
-            if (valid_warm_start && !k_u_.empty())
+            if (has_existing_gains && !k_u_.empty())
             {
                 for (int t = 0; t < horizon; ++t)
                 {
@@ -61,24 +60,46 @@ namespace cddp
                         K_u_[t].rows() != control_dim ||
                         K_u_[t].cols() != state_dim)
                     {
-                        valid_warm_start = false;
+                        has_existing_gains = false;
                         break;
                     }
                 }
             }
             else
             {
-                valid_warm_start = false;
+                has_existing_gains = false;
             }
+
+            // Check if we have a provided trajectory (new solver instance with setInitialTrajectory)
+            bool has_provided_trajectory = (context.X_.size() == static_cast<size_t>(horizon + 1) &&
+                                            context.U_.size() == static_cast<size_t>(horizon) &&
+                                            context.X_[0].size() == state_dim &&
+                                            context.U_[0].size() == control_dim);
+
+            bool valid_warm_start = has_existing_gains || has_provided_trajectory;
 
             if (valid_warm_start)
             {
                 if (options.verbose)
                 {
-                    std::cout << "IPDDP: Using warm start with existing solver state" << std::endl;
+                    if (has_existing_gains)
+                    {
+                        std::cout << "IPDDP: Using warm start with existing solver state" << std::endl;
+                    }
+                    else
+                    {
+                        std::cout << "IPDDP: Using warm start with provided trajectory" << std::endl;
+                    }
                 }
 
                 // Initialize control gains to zero for warm start (let them be computed in backward pass)
+                if (!has_existing_gains)
+                {
+                    // Resize control gains if they don't exist (new solver instance)
+                    k_u_.resize(horizon);
+                    K_u_.resize(horizon);
+                }
+                
                 for (int t = 0; t < horizon; ++t)
                 {
                     k_u_[t] = Eigen::VectorXd::Zero(control_dim);
@@ -771,29 +792,27 @@ namespace cddp
 
                 if (need_reinit)
                 {
-                    // For warm start: assume trajectory is good, use minimal slack variables
+                    // Use the same initialization as cold start for consistency
                     Eigen::VectorXd s_init = Eigen::VectorXd::Zero(dual_dim);
                     Eigen::VectorXd y_init = Eigen::VectorXd::Zero(dual_dim);
 
-                                        for (int i = 0; i < dual_dim; ++i)
+                    for (int i = 0; i < dual_dim; ++i)
                     {
-                        // For warm start: initialize slack based on actual constraint violation
-                        if (g_val(i) <= -options.tolerance)
+                        // Initialize s_i = max(slack_scale, -g_i) to ensure s_i > 0 (same as cold start)
+                        s_init(i) = std::max(options.ipddp.slack_var_init_scale, -g_val(i));
+
+                        // Initialize y_i = mu / s_i to satisfy s_i * y_i = mu (same as cold start)
+                        if (s_init(i) < 1e-12)
                         {
-                            // Constraint is satisfied: use very small slack
-                            s_init(i) = options.ipddp.slack_var_init_scale * 0.1;
+                            y_init(i) = mu_ / 1e-12;
                         }
                         else
                         {
-                            // Constraint violated: set slack to make it nearly feasible
-                            s_init(i) = std::max(options.ipddp.slack_var_init_scale, -g_val(i) + options.ipddp.slack_var_init_scale);
+                            y_init(i) = mu_ / s_init(i);
                         }
-                        
-                        // Small dual variables consistent with small barrier parameter
-                        y_init(i) = mu_ / s_init(i);
-                        
-                        // Ensure reasonable bounds
-                        y_init(i) = std::max(1e-8, std::min(y_init(i), 1e2));
+                        // Clamp dual variable (same as cold start)
+                        y_init(i) = std::max(options.ipddp.dual_var_init_scale * 0.01,
+                                             std::min(y_init(i), options.ipddp.dual_var_init_scale * 100.0));
                     }
                     Y_[constraint_name][t] = y_init;
                     S_[constraint_name][t] = s_init;
