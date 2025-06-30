@@ -14,6 +14,8 @@
  limitations under the License.
 */
 
+// THIS SCRIPT USES ipddp_core.cpp
+
 #include <iostream>
 #include <vector>
 #include <filesystem>
@@ -192,55 +194,20 @@ int main()
     options.max_iterations = 10000;
     options.verbose = true;
     options.debug = false;
-    options.enable_parallel = true;
+    options.use_parallel = true;
     options.num_threads = 10;
-    options.tolerance = 1e-3;
-    options.acceptable_tolerance = 1e-2;
-    options.use_ilqr = true; // Use full second-order derivatives for more accurate solutions
-    options.return_iteration_info = true;
-    
-    // Regularization options
-    options.regularization.initial_value = 1e-1;
-    options.regularization.max_value = 1e+7;
-    options.regularization.min_value = 1e-10;
-    options.regularization.update_factor = 10.0;
-    
-    // Line search options
-    options.line_search.max_iterations = 20;
-    options.line_search.initial_step_size = 1.0;
-    options.line_search.min_step_size = 1e-8;
-    options.line_search.step_reduction_factor = 0.5;
-    
-    // Filter options
-    options.filter.merit_acceptance_threshold = 1e-6;
-    options.filter.violation_acceptance_threshold = 1e-6;
-    options.filter.max_violation_threshold = 1e+4;
-    options.filter.min_violation_for_armijo_check = 1e-7;
-    options.filter.armijo_constant = 1e-4;
-
-    // IPDDP-specific options
-    options.ipddp.dual_var_init_scale = 1e-1;
-    options.ipddp.slack_var_init_scale = 1e-2;
-    options.ipddp.barrier.mu_initial = 1e-1;
-    options.ipddp.barrier.mu_min_value = 1e-8;
-    options.ipddp.barrier.mu_update_factor = 0.2;
-    options.ipddp.barrier.mu_update_power = 1.2;
-    options.ipddp.barrier.min_fraction_to_boundary = 0.99;
-    
-    // MSIPDDP-specific options
-    options.msipddp.dual_var_init_scale = 1e-2;
-    options.msipddp.slack_var_init_scale = 1e-1;
-    options.msipddp.costate_var_init_scale = 1e-6;
-    options.msipddp.segment_length = horizon / 10;
-    options.msipddp.rollout_type = "nonlinear";
-    options.msipddp.use_controlled_rollout = false;
-    
-    // MSIPDDP barrier options
-    options.msipddp.barrier.mu_initial = 1e-1;
-    options.msipddp.barrier.mu_min_value = 1e-8;
-    options.msipddp.barrier.mu_update_factor = 0.2;
-    options.msipddp.barrier.mu_update_power = 1.2;
-    options.msipddp.barrier.min_fraction_to_boundary = 0.99;
+    options.cost_tolerance = 1e-3;
+    options.grad_tolerance = 1e-2;
+    options.regularization_type = "control";
+    options.regularization_control = 1e-1;
+    options.regularization_state = 0.0;
+    options.barrier_coeff = 1e-1;
+    options.ms_segment_length = horizon / 10;
+    options.ms_rollout_type = "nonlinear";
+    options.ms_defect_tolerance_for_single_shooting = 1e-5;
+    options.barrier_update_factor = 0.2;
+    options.barrier_update_power = 1.2;
+    options.minimum_reduction_ratio = 1e-4;
 
     // Instantiate CDDP solver
     cddp::CDDP cddp_solver(
@@ -257,7 +224,7 @@ int main()
     double max_force = 4.0;
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+    cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
 
     // Initial trajectory guess
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -278,34 +245,24 @@ int main()
 
     // Solve the problem
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
-    
-    // Update options for the ball constraint problem
-    options.max_iterations = 500;
-    options.tolerance = 1e-6;
-    options.acceptable_tolerance = 1e-6;
-    
-    // Update line search options
-    options.line_search.max_iterations = 20;
-    
-    // Update filter options
-    options.filter.merit_acceptance_threshold = 1e-6;
-    options.filter.violation_acceptance_threshold = 1e-6;
-    options.filter.max_violation_threshold = 1e+4;
-    options.filter.min_violation_for_armijo_check = 1e-7;
-    options.filter.armijo_constant = 1e-4;
-    
-    // Update regularization options
-    options.regularization.max_value = 1e+7;
-    
-    // Update MSIPDDP-specific options for tighter constraints
-    options.msipddp.dual_var_init_scale = 1e-2;
-    options.msipddp.slack_var_init_scale = 1e-1;
-    options.msipddp.segment_length = horizon / 100; // Smaller segments for better accuracy
-    options.msipddp.rollout_type = "nonlinear";
-    
-    // Update MSIPDDP barrier options for more aggressive convergence
-    options.msipddp.barrier.mu_initial = 1e-0;
-    options.msipddp.barrier.mu_update_factor = 0.5;
+    options.max_iterations = 10;
+    options.max_line_search_iterations = 20;
+    options.barrier_coeff = 1e-0;
+    options.barrier_update_factor = 0.5;
+    options.filter_merit_acceptance = 1e-6;
+    options.filter_violation_acceptance = 1e-6;
+    options.filter_maximum_violation = 1e+4;
+    options.filter_minimum_violation = 1e-7;
+    options.regularization_control_max = 1e+7;
+    options.armijo_constant = 1e-4;
+    options.cost_tolerance = 1e-6;
+    options.grad_tolerance = 1e-6;
+    options.slack_scale = 1e-1;
+    options.dual_scale = 1e-2;
+    options.ms_segment_length = horizon / 100;
+    options.ms_rollout_type = "nonlinear";
+    options.ms_defect_tolerance_for_single_shooting = 1e-5;
+    options.minimum_reduction_ratio = 1e-4;
 
     // Resolve problem with the ball constraint
     cddp::CDDP solver_ball(
@@ -317,24 +274,22 @@ int main()
         std::make_unique<cddp::QuadraticObjective>(
             Q, R, Qf, goal_state, figure8_reference_states, timestep),
         options);
-    solver_ball.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+    solver_ball.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
 
     // Ball constraint
     double ball_radius = 0.7; // 70 cm
     Eigen::Vector3d ball_center(0.0, 0.0, constant_altitude); // Center of the ball
-    solver_ball.addPathConstraint("BallConstraint", std::make_unique<cddp::BallConstraint>(ball_radius, ball_center));
+    solver_ball.addConstraint("BallConstraint", std::make_unique<cddp::BallConstraint>(ball_radius, ball_center));
 
-    // Initial trajectory guess (extract from solution)
-    auto initial_X = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto initial_U = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    solver_ball.setInitialTrajectory(initial_X, initial_U);
+    // Initial trajectory guess
+    solver_ball.setInitialTrajectory(solution.state_sequence, solution.control_sequence);
     
     // Solve the problem (MSIPDDP, IPDDP)
     cddp::CDDPSolution solution_ball = solver_ball.solve("IPDDP");
 
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution_ball.at("time_points"));
+    auto X_sol = solution_ball.state_sequence;
+    auto U_sol = solution_ball.control_sequence;
+    auto t_sol = solution_ball.time_sequence;
 
     std::cout << "Final state = " << X_sol.back().transpose() << std::endl;
 
@@ -574,119 +529,119 @@ int main()
     f2->save(plotDirectory + "/quadrotor_figure_eight_horizontal_safe_3d.png");
     f2->show();
 
-    // // Animation of the quadrotor frame
-    // auto f_anim = figure();
-    // f_anim->size(800, 600);
-    // auto ax_anim = f_anim->current_axes();
+    // Animation of the quadrotor frame
+    auto f_anim = figure();
+    f_anim->size(800, 600);
+    auto ax_anim = f_anim->current_axes();
 
-    // // For collecting the trajectory as we go
-    // std::vector<double> anim_x, anim_y, anim_z;
-    // anim_x.reserve(X_sol.size());
-    // anim_y.reserve(X_sol.size());
-    // anim_z.reserve(X_sol.size());
+    // For collecting the trajectory as we go
+    std::vector<double> anim_x, anim_y, anim_z;
+    anim_x.reserve(X_sol.size());
+    anim_y.reserve(X_sol.size());
+    anim_z.reserve(X_sol.size());
 
-    // // Render every Nth frame to reduce #images
-    // int frame_stride = 15;
-    // double prop_radius = 0.03; // radius for small spheres at motor ends
+    // Render every Nth frame to reduce #images
+    int frame_stride = 15;
+    double prop_radius = 0.03; // radius for small spheres at motor ends
 
-    // for (size_t i = 0; i < X_sol.size(); i += frame_stride)
-    // {
-    //     ax_anim->clear();
-    //     ax_anim->hold(true);
-    //     ax_anim->grid(true);
+    for (size_t i = 0; i < X_sol.size(); i += frame_stride)
+    {
+        ax_anim->clear();
+        ax_anim->hold(true);
+        ax_anim->grid(true);
 
-    //     // Current state
-    //     double x = X_sol[i](0);
-    //     double y = X_sol[i](1);
-    //     double z = X_sol[i](2);
+        // Current state
+        double x = X_sol[i](0);
+        double y = X_sol[i](1);
+        double z = X_sol[i](2);
 
-    //     // Accumulate path
-    //     anim_x.push_back(x);
-    //     anim_y.push_back(y);
-    //     anim_z.push_back(z);
+        // Accumulate path
+        anim_x.push_back(x);
+        anim_y.push_back(y);
+        anim_z.push_back(z);
 
-    //     // Plot the partial trajectory so far (in black dotted line)
-    //     auto path_plot = plot3(anim_x, anim_y, anim_z);
-    //     path_plot->line_width(1.5);
-    //     path_plot->line_style("--");
-    //     path_plot->color("black");
+        // Plot the partial trajectory so far (in black dotted line)
+        auto path_plot = plot3(anim_x, anim_y, anim_z);
+        path_plot->line_width(1.5);
+        path_plot->line_style("--");
+        path_plot->color("black");
 
-    //     // Build rotation from quaternion
-    //     Eigen::Vector4d quat(X_sol[i](3), X_sol[i](4), X_sol[i](5), X_sol[i](6));
-    //     Eigen::Matrix3d R = getRotationMatrixFromQuaternion(quat(0), quat(1), quat(2), quat(3));
+        // Build rotation from quaternion
+        Eigen::Vector4d quat(X_sol[i](3), X_sol[i](4), X_sol[i](5), X_sol[i](6));
+        Eigen::Matrix3d R = getRotationMatrixFromQuaternion(quat(0), quat(1), quat(2), quat(3));
 
-    //     // Arm endpoints (front, right, back, left)
-    //     std::vector<Eigen::Vector3d> arm_endpoints;
-    //     arm_endpoints.push_back(Eigen::Vector3d(arm_length, 0, 0));
-    //     arm_endpoints.push_back(Eigen::Vector3d(0, arm_length, 0));
-    //     arm_endpoints.push_back(Eigen::Vector3d(-arm_length, 0, 0));
-    //     arm_endpoints.push_back(Eigen::Vector3d(0, -arm_length, 0));
+        // Arm endpoints (front, right, back, left)
+        std::vector<Eigen::Vector3d> arm_endpoints;
+        arm_endpoints.push_back(Eigen::Vector3d(arm_length, 0, 0));
+        arm_endpoints.push_back(Eigen::Vector3d(0, arm_length, 0));
+        arm_endpoints.push_back(Eigen::Vector3d(-arm_length, 0, 0));
+        arm_endpoints.push_back(Eigen::Vector3d(0, -arm_length, 0));
 
-    //     // Transform to world coords
-    //     for (auto &pt : arm_endpoints)
-    //     {
-    //         pt = Eigen::Vector3d(x, y, z) + R * pt;
-    //     }
+        // Transform to world coords
+        for (auto &pt : arm_endpoints)
+        {
+            pt = Eigen::Vector3d(x, y, z) + R * pt;
+        }
 
-    //     // Front-back arm
-    //     std::vector<double> fx = {arm_endpoints[0].x(), arm_endpoints[2].x()};
-    //     std::vector<double> fy = {arm_endpoints[0].y(), arm_endpoints[2].y()};
-    //     std::vector<double> fz = {arm_endpoints[0].z(), arm_endpoints[2].z()};
-    //     auto fb_arm = plot3(fx, fy, fz);
-    //     fb_arm->line_width(2.0);
-    //     fb_arm->color("blue");
+        // Front-back arm
+        std::vector<double> fx = {arm_endpoints[0].x(), arm_endpoints[2].x()};
+        std::vector<double> fy = {arm_endpoints[0].y(), arm_endpoints[2].y()};
+        std::vector<double> fz = {arm_endpoints[0].z(), arm_endpoints[2].z()};
+        auto fb_arm = plot3(fx, fy, fz);
+        fb_arm->line_width(2.0);
+        fb_arm->color("blue");
 
-    //     // Right-left arm
-    //     std::vector<double> rx = {arm_endpoints[1].x(), arm_endpoints[3].x()};
-    //     std::vector<double> ry = {arm_endpoints[1].y(), arm_endpoints[3].y()};
-    //     std::vector<double> rz = {arm_endpoints[1].z(), arm_endpoints[3].z()};
-    //     auto rl_arm = plot3(rx, ry, rz);
-    //     rl_arm->line_width(2.0);
-    //     rl_arm->color("red");
+        // Right-left arm
+        std::vector<double> rx = {arm_endpoints[1].x(), arm_endpoints[3].x()};
+        std::vector<double> ry = {arm_endpoints[1].y(), arm_endpoints[3].y()};
+        std::vector<double> rz = {arm_endpoints[1].z(), arm_endpoints[3].z()};
+        auto rl_arm = plot3(rx, ry, rz);
+        rl_arm->line_width(2.0);
+        rl_arm->color("red");
 
-    //     auto sphere_points = linspace(0, 2 * M_PI, 15);
-    //     for (const auto &motor_pos : arm_endpoints)
-    //     {
-    //         std::vector<double> circ_x, circ_y, circ_z;
-    //         circ_x.reserve(sphere_points.size());
-    //         circ_y.reserve(sphere_points.size());
-    //         circ_z.reserve(sphere_points.size());
-    //         for (auto angle : sphere_points)
-    //         {
-    //             circ_x.push_back(motor_pos.x() + prop_radius * cos(angle));
-    //             circ_y.push_back(motor_pos.y() + prop_radius * sin(angle));
-    //             circ_z.push_back(motor_pos.z()); // keep the same z for a small ring
-    //         }
-    //         auto sphere_plot = plot3(circ_x, circ_y, circ_z);
-    //         sphere_plot->line_style("solid");
-    //         sphere_plot->line_width(1.5);
-    //         sphere_plot->color("cyan");
-    //     }
+        auto sphere_points = linspace(0, 2 * M_PI, 15);
+        for (const auto &motor_pos : arm_endpoints)
+        {
+            std::vector<double> circ_x, circ_y, circ_z;
+            circ_x.reserve(sphere_points.size());
+            circ_y.reserve(sphere_points.size());
+            circ_z.reserve(sphere_points.size());
+            for (auto angle : sphere_points)
+            {
+                circ_x.push_back(motor_pos.x() + prop_radius * cos(angle));
+                circ_y.push_back(motor_pos.y() + prop_radius * sin(angle));
+                circ_z.push_back(motor_pos.z()); // keep the same z for a small ring
+            }
+            auto sphere_plot = plot3(circ_x, circ_y, circ_z);
+            sphere_plot->line_style("solid");
+            sphere_plot->line_width(1.5);
+            sphere_plot->color("cyan");
+        }
 
-    //     title(ax_anim, "Quadrotor Animation");
-    //     xlabel(ax_anim, "X [m]");
-    //     ylabel(ax_anim, "Y [m]");
-    //     zlabel(ax_anim, "Z [m]");
-    //     xlim(ax_anim, {-5, 5});
-    //     ylim(ax_anim, {-5, 5});
-    //     zlim(ax_anim, {0, 5});
+        title(ax_anim, "Quadrotor Animation");
+        xlabel(ax_anim, "X [m]");
+        ylabel(ax_anim, "Y [m]");
+        zlabel(ax_anim, "Z [m]");
+        xlim(ax_anim, {-5, 5});
+        ylim(ax_anim, {-5, 5});
+        zlim(ax_anim, {0, 5});
 
-    //     ax_anim->view(30, -30);
+        ax_anim->view(30, -30);
 
-    //     std::string frameFile = plotDirectory + "/quadrotor_anim_frame_" + std::to_string(i / frame_stride) + ".png";
-    //     f_anim->draw();
-    //     f_anim->save(frameFile);
-    //     std::this_thread::sleep_for(std::chrono::milliseconds(80));
-    // }
+        std::string frameFile = plotDirectory + "/quadrotor_anim_frame_" + std::to_string(i / frame_stride) + ".png";
+        f_anim->draw();
+        f_anim->save(frameFile);
+        std::this_thread::sleep_for(std::chrono::milliseconds(80));
+    }
 
-    // // -----------------------------
-    // // Generate GIF from frames using ImageMagick
-    // // -----------------------------
-    // std::string gif_command = "convert -delay 30 " + plotDirectory + "/quadrotor_anim_frame_*.png " + plotDirectory + "/quadrotor_figure_eight_horizontal_safe.gif";
-    // std::system(gif_command.c_str());
+    // -----------------------------
+    // Generate GIF from frames using ImageMagick
+    // -----------------------------
+    std::string gif_command = "convert -delay 30 " + plotDirectory + "/quadrotor_anim_frame_*.png " + plotDirectory + "/quadrotor_figure_eight_horizontal_safe.gif";
+    std::system(gif_command.c_str());
 
-    // std::string cleanup_command = "rm " + plotDirectory + "/quadrotor_anim_frame_*.png";
-    // std::system(cleanup_command.c_str());
+    std::string cleanup_command = "rm " + plotDirectory + "/quadrotor_anim_frame_*.png";
+    std::system(cleanup_command.c_str());
 
     return 0;
 }
