@@ -325,7 +325,7 @@ namespace cddp
         if (options.verbose)
         {
             printIteration(0, context.cost_, context.inf_pr_, context.inf_du_,
-                           mu_, context.step_norm_, context.regularization_, 1.0, context.alpha_pr_);
+                           mu_, context.step_norm_, context.regularization_, context.alpha_du_, context.alpha_pr_);
         }
 
         // Start timer
@@ -411,6 +411,7 @@ namespace cddp
                 context.merit_function_ = best_result.merit_function;
                 context.alpha_pr_ = best_result.alpha_pr;
                 context.inf_pr_ = best_result.constraint_violation;
+                constraint_violation_ = best_result.constraint_violation;  // Update member variable like ipddp_core.cpp
 
                 // Store history only if requested
                 if (options.return_iteration_info)
@@ -825,6 +826,7 @@ namespace cddp
         context.merit_function_ = merit_function;
         context.inf_pr_ = constraint_violation;
         context.inf_du_ = dual_infeasibility;
+        constraint_violation_ = constraint_violation;
 
         // Reset filter with initial point
         filter_.clear();
@@ -1516,45 +1518,63 @@ namespace cddp
             return result; // Failed
         }
 
-        // Simplified dual variable update using same alpha as primal (like old implementation)
-        bool dual_feasible = true;
-        for (int t = 0; t < horizon; ++t)
-        {
-            const Eigen::VectorXd delta_x = result.state_trajectory[t] - context.X_[t];
+        // Separate line search for dual variables (like ipddp_core.cpp approach)
+        bool suitable_alpha_y_found = false;
+        std::map<std::string, std::vector<Eigen::VectorXd>> Y_trial;
+        double alpha_du = alpha; // Start with same alpha as primal
 
-            for (const auto &constraint_pair : constraint_set)
+        for (double alpha_y_candidate : context.alphas_)
+        {
+            bool current_alpha_y_globally_feasible = true;
+            Y_trial = Y_;
+
+            for (int t = 0; t < horizon; ++t)
             {
-                const std::string &constraint_name = constraint_pair.first;
-                int dual_dim = constraint_pair.second->getDualDim();
-                const Eigen::VectorXd &y_old = Y_[constraint_name][t];
+                const Eigen::VectorXd delta_x = result.state_trajectory[t] - context.X_[t];
 
-                Eigen::VectorXd y_new = y_old + alpha * k_y_[constraint_name][t] +
-                                        K_y_[constraint_name][t] * delta_x;
-                Eigen::VectorXd y_min = (1.0 - tau) * y_old;
-
-                for (int i = 0; i < dual_dim; ++i)
+                for (const auto &constraint_pair : constraint_set)
                 {
-                    if (y_new[i] < y_min[i])
+                    const std::string &constraint_name = constraint_pair.first;
+                    int dual_dim = constraint_pair.second->getDualDim();
+                    const Eigen::VectorXd &y_old = Y_[constraint_name][t];
+
+                    Eigen::VectorXd y_new = y_old + alpha_y_candidate * k_y_[constraint_name][t] +
+                                            K_y_[constraint_name][t] * delta_x;
+                    Eigen::VectorXd y_min = (1.0 - tau) * y_old;
+
+                    for (int i = 0; i < dual_dim; ++i)
                     {
-                        dual_feasible = false;
-                        break;
+                        if (y_new[i] < y_min[i])
+                        {
+                            current_alpha_y_globally_feasible = false;
+                            break; // Exit i-loop
+                        }
                     }
+                    if (!current_alpha_y_globally_feasible)
+                        break; // Exit constraint-loop
+                    Y_trial[constraint_name][t] = y_new; // Store trial Y for this constraint
                 }
-                if (!dual_feasible)
-                    break;
-                Y_new[constraint_name][t] = y_new;
+                if (!current_alpha_y_globally_feasible)
+                    break; // Exit t-loop
             }
-            if (!dual_feasible)
-                break;
+
+            if (current_alpha_y_globally_feasible)
+            {
+                suitable_alpha_y_found = true;
+                Y_new = Y_trial; // Commit the successful trial Y to Y_new
+                alpha_du = alpha_y_candidate; // Store the successful dual step length
+                break; // Found a good alpha_y, exit the inner line search loop
+            }
         }
 
-        if (!dual_feasible)
+        if (!suitable_alpha_y_found)
         {
-            return result; // Failed
+            // No feasible alpha_y found for the current alpha_s (even though S was feasible)
+            return result; // result.success is already false
         }
 
-        // Store the primal step length for dual variables too
-        result.alpha_du = alpha;
+        // Store the dual step length
+        result.alpha_du = alpha_du;
 
         // Cost computation and filter line-search
         for (int t = 0; t < horizon; ++t)
@@ -1582,30 +1602,42 @@ namespace cddp
         // Ensure constraint violation is at least tolerance for proper filter behavior
         constraint_violation_new = std::max(constraint_violation_new, options.tolerance);
 
-        // More flexible filter acceptance logic (similar to old implementation)
+        // Filter acceptance logic (exact copy from ipddp_core.cpp)
         bool filter_acceptance = false;
         double expected_improvement = alpha * dV_(0);
-        double constraint_violation_old = context.inf_pr_;
+        double constraint_violation_old = constraint_violation_;  // Use member variable like ipddp_core.cpp
         double merit_function_old = context.merit_function_;
 
-        if (constraint_violation_new > 1e4) // filter_maximum_violation equivalent
+        // Use hardcoded values that match the working behavior from ipddp_core.cpp
+        const double filter_maximum_violation = 1e4;
+        const double filter_acceptance_threshold = 0.95;  // (1 - 0.05) 
+        const double filter_minimum_violation = 1e-7;
+        const double armijo_constant = 1e-4;
+        const double filter_merit_acceptance = 1e-6;
+        const double filter_violation_acceptance = 0.05;
+
+        if (constraint_violation_new > filter_maximum_violation)
         {
-            if (constraint_violation_new < 0.99 * constraint_violation_old) // More aggressive than old 1e-8 factor
+            if (constraint_violation_new < filter_acceptance_threshold * constraint_violation_old)
             {
                 filter_acceptance = true;
             }
+            else
+            {
+                filter_acceptance = false;
+            }
         }
-        else if (std::max(constraint_violation_new, constraint_violation_old) < 1e-7 && expected_improvement < 0) // filter_minimum_violation
+        else if (std::max(constraint_violation_new, constraint_violation_old) < filter_minimum_violation && expected_improvement < 0)
         {
-            if (merit_function_new < merit_function_old + 1e-4 * expected_improvement) // Armijo condition
+            if (merit_function_new < merit_function_old + armijo_constant * expected_improvement)
             {
                 filter_acceptance = true;
             }
         }
         else
         {
-            if (merit_function_new < merit_function_old - 1e-6 * constraint_violation_new || 
-                constraint_violation_new < 0.99 * constraint_violation_old) // Either merit improvement or constraint reduction
+            if (merit_function_new < merit_function_old - filter_merit_acceptance * constraint_violation_new || 
+                constraint_violation_new < (1.0 - filter_violation_acceptance) * constraint_violation_old)
             {
                 filter_acceptance = true;
             }
