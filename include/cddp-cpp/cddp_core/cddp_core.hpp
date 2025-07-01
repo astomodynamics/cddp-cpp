@@ -92,6 +92,8 @@ enum class SolverType {
  * violation norm (inf_pr), including dynamics defects)
  * - "history_dual_infeasibility":    std::vector<double> (Lagrangian gradient
  * norm (inf_du) or other dual infeasibility)
+ * - "history_complementary_infeasibility": std::vector<double> (Complementary
+ * infeasibility)
  * - "history_barrier_mu":            std::vector<double> (Barrier parameter
  * (mu) for IPMs; user can log10 for "lg(mu)")
  * - "history_regularization":        std::map<std::string, std::vector<double>>
