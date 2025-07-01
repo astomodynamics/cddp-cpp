@@ -92,7 +92,7 @@ namespace cddp
         double mu_;                    ///< Barrier parameter
         std::vector<FilterPoint> filter_;  ///< Filter points for line search
         double constraint_violation_ = 0.0;
-        double kkt_error_ = 1e10;      ///< KKT error for barrier updates (like ipddp_core.cpp)
+        double kkt_error_ = 1e10;      ///< KKT error for barrier updates
 
         /**
          * @brief Pre-compute dynamics jacobians and hessians for all time steps in parallel.
