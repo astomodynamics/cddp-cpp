@@ -125,6 +125,12 @@ namespace cddp
         void initializeDualSlackVariablesWarmStart(CDDP &context);
 
         /**
+         * @brief Initialize dual and slack variables for cold start.
+         * @param context Reference to the CDDP context.
+         */
+        void initializeDualSlackVariables(CDDP &context);
+
+        /**
          * @brief Reset/initialize barrier parameters and filter.
          * @param context Reference to the CDDP context.
          */

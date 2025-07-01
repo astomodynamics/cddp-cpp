@@ -33,6 +33,7 @@ namespace cddp
     void IPDDPSolver::initialize(CDDP &context)
     {
         const CDDPOptions &options = context.getOptions();
+        const auto &constraint_set = context.getConstraintSet();
 
         int horizon = context.getHorizon();
         int control_dim = context.getControlDim();
@@ -48,11 +49,10 @@ namespace cddp
         // For warm starts, verify that existing state is valid
         if (options.warm_start)
         {
-            // Check if we have existing solver state (same solver instance)
-            bool has_existing_gains = (k_u_.size() == static_cast<size_t>(horizon) &&
-                                       K_u_.size() == static_cast<size_t>(horizon));
+            bool valid_warm_start = (k_u_.size() == static_cast<size_t>(horizon) &&
+                                     K_u_.size() == static_cast<size_t>(horizon));
 
-            if (has_existing_gains && !k_u_.empty())
+            if (valid_warm_start && !k_u_.empty())
             {
                 for (int t = 0; t < horizon; ++t)
                 {
@@ -60,46 +60,46 @@ namespace cddp
                         K_u_[t].rows() != control_dim ||
                         K_u_[t].cols() != state_dim)
                     {
-                        has_existing_gains = false;
+                        valid_warm_start = false;
                         break;
                     }
                 }
             }
             else
             {
-                has_existing_gains = false;
+                valid_warm_start = false;
             }
 
-            // Check if we have a provided trajectory (new solver instance with setInitialTrajectory)
-            bool has_provided_trajectory = (context.X_.size() == static_cast<size_t>(horizon + 1) &&
-                                            context.U_.size() == static_cast<size_t>(horizon) &&
-                                            context.X_[0].size() == state_dim &&
-                                            context.U_[0].size() == control_dim);
-
-            bool valid_warm_start = has_existing_gains || has_provided_trajectory;
+            // For constrained problems, we don't require pre-existing dual/slack variables
+            // They will be re-initialized properly during warm start
 
             if (valid_warm_start)
             {
                 if (options.verbose)
                 {
-                    if (has_existing_gains)
-                    {
-                        std::cout << "IPDDP: Using warm start with existing solver state" << std::endl;
-                    }
-                    else
-                    {
-                        std::cout << "IPDDP: Using warm start with provided trajectory" << std::endl;
-                    }
+                    std::cout << "IPDDP: Using warm start with existing control gains" << std::endl;
+                }
+                mu_ = options.ipddp.barrier.mu_initial * 0.1;
+                context.step_norm_ = 0.0;
+                kkt_error_ = 1e10;
+                evaluateTrajectoryWarmStart(context);
+                initializeDualSlackVariablesWarmStart(context);
+                resetFilter(context);
+                return;
+            }
+            else
+            {
+                // Even without existing solver state, we can still perform a warm start
+                // if we have a good initial trajectory (set via setInitialTrajectory)
+                if (options.verbose)
+                {
+                    std::cout << "IPDDP: Using warm start with provided initial trajectory (no existing solver state)" << std::endl;
                 }
 
-                // Initialize control gains to zero for warm start (let them be computed in backward pass)
-                if (!has_existing_gains)
-                {
-                    // Resize control gains if they don't exist (new solver instance)
-                    k_u_.resize(horizon);
-                    K_u_.resize(horizon);
-                }
-                
+                // Initialize control gains to zero for warm start
+                k_u_.resize(horizon);
+                K_u_.resize(horizon);
+
                 for (int t = 0; t < horizon; ++t)
                 {
                     k_u_[t] = Eigen::VectorXd::Zero(control_dim);
@@ -119,48 +119,62 @@ namespace cddp
                 k_s_.clear();
                 K_s_.clear();
 
-                // Set modest barrier parameter for warm start
-                const auto &constraint_set = context.getConstraintSet();
+                // Set barrier parameter based on constraint evaluation
                 if (constraint_set.empty())
                 {
                     mu_ = 1e-8; // Small value if no constraints
                 }
                 else
                 {
-                    mu_ = options.ipddp.barrier.mu_initial * 0.1; // More aggressive initial value
+                    // For warm start: first evaluate constraints to set appropriate barrier parameter
+                    evaluateTrajectoryWarmStart(context);
+                    
+                    // Compute maximum constraint violation
+                    double max_constraint_violation = 0.0;
+                    for (const auto &constraint_pair : constraint_set)
+                    {
+                        const std::string &constraint_name = constraint_pair.first;
+                        for (int t = 0; t < horizon; ++t)
+                        {
+                            const Eigen::VectorXd &g_vec = G_[constraint_name][t];
+                            max_constraint_violation = std::max(max_constraint_violation, g_vec.maxCoeff());
+                        }
+                    }
+                    
+                    // Set barrier parameter based on constraint violation level
+                    if (max_constraint_violation <= options.tolerance)
+                    {
+                        // Trajectory is feasible: use very small barrier parameter
+                        mu_ = options.tolerance * 0.01;
+                    }
+                    else if (max_constraint_violation <= 0.1)
+                    {
+                        // Slightly infeasible: moderate barrier parameter
+                        mu_ = options.tolerance;
+                    }
+                    else
+                    {
+                        // Significantly infeasible: standard barrier parameter
+                        mu_ = options.ipddp.barrier.mu_initial * 0.1;
+                    }
                 }
 
                 // Initialize regularization
                 context.regularization_ = options.regularization.initial_value;
-                context.step_norm_ = 0.0;
 
-                // Initialize KKT error
+                // Initialize step norm and KKT error
+                context.step_norm_ = 0.0;
                 kkt_error_ = 1e10;
 
-                // Initialize line search parameters
-                context.alphas_.clear();
-                double alpha = options.line_search.initial_step_size;
-                for (int i = 0; i < options.line_search.max_iterations; ++i)
-                {
-                    context.alphas_.push_back(alpha);
-                    alpha *= options.line_search.step_reduction_factor;
-                }
-                context.alpha_pr_ = options.line_search.initial_step_size;
-
-                // Evaluate trajectory and initialize dual/slack variables
-                evaluateTrajectoryWarmStart(context);
+                // Initialize dual/slack variables 
                 initializeDualSlackVariablesWarmStart(context);
                 resetFilter(context);
                 return;
             }
-            else if (options.verbose)
-            {
-                std::cout << "IPDDP: Warning - warm start requested but no valid solver state found. "
-                          << "Falling back to cold start initialization." << std::endl;
-            }
         }
 
-        // Cold start: Initialize trajectories only if not already provided by setInitialTrajectory
+        // Cold start initialization
+        // Initialize trajectories only if not already provided by setInitialTrajectory
         bool trajectory_provided = (context.X_.size() == static_cast<size_t>(horizon + 1) && 
                                     context.U_.size() == static_cast<size_t>(horizon) &&
                                     context.X_[0].size() == state_dim &&
@@ -195,7 +209,7 @@ namespace cddp
             }
         }
 
-        // Cold start: full initialization
+        // Initialize control gains
         k_u_.resize(horizon);
         K_u_.resize(horizon);
 
@@ -219,7 +233,6 @@ namespace cddp
         K_s_.clear();
 
         // Initialize barrier parameter
-        const auto &constraint_set = context.getConstraintSet();
         if (constraint_set.empty())
         {
             mu_ = 1e-8; // Small value if no constraints
@@ -229,79 +242,14 @@ namespace cddp
             mu_ = options.ipddp.barrier.mu_initial;
         }
 
-        // Initialize dual and slack variables for each constraint
-        for (const auto &constraint_pair : constraint_set)
-        {
-            const std::string &constraint_name = constraint_pair.first;
-            int dual_dim = constraint_pair.second->getDualDim();
-
-            G_[constraint_name].resize(horizon);
-            Y_[constraint_name].resize(horizon);
-            S_[constraint_name].resize(horizon);
-            k_y_[constraint_name].resize(horizon);
-            K_y_[constraint_name].resize(horizon);
-            k_s_[constraint_name].resize(horizon);
-            K_s_[constraint_name].resize(horizon);
-
-            for (int t = 0; t < horizon; ++t)
-            {
-                // Evaluate constraint g(x,u) = evaluate(x,u) - getUpperBound()
-                Eigen::VectorXd g_val = constraint_pair.second->evaluate(context.X_[t], context.U_[t]) -
-                                        constraint_pair.second->getUpperBound();
-                G_[constraint_name][t] = g_val;
-
-                Eigen::VectorXd s_init = Eigen::VectorXd::Zero(dual_dim);
-                Eigen::VectorXd y_init = Eigen::VectorXd::Zero(dual_dim);
-
-                for (int i = 0; i < dual_dim; ++i)
-                {
-                    // Initialize s_i = max(slack_scale, -g_i) to ensure s_i > 0
-                    s_init(i) = std::max(options.ipddp.slack_var_init_scale, -g_val(i));
-
-                    // Initialize y_i = mu / s_i to satisfy s_i * y_i = mu
-                    if (s_init(i) < 1e-12)
-                    {
-                        y_init(i) = mu_ / 1e-12;
-                    }
-                    else
-                    {
-                        y_init(i) = mu_ / s_init(i);
-                    }
-                    // Clamp dual variable
-                    y_init(i) = std::max(options.ipddp.dual_var_init_scale * 0.01,
-                                         std::min(y_init(i), options.ipddp.dual_var_init_scale * 100.0));
-                }
-                Y_[constraint_name][t] = y_init;
-                S_[constraint_name][t] = s_init;
-
-                // Initialize gains to zero
-                k_y_[constraint_name][t] = Eigen::VectorXd::Zero(dual_dim);
-                K_y_[constraint_name][t] = Eigen::MatrixXd::Zero(dual_dim, state_dim);
-                k_s_[constraint_name][t] = Eigen::VectorXd::Zero(dual_dim);
-                K_s_[constraint_name][t] = Eigen::MatrixXd::Zero(dual_dim, state_dim);
-            }
-        }
-
-        // Initialize cost using objective evaluation
-        context.cost_ = context.getObjective().evaluate(context.X_, context.U_);
-
-        // Initialize line search parameters
-        context.alphas_.clear();
-        double alpha = options.line_search.initial_step_size;
-        for (int i = 0; i < options.line_search.max_iterations; ++i)
-        {
-            context.alphas_.push_back(alpha);
-            alpha *= options.line_search.step_reduction_factor;
-        }
-        context.alpha_pr_ = options.line_search.initial_step_size;
+        // Initialize dual and slack variables
+        initializeDualSlackVariables(context);
 
         // Initialize regularization
         context.regularization_ = options.regularization.initial_value;
 
-        // Initialize step norm
+        // Initialize step norm and KKT error
         context.step_norm_ = 0.0;
-
-        // Initialize KKT error
         kkt_error_ = 1e10;
 
         // Evaluate initial trajectory
@@ -853,6 +801,69 @@ namespace cddp
             }
             std::cout << "IPDDP: Warm start max constraint violation = " << std::scientific << std::setprecision(2) << max_constraint_violation << std::endl;
         }
+    }
+
+    void IPDDPSolver::initializeDualSlackVariables(CDDP &context)
+    {
+        const CDDPOptions &options = context.getOptions();
+        const int horizon = context.getHorizon();
+        const auto &constraint_set = context.getConstraintSet();
+
+        // Initialize dual and slack variables for each constraint
+        for (const auto &constraint_pair : constraint_set)
+        {
+            const std::string &constraint_name = constraint_pair.first;
+            int dual_dim = constraint_pair.second->getDualDim();
+
+            G_[constraint_name].resize(horizon);
+            Y_[constraint_name].resize(horizon);
+            S_[constraint_name].resize(horizon);
+            k_y_[constraint_name].resize(horizon);
+            K_y_[constraint_name].resize(horizon);
+            k_s_[constraint_name].resize(horizon);
+            K_s_[constraint_name].resize(horizon);
+
+            for (int t = 0; t < horizon; ++t)
+            {
+                // Evaluate constraint g(x,u) = evaluate(x,u) - getUpperBound()
+                Eigen::VectorXd g_val = constraint_pair.second->evaluate(context.X_[t], context.U_[t]) -
+                                        constraint_pair.second->getUpperBound();
+                G_[constraint_name][t] = g_val;
+
+                Eigen::VectorXd s_init = Eigen::VectorXd::Zero(dual_dim);
+                Eigen::VectorXd y_init = Eigen::VectorXd::Zero(dual_dim);
+
+                for (int i = 0; i < dual_dim; ++i)
+                {
+                    // Initialize s_i = max(slack_scale, -g_i) to ensure s_i > 0
+                    s_init(i) = std::max(options.ipddp.slack_var_init_scale, -g_val(i));
+
+                    // Initialize y_i = mu / s_i to satisfy s_i * y_i = mu
+                    if (s_init(i) < 1e-12)
+                    {
+                        y_init(i) = mu_ / 1e-12;
+                    }
+                    else
+                    {
+                        y_init(i) = mu_ / s_init(i);
+                    }
+                    // Clamp dual variable
+                    y_init(i) = std::max(options.ipddp.dual_var_init_scale * 0.01,
+                                         std::min(y_init(i), options.ipddp.dual_var_init_scale * 100.0));
+                }
+                Y_[constraint_name][t] = y_init;
+                S_[constraint_name][t] = s_init;
+
+                // Initialize gains to zero
+                k_y_[constraint_name][t] = Eigen::VectorXd::Zero(dual_dim);
+                K_y_[constraint_name][t] = Eigen::MatrixXd::Zero(dual_dim, context.getStateDim());
+                k_s_[constraint_name][t] = Eigen::VectorXd::Zero(dual_dim);
+                K_s_[constraint_name][t] = Eigen::MatrixXd::Zero(dual_dim, context.getStateDim());
+            }
+        }
+
+        // Initialize cost using objective evaluation
+        context.cost_ = context.getObjective().evaluate(context.X_, context.U_);
     }
 
     void IPDDPSolver::resetBarrierFilter(CDDP &context)
@@ -1725,8 +1736,6 @@ namespace cddp
 
         return result;
     }
-
-
 
     void IPDDPSolver::printIteration(int iter, double objective, double inf_pr, double inf_du,
                                      double mu, double step_norm, double regularization,
