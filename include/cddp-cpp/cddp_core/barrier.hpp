@@ -21,6 +21,7 @@
 #include <cmath>
 #include <stdexcept>
 #include <tuple>
+#include "constraint.hpp"
 
 namespace cddp {
 
