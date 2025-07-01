@@ -313,6 +313,7 @@ public:
   double merit_function_;          ///< Merit function value
   double inf_pr_; ///< Current primal infeasibility (constraint violation norm)
   double inf_du_; ///< Current dual infeasibility (Lagrangian gradient norm)
+  double inf_comp_; ///< Current complementary 
   double step_norm_; ///< Current step norm ||d|| (primal step magnitude)
   bool initialized_ = false; ///< Overall CDDP problem initialization flag
 

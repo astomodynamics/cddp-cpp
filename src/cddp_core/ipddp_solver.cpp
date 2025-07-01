@@ -291,9 +291,10 @@ CDDPSolution IPDDPSolver::solve(CDDP &context) {
   }
 
   if (options.verbose) {
-    printIteration(0, context.cost_, context.inf_pr_, context.inf_du_, mu_,
-                   context.step_norm_, context.regularization_,
-                   context.alpha_du_, context.alpha_pr_);
+    printIteration(0, context.cost_, context.inf_pr_, context.inf_du_,
+                   context.inf_comp_, mu_, context.step_norm_,
+                   context.regularization_, context.alpha_du_,
+                   context.alpha_pr_);
   }
 
   // Start timer
@@ -454,9 +455,10 @@ CDDPSolution IPDDPSolver::solve(CDDP &context) {
 
     // Print iteration info
     if (options.verbose) {
-      printIteration(iter, context.cost_, context.inf_pr_, context.inf_du_, mu_,
-                     context.step_norm_, context.regularization_,
-                     best_result.alpha_du, context.alpha_pr_);
+      printIteration(iter, context.cost_, context.inf_pr_, context.inf_du_,
+                     context.inf_comp_, mu_, context.step_norm_,
+                     context.regularization_, best_result.alpha_du,
+                     context.alpha_pr_);
     }
 
     // Update barrier parameters (like ipddp_core.cpp)
@@ -1650,14 +1652,15 @@ ForwardPassResult IPDDPSolver::forwardPass(CDDP &context, double alpha) {
 }
 
 void IPDDPSolver::printIteration(int iter, double objective, double inf_pr,
-                                 double inf_du, double mu, double step_norm,
-                                 double regularization, double alpha_du,
-                                 double alpha_pr) const {
+                                 double inf_du, double inf_comp, double mu,
+                                 double step_norm, double regularization,
+                                 double alpha_du, double alpha_pr) const {
   if (iter == 0) {
     std::cout << std::setw(4) << "iter" << " " << std::setw(12) << "objective"
               << " " << std::setw(9) << "inf_pr" << " " << std::setw(9)
-              << "inf_du" << " " << std::setw(7) << "lg(mu)" << " "
-              << std::setw(9) << "||d||" << " " << std::setw(7) << "lg(rg)"
+              << "inf_du" << " " << std::setw(9) << "inf_comp" << " "
+              << std::setw(7) << "lg(mu)" << " " << std::setw(9) << "||d||"
+              << " " << std::setw(7) << "lg(rg)"
               << " " << std::setw(9) << "alpha_du" << " " << std::setw(9)
               << "alpha_pr" << std::endl;
   }
@@ -1676,6 +1679,10 @@ void IPDDPSolver::printIteration(int iter, double objective, double inf_pr,
   // Dual infeasibility (optimality gap)
   std::cout << std::setw(9) << std::scientific << std::setprecision(2) << inf_du
             << " ";
+
+  // Complementary infeasibility
+  std::cout << std::setw(9) << std::scientific << std::setprecision(2)
+            << inf_comp << " ";
 
   // Log of barrier parameter
   if (mu > 0.0) {

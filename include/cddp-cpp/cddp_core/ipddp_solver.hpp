@@ -100,7 +100,7 @@ private:
   // Interior point method parameters
   double mu_;                       ///< Barrier parameter
   std::vector<FilterPoint> filter_; ///< Filter points for line search
-  double constraint_violation_ = 0.0;
+  double constraint_violation_ = 0.0; ///< Constraint violation
   double kkt_error_ = 1e10; ///< KKT error for barrier updates
 
   /**
@@ -188,7 +188,7 @@ private:
   /**
    * @brief Print iteration information in IPOPT style.
    */
-  void printIteration(int iter, double objective, double inf_pr, double inf_du,
+  void printIteration(int iter, double objective, double inf_pr, double inf_du, double inf_comp,
                       double mu, double step_norm, double regularization,
                       double alpha_du, double alpha_pr) const;
 

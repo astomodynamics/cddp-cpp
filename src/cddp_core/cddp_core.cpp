@@ -37,7 +37,7 @@ CDDP::CDDP(const Eigen::VectorXd &initial_state,
       objective_(std::move(objective)), options_(options),
       initialized_(false), // Will be set true by initializeProblemIfNecessary
                            // or by strategies
-      cost_(0.0), merit_function_(0.0), inf_pr_(0.0), inf_du_(0.0),
+      cost_(0.0), merit_function_(0.0), inf_pr_(0.0), inf_du_(0.0), inf_comp_(0.0),
       alpha_pr_(
           options.line_search.initial_step_size), // Initialize from options
       alpha_du_(0.0), regularization_(options.regularization.initial_value),
@@ -389,6 +389,7 @@ void CDDP::initializeProblemIfNecessary() {
   merit_function_ = std::numeric_limits<double>::infinity();
   inf_pr_ = std::numeric_limits<double>::infinity();
   inf_du_ = std::numeric_limits<double>::infinity();
+  inf_comp_ = std::numeric_limits<double>::infinity();
   regularization_ = options_.regularization.initial_value;
 
   initialized_ = true;
