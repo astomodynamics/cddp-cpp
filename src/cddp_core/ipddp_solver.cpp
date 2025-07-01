@@ -267,6 +267,7 @@ CDDPSolution IPDDPSolver::solve(CDDP &context) {
   std::vector<double> history_step_length_dual;
   std::vector<double> history_dual_infeasibility;
   std::vector<double> history_primal_infeasibility;
+  std::vector<double> history_complementary_infeasibility;
   std::vector<double> history_barrier_mu;
 
   if (options.return_iteration_info) {
@@ -278,6 +279,7 @@ CDDPSolution IPDDPSolver::solve(CDDP &context) {
     history_step_length_dual.reserve(expected_size);
     history_dual_infeasibility.reserve(expected_size);
     history_primal_infeasibility.reserve(expected_size);
+    history_complementary_infeasibility.reserve(expected_size);
     history_barrier_mu.reserve(expected_size);
 
     // Initial iteration values
@@ -287,6 +289,7 @@ CDDPSolution IPDDPSolver::solve(CDDP &context) {
     history_step_length_dual.push_back(1.0);   // Initial dual step length
     history_dual_infeasibility.push_back(context.inf_du_);
     history_primal_infeasibility.push_back(context.inf_pr_);
+    history_complementary_infeasibility.push_back(context.inf_comp_);
     history_barrier_mu.push_back(mu_);
   }
 
@@ -393,6 +396,7 @@ CDDPSolution IPDDPSolver::solve(CDDP &context) {
         history_step_length_dual.push_back(best_result.alpha_du);
         history_dual_infeasibility.push_back(context.inf_du_);
         history_primal_infeasibility.push_back(context.inf_pr_);
+        history_complementary_infeasibility.push_back(context.inf_comp_);
         history_barrier_mu.push_back(mu_);
       }
 
@@ -537,6 +541,7 @@ CDDPSolution IPDDPSolver::solve(CDDP &context) {
   solution["final_barrier_parameter_mu"] = mu_;
   solution["final_primal_infeasibility"] = context.inf_pr_;
   solution["final_dual_infeasibility"] = context.inf_du_;
+  solution["final_complementary_infeasibility"] = context.inf_comp_;
 
   if (options.verbose) {
     printSolutionSummary(solution);
