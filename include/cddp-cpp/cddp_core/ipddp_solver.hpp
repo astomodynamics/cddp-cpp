@@ -100,7 +100,6 @@ private:
   // Interior point method parameters
   double mu_;                       ///< Barrier parameter
   std::vector<FilterPoint> filter_; ///< Filter points for line search
-  double constraint_violation_ = 0.0; ///< Constraint violation
   double kkt_error_ = 1e10; ///< KKT error for barrier updates
 
   /**
