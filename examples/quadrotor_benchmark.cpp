@@ -479,6 +479,296 @@ int main() {
     }
 
     // --------------------------------------------------------
+    // 5. Baseline #5: IPOPT (using CasADi)
+    // --------------------------------------------------------
+    std::cout << "Solving with IPOPT..." << std::endl;
+    
+    std::vector<Eigen::VectorXd> X_ipopt_sol(horizon + 1, Eigen::VectorXd(state_dim));
+    std::vector<Eigen::VectorXd> U_ipopt_sol(horizon, Eigen::VectorXd(control_dim));
+    std::vector<double> x_ipopt, y_ipopt, z_ipopt;
+    std::vector<double> phi_ipopt, theta_ipopt, psi_ipopt;
+    double solve_time_ipopt_numeric = 0.0;
+    double cost_ipopt = 0.0;
+
+    { // IPOPT specific scope
+        const int n_states = (horizon + 1) * state_dim;
+        const int n_controls = horizon * control_dim;
+        const int n_dec = n_states + n_controls;
+
+        // Define symbolic variables for states and controls
+        casadi::MX X_casadi = casadi::MX::sym("X", n_states);
+        casadi::MX U_casadi = casadi::MX::sym("U", n_controls);
+        casadi::MX z = casadi::MX::vertcat({X_casadi, U_casadi});
+
+        // Helper lambdas to extract the state and control at time step t
+        auto X_t = [=](int t) -> casadi::MX {
+            return X_casadi(casadi::Slice(t * state_dim, (t + 1) * state_dim));
+        };
+        auto U_t = [=](int t) -> casadi::MX {
+            return U_casadi(casadi::Slice(t * control_dim, (t + 1) * control_dim));
+        };
+
+        // Convert Eigen matrices to CasADi
+        casadi::DM Q_dm(Q.rows(), Q.cols());
+        for (int i = 0; i < Q.rows(); i++) {
+            for (int j = 0; j < Q.cols(); j++) {
+                Q_dm(i, j) = Q(i, j);
+            }
+        }
+        casadi::DM R_dm(R.rows(), R.cols());
+        for (int i = 0; i < R.rows(); i++) {
+            for (int j = 0; j < R.cols(); j++) {
+                R_dm(i, j) = R(i, j);
+            }
+        }
+        casadi::DM Qf_dm(Qf.rows(), Qf.cols());
+        for (int i = 0; i < Qf.rows(); i++) {
+            for (int j = 0; j < Qf.cols(); j++) {
+                Qf_dm(i, j) = Qf(i, j);
+            }
+        }
+
+        // Convert inertia matrix to CasADi
+        casadi::DM inertia_dm(3, 3);
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                inertia_dm(i, j) = inertia_matrix(i, j);
+            }
+        }
+
+        // Quadrotor continuous dynamics function (computes derivatives)
+        auto quadrotor_derivatives = [=](casadi::MX x, casadi::MX u) -> casadi::MX {
+            casadi::MX x_dot = casadi::MX::zeros(state_dim, 1);
+            
+            // Extract states
+            casadi::MX pos = x(casadi::Slice(0, 3));      // [x, y, z]
+            casadi::MX quat = x(casadi::Slice(3, 7));     // [qw, qx, qy, qz]
+            casadi::MX vel = x(casadi::Slice(7, 10));     // [vx, vy, vz]
+            casadi::MX omega = x(casadi::Slice(10, 13));  // [omega_x, omega_y, omega_z]
+            
+            casadi::MX qw = quat(0), qx = quat(1), qy = quat(2), qz = quat(3);
+            casadi::MX omega_x = omega(0), omega_y = omega(1), omega_z = omega(2);
+            
+            // Normalize quaternion
+            casadi::MX q_norm = casadi::MX::sqrt(qw*qw + qx*qx + qy*qy + qz*qz);
+            qw = qw / q_norm;
+            qx = qx / q_norm;
+            qy = qy / q_norm;
+            qz = qz / q_norm;
+            
+            // Extract control inputs (motor forces)
+            casadi::MX f1 = u(0), f2 = u(1), f3 = u(2), f4 = u(3);
+            
+            // Compute total thrust and moments
+            casadi::MX thrust = f1 + f2 + f3 + f4;
+            casadi::MX tau_x = arm_length * (f1 - f3);
+            casadi::MX tau_y = arm_length * (f2 - f4);
+            casadi::MX tau_z = 0.1 * (f1 - f2 + f3 - f4);
+            
+            // Rotation matrix from quaternion
+            casadi::MX R11 = 1 - 2 * (qy * qy + qz * qz);
+            casadi::MX R12 = 2 * (qx * qy - qz * qw);
+            casadi::MX R13 = 2 * (qx * qz + qy * qw);
+            casadi::MX R21 = 2 * (qx * qy + qz * qw);
+            casadi::MX R22 = 1 - 2 * (qx * qx + qz * qz);
+            casadi::MX R23 = 2 * (qy * qz - qx * qw);
+            casadi::MX R31 = 2 * (qx * qz - qy * qw);
+            casadi::MX R32 = 2 * (qy * qz + qx * qw);
+            casadi::MX R33 = 1 - 2 * (qx * qx + qy * qy);
+            
+            // Position derivative = velocity
+            x_dot(casadi::Slice(0, 3)) = vel;
+            
+            // Quaternion derivative
+            x_dot(3) = -0.5 * (qx * omega_x + qy * omega_y + qz * omega_z);  // qw_dot
+            x_dot(4) =  0.5 * (qw * omega_x + qy * omega_z - qz * omega_y);  // qx_dot
+            x_dot(5) =  0.5 * (qw * omega_y - qx * omega_z + qz * omega_x);  // qy_dot
+            x_dot(6) =  0.5 * (qw * omega_z + qx * omega_y - qy * omega_x);  // qz_dot
+            
+            // Velocity derivative (thrust is applied along body z-axis)
+            casadi::MX thrust_world_x = R13 * thrust;
+            casadi::MX thrust_world_y = R23 * thrust;
+            casadi::MX thrust_world_z = R33 * thrust;
+            
+            x_dot(7) = thrust_world_x / mass;                    // vx_dot
+            x_dot(8) = thrust_world_y / mass;                    // vy_dot
+            x_dot(9) = thrust_world_z / mass - 9.81;             // vz_dot
+            
+            // Angular velocity derivative
+            casadi::MX inertia_inv = casadi::MX::inv(inertia_dm);
+            casadi::MX tau_vec = casadi::MX::vertcat({tau_x, tau_y, tau_z});
+            casadi::MX gyroscopic = casadi::MX::cross(omega, casadi::MX::mtimes(inertia_dm, omega));
+            casadi::MX angular_acc = casadi::MX::mtimes(inertia_inv, tau_vec - gyroscopic);
+            
+            x_dot(casadi::Slice(10, 13)) = angular_acc;
+            
+            return x_dot;
+        };
+
+        // RK4 integration function
+        auto quadrotor_dynamics = [=](casadi::MX x, casadi::MX u) -> casadi::MX {
+            // RK4 integration: k1, k2, k3, k4
+            casadi::MX k1 = quadrotor_derivatives(x, u);
+            casadi::MX k2 = quadrotor_derivatives(x + timestep/2.0 * k1, u);
+            casadi::MX k3 = quadrotor_derivatives(x + timestep/2.0 * k2, u);
+            casadi::MX k4 = quadrotor_derivatives(x + timestep * k3, u);
+            
+            // RK4 final integration step
+            return x + timestep/6.0 * (k1 + 2.0*k2 + 2.0*k3 + k4);
+        };
+
+        casadi::MX g; 
+
+        // Initial state constraint: X₀ = initial_state
+        casadi::DM init_state_dm(std::vector<double>(initial_state.data(), initial_state.data() + state_dim));
+        g = casadi::MX::vertcat({g, X_t(0) - init_state_dm});
+
+        // Dynamics constraints
+        for (int t = 0; t < horizon; t++) {
+            casadi::MX x_next_expr = quadrotor_dynamics(X_t(t), U_t(t));
+            g = casadi::MX::vertcat({g, X_t(t + 1) - x_next_expr});
+        }
+
+        // Cost Function
+        casadi::MX cost = casadi::MX::zeros(1, 1);
+        
+        // Running cost
+        for (int t = 0; t < horizon; t++) {
+            // Convert reference state to CasADi
+            casadi::DM ref_dm(std::vector<double>(figure8_reference_states[t].data(), 
+                                                figure8_reference_states[t].data() + state_dim));
+            
+            casadi::MX x_diff = X_t(t) - ref_dm;
+            casadi::MX u_diff = U_t(t);
+            
+            casadi::MX state_cost = casadi::MX::mtimes({x_diff.T(), Q_dm, x_diff});
+            casadi::MX control_cost = casadi::MX::mtimes({u_diff.T(), R_dm, u_diff});
+            cost = cost + state_cost + control_cost;
+        }
+        
+        // Terminal cost
+        casadi::DM goal_dm(std::vector<double>(goal_state.data(), goal_state.data() + state_dim));
+        casadi::MX x_diff_final = X_t(horizon) - goal_dm;
+        casadi::MX terminal_cost = casadi::MX::mtimes({x_diff_final.T(), Qf_dm, x_diff_final});
+        cost = cost + terminal_cost;
+
+        // Variable Bounds and Initial Guess
+        std::vector<double> lbx(n_dec, -1e20);
+        std::vector<double> ubx(n_dec,  1e20);
+        
+        // Apply control bounds
+        for (int t = 0; t < horizon; t++) {
+            for (int i = 0; i < control_dim; i++) {
+                lbx[n_states + t * control_dim + i] = control_lower_bound(i);
+                ubx[n_states + t * control_dim + i] = control_upper_bound(i);
+            }
+        }
+
+        // The complete set of constraints (g) must be equal to zero
+        const int n_g = static_cast<int>(g.size1());
+        std::vector<double> lbg(n_g, 0.0);
+        std::vector<double> ubg(n_g, 0.0);
+
+        // Provide an initial guess for the decision vector
+        std::vector<double> x0(n_dec, 0.0);
+        
+        // Set the initial state portion
+        for (int i = 0; i < state_dim; i++) {
+            x0[i] = initial_state(i);
+        }
+        
+        // Use the reference trajectory as initial guess for states
+        for (int t = 1; t <= horizon; t++) {
+            for (int i = 0; i < state_dim; i++) {
+                x0[t * state_dim + i] = figure8_reference_states[t](i);
+            }
+        }
+        
+        // Initial guess for controls (hover thrust)
+        for (int t = 0; t < horizon; t++) {
+            for (int i = 0; i < control_dim; i++) {
+                x0[n_states + t * control_dim + i] = hover_thrust;
+            }
+        }
+
+        // NLP Definition and IPOPT Solver Setup
+        std::map<std::string, casadi::MX> nlp;
+        nlp["x"] = z;
+        nlp["f"] = cost;
+        nlp["g"] = g;
+
+        casadi::Dict solver_opts;
+        solver_opts["print_time"]         = true;
+        solver_opts["ipopt.print_level"]  = 0;
+        solver_opts["ipopt.max_iter"]     = 1000;
+        solver_opts["ipopt.tol"]          = 1e-6;
+        solver_opts["ipopt.acceptable_tol"] = 1e-4;
+
+        // Create the NLP solver instance using IPOPT
+        casadi::Function solver = casadi::nlpsol("solver", "ipopt", nlp, solver_opts);
+
+        // Convert the initial guess and bounds into DM objects
+        casadi::DM x0_dm = casadi::DM(x0);
+        casadi::DM lbx_dm = casadi::DM(lbx);
+        casadi::DM ubx_dm = casadi::DM(ubx);
+        casadi::DM lbg_dm = casadi::DM(lbg);
+        casadi::DM ubg_dm = casadi::DM(ubg);
+
+        casadi::DMDict arg({
+            {"x0", x0_dm},
+            {"lbx", lbx_dm},
+            {"ubx", ubx_dm},
+            {"lbg", lbg_dm},
+            {"ubg", ubg_dm}
+        });
+
+        // Solve the NLP
+        auto start_time_ipopt = std::chrono::high_resolution_clock::now();
+        casadi::DMDict res = solver(arg);
+        auto end_time_ipopt = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> elapsed = end_time_ipopt - start_time_ipopt;
+        solve_time_ipopt_numeric = elapsed.count();
+
+        // Extract and Display the Solution
+        std::vector<double> sol = std::vector<double>(res.at("x"));
+        cost_ipopt = static_cast<double>(casadi::DM(res.at("f")));
+
+        // Convert to state and control trajectories
+        for (int t = 0; t <= horizon; t++) {
+            for (int i = 0; i < state_dim; i++) {
+                X_ipopt_sol[t](i) = sol[t * state_dim + i];
+            }
+        }
+
+        for (int t = 0; t < horizon; t++) {
+            for (int i = 0; i < control_dim; i++) {
+                U_ipopt_sol[t](i) = sol[n_states + t * control_dim + i];
+            }
+        }
+
+        std::cout << "IPOPT Optimal Cost: " << cost_ipopt << std::endl;
+        std::cout << "IPOPT solve time: " << solve_time_ipopt_numeric << " seconds" << std::endl;
+    }
+
+    // Extract data for plotting
+    for (size_t i = 0; i < X_ipopt_sol.size(); ++i)
+    {
+        x_ipopt.push_back(X_ipopt_sol[i](0));
+        y_ipopt.push_back(X_ipopt_sol[i](1));
+        z_ipopt.push_back(X_ipopt_sol[i](2));
+
+        double qw = X_ipopt_sol[i](3);
+        double qx = X_ipopt_sol[i](4);
+        double qy = X_ipopt_sol[i](5);
+        double qz = X_ipopt_sol[i](6);
+
+        Eigen::Vector3d euler = quaternionToEuler(qw, qx, qy, qz);
+        phi_ipopt.push_back(euler(0));
+        theta_ipopt.push_back(euler(1));
+        psi_ipopt.push_back(euler(2));
+    }
+
+    // --------------------------------------------------------
     // 6. Reference trajectory for comparison
     // --------------------------------------------------------
     std::vector<double> x_ref, y_ref, z_ref;
@@ -492,10 +782,10 @@ int main() {
     // 7. Plot all trajectories comparison
     // --------------------------------------------------------
     auto main_figure = figure(true);
-    main_figure->size(2400, 800); // 1x4 layout
+    main_figure->size(3000, 800); // 1x5 layout
 
     // --- Subplot 1: ASDDP ---
-    auto ax_asddp = subplot(1, 4, 0);
+    auto ax_asddp = subplot(1, 5, 0);
 
     auto traj3d_asddp = plot3(ax_asddp, x_asddp, y_asddp, z_asddp);
     traj3d_asddp->display_name("ASDDP Trajectory");
@@ -531,7 +821,7 @@ int main() {
     grid(ax_asddp, true);
 
     // --- Subplot 2: LogDDP ---
-    auto ax_logddp = subplot(1, 4, 1);
+    auto ax_logddp = subplot(1, 5, 1);
 
     auto traj3d_logddp = plot3(ax_logddp, x_logddp, y_logddp, z_logddp);
     traj3d_logddp->display_name("LogDDP Trajectory");
@@ -565,7 +855,7 @@ int main() {
     grid(ax_logddp, true);
 
     // --- Subplot 3: IPDDP ---
-    auto ax_ipddp = subplot(1, 4, 2);
+    auto ax_ipddp = subplot(1, 5, 2);
 
     auto traj3d_ipddp = plot3(ax_ipddp, x_ipddp, y_ipddp, z_ipddp);
     traj3d_ipddp->display_name("IPDDP Trajectory");
@@ -599,7 +889,7 @@ int main() {
     grid(ax_ipddp, true);
 
     // --- Subplot 4: MSIPDDP ---
-    auto ax_msipddp = subplot(1, 4, 3);
+    auto ax_msipddp = subplot(1, 5, 3);
 
     auto traj3d_msipddp = plot3(ax_msipddp, x_msipddp, y_msipddp, z_msipddp);
     traj3d_msipddp->display_name("MSIPDDP Trajectory");
@@ -632,6 +922,40 @@ int main() {
     leg_msipddp->location(legend::general_alignment::topleft);
     grid(ax_msipddp, true);
 
+    // --- Subplot 5: IPOPT ---
+    auto ax_ipopt = subplot(1, 5, 4);
+
+    auto traj3d_ipopt = plot3(ax_ipopt, x_ipopt, y_ipopt, z_ipopt);
+    traj3d_ipopt->display_name("IPOPT Trajectory");
+    traj3d_ipopt->line_style("-");
+    traj3d_ipopt->line_width(2);
+    traj3d_ipopt->color("blue");
+
+    hold(ax_ipopt, true);
+
+    auto ref3d_ipopt = plot3(ax_ipopt, x_ref, y_ref, z_ref);
+    ref3d_ipopt->display_name("Reference");
+    ref3d_ipopt->line_style("--");
+    ref3d_ipopt->line_width(1);
+    ref3d_ipopt->color("red");
+
+    auto proj_xy_ipopt = plot3(ax_ipopt, x_ipopt, y_ipopt, std::vector<double>(x_ipopt.size(), 0.0));
+    proj_xy_ipopt->display_name("X-Y Projection");
+    proj_xy_ipopt->line_style("--");
+    proj_xy_ipopt->line_width(1);
+    proj_xy_ipopt->color("gray");
+
+    xlabel(ax_ipopt, "X [m]");
+    ylabel(ax_ipopt, "Y [m]");
+    zlabel(ax_ipopt, "Z [m]");
+    xlim(ax_ipopt, {-4, 4});
+    ylim(ax_ipopt, {-2, 2});
+    zlim(ax_ipopt, {0, 4});
+    title(ax_ipopt, "IPOPT");
+    auto leg_ipopt = matplot::legend(ax_ipopt);
+    leg_ipopt->location(legend::general_alignment::topleft);
+    grid(ax_ipopt, true);
+
     main_figure->draw();
     main_figure->save(plotDirectory + "/quadrotor_lemniscate_3d_comparison.png");
     std::cout << "Saved combined 3D trajectory plot to "
@@ -647,11 +971,12 @@ int main() {
         solve_time_asddp / 1000000.0,      // Convert to seconds
         solve_time_logddp / 1000000.0,     // Convert to seconds
         solve_time_ipddp / 1000000.0,      // Convert to seconds
-        solve_time_msipddp / 1000000.0     // Convert to seconds
+        solve_time_msipddp / 1000000.0,    // Convert to seconds
+        solve_time_ipopt_numeric           // Already in seconds
     };
 
     std::vector<std::string> solver_names = {
-        "ASDDP", "LogDDP", "IPDDP", "MSIPDDP"
+        "ASDDP", "LogDDP", "IPDDP", "MSIPDDP", "IPOPT"
     };
 
     auto ax_times = time_figure->current_axes();
@@ -685,6 +1010,8 @@ int main() {
               << " | " << std::setw(13) << solve_time_ipddp / 1000000.0 << "\n";
     std::cout << "MSIPDDP   | " << std::setw(10) << cost_msipddp 
               << " | " << std::setw(13) << solve_time_msipddp / 1000000.0 << "\n";
+    std::cout << "IPOPT     | " << std::setw(10) << cost_ipopt 
+              << " | " << std::setw(13) << solve_time_ipopt_numeric << "\n";
     std::cout << "========================================\n\n";
 
     return 0;
