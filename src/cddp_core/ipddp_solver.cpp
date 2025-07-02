@@ -524,47 +524,8 @@ namespace cddp
                        context.alpha_pr_);
       }
 
-      // Update barrier parameters (like ipddp_core.cpp)
-      if (kkt_error_ <= options.ipddp.barrier.mu_update_factor * mu_)
-      {
-        if (context.getConstraintSet().empty())
-        {
-          // No constraints case - no barrier update needed
-        }
-        else
-        {
-          // Adaptive barrier reduction like ipddp_core.cpp
-          double linear_reduction_target_factor =
-              options.ipddp.barrier.mu_update_factor;
-          if (mu_ > 1e-12)
-          {
-            double kkt_progress_metric = kkt_error_ / mu_;
-            // Satisfying the KKT conditions for the current mu.
-            // So, we can be more aggressive in reducing mu.
-            if (kkt_progress_metric <
-                0.1 * options.ipddp.barrier.mu_update_factor)
-            {
-              // Significantly better than threshold: make reduction factor more
-              // aggressive
-              linear_reduction_target_factor =
-                  options.ipddp.barrier.mu_update_factor * 0.5;
-            }
-            else if (kkt_progress_metric <
-                     0.5 * options.ipddp.barrier.mu_update_factor)
-            {
-              // Moderately better than threshold: make reduction factor slightly
-              // more aggressive
-              linear_reduction_target_factor =
-                  options.ipddp.barrier.mu_update_factor * 0.75;
-            }
-          }
-          mu_ = std::max(
-              options.tolerance / 10.0,
-              std::min(linear_reduction_target_factor * mu_,
-                       std::pow(mu_, options.ipddp.barrier.mu_update_power)));
-        }
-        resetFilter(context);
-      }
+      // Update barrier parameters using the extracted method
+      updateBarrierParameters(context, best_result.success, kkt_error_);
     }
 
     // Compute final timing
@@ -1954,6 +1915,61 @@ namespace cddp
     std::cout << "Final Barrier μ: " << std::setprecision(2) << std::scientific
               << final_mu << "\n";
     std::cout << "========================================\n\n";
+  }
+
+  void IPDDPSolver::updateBarrierParameters(CDDP &context, bool forward_pass_success, double kkt_error)
+  {
+    const CDDPOptions &options = context.getOptions();
+    const auto &barrier_opts = options.ipddp.barrier;
+    const auto &constraint_set = context.getConstraintSet();
+    
+    // Only update barrier parameters if we have constraints
+    if (constraint_set.empty())
+    {
+      return; // No constraints case - no barrier update needed
+    }
+    
+    // Check if we should update the barrier parameter
+    if (kkt_error <= barrier_opts.mu_update_factor * mu_)
+    {
+      // Adaptive barrier reduction strategy
+      double reduction_factor = barrier_opts.mu_update_factor;
+      
+      if (mu_ > 1e-12)
+      {
+        double kkt_progress_ratio = kkt_error / mu_;
+        
+        // Aggressive reduction if we're significantly satisfying KKT conditions
+        if (kkt_progress_ratio < 0.1 * barrier_opts.mu_update_factor)
+        {
+          reduction_factor = barrier_opts.mu_update_factor * 0.5;
+        }
+        // Moderate reduction if we're moderately satisfying KKT conditions  
+        else if (kkt_progress_ratio < 0.5 * barrier_opts.mu_update_factor)
+        {
+          reduction_factor = barrier_opts.mu_update_factor * 0.75;
+        }
+        // Standard reduction otherwise
+      }
+      
+      // Update barrier parameter with bounds
+      double new_mu_linear = reduction_factor * mu_;
+      double new_mu_superlinear = std::pow(mu_, barrier_opts.mu_update_power);
+      
+      mu_ = std::max(options.tolerance / 10.0,
+                     std::min(new_mu_linear, new_mu_superlinear));
+      
+      // Reset filter when barrier parameter changes
+      resetFilter(context);
+      
+      if (options.debug)
+      {
+        std::cout << "[IPDDP Barrier Update] "
+                  << "KKT error: " << std::scientific << std::setprecision(2) << kkt_error
+                  << " threshold: " << barrier_opts.mu_update_factor * mu_
+                  << " new μ: " << mu_ << std::endl;
+      }
+    }
   }
 
 } // namespace cddp

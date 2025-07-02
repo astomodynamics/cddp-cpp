@@ -178,6 +178,14 @@ private:
   ForwardPassResult forwardPass(CDDP &context, double alpha);
 
   /**
+   * @brief Update barrier parameter based on convergence progress.
+   * @param context Reference to the CDDP context.
+   * @param forward_pass_success Whether the forward pass was successful.
+   * @param kkt_error Current KKT error for barrier update condition.
+   */
+  void updateBarrierParameters(CDDP &context, bool forward_pass_success, double kkt_error);
+
+  /**
    * @brief Get total dual dimension across all constraints.
    * @param context Reference to the CDDP context.
    * @return Total number of dual variables.
