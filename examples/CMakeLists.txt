@@ -13,6 +13,12 @@
 #  limitations under the License.
 
 # # CMakeLists.txt for the CDDP examples
+add_executable(unicycle_benchmark unicycle_benchmark.cpp)
+target_link_libraries(unicycle_benchmark cddp)
+
+add_executable(quadrotor_benchmark quadrotor_benchmark.cpp)
+target_link_libraries(quadrotor_benchmark cddp)
+
 # add_executable(cddp_bicycle cddp_bicycle.cpp)
 # target_link_libraries(cddp_bicycle cddp)
 
