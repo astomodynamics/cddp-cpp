@@ -102,6 +102,9 @@ private:
   std::vector<FilterPoint> filter_; ///< Filter points for line search
   double kkt_error_ = 1e10; ///< KKT error for barrier updates
 
+  // Trajectory norms for termination metric scaling
+  double slack_trajectory_norm_; ///< 1-norm of slack variable trajectory
+
   /**
    * @brief Pre-compute dynamics jacobians and hessians for all time steps in
    * parallel.

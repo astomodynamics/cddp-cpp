@@ -27,7 +27,7 @@
 namespace cddp
 {
 
-  IPDDPSolver::IPDDPSolver() : mu_(1e-1) {}
+  IPDDPSolver::IPDDPSolver() : mu_(1e-1), slack_trajectory_norm_(1.0) {}
 
   void IPDDPSolver::initialize(CDDP &context)
   {
@@ -125,10 +125,11 @@ namespace cddp
         k_s_.clear();
         K_s_.clear();
 
-        // Set barrier parameter based on constraint evaluation
+        // Set barrier parameter and slack trajectory norm based on constraint evaluation
         if (constraint_set.empty())
         {
           mu_ = 1e-8; // Small value if no constraints
+          slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
         }
         else
         {
@@ -160,12 +161,15 @@ namespace cddp
             // Slightly infeasible: moderate barrier parameter
             mu_ = options.tolerance;
           }
-          else
-          {
-            // Significantly infeasible: standard barrier parameter
-            mu_ = options.ipddp.barrier.mu_initial * 0.1;
+                      else
+            {
+              // Significantly infeasible: standard barrier parameter
+              mu_ = options.ipddp.barrier.mu_initial * 0.1;
+            }
+            
+            // Initialize slack trajectory norm for warm start
+            slack_trajectory_norm_ = 1.0; // Will be computed after first iteration
           }
-        }
 
         // Initialize regularization
         context.regularization_ = options.regularization.initial_value;
@@ -250,14 +254,16 @@ namespace cddp
     k_s_.clear();
     K_s_.clear();
 
-    // Initialize barrier parameter
+    // Initialize barrier parameter and slack trajectory norm
     if (constraint_set.empty())
     {
       mu_ = 1e-8; // Small value if no constraints
+      slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
     }
     else
     {
       mu_ = options.ipddp.barrier.mu_initial;
+      slack_trajectory_norm_ = 1.0; // Will be computed after first iteration
     }
 
     // Initialize dual and slack variables
@@ -411,8 +417,9 @@ namespace cddp
           std::cout << "    cost: " << best_result.cost << std::endl;
           std::cout << "    merit: " << best_result.merit_function << std::endl;
           std::cout << "    alpha: " << best_result.alpha_pr << std::endl;
-          std::cout << "    cv_err: " << best_result.constraint_violation
-                    << std::endl;
+          std::cout << "    cv_err: " << best_result.constraint_violation << std::endl;
+          std::cout << "    slack_norm: " << std::scientific << std::setprecision(4) 
+                    << slack_trajectory_norm_ << std::endl;
         }
 
         context.X_ = best_result.state_trajectory;
@@ -423,6 +430,34 @@ namespace cddp
           S_ = *best_result.slack_trajectory;
         if (best_result.constraint_eval_trajectory)
           G_ = *best_result.constraint_eval_trajectory;
+
+        // Calculate slack trajectory norm for scaled termination metrics
+        const auto &constraint_set_local = context.getConstraintSet();
+        const int horizon_local = context.getHorizon();
+        if (constraint_set_local.empty())
+        {
+          slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
+        }
+        else
+        {
+          // Use average slack norm instead of total to be comparable across different horizons
+          slack_trajectory_norm_ = 0.0;
+          int total_slack_vars = 0;
+          for (const auto &constraint_pair : constraint_set_local)
+          {
+            const std::string &constraint_name = constraint_pair.first;
+            for (int t = 0; t < horizon_local; ++t)
+            {
+              slack_trajectory_norm_ += S_[constraint_name][t].lpNorm<1>();
+              total_slack_vars += S_[constraint_name][t].size();
+            }
+          }
+          if (total_slack_vars > 0)
+          {
+            slack_trajectory_norm_ = slack_trajectory_norm_ / total_slack_vars;
+          }
+          slack_trajectory_norm_ = std::max(slack_trajectory_norm_, 1.0); // Avoid division by zero
+        }
 
         dJ = context.cost_ - best_result.cost;
         context.cost_ = best_result.cost;
@@ -468,33 +503,34 @@ namespace cddp
         }
       }
 
-      // Check convergence (exactly like ipddp_core.cpp)
-      double mu_vs_kkt_error = std::max(mu_, kkt_error_);
-      if (std::max(context.inf_du_, mu_vs_kkt_error) <= options.tolerance)
+      // Check convergence with proper scaling using trajectory norms (like MSIPDDP)
+      double dual_scaling = std::max(slack_trajectory_norm_, 1.0);
+      double primal_scaling = std::max(slack_trajectory_norm_, 1.0);
+      double termination_metric = std::max(context.inf_du_ / dual_scaling, 
+                                           context.inf_pr_ / primal_scaling);
+
+      if (termination_metric <= options.tolerance)
       {
         converged = true;
         termination_reason = "OptimalSolutionFound";
         if (options.verbose)
         {
-          std::cout << "IPDDP: Converged due to optimality gap and constraint "
-                       "violation."
-                    << std::endl;
+          std::cout << "IPDDP: Converged due to scaled optimality gap and constraint "
+                       "violation (metric: " << std::scientific << std::setprecision(2) 
+                    << termination_metric << ")" << std::endl;
         }
         break;
       }
 
-      if (std::abs(dJ) < options.acceptable_tolerance &&
-          std::abs(context.cost_ - context.merit_function_) <
-              options.acceptable_tolerance &&
-          mu_vs_kkt_error <= options.tolerance)
+      if (std::abs(dJ) < options.acceptable_tolerance)
       {
         converged = true;
         termination_reason = "AcceptableSolutionFound";
         if (options.verbose)
         {
-          std::cout
-              << "IPDDP: Converged due to small change in cost and Lagrangian."
-              << std::endl;
+          std::cout << "IPDDP: Converged due to small change in cost (dJ: " 
+                    << std::scientific << std::setprecision(2) << std::abs(dJ) 
+                    << ")" << std::endl;
         }
         break;
       }
@@ -572,6 +608,7 @@ namespace cddp
     solution["final_primal_infeasibility"] = context.inf_pr_;
     solution["final_dual_infeasibility"] = context.inf_du_;
     solution["final_complementary_infeasibility"] = context.inf_comp_;
+    solution["final_slack_trajectory_norm"] = slack_trajectory_norm_;
 
     if (options.verbose)
     {
@@ -1914,6 +1951,10 @@ namespace cddp
     std::cout << "Final Cost: " << std::setprecision(6) << final_cost << "\n";
     std::cout << "Final Barrier μ: " << std::setprecision(2) << std::scientific
               << final_mu << "\n";
+    
+    auto final_slack_norm = std::any_cast<double>(solution.at("final_slack_trajectory_norm"));
+    std::cout << "Final Slack Norm: " << std::setprecision(2) << std::scientific 
+              << final_slack_norm << "\n";
     std::cout << "========================================\n\n";
   }
 
