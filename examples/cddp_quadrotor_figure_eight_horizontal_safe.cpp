@@ -296,10 +296,15 @@ int main()
     
     // Update regularization options
     options.regularization.max_value = 1e+7;
+
+    // Update IPDDP-specific options
+    options.ipddp.dual_var_init_scale = 1e-1;
+    options.ipddp.slack_var_init_scale = 1e-2;
+    options.ipddp.barrier.mu_initial = 1e-0;
     
     // Update MSIPDDP-specific options for tighter constraints
-    options.msipddp.dual_var_init_scale = 1e-2;
-    options.msipddp.slack_var_init_scale = 1e-1;
+    options.msipddp.dual_var_init_scale = 1e-1;
+    options.msipddp.slack_var_init_scale = 1e-2;
     options.msipddp.segment_length = horizon / 100; // Smaller segments for better accuracy
     options.msipddp.rollout_type = "nonlinear";
     
