@@ -139,13 +139,13 @@ int main() {
     casadi::DM Q_dm(Q.rows(), Q.cols());
     for (int i = 0; i < Q.rows(); i++) {
         for (int j = 0; j < Q.cols(); j++) {
-            Q_dm(i, j) = Q(i, j);
+            Q_dm(i, j) = Q(i, j) * timestep;
         }
     }
     casadi::DM R_dm(R.rows(), R.cols());
     for (int i = 0; i < R.rows(); i++) {
         for (int j = 0; j < R.cols(); j++) {
-            R_dm(i, j) = R(i, j);
+            R_dm(i, j) = R(i, j) * timestep;
         }
     }
     casadi::DM Qf_dm(Qf.rows(), Qf.cols());
@@ -323,6 +323,7 @@ int main() {
     
     // Set the initial state portion
     for (int i = 0; i < state_dim; i++) {
+
         x0[i] = initial_state(i);
     }
     
