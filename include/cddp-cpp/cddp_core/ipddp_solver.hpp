@@ -100,7 +100,6 @@ private:
   // Interior point method parameters
   double mu_;                       ///< Barrier parameter
   std::vector<FilterPoint> filter_; ///< Filter points for line search
-  double kkt_error_ = 1e10; ///< KKT error for barrier updates
 
   // Trajectory norms for termination metric scaling
   double slack_trajectory_norm_; ///< 1-norm of slack variable trajectory
@@ -184,9 +183,8 @@ private:
    * @brief Update barrier parameter based on convergence progress.
    * @param context Reference to the CDDP context.
    * @param forward_pass_success Whether the forward pass was successful.
-   * @param kkt_error Current KKT error for barrier update condition.
    */
-  void updateBarrierParameters(CDDP &context, bool forward_pass_success, double kkt_error);
+  void updateBarrierParameters(CDDP &context, bool forward_pass_success);
 
   /**
    * @brief Get total dual dimension across all constraints.

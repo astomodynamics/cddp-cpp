@@ -85,7 +85,6 @@ namespace cddp
         }
         mu_ = options.ipddp.barrier.mu_initial * 0.1;
         context.step_norm_ = 0.0;
-        kkt_error_ = 1e10;
         evaluateTrajectoryWarmStart(context);
         initializeDualSlackVariablesWarmStart(context);
         resetFilter(context);
@@ -174,9 +173,8 @@ namespace cddp
         // Initialize regularization
         context.regularization_ = options.regularization.initial_value;
 
-        // Initialize step norm and KKT error
+        // Initialize step norm
         context.step_norm_ = 0.0;
-        kkt_error_ = 1e10;
 
         // Initialize dual/slack variables
         initializeDualSlackVariablesWarmStart(context);
@@ -272,9 +270,8 @@ namespace cddp
     // Initialize regularization
     context.regularization_ = options.regularization.initial_value;
 
-    // Initialize step norm and KKT error
+    // Initialize step norm
     context.step_norm_ = 0.0;
-    kkt_error_ = 1e10;
 
     // Evaluate initial trajectory
     evaluateTrajectory(context);
@@ -463,13 +460,10 @@ namespace cddp
         context.cost_ = best_result.cost;
         context.merit_function_ = best_result.merit_function;
         context.alpha_pr_ = best_result.alpha_pr;
-        context.inf_pr_ =
-            best_result.constraint_violation; // Actual constraint violation from
-                                              // forward pass
+        // Note: best_result.constraint_violation is l1 norm for filter 
+        // inf_pr_ (infinity norm) is computed correctly in backward pass and should not be overwritten here
 
-        // KKT error is already correctly computed in backward pass - don't
-        // overwrite it! The backward pass computes kkt_error_ = max(rp_err,
-        // rd_err) which is the correct linearized residual
+        // Infeasibility metrics are correctly computed in backward pass
 
         // Store history only if requested
         if (options.return_iteration_info)
@@ -561,7 +555,7 @@ namespace cddp
       }
 
       // Update barrier parameters using the extracted method
-      updateBarrierParameters(context, best_result.success, kkt_error_);
+      updateBarrierParameters(context, best_result.success);
     }
 
     // Compute final timing
@@ -596,6 +590,7 @@ namespace cddp
       solution["history_step_length_dual"] = history_step_length_dual;
       solution["history_dual_infeasibility"] = history_dual_infeasibility;
       solution["history_primal_infeasibility"] = history_primal_infeasibility;
+      solution["history_complementary_infeasibility"] = history_complementary_infeasibility;
       solution["history_barrier_mu"] = history_barrier_mu;
     }
 
@@ -940,8 +935,10 @@ namespace cddp
   {
     // Evaluate merit function (cost + log-barrier terms)
     double merit_function = context.cost_;
-    double constraint_violation = 0.0;
-    double dual_infeasibility = 0.0;
+    double inf_pr = 0.0;  // inf_pr: infinity norm (largest absolute residual)
+    double filter_constraint_violation = 0.0;  // l1 norm for filter (sum of residuals)
+    double inf_du = 0.0;  // dual infeasibility (computed separately in backward pass)
+    double inf_comp = 0.0;  // complementary infeasibility
 
     const auto &constraint_set = context.getConstraintSet();
 
@@ -959,30 +956,38 @@ namespace cddp
           // Add log-barrier term
           merit_function -= mu_ * s_vec.array().log().sum();
 
-          // Compute primal residual: ||g + s||_1 (match ipddp_core.cpp)
-          constraint_violation += (g_vec + s_vec).lpNorm<1>();
+          // Compute primal residual vector
+          Eigen::VectorXd r_p = g_vec + s_vec;
+          
+          // inf_pr: infinity norm (largest absolute residual)
+          inf_pr = std::max(inf_pr, r_p.lpNorm<Eigen::Infinity>());
+          
+          // Filter constraint violation: l1 norm (sum of residuals)
+          filter_constraint_violation += r_p.lpNorm<1>();
 
-          // Compute dual feasibility: ||y .* s - mu||_inf
-          Eigen::VectorXd r_d = y_vec.cwiseProduct(s_vec).array() - mu_;
-          dual_infeasibility =
-              std::max(dual_infeasibility, r_d.lpNorm<Eigen::Infinity>());
+          // Compute complementary infeasibility: ||y .* s - mu||_inf
+          Eigen::VectorXd r_comp = y_vec.cwiseProduct(s_vec).array() - mu_;
+          inf_comp = std::max(inf_comp, r_comp.lpNorm<Eigen::Infinity>());
         }
       }
     }
     else
     {
       // No constraints: set infeasibility metrics to zero
-      constraint_violation = 0.0;
-      dual_infeasibility = 0.0;
+      inf_pr = 0.0;
+      filter_constraint_violation = 0.0;
+      inf_du = 0.0;
+      inf_comp = 0.0;
     }
 
     context.merit_function_ = merit_function;
-    context.inf_pr_ = constraint_violation;
-    context.inf_du_ = dual_infeasibility;
+    context.inf_pr_ = inf_pr;  // Store infinity norm as inf_pr
+    // Note: inf_du_ (dual infeasibility/optimality gap) is computed in backward pass for constrained case
+    context.inf_comp_ = inf_comp;
 
-    // Reset filter with initial point
+    // Reset filter with initial point using l1 norm for constraint violation
     filter_.clear();
-    filter_.push_back(FilterPoint(merit_function, constraint_violation));
+    filter_.push_back(FilterPoint(merit_function, filter_constraint_violation));
   }
 
   void IPDDPSolver::resetFilter(CDDP &context) { resetBarrierFilter(context); }
@@ -1247,9 +1252,9 @@ namespace cddp
     V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
 
     dV_ = Eigen::Vector2d::Zero();
-    double Qu_err = 0.0;
-    double rp_err = 0.0; // primal feasibility
-    double rd_err = 0.0; // dual feasibility
+    double inf_du = 0.0;  // dual infeasibility (optimality gap; Qu_err)
+    double inf_pr = 0.0;  // primal infeasibility (constraint violation)
+    double inf_comp = 0.0; // complementary infeasibility  
     double step_norm = 0.0;
 
     // If no constraints, use standard DDP recursion
@@ -1298,7 +1303,7 @@ namespace cddp
         // Regularization
         Eigen::MatrixXd Q_uu_reg = Q_uu;
         Q_uu_reg.diagonal().array() += context.regularization_;
-        Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
+        Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize NOTE: This is critical
 
         Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
         if (ldlt.info() != Eigen::Success)
@@ -1327,20 +1332,21 @@ namespace cddp
         dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
 
         // Error tracking
-        Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
+        inf_du = std::max(inf_du, Q_u.lpNorm<Eigen::Infinity>());
         step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
       }
 
       // Update termination metrics
-      context.inf_du_ = Qu_err;
+      context.inf_du_ = inf_du;
       context.step_norm_ = step_norm;
-      context.inf_pr_ = 0.0; // No constraints
-      kkt_error_ = Qu_err;   // Only dual infeasibility for unconstrained case
+      context.inf_pr_ = 0.0;   // No constraints
+      context.inf_comp_ = 0.0; // No complementary constraints
+
 
       if (options.debug)
       {
         std::cout << "[IPDDP Backward Pass]\n"
-                  << "    Qu_err:  " << Qu_err << "\n"
+                  << "    inf_du:  " << inf_du << "\n"
                   << "    step_norm: " << context.step_norm_ << "\n"
                   << "    dV:      " << dV_.transpose() << std::endl;
       }
@@ -1424,8 +1430,8 @@ namespace cddp
 
         // Residuals
         Eigen::VectorXd r_p = g + s;                           // primal feasibility
-        Eigen::VectorXd r_d = y.cwiseProduct(s).array() - mu_; // dual feasibility
-        Eigen::VectorXd rhat = y.cwiseProduct(r_p) - r_d;
+        Eigen::VectorXd r_comp = y.cwiseProduct(s).array() - mu_; // complementary feasibility
+        Eigen::VectorXd rhat = y.cwiseProduct(r_p) - r_comp;
 
         // Regularization
         Eigen::MatrixXd Q_uu_reg = Q_uu;
@@ -1503,30 +1509,29 @@ namespace cddp
         V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
 
         // Error tracking
-        Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
-        rp_err = std::max(rp_err, r_p.lpNorm<Eigen::Infinity>());
-        rd_err = std::max(rd_err, r_d.lpNorm<Eigen::Infinity>());
+        inf_du = std::max(inf_du, Q_u.lpNorm<Eigen::Infinity>());
+        inf_pr = std::max(inf_pr, r_p.lpNorm<Eigen::Infinity>());
+        inf_comp = std::max(inf_comp, r_comp.lpNorm<Eigen::Infinity>());
         step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
       }
 
-      // Update termination metrics (like ipddp_core.cpp)
-      context.inf_pr_ =
-          std::max(rp_err, rd_err); // Primal infeasibility (constraint violation)
-      context.inf_du_ = Qu_err;     // Dual infeasibility (optimality gap)
+      // Update termination metrics (properly separated)
+      context.inf_pr_ = inf_pr;     // Primal infeasibility (constraint violation)
+      context.inf_du_ = inf_du;     // Dual infeasibility (optimality gap)
+      context.inf_comp_ = inf_comp; // Complementary infeasibility
       context.step_norm_ = step_norm;
 
-      // Store KKT error like ipddp_core.cpp (both primal and dual feasibility)
-      kkt_error_ = std::max(rp_err, rd_err);
+
 
       if (options.debug)
       {
         std::cout << "[IPDDP Backward Pass]\n"
-                  << "    Qu_err:  " << std::scientific << std::setprecision(4)
-                  << Qu_err << "\n"
-                  << "    rp_err:  " << std::scientific << std::setprecision(4)
-                  << rp_err << "\n"
-                  << "    rd_err:  " << std::scientific << std::setprecision(4)
-                  << rd_err << "\n"
+                  << "    inf_du:  " << std::scientific << std::setprecision(4)
+                  << inf_du << "\n"
+                  << "    inf_pr:  " << std::scientific << std::setprecision(4)
+                  << inf_pr << "\n"
+                  << "    inf_comp: " << std::scientific << std::setprecision(4)
+                  << inf_comp << "\n"
                   << "    step_norm: " << std::scientific << std::setprecision(4)
                   << context.step_norm_ << "\n"
                   << "    dV:      " << std::scientific << std::setprecision(4)
@@ -1958,7 +1963,7 @@ namespace cddp
     std::cout << "========================================\n\n";
   }
 
-  void IPDDPSolver::updateBarrierParameters(CDDP &context, bool forward_pass_success, double kkt_error)
+  void IPDDPSolver::updateBarrierParameters(CDDP &context, bool forward_pass_success)
   {
     const CDDPOptions &options = context.getOptions();
     const auto &barrier_opts = options.ipddp.barrier;
@@ -1969,6 +1974,9 @@ namespace cddp
     {
       return; // No constraints case - no barrier update needed
     }
+    
+    // Compute KKT error locally from current infeasibility metrics
+    double kkt_error = std::max(context.inf_pr_, context.inf_comp_);
     
     // Check if we should update the barrier parameter
     if (kkt_error <= barrier_opts.mu_update_factor * mu_)
