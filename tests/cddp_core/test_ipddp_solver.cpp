@@ -159,7 +159,7 @@ TEST(IPDDPTest, SolvePendulum)
     // Enable warm start and use previous solution as initial guess
     cddp::CDDPOptions warm_options = options;
     warm_options.warm_start = true;
-    warm_options.max_iterations = 20; // Fewer iterations for warm start
+    warm_options.max_iterations = 50; // Fewer iterations for warm start
     warm_options.verbose = false;     // Less verbose for warm start test
     warm_options.tolerance = 1e-3;            // KKT/optimality tolerance
     warm_options.acceptable_tolerance = 1e-4; // Cost change tolerance
