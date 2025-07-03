@@ -1442,7 +1442,6 @@ namespace cddp
       double reduction_ratio =
           expected > 0.0 ? dJ / expected : std::copysign(1.0, dJ);
 
-      // Match ipddp_core.cpp line search acceptance (more lenient)
       result.success = reduction_ratio > 1e-6;
       result.cost = cost_new;
       result.merit_function = cost_new;
@@ -1451,7 +1450,7 @@ namespace cddp
       return result;
     }
 
-    // Constrained forward pass - separate approach like ipddp_core.cpp
+    // Constrained forward pass
     double alpha_s = alpha;
 
     // Step 1: Update slack variables and state/control with alpha_s
@@ -1575,7 +1574,7 @@ namespace cddp
         const Eigen::VectorXd &s_vec = S_new[constraint_name][t];
         merit_function_new -= mu_ * s_vec.array().log().sum();
 
-        // Primal infeasibility: g + s (match ipddp_core.cpp)
+        // Primal infeasibility: g + s
         Eigen::VectorXd primal_residual = G_new[constraint_name][t] + s_vec;
         constraint_violation_new += primal_residual.lpNorm<1>();
       }
@@ -1591,10 +1590,9 @@ namespace cddp
     double constraint_violation_old = filter_.empty() ? 0.0 : filter_.back().constraint_violation;
     double merit_function_old = context.merit_function_;
 
-    // Filter logic matching ipddp_core.cpp pattern with exact parameter values
+    // Filter logic
     if (constraint_violation_new > options.filter.max_violation_threshold)
     {
-      // Use ipddp_core.cpp filter_acceptance value (1e-8, more lenient than 1e-6)
       if (constraint_violation_new < 1e-8 * constraint_violation_old)
       {
         filter_acceptance = true;
@@ -1828,7 +1826,7 @@ namespace cddp
       int iter,
       std::string &termination_reason) const
   {
-    // Proper scaling using trajectory norms (like MSIPDDP)
+    // Proper scaling using trajectory norms
     double dual_scaling = std::max(slack_trajectory_norm_, 1.0);
     double primal_scaling = std::max(slack_trajectory_norm_, 1.0);
     double termination_metric = std::max(context.inf_du_ / dual_scaling,
@@ -1860,7 +1858,7 @@ namespace cddp
     }
 
     // Check step norm for early termination
-    if (iter >= 10 &&
+    if (iter >= 1 &&
         context.step_norm_ < options.tolerance * 10.0 && // Small step norm
         context.inf_pr_ < 1e-4)                          // Reasonably feasible
     {
