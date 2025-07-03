@@ -38,16 +38,10 @@ namespace cddp
     int control_dim = context.getControlDim();
     int state_dim = context.getStateDim();
 
-    // Check if reference_state in objective and reference_state in context are
-    // the same
-    if ((context.getReferenceState() - context.getObjective().getReferenceState())
-            .norm() > 1e-6)
+    // Validate reference state consistency
+    if ((context.getReferenceState() - context.getObjective().getReferenceState()).norm() > 1e-6)
     {
-      std::cerr << "IPDDP: Reference state in context and objective function do "
-                   "not match"
-                << std::endl;
-      throw std::runtime_error("IPDDP: Reference state in context and objective "
-                               "function do not match");
+      throw std::runtime_error("IPDDP: Reference state mismatch between context and objective");
     }
 
     // For warm starts, verify that existing state is valid
@@ -92,83 +86,44 @@ namespace cddp
       }
       else
       {
-        // Even without existing solver state, we can still perform a warm start
-        // if we have a good initial trajectory (set via setInitialTrajectory)
+        // Warm start with provided trajectory (no existing solver state)
         if (options.verbose)
         {
-          std::cout << "IPDDP: Using warm start with provided initial trajectory "
-                       "(no existing solver state)"
-                    << std::endl;
+          std::cout << "IPDDP: Warm start with provided trajectory" << std::endl;
         }
 
-        // Initialize control gains to zero for warm start
-        k_u_.resize(horizon);
-        K_u_.resize(horizon);
-
-        for (int t = 0; t < horizon; ++t)
-        {
-          k_u_[t] = Eigen::VectorXd::Zero(control_dim);
-          K_u_[t] = Eigen::MatrixXd::Zero(control_dim, state_dim);
-        }
-
+        // Initialize gains and constraints
+        k_u_.assign(horizon, Eigen::VectorXd::Zero(control_dim));
+        K_u_.assign(horizon, Eigen::MatrixXd::Zero(control_dim, state_dim));
         dV_ = Eigen::Vector2d::Zero();
+        initializeConstraintStorage(context);
 
-        // Clear constraint-related variables
-        G_.clear();
-        G_x_.clear();
-        G_u_.clear();
-        Y_.clear();
-        S_.clear();
-        k_y_.clear();
-        K_y_.clear();
-        k_s_.clear();
-        K_s_.clear();
-
-        // Set barrier parameter and slack trajectory norm based on constraint evaluation
+        // Set barrier parameter based on constraint evaluation
         if (constraint_set.empty())
         {
-          mu_ = 1e-8; // Small value if no constraints
+          mu_ = 1e-8;                   // Small value if no constraints
           slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
         }
         else
         {
-          // For warm start: first evaluate constraints to set appropriate barrier
-          // parameter
+          // Evaluate constraints and set barrier parameter
           evaluateTrajectoryWarmStart(context);
-
-          // Compute maximum constraint violation
-          double max_constraint_violation = 0.0;
-          for (const auto &constraint_pair : constraint_set)
-          {
-            const std::string &constraint_name = constraint_pair.first;
-            for (int t = 0; t < horizon; ++t)
-            {
-              const Eigen::VectorXd &g_vec = G_[constraint_name][t];
-              max_constraint_violation =
-                  std::max(max_constraint_violation, g_vec.maxCoeff());
-            }
-          }
-
-          // Set barrier parameter based on constraint violation level
+          double max_constraint_violation = computeMaxConstraintViolation(context);
           if (max_constraint_violation <= options.tolerance)
           {
-            // Trajectory is feasible: use very small barrier parameter
-            mu_ = options.tolerance * 0.01;
+            mu_ = options.tolerance * 0.01; // Feasible trajectory
           }
           else if (max_constraint_violation <= 0.1)
           {
-            // Slightly infeasible: moderate barrier parameter
-            mu_ = options.tolerance;
+            mu_ = options.tolerance; // Slightly infeasible
           }
-                      else
-            {
-              // Significantly infeasible: standard barrier parameter
-              mu_ = options.ipddp.barrier.mu_initial * 0.1;
-            }
-            
-            // Initialize slack trajectory norm for warm start
-            slack_trajectory_norm_ = 1.0; // Will be computed after first iteration
+          else
+          {
+            mu_ = options.ipddp.barrier.mu_initial * 0.1; // Significantly infeasible
           }
+
+          slack_trajectory_norm_ = 1.0; // Computed after first iteration
+        }
 
         // Initialize regularization
         context.regularization_ = options.regularization.initial_value;
@@ -183,28 +138,22 @@ namespace cddp
       }
     }
 
-    // Cold start initialization
-    // Initialize trajectories only if not already provided by
-    // setInitialTrajectory
-    bool trajectory_provided =
-        (context.X_.size() == static_cast<size_t>(horizon + 1) &&
-         context.U_.size() == static_cast<size_t>(horizon) &&
-         context.X_[0].size() == state_dim &&
-         context.U_[0].size() == control_dim);
+    // Cold start: check if trajectory is provided
+    bool trajectory_provided = (context.X_.size() == static_cast<size_t>(horizon + 1) &&
+                                context.U_.size() == static_cast<size_t>(horizon) &&
+                                context.X_[0].size() == state_dim &&
+                                context.U_[0].size() == control_dim);
 
     if (!trajectory_provided)
     {
+      // Create interpolated initial trajectory
       context.X_.resize(horizon + 1);
       context.U_.resize(horizon);
 
-      // Create X_ initial guess using initial_state and reference_state by
-      // interpolating between them
       for (int t = 0; t <= horizon; ++t)
       {
-        context.X_[t] =
-            context.getInitialState() +
-            t * (context.getReferenceState() - context.getInitialState()) /
-                horizon;
+        context.X_[t] = context.getInitialState() +
+                        t * (context.getReferenceState() - context.getInitialState()) / horizon;
       }
 
       for (int t = 0; t < horizon; ++t)
@@ -214,66 +163,35 @@ namespace cddp
 
       if (options.verbose)
       {
-        std::cout << "IPDDP: Using interpolated initial trajectory (no "
-                     "setInitialTrajectory provided)"
-                  << std::endl;
+        std::cout << "IPDDP: Using interpolated initial trajectory" << std::endl;
       }
     }
-    else
+    else if (options.verbose)
     {
-      if (options.verbose)
-      {
-        std::cout << "IPDDP: Using provided initial trajectory from "
-                     "setInitialTrajectory"
-                  << std::endl;
-      }
+      std::cout << "IPDDP: Using provided initial trajectory" << std::endl;
     }
 
-    // Initialize control gains
-    k_u_.resize(horizon);
-    K_u_.resize(horizon);
-
-    for (int t = 0; t < horizon; ++t)
-    {
-      k_u_[t] = Eigen::VectorXd::Zero(control_dim);
-      K_u_[t] = Eigen::MatrixXd::Zero(control_dim, state_dim);
-    }
-
+    // Initialize gains, constraints, and parameters
+    k_u_.assign(horizon, Eigen::VectorXd::Zero(control_dim));
+    K_u_.assign(horizon, Eigen::MatrixXd::Zero(control_dim, state_dim));
     dV_ = Eigen::Vector2d::Zero();
+    initializeConstraintStorage(context);
 
-    // Clear constraint-related variables
-    G_.clear();
-    G_x_.clear();
-    G_u_.clear();
-    Y_.clear();
-    S_.clear();
-    k_y_.clear();
-    K_y_.clear();
-    k_s_.clear();
-    K_s_.clear();
-
-    // Initialize barrier parameter and slack trajectory norm
+    // Set barrier parameter
     if (constraint_set.empty())
     {
-      mu_ = 1e-8; // Small value if no constraints
-      slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
+      mu_ = 1e-8;
+      slack_trajectory_norm_ = 1.0; // No slack variables
     }
     else
     {
       mu_ = options.ipddp.barrier.mu_initial;
-      slack_trajectory_norm_ = 1.0; // Will be computed after first iteration
+      slack_trajectory_norm_ = 1.0; // Computed after first iteration
     }
 
-    // Initialize dual and slack variables
     initializeDualSlackVariables(context);
-
-    // Initialize regularization
     context.regularization_ = options.regularization.initial_value;
-
-    // Initialize step norm
     context.step_norm_ = 0.0;
-
-    // Evaluate initial trajectory
     evaluateTrajectory(context);
     resetFilter(context);
   }
@@ -344,45 +262,38 @@ namespace cddp
                      context.alpha_pr_);
     }
 
-    // Start timer
+    // Main solve loop
     auto start_time = std::chrono::high_resolution_clock::now();
     int iter = 0;
     bool converged = false;
     std::string termination_reason = "MaxIterationsReached";
-    double termination_metric = 0.0;
     double dJ = 0.0;
-    double scaling_factor = 1.0;
 
-    // Main IPDDP loop
     while (iter < options.max_iterations)
     {
       ++iter;
 
-      // Check maximum CPU time
+      // Check CPU time limit
       if (options.max_cpu_time > 0)
       {
-        auto current_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            current_time - start_time);
+            std::chrono::high_resolution_clock::now() - start_time);
         if (duration.count() > options.max_cpu_time * 1000)
         {
           termination_reason = "MaxCpuTimeReached";
           if (options.verbose)
           {
-            std::cerr
-                << "IPDDP: Maximum CPU time reached. Returning current solution"
-                << std::endl;
+            std::cerr << "IPDDP: Maximum CPU time reached" << std::endl;
           }
           break;
         }
       }
 
-      // 1. Backward pass
+      // Backward pass with regularization
       bool backward_pass_success = false;
       while (!backward_pass_success)
       {
         backward_pass_success = backwardPass(context);
-
         if (!backward_pass_success)
         {
           context.increaseRegularization();
@@ -391,34 +302,30 @@ namespace cddp
             termination_reason = "RegularizationLimitReached_NotConverged";
             if (options.verbose)
             {
-              std::cerr << "IPDDP: Backward pass regularization limit reached"
-                        << std::endl;
+              std::cerr << "IPDDP: Regularization limit reached" << std::endl;
             }
             break;
           }
         }
       }
-
       if (!backward_pass_success)
         break;
 
-      // 2. Forward pass
+      // Forward pass
       ForwardPassResult best_result = performForwardPass(context);
 
-      // Update solution if forward pass succeeded
+      // Update trajectories if forward pass succeeded
       if (best_result.success)
       {
         if (options.debug)
         {
-          std::cout << "[IPDDP: Forward pass] " << std::endl;
-          std::cout << "    cost: " << best_result.cost << std::endl;
-          std::cout << "    merit: " << best_result.merit_function << std::endl;
-          std::cout << "    alpha: " << best_result.alpha_pr << std::endl;
-          std::cout << "    cv_err: " << best_result.constraint_violation << std::endl;
-          std::cout << "    slack_norm: " << std::scientific << std::setprecision(4) 
-                    << slack_trajectory_norm_ << std::endl;
+          std::cout << "[IPDDP Forward] cost: " << std::scientific << std::setprecision(4)
+                    << best_result.cost << " α: " << best_result.alpha_pr
+                    << " cv: " << best_result.constraint_violation
+                    << " ||s||: " << slack_trajectory_norm_ << std::endl;
         }
 
+        // Update trajectories and variables
         context.X_ = best_result.state_trajectory;
         context.U_ = best_result.control_trajectory;
         if (best_result.dual_trajectory)
@@ -428,122 +335,41 @@ namespace cddp
         if (best_result.constraint_eval_trajectory)
           G_ = *best_result.constraint_eval_trajectory;
 
-        // Calculate slack trajectory norm for scaled termination metrics
-        const auto &constraint_set_local = context.getConstraintSet();
-        const int horizon_local = context.getHorizon();
-        if (constraint_set_local.empty())
-        {
-          slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
-        }
-        else
-        {
-          // Use average slack norm instead of total to be comparable across different horizons
-          slack_trajectory_norm_ = 0.0;
-          int total_slack_vars = 0;
-          for (const auto &constraint_pair : constraint_set_local)
-          {
-            const std::string &constraint_name = constraint_pair.first;
-            for (int t = 0; t < horizon_local; ++t)
-            {
-              slack_trajectory_norm_ += S_[constraint_name][t].lpNorm<1>();
-              total_slack_vars += S_[constraint_name][t].size();
-            }
-          }
-          if (total_slack_vars > 0)
-          {
-            slack_trajectory_norm_ = slack_trajectory_norm_ / total_slack_vars;
-          }
-          slack_trajectory_norm_ = std::max(slack_trajectory_norm_, 1.0); // Avoid division by zero
-        }
+        updateSlackTrajectoryNorm(context);
 
+        // Update costs and step lengths
         dJ = context.cost_ - best_result.cost;
         context.cost_ = best_result.cost;
         context.merit_function_ = best_result.merit_function;
         context.alpha_pr_ = best_result.alpha_pr;
-        // Note: best_result.constraint_violation is l1 norm for filter 
-        // inf_pr_ (infinity norm) is computed correctly in backward pass and should not be overwritten here
 
-        // Infeasibility metrics are correctly computed in backward pass
-
-        // Store history only if requested
-        if (options.return_iteration_info)
-        {
-          history_objective.push_back(context.cost_);
-          history_merit_function.push_back(context.merit_function_);
-          history_step_length_primal.push_back(context.alpha_pr_);
-          history_step_length_dual.push_back(best_result.alpha_du);
-          history_dual_infeasibility.push_back(context.inf_du_);
-          history_primal_infeasibility.push_back(context.inf_pr_);
-          history_complementary_infeasibility.push_back(context.inf_comp_);
-          history_barrier_mu.push_back(mu_);
-        }
+        updateIterationHistory(options, context, history_objective, history_merit_function,
+                               history_step_length_primal, history_step_length_dual,
+                               history_dual_infeasibility, history_primal_infeasibility,
+                               history_complementary_infeasibility, history_barrier_mu,
+                               best_result.alpha_du);
 
         context.decreaseRegularization();
       }
       else
       {
         context.increaseRegularization();
-
         if (context.isRegularizationLimitReached())
         {
           termination_reason = "RegularizationLimitReached_NotConverged";
           converged = false;
           if (options.verbose)
           {
-            std::cerr << "IPDDP: Regularization limit reached. Not converged."
-                      << std::endl;
+            std::cerr << "IPDDP: Regularization limit reached" << std::endl;
           }
           break;
         }
       }
 
-      // Check convergence with proper scaling using trajectory norms (like MSIPDDP)
-      double dual_scaling = std::max(slack_trajectory_norm_, 1.0);
-      double primal_scaling = std::max(slack_trajectory_norm_, 1.0);
-      double termination_metric = std::max(context.inf_du_ / dual_scaling, 
-                                           context.inf_pr_ / primal_scaling);
-
-      if (termination_metric <= options.tolerance)
-      {
-        converged = true;
-        termination_reason = "OptimalSolutionFound";
-        if (options.verbose)
-        {
-          std::cout << "IPDDP: Converged due to scaled optimality gap and constraint "
-                       "violation (metric: " << std::scientific << std::setprecision(2) 
-                    << termination_metric << ")" << std::endl;
-        }
+      // Check convergence
+      converged = checkConvergence(options, context, dJ, iter, termination_reason);
+      if (converged)
         break;
-      }
-
-      if (std::abs(dJ) < options.acceptable_tolerance)
-      {
-        converged = true;
-        termination_reason = "AcceptableSolutionFound";
-        if (options.verbose)
-        {
-          std::cout << "IPDDP: Converged due to small change in cost (dJ: " 
-                    << std::scientific << std::setprecision(2) << std::abs(dJ) 
-                    << ")" << std::endl;
-        }
-        break;
-      }
-
-      // Check step norm for early termination (general criterion - independent of
-      // forward pass success)
-      if (iter >= 10 &&
-          context.step_norm_ < options.tolerance * 10.0 && // Small step norm
-          context.inf_pr_ < 1e-4)                          // Reasonably feasible
-      {
-        converged = true;
-        termination_reason = "AcceptableSolutionFound";
-        if (options.verbose)
-        {
-          std::cout << "IPDDP: Converged based on small step norm and feasibility"
-                    << std::endl;
-        }
-        break;
-      }
 
       // Print iteration info
       if (options.verbose)
@@ -829,38 +655,9 @@ namespace cddp
 
     if (options.verbose)
     {
-      if (has_existing_dual_slack)
-      {
-        std::cout << "IPDDP: Warm start preserved existing dual/slack variables "
-                     "where feasible"
-                  << std::endl;
-      }
-      else
-      {
-        std::cout
-            << "IPDDP: Warm start initialized dual/slack variables from scratch"
-            << std::endl;
-      }
-
-      // Report barrier parameter chosen and initial constraint violation
-      std::cout << "IPDDP: Warm start barrier parameter μ = " << std::scientific
-                << std::setprecision(2) << mu_ << std::endl;
-
-      // Report initial constraint violation
-      double max_constraint_violation = 0.0;
-      for (const auto &constraint_pair : constraint_set)
-      {
-        const std::string &constraint_name = constraint_pair.first;
-        for (int t = 0; t < horizon; ++t)
-        {
-          const Eigen::VectorXd &g_vec = G_[constraint_name][t];
-          max_constraint_violation =
-              std::max(max_constraint_violation, g_vec.maxCoeff());
-        }
-      }
-      std::cout << "IPDDP: Warm start max constraint violation = "
-                << std::scientific << std::setprecision(2)
-                << max_constraint_violation << std::endl;
+      std::cout << "IPDDP: " << (has_existing_dual_slack ? "Preserved" : "Initialized")
+                << " dual/slack variables, μ = " << std::scientific << std::setprecision(2)
+                << mu_ << ", max violation = " << computeMaxConstraintViolation(context) << std::endl;
     }
   }
 
@@ -935,10 +732,10 @@ namespace cddp
   {
     // Evaluate merit function (cost + log-barrier terms)
     double merit_function = context.cost_;
-    double inf_pr = 0.0;  // inf_pr: infinity norm (largest absolute residual)
-    double filter_constraint_violation = 0.0;  // l1 norm for filter (sum of residuals)
-    double inf_du = 0.0;  // dual infeasibility (computed separately in backward pass)
-    double inf_comp = 0.0;  // complementary infeasibility
+    double inf_pr = 0.0;                      // inf_pr: infinity norm (largest absolute residual)
+    double filter_constraint_violation = 0.0; // l1 norm for filter (sum of residuals)
+    double inf_du = 0.0;                      // dual infeasibility (computed separately in backward pass)
+    double inf_comp = 0.0;                    // complementary infeasibility
 
     const auto &constraint_set = context.getConstraintSet();
 
@@ -958,10 +755,10 @@ namespace cddp
 
           // Compute primal residual vector
           Eigen::VectorXd primal_residual = g_vec + s_vec;
-          
+
           // inf_pr: infinity norm (largest absolute residual)
           inf_pr = std::max(inf_pr, primal_residual.lpNorm<Eigen::Infinity>());
-          
+
           // Filter constraint violation: l1 norm (sum of residuals)
           filter_constraint_violation += primal_residual.lpNorm<1>();
 
@@ -981,7 +778,7 @@ namespace cddp
     }
 
     context.merit_function_ = merit_function;
-    context.inf_pr_ = inf_pr;  // Store infinity norm as inf_pr
+    context.inf_pr_ = inf_pr; // Store infinity norm as inf_pr
     // Note: inf_du_ (dual infeasibility/optimality gap) is computed in backward pass for constrained case
     context.inf_comp_ = inf_comp;
 
@@ -1006,15 +803,13 @@ namespace cddp
     F_uu_.resize(horizon);
     F_ux_.resize(horizon);
 
-    // Threshold for when parallelization is worth it - increased for better
-    // performance
+    // Use parallel computation for larger horizons
     const int MIN_HORIZON_FOR_PARALLEL = 50;
-    const bool use_parallel =
-        options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;
+    const bool use_parallel = options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;
 
     if (!use_parallel)
     {
-      // Single-threaded computation - always efficient for small horizons
+      // Single-threaded computation
       for (int t = 0; t < horizon; ++t)
       {
         const Eigen::VectorXd &x = context.X_[t];
@@ -1046,10 +841,9 @@ namespace cddp
     }
     else
     {
-      // Chunked parallel computation - much more efficient
-      const int num_threads =
-          std::min(options.num_threads,
-                   static_cast<int>(std::thread::hardware_concurrency()));
+      // Parallel computation
+      const int num_threads = std::min(options.num_threads,
+                                       static_cast<int>(std::thread::hardware_concurrency()));
       const int chunk_size = std::max(1, horizon / num_threads);
 
       std::vector<std::future<void>> futures;
@@ -1058,17 +852,15 @@ namespace cddp
       for (int thread_id = 0; thread_id < num_threads; ++thread_id)
       {
         int start_t = thread_id * chunk_size;
-        int end_t = (thread_id == num_threads - 1) ? horizon
-                                                   : (thread_id + 1) * chunk_size;
+        int end_t = (thread_id == num_threads - 1) ? horizon : (thread_id + 1) * chunk_size;
 
         if (start_t >= horizon)
           break;
 
-        futures.push_back(
-            std::async(std::launch::async, [this, &context, &options, start_t,
-                                            end_t, timestep]()
-                       {
-            // Process a chunk of time steps
+        futures.push_back(std::async(std::launch::async,
+                                     [this, &context, &options, start_t, end_t, timestep]()
+                                     {
+            // Process chunk of time steps
             for (int t = start_t; t < end_t; ++t) {
               const Eigen::VectorXd &x = context.X_[t];
               const Eigen::VectorXd &u = context.U_[t];
@@ -1252,9 +1044,9 @@ namespace cddp
     V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
 
     dV_ = Eigen::Vector2d::Zero();
-    double inf_du = 0.0;  // dual infeasibility (optimality gap; Qu_err)
-    double inf_pr = 0.0;  // primal infeasibility (constraint violation)
-    double inf_comp = 0.0; // complementary infeasibility  
+    double inf_du = 0.0;   // dual infeasibility (optimality gap; Qu_err)
+    double inf_pr = 0.0;   // primal infeasibility (constraint violation)
+    double inf_comp = 0.0; // complementary infeasibility
     double step_norm = 0.0;
 
     // If no constraints, use standard DDP recursion
@@ -1342,13 +1134,10 @@ namespace cddp
       context.inf_pr_ = 0.0;   // No constraints
       context.inf_comp_ = 0.0; // No complementary constraints
 
-
       if (options.debug)
       {
-        std::cout << "[IPDDP Backward Pass]\n"
-                  << "    inf_du:  " << inf_du << "\n"
-                  << "    step_norm: " << context.step_norm_ << "\n"
-                  << "    dV:      " << dV_.transpose() << std::endl;
+        std::cout << "[IPDDP Backward] inf_du: " << std::scientific << std::setprecision(2)
+                  << inf_du << " ||d||: " << context.step_norm_ << " dV: " << dV_.transpose() << std::endl;
       }
       return true;
     }
@@ -1429,7 +1218,7 @@ namespace cddp
         Eigen::MatrixXd YSinv = Y * S_inv;
 
         // Residuals
-        Eigen::VectorXd primal_residual = g + s;                           // primal infeasibility
+        Eigen::VectorXd primal_residual = g + s;                                  // primal infeasibility
         Eigen::VectorXd complementary_residual = y.cwiseProduct(s).array() - mu_; // complementary infeasibility
         Eigen::VectorXd rhat = y.cwiseProduct(primal_residual) - complementary_residual;
 
@@ -1521,21 +1310,11 @@ namespace cddp
       context.inf_comp_ = inf_comp; // Complementary infeasibility
       context.step_norm_ = step_norm;
 
-
-
       if (options.debug)
       {
-        std::cout << "[IPDDP Backward Pass]\n"
-                  << "    inf_du:  " << std::scientific << std::setprecision(4)
-                  << inf_du << "\n"
-                  << "    inf_pr:  " << std::scientific << std::setprecision(4)
-                  << inf_pr << "\n"
-                  << "    inf_comp: " << std::scientific << std::setprecision(4)
-                  << inf_comp << "\n"
-                  << "    step_norm: " << std::scientific << std::setprecision(4)
-                  << context.step_norm_ << "\n"
-                  << "    dV:      " << std::scientific << std::setprecision(4)
-                  << dV_.transpose() << std::endl;
+        std::cout << "[IPDDP Backward] inf_du: " << std::scientific << std::setprecision(2)
+                  << inf_du << " inf_pr: " << inf_pr << " inf_comp: " << inf_comp
+                  << " ||d||: " << context.step_norm_ << " dV: " << dV_.transpose() << std::endl;
       }
       return true;
     }
@@ -1953,9 +1732,9 @@ namespace cddp
     std::cout << "Final Cost: " << std::setprecision(6) << final_cost << "\n";
     std::cout << "Final Barrier μ: " << std::setprecision(2) << std::scientific
               << final_mu << "\n";
-    
+
     auto final_slack_norm = std::any_cast<double>(solution.at("final_slack_trajectory_norm"));
-    std::cout << "Final Slack Norm: " << std::setprecision(2) << std::scientific 
+    std::cout << "Final Slack Norm: " << std::setprecision(2) << std::scientific
               << final_slack_norm << "\n";
     std::cout << "========================================\n\n";
   }
@@ -1965,57 +1744,219 @@ namespace cddp
     const CDDPOptions &options = context.getOptions();
     const auto &barrier_opts = options.ipddp.barrier;
     const auto &constraint_set = context.getConstraintSet();
-    
+
     // Only update barrier parameters if we have constraints
     if (constraint_set.empty())
     {
       return; // No constraints case - no barrier update needed
     }
-    
+
     // Compute KKT error locally from current infeasibility metrics
     double kkt_error = std::max(context.inf_pr_, context.inf_comp_);
-    
+
     // Check if we should update the barrier parameter
     if (kkt_error <= barrier_opts.mu_update_factor * mu_)
     {
       // Adaptive barrier reduction strategy
       double reduction_factor = barrier_opts.mu_update_factor;
-      
+
       if (mu_ > 1e-12)
       {
         double kkt_progress_ratio = kkt_error / mu_;
-        
+
         // Aggressive reduction if we're significantly satisfying KKT conditions
         if (kkt_progress_ratio < 0.1 * barrier_opts.mu_update_factor)
         {
           reduction_factor = barrier_opts.mu_update_factor * 0.5;
         }
-        // Moderate reduction if we're moderately satisfying KKT conditions  
+        // Moderate reduction if we're moderately satisfying KKT conditions
         else if (kkt_progress_ratio < 0.5 * barrier_opts.mu_update_factor)
         {
           reduction_factor = barrier_opts.mu_update_factor * 0.75;
         }
         // Standard reduction otherwise
       }
-      
+
       // Update barrier parameter with bounds
       double new_mu_linear = reduction_factor * mu_;
       double new_mu_superlinear = std::pow(mu_, barrier_opts.mu_update_power);
-      
+
       mu_ = std::max(options.tolerance / 10.0,
                      std::min(new_mu_linear, new_mu_superlinear));
-      
+
       // Reset filter when barrier parameter changes
       resetFilter(context);
-      
+
       if (options.debug)
       {
-        std::cout << "[IPDDP Barrier Update] "
-                  << "KKT error: " << std::scientific << std::setprecision(2) << kkt_error
-                  << " threshold: " << barrier_opts.mu_update_factor * mu_
-                  << " new μ: " << mu_ << std::endl;
+        std::cout << "[IPDDP Barrier] KKT: " << std::scientific << std::setprecision(2)
+                  << kkt_error << " → μ: " << mu_ << std::endl;
       }
     }
+  }
+
+  void IPDDPSolver::updateIterationHistory(
+      const CDDPOptions &options,
+      const CDDP &context,
+      std::vector<double> &history_objective,
+      std::vector<double> &history_merit_function,
+      std::vector<double> &history_step_length_primal,
+      std::vector<double> &history_step_length_dual,
+      std::vector<double> &history_dual_infeasibility,
+      std::vector<double> &history_primal_infeasibility,
+      std::vector<double> &history_complementary_infeasibility,
+      std::vector<double> &history_barrier_mu,
+      double alpha_du) const
+  {
+    if (options.return_iteration_info)
+    {
+      history_objective.push_back(context.cost_);
+      history_merit_function.push_back(context.merit_function_);
+      history_step_length_primal.push_back(context.alpha_pr_);
+      history_step_length_dual.push_back(alpha_du);
+      history_dual_infeasibility.push_back(context.inf_du_);
+      history_primal_infeasibility.push_back(context.inf_pr_);
+      history_complementary_infeasibility.push_back(context.inf_comp_);
+      history_barrier_mu.push_back(mu_);
+    }
+  }
+
+  bool IPDDPSolver::checkConvergence(
+      const CDDPOptions &options,
+      const CDDP &context,
+      double dJ,
+      int iter,
+      std::string &termination_reason) const
+  {
+    // Proper scaling using trajectory norms (like MSIPDDP)
+    double dual_scaling = std::max(slack_trajectory_norm_, 1.0);
+    double primal_scaling = std::max(slack_trajectory_norm_, 1.0);
+    double termination_metric = std::max(context.inf_du_ / dual_scaling,
+                                         context.inf_pr_ / primal_scaling);
+
+    if (termination_metric <= options.tolerance)
+    {
+      termination_reason = "OptimalSolutionFound";
+      if (options.verbose)
+      {
+        std::cout << "IPDDP: Converged due to scaled optimality gap and constraint "
+                     "violation (metric: "
+                  << std::scientific << std::setprecision(2)
+                  << termination_metric << ")" << std::endl;
+      }
+      return true;
+    }
+
+    if (std::abs(dJ) < options.acceptable_tolerance)
+    {
+      termination_reason = "AcceptableSolutionFound";
+      if (options.verbose)
+      {
+        std::cout << "IPDDP: Converged due to small change in cost (dJ: "
+                  << std::scientific << std::setprecision(2) << std::abs(dJ)
+                  << ")" << std::endl;
+      }
+      return true;
+    }
+
+    // Check step norm for early termination
+    if (iter >= 10 &&
+        context.step_norm_ < options.tolerance * 10.0 && // Small step norm
+        context.inf_pr_ < 1e-4)                          // Reasonably feasible
+    {
+      termination_reason = "AcceptableSolutionFound";
+      if (options.verbose)
+      {
+        std::cout << "IPDDP: Converged based on small step norm and feasibility"
+                  << std::endl;
+      }
+      return true;
+    }
+
+    return false;
+  }
+
+  void IPDDPSolver::updateSlackTrajectoryNorm(const CDDP &context)
+  {
+    const auto &constraint_set = context.getConstraintSet();
+    const int horizon = context.getHorizon();
+
+    if (constraint_set.empty())
+    {
+      slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
+    }
+    else
+    {
+      // Use average slack norm instead of total to be comparable across different horizons
+      slack_trajectory_norm_ = 0.0;
+      int total_slack_vars = 0;
+      for (const auto &constraint_pair : constraint_set)
+      {
+        const std::string &constraint_name = constraint_pair.first;
+        for (int t = 0; t < horizon; ++t)
+        {
+          slack_trajectory_norm_ += S_[constraint_name][t].lpNorm<1>();
+          total_slack_vars += S_[constraint_name][t].size();
+        }
+      }
+      if (total_slack_vars > 0)
+      {
+        slack_trajectory_norm_ = slack_trajectory_norm_ / total_slack_vars;
+      }
+      slack_trajectory_norm_ = std::max(slack_trajectory_norm_, 1.0); // Avoid division by zero
+    }
+  }
+
+  void IPDDPSolver::initializeConstraintStorage(CDDP &context)
+  {
+    const auto &constraint_set = context.getConstraintSet();
+    const int horizon = context.getHorizon();
+
+    // Clear and initialize constraint storage
+    G_.clear();
+    G_x_.clear();
+    G_u_.clear();
+    Y_.clear();
+    S_.clear();
+    k_y_.clear();
+    K_y_.clear();
+    k_s_.clear();
+    K_s_.clear();
+
+    // Initialize storage for each constraint
+    for (const auto &constraint_pair : constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      G_[constraint_name].resize(horizon);
+      Y_[constraint_name].resize(horizon);
+      S_[constraint_name].resize(horizon);
+      k_y_[constraint_name].resize(horizon);
+      K_y_[constraint_name].resize(horizon);
+      k_s_[constraint_name].resize(horizon);
+      K_s_[constraint_name].resize(horizon);
+    }
+  }
+
+  double IPDDPSolver::computeMaxConstraintViolation(const CDDP &context) const
+  {
+    const auto &constraint_set = context.getConstraintSet();
+    const int horizon = context.getHorizon();
+    double max_violation = 0.0;
+
+    for (const auto &constraint_pair : constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      auto g_it = G_.find(constraint_name);
+      if (g_it != G_.end())
+      {
+        for (int t = 0; t < horizon; ++t)
+        {
+          const Eigen::VectorXd &g_vec = g_it->second[t];
+          max_violation = std::max(max_violation, g_vec.maxCoeff());
+        }
+      }
+    }
+    return max_violation;
   }
 
 } // namespace cddp
