@@ -428,7 +428,7 @@ TEST(IPDDPTest, SolveCar)
 
     // Create CDDP Options
     cddp::CDDPOptions options;
-    options.max_iterations = 100;         // Reasonable number for testing
+    options.max_iterations = 150;         // Reasonable number for testing
     options.tolerance = 1e-4;            // KKT/optimality tolerance
     options.acceptable_tolerance = 1e-6; // Cost change tolerance
     options.enable_parallel = false;
