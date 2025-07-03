@@ -358,8 +358,8 @@ int main() {
     options_ipddp.filter.min_violation_for_armijo_check = 1e-7;
     options_ipddp.filter.armijo_constant = 1e-4;
     options_ipddp.use_ilqr = true;
-    options_ipddp.enable_parallel = true;
-    options_ipddp.num_threads = 10;
+    options_ipddp.enable_parallel = false;
+    options_ipddp.num_threads = 1;
 
     cddp::CDDP solver_ipddp(
         initial_state,
@@ -418,17 +418,17 @@ int main() {
     options_msipddp.max_iterations = 100;
     options_msipddp.verbose = true;
     options_msipddp.debug = false;
-    options_msipddp.tolerance = 1e-5;
-    options_msipddp.acceptable_tolerance = 1e-4;
+    options_msipddp.tolerance = 1e-6;
+    options_msipddp.acceptable_tolerance = 1e-7;
     options_msipddp.regularization.initial_value = 1e-3;
     options_msipddp.msipddp.segment_length = horizon / 10;
-    options_msipddp.msipddp.rollout_type = "hybrid";
+    options_msipddp.msipddp.rollout_type = "nonlinear";
     options_msipddp.msipddp.barrier.mu_initial = 1e-0;
-    options_msipddp.msipddp.barrier.mu_update_factor = 0.2;
+    options_msipddp.msipddp.barrier.mu_update_factor = 0.5;
     options_msipddp.msipddp.barrier.mu_update_power = 1.2;
     options_msipddp.use_ilqr = true;
-    options_msipddp.enable_parallel = true;
-    options_msipddp.num_threads = 10;
+    options_msipddp.enable_parallel = false;
+    options_msipddp.num_threads = 1;
     
     cddp::CDDP solver_msipddp(
         initial_state,
