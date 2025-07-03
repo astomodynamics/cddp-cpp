@@ -96,7 +96,7 @@ struct LogBarrierOptions {
   bool use_relaxed_log_barrier_penalty =
       false; ///< Use relaxed log-barrier method (if applicable to the solver).
   double relaxed_log_barrier_delta =
-      1e-5; ///< Relaxation delta for relaxed log-barrier (if applicable).
+      1e-10; ///< Relaxation delta for relaxed log-barrier (if applicable).
 
   // Multi-shooting specific
   int segment_length =
