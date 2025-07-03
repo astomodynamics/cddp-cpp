@@ -163,7 +163,11 @@ int main() {
     options_logddp.regularization.initial_value = 1e-4;
     options_logddp.log_barrier.barrier.mu_initial = 1e-0;
     options_logddp.log_barrier.barrier.mu_update_factor = 0.2;
-    options_logddp.log_barrier.relaxed_log_barrier_delta = 1e-5;
+    options_logddp.log_barrier.relaxed_log_barrier_delta = 1e-12;
+    options_logddp.log_barrier.segment_length = horizon;
+    options_logddp.log_barrier.use_relaxed_log_barrier_penalty = true;
+    options_logddp.log_barrier.rollout_type = "nonlinear";
+    options_logddp.log_barrier.use_controlled_rollout = true;
 
     cddp::CDDP solver_logddp(
         initial_state,
