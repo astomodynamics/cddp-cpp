@@ -217,7 +217,7 @@ int main() {
     options_ipddp.verbose = true;
     options_ipddp.debug = false;
     options_ipddp.tolerance = 1e-5;
-    options_ipddp.acceptable_tolerance = 1e-4;
+    options_ipddp.acceptable_tolerance = 1e-6;
     options_ipddp.ipddp.barrier.mu_initial = 1e-0;
     options_ipddp.ipddp.barrier.mu_update_factor = 0.5;
     options_ipddp.ipddp.barrier.mu_update_power = 1.2;
@@ -275,9 +275,9 @@ int main() {
     options_msipddp.verbose = true;
     options_msipddp.debug = false;
     options_msipddp.tolerance = 1e-5;
-    options_msipddp.acceptable_tolerance = 1e-4;
+    options_msipddp.acceptable_tolerance = 1e-6;
     options_msipddp.msipddp.segment_length = horizon / 10;
-    options_msipddp.msipddp.rollout_type = "hybrid";
+    options_msipddp.msipddp.rollout_type = "nonlinear";
     options_msipddp.msipddp.barrier.mu_initial = 1e-0;
     options_msipddp.msipddp.barrier.mu_update_factor = 0.5;
     options_msipddp.msipddp.barrier.mu_update_power = 1.2;
@@ -330,6 +330,7 @@ int main() {
     std::vector<Eigen::VectorXd> U_ipopt_sol(horizon, Eigen::VectorXd(control_dim));
     std::vector<double> x_ipopt, y_ipopt;
     double solve_time_ipopt_numeric = 0.0;
+    double cost_ipopt = 0.0;
 
     { // IPOPT specific scope
         const int n_s = state_dim;    // Renaming for clarity in CasADi context
@@ -483,6 +484,7 @@ int main() {
         if (res_ipopt.count("f")) {
             double optimal_cost = static_cast<double>(casadi::DM(res_ipopt.at("f")));
             std::cout << "IPOPT Optimal Cost: " << optimal_cost << std::endl;
+            cost_ipopt = optimal_cost;
         }
 
         for (int t = 0; t <= H; ++t) {
@@ -508,6 +510,7 @@ int main() {
     std::vector<Eigen::VectorXd> U_snopt_sol(horizon, Eigen::VectorXd(control_dim));
     std::vector<double> x_snopt, y_snopt;
     double solve_time_snopt_numeric = 0.0;
+    double cost_snopt = 0.0;
 
     { // SNOPT specific scope
         const int n_s = state_dim;    // Renaming for clarity in CasADi context
@@ -661,6 +664,7 @@ int main() {
         if (res_snopt.count("f")) {
             double optimal_cost = static_cast<double>(casadi::DM(res_snopt.at("f")));
             std::cout << "SNOPT Optimal Cost: " << optimal_cost << std::endl;
+            cost_snopt = optimal_cost;
         }
 
         for (int t = 0; t <= H; ++t) {
@@ -917,6 +921,29 @@ int main() {
     time_figure->save(plotDirectory + "/unicycle_computation_time_comparison.png");
     std::cout << "Saved computation time plot to "
               << (plotDirectory + "/unicycle_computation_time_comparison.png") << std::endl;
+
+    // --------------------------------------------------------
+    // 9. Print summary
+    // --------------------------------------------------------
+    std::cout << "\n========================================\n";
+    std::cout << "       Unicycle Benchmark Summary\n";
+    std::cout << "========================================\n";
+    std::cout << "Solver    | Final Cost | Solve Time (s)\n";
+    std::cout << "----------|------------|---------------\n";
+    std::cout << std::fixed << std::setprecision(4);
+    std::cout << "ASDDP     | " << std::setw(10) << cost_asddp 
+              << " | " << std::setw(13) << solve_time_asddp / 1000000.0 << "\n";
+    std::cout << "LogDDP    | " << std::setw(10) << cost_logddp 
+              << " | " << std::setw(13) << solve_time_logddp / 1000000.0 << "\n";
+    std::cout << "IPDDP     | " << std::setw(10) << cost_ipddp 
+              << " | " << std::setw(13) << solve_time_ipddp / 1000000.0 << "\n";
+    std::cout << "MSIPDDP   | " << std::setw(10) << cost_msipddp 
+              << " | " << std::setw(13) << solve_time_msipddp / 1000000.0 << "\n";
+    std::cout << "IPOPT     | " << std::setw(10) << cost_ipopt 
+              << " | " << std::setw(13) << solve_time_ipopt_numeric << "\n";
+    std::cout << "SNOPT     | " << std::setw(10) << cost_snopt 
+              << " | " << std::setw(13) << solve_time_snopt_numeric << "\n";
+    std::cout << "========================================\n\n";
 
     return 0;
 }
