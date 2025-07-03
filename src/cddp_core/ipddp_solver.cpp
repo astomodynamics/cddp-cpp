@@ -957,17 +957,17 @@ namespace cddp
           merit_function -= mu_ * s_vec.array().log().sum();
 
           // Compute primal residual vector
-          Eigen::VectorXd r_p = g_vec + s_vec;
+          Eigen::VectorXd primal_residual = g_vec + s_vec;
           
           // inf_pr: infinity norm (largest absolute residual)
-          inf_pr = std::max(inf_pr, r_p.lpNorm<Eigen::Infinity>());
+          inf_pr = std::max(inf_pr, primal_residual.lpNorm<Eigen::Infinity>());
           
           // Filter constraint violation: l1 norm (sum of residuals)
-          filter_constraint_violation += r_p.lpNorm<1>();
+          filter_constraint_violation += primal_residual.lpNorm<1>();
 
           // Compute complementary infeasibility: ||y .* s - mu||_inf
-          Eigen::VectorXd r_comp = y_vec.cwiseProduct(s_vec).array() - mu_;
-          inf_comp = std::max(inf_comp, r_comp.lpNorm<Eigen::Infinity>());
+          Eigen::VectorXd complementary_residual = y_vec.cwiseProduct(s_vec).array() - mu_;
+          inf_comp = std::max(inf_comp, complementary_residual.lpNorm<Eigen::Infinity>());
         }
       }
     }
@@ -1429,9 +1429,9 @@ namespace cddp
         Eigen::MatrixXd YSinv = Y * S_inv;
 
         // Residuals
-        Eigen::VectorXd r_p = g + s;                           // primal feasibility
-        Eigen::VectorXd r_comp = y.cwiseProduct(s).array() - mu_; // complementary feasibility
-        Eigen::VectorXd rhat = y.cwiseProduct(r_p) - r_comp;
+        Eigen::VectorXd primal_residual = g + s;                           // primal infeasibility
+        Eigen::VectorXd complementary_residual = y.cwiseProduct(s).array() - mu_; // complementary infeasibility
+        Eigen::VectorXd rhat = y.cwiseProduct(primal_residual) - complementary_residual;
 
         // Regularization
         Eigen::MatrixXd Q_uu_reg = Q_uu;
@@ -1473,7 +1473,7 @@ namespace cddp
         // Compute gains for constraints
         Eigen::VectorXd k_y = S_inv * (rhat + Y * Q_yu * k_u);
         Eigen::MatrixXd K_y = YSinv * (Q_yx + Q_yu * K_u);
-        Eigen::VectorXd k_s = -r_p - Q_yu * k_u;
+        Eigen::VectorXd k_s = -primal_residual - Q_yu * k_u;
         Eigen::MatrixXd K_s = -Q_yx - Q_yu * K_u;
 
         offset = 0;
@@ -1510,8 +1510,8 @@ namespace cddp
 
         // Error tracking
         inf_du = std::max(inf_du, Q_u.lpNorm<Eigen::Infinity>());
-        inf_pr = std::max(inf_pr, r_p.lpNorm<Eigen::Infinity>());
-        inf_comp = std::max(inf_comp, r_comp.lpNorm<Eigen::Infinity>());
+        inf_pr = std::max(inf_pr, primal_residual.lpNorm<Eigen::Infinity>());
+        inf_comp = std::max(inf_comp, complementary_residual.lpNorm<Eigen::Infinity>());
         step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
       }
 
@@ -1796,9 +1796,9 @@ namespace cddp
         const Eigen::VectorXd &s_vec = S_new[constraint_name][t];
         merit_function_new -= mu_ * s_vec.array().log().sum();
 
-        // Primal feasibility r_p: g + s (match ipddp_core.cpp)
-        Eigen::VectorXd r_p = G_new[constraint_name][t] + s_vec;
-        constraint_violation_new += r_p.lpNorm<1>();
+        // Primal infeasibility: g + s (match ipddp_core.cpp)
+        Eigen::VectorXd primal_residual = G_new[constraint_name][t] + s_vec;
+        constraint_violation_new += primal_residual.lpNorm<1>();
       }
     }
 
@@ -1806,10 +1806,7 @@ namespace cddp
         context.getObjective().terminal_cost(result.state_trajectory.back());
     merit_function_new += cost_new;
 
-    // Don't artificially inflate constraint violation - let it be computed
-    // naturally
-
-    // Filter acceptance logic (simplified like ipddp_core.cpp)
+    // Filter acceptance logic
     bool filter_acceptance = false;
     double expected_improvement = alpha * dV_(0);
     double constraint_violation_old = filter_.empty() ? 0.0 : filter_.back().constraint_violation;
