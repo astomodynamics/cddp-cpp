@@ -27,7 +27,7 @@
 namespace cddp
 {
 
-  IPDDPSolver::IPDDPSolver() : mu_(1e-1), slack_trajectory_norm_(1.0) {}
+  IPDDPSolver::IPDDPSolver() : mu_(1e-1) {}
 
   void IPDDPSolver::initialize(CDDP &context)
   {
@@ -101,8 +101,7 @@ namespace cddp
         // Set barrier parameter based on constraint evaluation
         if (constraint_set.empty())
         {
-          mu_ = 1e-8;                   // Small value if no constraints
-          slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
+          mu_ = 1e-8; // Small value if no constraints
         }
         else
         {
@@ -121,8 +120,6 @@ namespace cddp
           {
             mu_ = options.ipddp.barrier.mu_initial * 0.1; // Significantly infeasible
           }
-
-          slack_trajectory_norm_ = 1.0; // Computed after first iteration
         }
 
         // Initialize regularization
@@ -181,12 +178,10 @@ namespace cddp
     if (constraint_set.empty())
     {
       mu_ = 1e-8;
-      slack_trajectory_norm_ = 1.0; // No slack variables
     }
     else
     {
       mu_ = options.ipddp.barrier.mu_initial;
-      slack_trajectory_norm_ = 1.0; // Computed after first iteration
     }
 
     initializeDualSlackVariables(context);
@@ -321,8 +316,7 @@ namespace cddp
         {
           std::cout << "[IPDDP Forward] cost: " << std::scientific << std::setprecision(4)
                     << best_result.cost << " α: " << best_result.alpha_pr
-                    << " cv: " << best_result.constraint_violation
-                    << " ||s||: " << slack_trajectory_norm_ << std::endl;
+                    << " cv: " << best_result.constraint_violation << std::endl;
         }
 
         // Update trajectories and variables
@@ -334,8 +328,6 @@ namespace cddp
           S_ = *best_result.slack_trajectory;
         if (best_result.constraint_eval_trajectory)
           G_ = *best_result.constraint_eval_trajectory;
-
-        updateSlackTrajectoryNorm(context);
 
         // Update costs and step lengths
         dJ = context.cost_ - best_result.cost;
@@ -429,7 +421,6 @@ namespace cddp
     solution["final_primal_infeasibility"] = context.inf_pr_;
     solution["final_dual_infeasibility"] = context.inf_du_;
     solution["final_complementary_infeasibility"] = context.inf_comp_;
-    solution["final_slack_trajectory_norm"] = slack_trajectory_norm_;
 
     if (options.verbose)
     {
@@ -1730,10 +1721,6 @@ namespace cddp
     std::cout << "Final Cost: " << std::setprecision(6) << final_cost << "\n";
     std::cout << "Final Barrier μ: " << std::setprecision(2) << std::scientific
               << final_mu << "\n";
-
-    auto final_slack_norm = std::any_cast<double>(solution.at("final_slack_trajectory_norm"));
-    std::cout << "Final Slack Norm: " << std::setprecision(2) << std::scientific
-              << final_slack_norm << "\n";
     std::cout << "========================================\n\n";
   }
 
@@ -1749,18 +1736,18 @@ namespace cddp
       return; // No constraints case - no barrier update needed
     }
 
-    // Compute KKT error locally from current infeasibility metrics
-    double kkt_error = std::max(context.inf_pr_, context.inf_comp_);
+    // Compute termination metric from current infeasibility metrics
+    double termination_metric = std::max({context.inf_du_, context.inf_pr_, context.inf_comp_});
 
     // Check if we should update the barrier parameter
-    if (kkt_error <= barrier_opts.mu_update_factor * mu_)
+    if (termination_metric <= barrier_opts.mu_update_factor * mu_)
     {
       // Adaptive barrier reduction strategy
       double reduction_factor = barrier_opts.mu_update_factor;
 
       if (mu_ > 1e-12)
       {
-        double kkt_progress_ratio = kkt_error / mu_;
+        double kkt_progress_ratio = termination_metric / mu_;
 
         // Aggressive reduction if we're significantly satisfying KKT conditions
         if (kkt_progress_ratio < 0.1 * barrier_opts.mu_update_factor)
@@ -1787,8 +1774,8 @@ namespace cddp
 
       if (options.debug)
       {
-        std::cout << "[IPDDP Barrier] KKT: " << std::scientific << std::setprecision(2)
-                  << kkt_error << " → μ: " << mu_ << std::endl;
+        std::cout << "[IPDDP Barrier] Termination metric: " << std::scientific << std::setprecision(2)
+                  << termination_metric << " → μ: " << mu_ << std::endl;
       }
     }
   }
@@ -1826,11 +1813,8 @@ namespace cddp
       int iter,
       std::string &termination_reason) const
   {
-    // Proper scaling using trajectory norms
-    double dual_scaling = std::max(slack_trajectory_norm_, 1.0);
-    double primal_scaling = std::max(slack_trajectory_norm_, 1.0);
-    double termination_metric = std::max(context.inf_du_ / dual_scaling,
-                                         context.inf_pr_ / primal_scaling);
+    
+    double termination_metric = std::max({context.inf_du_, context.inf_pr_, context.inf_comp_});
 
     if (termination_metric <= options.tolerance)
     {
@@ -1840,8 +1824,8 @@ namespace cddp
         std::cout << "IPDDP: Converged due to scaled optimality gap and constraint "
                      "violation (metric: "
                   << std::scientific << std::setprecision(2)
-                  << termination_metric << ")" << std::endl;
-      }
+                    << termination_metric << ")" << std::endl;
+        }
       return true;
     }
 
@@ -1874,36 +1858,7 @@ namespace cddp
     return false;
   }
 
-  void IPDDPSolver::updateSlackTrajectoryNorm(const CDDP &context)
-  {
-    const auto &constraint_set = context.getConstraintSet();
-    const int horizon = context.getHorizon();
 
-    if (constraint_set.empty())
-    {
-      slack_trajectory_norm_ = 1.0; // No slack variables for unconstrained problems
-    }
-    else
-    {
-      // Use average slack norm instead of total to be comparable across different horizons
-      slack_trajectory_norm_ = 0.0;
-      int total_slack_vars = 0;
-      for (const auto &constraint_pair : constraint_set)
-      {
-        const std::string &constraint_name = constraint_pair.first;
-        for (int t = 0; t < horizon; ++t)
-        {
-          slack_trajectory_norm_ += S_[constraint_name][t].lpNorm<1>();
-          total_slack_vars += S_[constraint_name][t].size();
-        }
-      }
-      if (total_slack_vars > 0)
-      {
-        slack_trajectory_norm_ = slack_trajectory_norm_ / total_slack_vars;
-      }
-      slack_trajectory_norm_ = std::max(slack_trajectory_norm_, 1.0); // Avoid division by zero
-    }
-  }
 
   void IPDDPSolver::initializeConstraintStorage(CDDP &context)
   {

@@ -90,7 +90,6 @@ namespace cddp
         // Barrier method parameters
         double mu_;                       ///< Barrier parameter
         std::vector<FilterPoint> filter_; ///< Filter for line search
-        double slack_trajectory_norm_;    ///< Slack norm for scaling
 
         /**
          * @brief Precompute dynamics derivatives in parallel.
@@ -179,10 +178,7 @@ namespace cddp
         bool checkConvergence(const CDDPOptions &options, const CDDP &context,
                               double dJ, int iter, std::string &termination_reason) const;
 
-        /**
-         * @brief Update slack trajectory norm for scaling.
-         */
-        void updateSlackTrajectoryNorm(const CDDP &context);
+
 
         /**
          * @brief Initialize constraint storage containers.
