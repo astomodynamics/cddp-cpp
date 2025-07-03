@@ -102,14 +102,14 @@ int main() {
     std::cout << "Solving with ASDDP..." << std::endl;
     
     cddp::CDDPOptions options_asddp;
-    options_asddp.max_iterations = 10000;
+    options_asddp.max_iterations = 200;  
     options_asddp.verbose = true;
-    options_asddp.debug = false;
+    options_asddp.debug = false; 
     options_asddp.enable_parallel = false;
     options_asddp.num_threads = 1;
-    options_asddp.tolerance = 1e-5;
-    options_asddp.acceptable_tolerance = 1e-4;
-    options_asddp.regularization.initial_value = 1e-1;
+    options_asddp.tolerance = 1e-4;  
+    options_asddp.acceptable_tolerance = 1e-5;  
+    options_asddp.regularization.initial_value = 1e-2; 
 
     cddp::CDDP solver_asddp(
         initial_state,
@@ -123,7 +123,7 @@ int main() {
     
     solver_asddp.setInitialTrajectory(X_init, U_init);
 
-    // Add constraints
+    // Add constraints (consistent with other solvers)
     solver_asddp.addPathConstraint("ControlBoxConstraint",
         std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
     solver_asddp.addPathConstraint("BallConstraint",
@@ -321,8 +321,9 @@ int main() {
     }   
 
     // --------------------------------------------------------
-    // 6. Baseline #5: IPOPT (using CasADi)
+    // 5. Baseline #5 & #6: IPOPT and SNOPT (using CasADi)
     // --------------------------------------------------------
+    // NOTE: Both solvers reuse the same NLP problem definition to avoid duplication
     std::cout << "Solving with IPOPT..." << std::endl;
     
     std::vector<Eigen::VectorXd> X_ipopt_sol(horizon + 1, Eigen::VectorXd(state_dim));
@@ -499,10 +500,188 @@ int main() {
     }
 
     // --------------------------------------------------------
+    // SNOPT: Reusing the same NLP definition from IPOPT above
+    // --------------------------------------------------------
+    std::cout << "Solving with SNOPT..." << std::endl;
+    
+    std::vector<Eigen::VectorXd> X_snopt_sol(horizon + 1, Eigen::VectorXd(state_dim));
+    std::vector<Eigen::VectorXd> U_snopt_sol(horizon, Eigen::VectorXd(control_dim));
+    std::vector<double> x_snopt, y_snopt;
+    double solve_time_snopt_numeric = 0.0;
+
+    { // SNOPT specific scope
+        const int n_s = state_dim;    // Renaming for clarity in CasADi context
+        const int n_c = control_dim;  // Renaming for clarity in CasADi context
+        const int H = horizon;        // Renaming for clarity
+
+        // Define symbolic variables for states and controls
+        casadi::MX X_casadi = casadi::MX::sym("X_casadi", (H + 1) * n_s);
+        casadi::MX U_casadi = casadi::MX::sym("U_casadi", H * n_c);
+        casadi::MX Z_casadi = casadi::MX::vertcat({X_casadi, U_casadi});
+
+        // Helper lambdas to extract the state and control at time step t
+        auto X_t = [&](int t) -> casadi::MX {
+            return X_casadi(casadi::Slice(t * n_s, (t + 1) * n_s));
+        };
+        auto U_t = [&](int t) -> casadi::MX {
+            return U_casadi(casadi::Slice(t * n_c, (t + 1) * n_c));
+        };
+        using casadi::cos;
+        using casadi::sin;
+        
+        // Unicycle dynamics function for CasADi
+        auto unicycle_dynamics_casadi = [&](casadi::MX x, casadi::MX u) -> casadi::MX {
+            casadi::MX x_next = casadi::MX::zeros(n_s, 1);
+            casadi::MX theta = x(2);
+            casadi::MX v     = u(0);
+            casadi::MX omega = u(1);
+            casadi::MX ctheta = cos(theta);
+            casadi::MX stheta = sin(theta);
+            x_next(0) = x(0) + v * ctheta * timestep;
+            x_next(1) = x(1) + v * stheta * timestep;
+            x_next(2) = x(2) + omega * timestep;
+            return x_next;
+        };
+
+        // Cost function
+        casadi::MX cost_casadi = 0;
+        casadi::DM Q_dm = casadi::DM::zeros(n_s, n_s);
+        casadi::DM R_dm = casadi::DM::zeros(n_c, n_c);
+        casadi::DM Qf_dm = casadi::DM::zeros(n_s, n_s);
+
+        for(int i=0; i<n_s; ++i) for(int j=0; j<n_s; ++j) Q_dm(i,j) = Q(i,j) * timestep;
+        for(int i=0; i<n_c; ++i) for(int j=0; j<n_c; ++j) R_dm(i,j) = R(i,j) * timestep;
+        for(int i=0; i<n_s; ++i) for(int j=0; j<n_s; ++j) Qf_dm(i,j) = Qf(i,j);
+        
+        casadi::DM goal_state_dm(std::vector<double>(goal_state.data(), goal_state.data() + n_s));
+
+        for (int t = 0; t < H; ++t) {
+            casadi::MX x_diff = X_t(t) - goal_state_dm;
+            casadi::MX u_curr = U_t(t);
+            cost_casadi += casadi::MX::mtimes({x_diff.T(), Q_dm, x_diff});
+            cost_casadi += casadi::MX::mtimes({u_curr.T(), R_dm, u_curr});
+        }
+        casadi::MX x_final_diff = X_t(H) - goal_state_dm;
+        cost_casadi += casadi::MX::mtimes({x_final_diff.T(), Qf_dm, x_final_diff});
+
+        // Constraints
+        casadi::MX g_casadi;
+        casadi::DM initial_state_dm(std::vector<double>(initial_state.data(), initial_state.data() + n_s));
+        g_casadi = casadi::MX::vertcat({g_casadi, X_t(0) - initial_state_dm});
+
+        for (int t = 0; t < H; ++t) {
+            g_casadi = casadi::MX::vertcat({g_casadi, X_t(t+1) - unicycle_dynamics_casadi(X_t(t), U_t(t))});
+        }
+
+        // Store the number of equality constraints (initial state + dynamics)
+        int num_equality_constraints = static_cast<int>(g_casadi.size1());
+
+        // Add Ball Constraints (inequality constraints)
+        for (int t = 0; t <= H; ++t) {
+            casadi::MX x_coord = X_t(t)(0);
+            casadi::MX y_coord = X_t(t)(1);
+
+            // Ball Constraint 1
+            casadi::MX term1_c1 = x_coord - center(0);
+            casadi::MX term2_c1 = y_coord - center(1);
+            casadi::MX ball_constraint1 = term1_c1 * term1_c1 + 
+                                          term2_c1 * term2_c1 - 
+                                          radius * radius;
+            g_casadi = casadi::MX::vertcat({g_casadi, ball_constraint1});
+
+            // Ball Constraint 2
+            casadi::MX term1_c2 = x_coord - center2(0);
+            casadi::MX term2_c2 = y_coord - center2(1);
+            casadi::MX ball_constraint2 = term1_c2 * term1_c2 + 
+                                          term2_c2 * term2_c2 - 
+                                          radius2 * radius2;
+            g_casadi = casadi::MX::vertcat({g_casadi, ball_constraint2});
+        }
+
+        // NLP definition
+        casadi::MXDict nlp_casadi = {{"x", Z_casadi}, {"f", cost_casadi}, {"g", g_casadi}};
+        casadi::Dict solver_opts;
+        solver_opts["snopt.print_level"] = 1;
+        solver_opts["print_time"] = true;
+        solver_opts["snopt.major_iterations_limit"] = 500;
+        solver_opts["snopt.minor_iterations_limit"] = 500;
+        casadi::Function solver_snopt = casadi::nlpsol("solver_snopt", "snopt", nlp_casadi, solver_opts);
+
+        // Bounds
+        std::vector<double> lbx_casadi((H+1)*n_s + H*n_c, -casadi::inf);
+        std::vector<double> ubx_casadi((H+1)*n_s + H*n_c, casadi::inf);
+
+        for (int t = 0; t < H; ++t) {
+            for (int i = 0; i < n_c; ++i) {
+                lbx_casadi[(H+1)*n_s + t*n_c + i] = control_lower_bound(i);
+                ubx_casadi[(H+1)*n_s + t*n_c + i] = control_upper_bound(i);
+            }
+        }
+        
+        int n_g_casadi = static_cast<int>(g_casadi.size1());
+        std::vector<double> lbg_casadi_vec(n_g_casadi);
+        std::vector<double> ubg_casadi_vec(n_g_casadi);
+
+        // Bounds for equality constraints
+        for (int i = 0; i < num_equality_constraints; ++i) {
+            lbg_casadi_vec[i] = 0.0;
+            ubg_casadi_vec[i] = 0.0;
+        }
+
+        // Bounds for ball constraints (inequality)
+        for (int i = num_equality_constraints; i < n_g_casadi; ++i) {
+            lbg_casadi_vec[i] = 0.0;
+            ubg_casadi_vec[i] = casadi::inf;
+        }
+
+        // Initial guess
+        std::vector<double> x0_casadi_vec((H+1)*n_s + H*n_c, 0.0);
+        for (int i = 0; i < n_s; ++i) x0_casadi_vec[i] = initial_state(i);
+        for (int t = 1; t <= H; ++t) {
+            for (int i = 0; i < n_s; ++i) {
+                x0_casadi_vec[t*n_s + i] = initial_state(i);
+            }
+        }
+
+        casadi::DMDict arg_snopt;
+        arg_snopt["lbx"] = casadi::DM(lbx_casadi);
+        arg_snopt["ubx"] = casadi::DM(ubx_casadi);
+        arg_snopt["lbg"] = casadi::DM(lbg_casadi_vec);
+        arg_snopt["ubg"] = casadi::DM(ubg_casadi_vec);
+        arg_snopt["x0"] = casadi::DM(x0_casadi_vec);
+        
+        auto start_time_snopt = std::chrono::high_resolution_clock::now();
+        casadi::DMDict res_snopt = solver_snopt(arg_snopt);
+        auto end_time_snopt = std::chrono::high_resolution_clock::now();
+        std::chrono::duration<double> duration_snopt = end_time_snopt - start_time_snopt;
+        solve_time_snopt_numeric = duration_snopt.count();
+
+        std::vector<double> sol_snopt_vec = std::vector<double>(res_snopt.at("x"));
+
+        if (res_snopt.count("f")) {
+            double optimal_cost = static_cast<double>(casadi::DM(res_snopt.at("f")));
+            std::cout << "SNOPT Optimal Cost: " << optimal_cost << std::endl;
+        }
+
+        for (int t = 0; t <= H; ++t) {
+            for (int i = 0; i < n_s; ++i) X_snopt_sol[t](i) = sol_snopt_vec[t*n_s + i];
+        }
+        for (int t = 0; t < H; ++t) {
+            for (int i = 0; i < n_c; ++i) U_snopt_sol[t](i) = sol_snopt_vec[(H+1)*n_s + t*n_c + i];
+        }
+        
+        for (const auto& state : X_snopt_sol) {
+            x_snopt.push_back(state(0));
+            y_snopt.push_back(state(1));
+        }
+        std::cout << "SNOPT solve time: " << solve_time_snopt_numeric << " seconds" << std::endl; 
+    }
+
+    // --------------------------------------------------------
     // 7. Plot all trajectories in one figure
     // --------------------------------------------------------
     auto main_figure = figure(true);
-    main_figure->size(3000, 500);
+    main_figure->size(3600, 500);
 
     // Initial guess data
     std::vector<double> x_init_plot, y_init_plot;
@@ -524,7 +703,7 @@ int main() {
     }
 
     // --- Subplot 1: ASDDP ---
-    auto ax_asddp = subplot(1, 5, 0);
+    auto ax_asddp = subplot(1, 6, 0);
 
     auto l_asddp = plot(ax_asddp, x_asddp, y_asddp, "-r");
     l_asddp->display_name("ASDDP Solution");
@@ -554,7 +733,7 @@ int main() {
     grid(ax_asddp, true);
 
     // --- Subplot 2: LogDDP ---
-    auto ax_logddp = subplot(1, 5, 1);
+    auto ax_logddp = subplot(1, 6, 1);
 
     auto l_logddp = plot(ax_logddp, x_logddp, y_logddp, "-b");
     l_logddp->display_name("LogDDP Solution");
@@ -584,7 +763,7 @@ int main() {
     grid(ax_logddp, true);
 
     // --- Subplot 3: IPDDP ---
-    auto ax_ipddp = subplot(1, 5, 2);
+    auto ax_ipddp = subplot(1, 6, 2);
 
     auto l_ipddp = plot(ax_ipddp, x_ipddp, y_ipddp, "-g");
     l_ipddp->display_name("IPDDP Solution");
@@ -614,7 +793,7 @@ int main() {
     grid(ax_ipddp, true);
 
     // --- Subplot 4: MSIPDDP ---
-    auto ax_msipddp = subplot(1, 5, 3);
+    auto ax_msipddp = subplot(1, 6, 3);
 
     auto l_msipddp = plot(ax_msipddp, x_msipddp, y_msipddp, "-c");
     l_msipddp->display_name("MSIPDDP Solution");
@@ -644,7 +823,7 @@ int main() {
     grid(ax_msipddp, true);
 
     // --- Subplot 5: IPOPT ---
-    auto ax_ipopt = subplot(1, 5, 4);
+    auto ax_ipopt = subplot(1, 6, 4);
     auto l_ipopt_sol = plot(ax_ipopt, x_ipopt, y_ipopt, "-m");
     l_ipopt_sol->display_name("IPOPT Solution");
     l_ipopt_sol->line_width(2);
@@ -672,6 +851,35 @@ int main() {
     leg_ipopt->location(legend::general_alignment::topleft);
     grid(ax_ipopt, true);
 
+    // --- Subplot 6: SNOPT ---
+    auto ax_snopt = subplot(1, 6, 5);
+    auto l_snopt_sol = plot(ax_snopt, x_snopt, y_snopt, "-y");
+    l_snopt_sol->display_name("SNOPT Solution");
+    l_snopt_sol->line_width(2);
+
+    hold(ax_snopt, true);
+
+    auto cplot_snopt = plot(ax_snopt, cx, cy, "--g");
+    cplot_snopt->display_name("Ball Constraint");
+    cplot_snopt->line_width(2);
+    
+    auto cplot_snopt2 = plot(ax_snopt, cx2, cy2, "--g");
+    cplot_snopt2->display_name("Ball Constraint 2");
+    cplot_snopt2->line_width(2);
+
+    auto l_snopt_init = plot(ax_snopt, x_init_plot, y_init_plot, "-k");
+    l_snopt_init->display_name("Initial Guess");
+    l_snopt_init->line_width(2);
+    
+    title(ax_snopt, "SNOPT Trajectory");
+    xlabel(ax_snopt, "x [m]");
+    ylabel(ax_snopt, "y [m]");
+    xlim(ax_snopt, {-0.2, 3.2});
+    ylim(ax_snopt, {-0.2, 3.2});
+    auto leg_snopt = matplot::legend(ax_snopt);
+    leg_snopt->location(legend::general_alignment::topleft);
+    grid(ax_snopt, true);
+
     main_figure->draw();
     main_figure->save(plotDirectory + "/unicycle_baseline_trajectories_comparison.png");
     std::cout << "Saved combined trajectory plot to "
@@ -688,11 +896,12 @@ int main() {
         solve_time_logddp / 1000000.0,     // Convert to seconds
         solve_time_ipddp / 1000000.0,      // Convert to seconds
         solve_time_msipddp / 1000000.0,    // Convert to seconds
-        solve_time_ipopt_numeric
+        solve_time_ipopt_numeric,
+        solve_time_snopt_numeric
     };
 
     std::vector<std::string> solver_names = {
-        "ASDDP", "LogDDP", "IPDDP", "MSIPDDP", "IPOPT"
+        "ASDDP", "LogDDP", "IPDDP", "MSIPDDP", "IPOPT", "SNOPT"
     };
 
     auto ax_times = time_figure->current_axes();
