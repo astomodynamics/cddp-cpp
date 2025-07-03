@@ -348,8 +348,8 @@ int main() {
     options_ipddp.max_iterations = 100;
     options_ipddp.verbose = true;
     options_ipddp.debug = false;
-    options_ipddp.tolerance = 1e-6;
-    options_ipddp.acceptable_tolerance = 1e-7;
+    options_ipddp.tolerance = 1e-5;
+    options_ipddp.acceptable_tolerance = 1e-6;
     options_ipddp.regularization.initial_value = 1e-3;
     options_ipddp.ipddp.barrier.mu_initial = 1e-0;
     options_ipddp.ipddp.barrier.mu_update_factor = 0.5;
