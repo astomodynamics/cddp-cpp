@@ -104,6 +104,13 @@ private:
   void computeCost(CDDP &context);
 
   /**
+   * @brief Compute total constraint violation.
+   * @param context Reference to the CDDP context.
+   * @return Total constraint violation.
+   */
+  double computeConstraintViolation(CDDP &context);
+
+  /**
    * @brief Print iteration information.
    */
   void printIteration(int iter, double cost, double merit, double inf_du,

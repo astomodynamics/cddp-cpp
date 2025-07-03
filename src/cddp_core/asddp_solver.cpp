@@ -17,6 +17,7 @@
 #include "cddp_core/asddp_solver.hpp"
 #include "cddp_core/cddp_core.hpp"
 #include "osqp++.h"
+#include "absl/status/status.h"
 #include <chrono>
 #include <cmath>
 #include <execution>
@@ -243,6 +244,9 @@ CDDPSolution ASDDPSolver::solve(CDDP &context) {
   auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
       end_time - start_time);
 
+  // Compute final constraint violation
+  context.inf_pr_ = computeConstraintViolation(context);
+
   // Populate final solution
   solution["status_message"] = termination_reason;
   solution["iterations_completed"] = iter;
@@ -320,7 +324,6 @@ bool ASDDPSolver::backwardPass(CDDP &context) {
 
   dV_ = Eigen::Vector2d::Zero();
   double Qu_error = 0.0;
-  double norm_Vx = V_x.lpNorm<1>();
 
   // Backward Riccati recursion
   for (int t = horizon - 1; t >= 0; --t) {
@@ -347,8 +350,14 @@ bool ASDDPSolver::backwardPass(CDDP &context) {
     Q_ux = l_ux + B.transpose() * V_xx * A;
     Q_uu = l_uu + B.transpose() * V_xx * B;
 
-    // Apply regularization
-    Q_uu_reg = Q_uu;
+    // Apply regularization - state regularization to value function
+    Eigen::MatrixXd V_xx_reg = V_xx + context.regularization_ * Eigen::MatrixXd::Identity(state_dim, state_dim);
+    
+    // Compute regularized Q-function matrices
+    Q_ux_reg = l_ux + B.transpose() * V_xx_reg * A;
+    Q_uu_reg = l_uu + B.transpose() * V_xx_reg * B;
+    
+    // Apply control regularization
     Q_uu_reg.diagonal().array() += context.regularization_;
 
     // Check positive definiteness
@@ -395,15 +404,14 @@ bool ASDDPSolver::backwardPass(CDDP &context) {
           continue;
         }
 
-        Eigen::VectorXd constraint_vals =
-            constraint->evaluate(context.X_[t + 1], context.U_[t + 1]);
-        auto [cons_jac_x, cons_jac_u] =
-            constraint->getJacobians(context.X_[t + 1], context.U_[t + 1]);
+        Eigen::VectorXd constraint_vals = constraint->evaluate(context.X_[t + 1], context.U_[t + 1]) - constraint->getUpperBound();
+        Eigen::MatrixXd cons_jac_x = constraint->getStateJacobian(context.X_[t + 1], context.U_[t + 1]);
+        Eigen::MatrixXd cons_jac_u = constraint->getControlJacobian(context.X_[t + 1], context.U_[t + 1]);
 
         for (int j = 0; j < constraint_vals.size(); j++) {
           if (std::abs(constraint_vals(j)) <= active_set_tol) {
-            C.row(active_constraint_index) = cons_jac_x * B;
-            D.row(active_constraint_index) = cons_jac_x * A;
+            C.row(active_constraint_index) = cons_jac_x.row(j) * B;
+            D.row(active_constraint_index) = cons_jac_x.row(j) * A;
             active_constraint_index++;
           }
         }
@@ -413,7 +421,7 @@ bool ASDDPSolver::backwardPass(CDDP &context) {
     if (active_constraint_index == 0) { // No active constraints
       const Eigen::MatrixXd &H = Q_uu_reg.inverse();
       k = -H * Q_u;
-      K = -H * Q_ux;
+      K = -H * Q_ux_reg;
     } else {
       // Extract identified active constraints
       Eigen::MatrixXd grad_x_g = D.topRows(active_constraint_index);
@@ -454,23 +462,23 @@ bool ASDDPSolver::backwardPass(CDDP &context) {
             Q_uu_inv * (Eigen::MatrixXd::Identity(control_dim, control_dim) -
                         C_new.transpose() * W);
         k = -H * Q_u;
-        K = -H * Q_ux + W.transpose() * D_new;
+        K = -H * Q_ux_reg + W.transpose() * D_new;
       } else {
         // If no active constraints remain, revert to unconstrained solution
         Eigen::MatrixXd H = Q_uu_reg.inverse();
-        K = -H * Q_ux;
+        K = -H * Q_ux_reg;
         k = -H * Q_u;
       }
     }
 
     // Store Q-function matrices and gains
     Q_UU_[t] = Q_uu_reg;
-    Q_UX_[t] = Q_ux;
+    Q_UX_[t] = Q_ux_reg;
     Q_U_[t] = Q_u;
     k_u_[t] = k;
     K_u_[t] = K;
 
-    // Update value function
+    // Update value function - use original Q matrices for value function recursion
     Eigen::Vector2d dV_step;
     dV_step << Q_u.dot(k), 0.5 * k.dot(Q_uu * k);
     dV_ += dV_step;
@@ -481,18 +489,12 @@ bool ASDDPSolver::backwardPass(CDDP &context) {
            K.transpose() * Q_ux;
     V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
 
-    // 1-norm of the value function gradient
-    norm_Vx += V_x.lpNorm<1>();
-
-    // Update optimality gap
+    // Compute optimality gap (Inf-norm) for convergence check - simplified like asddp_core.cpp
     Qu_error = std::max(Qu_error, Q_u.lpNorm<Eigen::Infinity>());
   }
 
-  // Normalize dual infeasibility
-  double scaling_factor = options.termination_scaling_max_factor;
-  scaling_factor = std::max(scaling_factor, norm_Vx / (horizon * state_dim)) /
-                   scaling_factor;
-  context.inf_du_ = Qu_error / scaling_factor;
+  // Simplified dual infeasibility computation like asddp_core.cpp
+  context.inf_du_ = Qu_error;
 
   if (options.debug) {
     std::cout << "Qu_error: " << Qu_error << std::endl;
@@ -625,15 +627,15 @@ ForwardPassResult ASDDPSolver::forwardPass(CDDP &context, double alpha_pr) {
         if (name == "ControlBoxConstraint") {
           continue;
         }
-        Eigen::VectorXd cons_vals = constraint->evaluate(x_next, u);
-        auto [cons_jac_x, cons_jac_u] = constraint->getJacobians(x_next, u);
-
-        int m = cons_vals.size();
-        A_aug.block(row_index, 0, m, control_dim) = cons_jac_x * Fu;
-        lb_aug.segment(row_index, m)
-            .setConstant(-std::numeric_limits<double>::infinity());
-        ub_aug.segment(row_index, m) = -cons_vals;
-        row_index += m;
+                    Eigen::VectorXd cons_vals = constraint->evaluate(x_next, u) - constraint->getUpperBound();
+            Eigen::MatrixXd cons_jac_x = constraint->getStateJacobian(x_next, u);
+            
+            int m = cons_vals.size();
+            A_aug.block(row_index, 0, m, control_dim) = cons_jac_x * Fu;
+            lb_aug.segment(row_index, m)
+                .setConstant(-std::numeric_limits<double>::infinity());
+            ub_aug.segment(row_index, m) = -cons_vals;
+            row_index += m;
       }
     }
 
@@ -655,7 +657,16 @@ ForwardPassResult ASDDPSolver::forwardPass(CDDP &context, double alpha_pr) {
     osqp_settings.verbose = false;
 
     try {
-      osqp_solver.Init(instance, osqp_settings);
+      absl::Status init_status = osqp_solver.Init(instance, osqp_settings);
+      if (!init_status.ok()) {
+        if (options.debug) {
+          std::cerr << "ASDDP: QP solver initialization failed at time step " << t
+                    << ": " << init_status.message() << std::endl;
+        }
+        result.success = false;
+        return result;
+      }
+
       osqp::OsqpExitCode exit_code = osqp_solver.Solve();
 
       if (exit_code != osqp::OsqpExitCode::kOptimal) {
@@ -724,6 +735,37 @@ void ASDDPSolver::computeCost(CDDP &context) {
   context.cost_ += context.getObjective().terminal_cost(context.X_.back());
   context.merit_function_ =
       context.cost_; // For ASDDP, merit function equals cost
+  
+  // Compute constraint violation
+  context.inf_pr_ = computeConstraintViolation(context);
+}
+
+double ASDDPSolver::computeConstraintViolation(CDDP &context) {
+  double total_violation = 0.0;
+
+  // Check constraint violations for each time step
+  for (int t = 0; t <= context.getHorizon(); ++t) {
+    const Eigen::VectorXd &x = context.X_[t];
+    const Eigen::VectorXd &u = (t < context.getHorizon()) ? context.U_[t] : Eigen::VectorXd::Zero(context.getControlDim());
+
+    // Control box constraints
+    auto control_box_constraint =
+        context.getConstraint<ControlBoxConstraint>("ControlBoxConstraint");
+    if (control_box_constraint != nullptr && t < context.getHorizon()) {
+      total_violation += control_box_constraint->computeViolation(x, u);
+    }
+
+    // Path constraints
+    const auto &constraint_set = context.getConstraintSet();
+    for (const auto &[name, constraint] : constraint_set) {
+      if (name == "ControlBoxConstraint") {
+        continue;
+      }
+      total_violation += constraint->computeViolation(x, u);
+    }
+  }
+
+  return total_violation;
 }
 
 void ASDDPSolver::printIteration(int iter, double cost, double merit,
