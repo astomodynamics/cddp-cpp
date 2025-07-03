@@ -28,6 +28,7 @@
 #include <string> // For std::string
 #include <thread>
 #include <vector>
+#include <functional>
 
 #include "cddp_core/barrier.hpp"
 #include "cddp_core/boxqp.hpp"
@@ -307,6 +308,28 @@ public:
    */
   CDDPSolution solve(const std::string &solver_type);
 
+  // --- External Solver Registration ---
+  /**
+   * @brief Register an external solver factory function
+   * @param solver_name The name of the solver (e.g., "CCIPDDP")
+   * @param factory Function that creates the solver instance
+   */
+  static void registerSolver(const std::string& solver_name, 
+                           std::function<std::unique_ptr<ISolverAlgorithm>()> factory);
+
+  /**
+   * @brief Check if a solver is registered
+   * @param solver_name The name of the solver
+   * @return True if solver is registered
+   */
+  static bool isSolverRegistered(const std::string& solver_name);
+
+  /**
+   * @brief Get list of all registered solver names
+   * @return Vector of solver names
+   */
+  static std::vector<std::string> getRegisteredSolvers();
+
   // --- Public members for strategy access (or provide getters/setters) ---
   // These are the core iterative variables shared across solver strategies.
   std::vector<Eigen::VectorXd> X_; ///< State trajectory (nominal)
@@ -362,6 +385,14 @@ public:
    */
   bool isRegularizationLimitReached() const;
 
+protected:
+  /**
+   * @brief Create solver instance (virtual for extensibility)
+   * @param solver_type String identifying the solver type
+   * @return Unique pointer to solver instance, or nullptr if not found
+   */
+  virtual std::unique_ptr<ISolverAlgorithm> createSolver(const std::string& solver_type);
+
 private:
   // Problem Definition Data
   std::unique_ptr<DynamicalSystem> system_;
@@ -381,6 +412,9 @@ private:
 
   // Strategy pattern for different solver algorithms
   std::unique_ptr<ISolverAlgorithm> solver_;
+
+  // Static registry for external solvers
+  static std::map<std::string, std::function<std::unique_ptr<ISolverAlgorithm>()>> external_solver_registry_;
 
   void initializeProblemIfNecessary();
   void printSolverInfo();

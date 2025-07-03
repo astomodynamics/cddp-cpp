@@ -95,6 +95,10 @@ target_link_libraries(test_hessian gtest gmock gtest_main cddp)
 gtest_discover_tests(test_hessian)
 
 # Core tests
+add_executable(test_cddp_core cddp_core/test_cddp_core.cpp)
+target_link_libraries(test_cddp_core gtest gmock gtest_main cddp)
+gtest_discover_tests(test_cddp_core)
+
 add_executable(test_boxqp cddp_core/test_boxqp.cpp)
 target_link_libraries(test_boxqp gtest gmock gtest_main cddp)
 gtest_discover_tests(test_boxqp)

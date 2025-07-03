@@ -25,8 +25,15 @@
 #include <cmath>                        // For std::min, std::max
 #include <iomanip>                      // For std::setw
 #include <iostream>
+#include <map>
+#include <functional>
 
 namespace cddp {
+
+// Static registry definition
+std::map<std::string, std::function<std::unique_ptr<ISolverAlgorithm>()>> 
+    CDDP::external_solver_registry_;
+
 // Constructor
 CDDP::CDDP(const Eigen::VectorXd &initial_state,
            const Eigen::VectorXd &reference_state, int horizon, double timestep,
@@ -268,31 +275,46 @@ CDDPSolution CDDP::solve(SolverType solver_type) {
   return solve(solverTypeToString(solver_type));
 }
 
+// Virtual factory method
+std::unique_ptr<ISolverAlgorithm> CDDP::createSolver(const std::string& solver_type) {
+  // First check external registry
+  auto it = external_solver_registry_.find(solver_type);
+  if (it != external_solver_registry_.end()) {
+    return it->second();  // Call the factory function
+  }
+
+  // Fall back to built-in solvers
+  if (solver_type == "CLCDDP" || solver_type == "CLDDP") {
+    return std::make_unique<CLDDPSolver>();
+  } else if (solver_type == "ASDDP") {
+    return std::make_unique<ASDDPSolver>();
+  } else if (solver_type == "LogDDP" || solver_type == "LOGDDP") {
+    return std::make_unique<LogDDPSolver>();
+  } else if (solver_type == "IPDDP") {
+    return std::make_unique<IPDDPSolver>();
+  } else if (solver_type == "MSIPDDP") {
+    return std::make_unique<MSIPDDPSolver>();
+  } else if (solver_type == "ALDDP") {
+    return std::make_unique<AlddpSolver>();
+  }
+  
+  return nullptr;  // Solver not found
+}
+
 CDDPSolution CDDP::solve(const std::string &solver_type) {
   // This is where strategy selection and invocation will happen.
 
   initializeProblemIfNecessary(); // Ensure X_, U_ are sized etc.
 
   // Strategy selection and instantiation
-  if (solver_type == "CLCDDP" || solver_type == "CLDDP") {
-    solver_ = std::make_unique<CLDDPSolver>();
-  } else if (solver_type == "ASDDP") {
-    solver_ = std::make_unique<ASDDPSolver>();
-  } else if (solver_type == "LogDDP" || solver_type == "LOGDDP") {
-    solver_ = std::make_unique<LogDDPSolver>();
-  } else if (solver_type == "IPDDP") {
-    solver_ = std::make_unique<IPDDPSolver>();
-  } else if (solver_type == "MSIPDDP") {
-    solver_ = std::make_unique<MSIPDDPSolver>();
-  } else if (solver_type == "ALDDP") {
-    solver_ = std::make_unique<AlddpSolver>();
-  } else {
-    // For now, return placeholder for other solver types
+  solver_ = createSolver(solver_type);
+  
+  if (!solver_) {
+    // Solver not found - return error solution
     CDDPSolution solution;
     solution["solver_name"] = solver_type;
-    solution["status_message"] =
-        std::string("NotImplemented - Strategy class not yet created for ") +
-        solver_type;
+    solution["status_message"] = 
+        std::string("UnknownSolver - No solver registered for '") + solver_type + "'";
     solution["iterations_completed"] = 0;
     solution["solve_time_ms"] = 0.0;
     solution["final_objective"] = 0.0;
@@ -304,8 +326,12 @@ CDDPSolution CDDP::solve(const std::string &solver_type) {
     solution["control_trajectory"] = std::vector<Eigen::VectorXd>();
 
     if (options_.verbose) {
-      std::cout << "Solver type '" << solver_type << "' not yet implemented."
-                << std::endl;
+      std::cout << "Solver type '" << solver_type << "' not found. Available solvers: ";
+      auto available = getRegisteredSolvers();
+      for (const auto& name : available) {
+        std::cout << name << " ";
+      }
+      std::cout << "CLDDP ASDDP LogDDP IPDDP MSIPDDP ALDDP" << std::endl;
     }
 
     return solution;
@@ -592,20 +618,22 @@ void CDDP::printOptions(const CDDPOptions &options) {
   std::cout << "========================================\n\n";
 }
 
-// void CDDP::printSolution(const CDDPSolution &solution)
-// {
-//     std::cout << "\n========================================\n";
-//     std::cout << "           CDDP Solution\n";
-//     std::cout << "========================================\n";
+// Static methods for solver registration
+void CDDP::registerSolver(const std::string& solver_name, 
+                         std::function<std::unique_ptr<ISolverAlgorithm>()> factory) {
+  external_solver_registry_[solver_name] = factory;
+}
 
-//     std::cout << "Converged: " << (solution.converged ? "Yes" : "No") <<
-//     "\n"; std::cout << "Iterations: " << solution.iterations << "\n";
-//     std::cout << "Solve Time: " << std::setprecision(4) <<
-//     solution.solve_time << " micro sec\n"; std::cout << "Final Cost: " <<
-//     std::setprecision(6) << solution.cost_sequence.back() << "\n"; //
-//     Assuming cost_sequence is not empty
+bool CDDP::isSolverRegistered(const std::string& solver_name) {
+  return external_solver_registry_.find(solver_name) != external_solver_registry_.end();
+}
 
-//     std::cout << "========================================\n\n";
-// }
+std::vector<std::string> CDDP::getRegisteredSolvers() {
+  std::vector<std::string> names;
+  for (const auto& pair : external_solver_registry_) {
+    names.push_back(pair.first);
+  }
+  return names;
+}
 
 } // namespace cddp
