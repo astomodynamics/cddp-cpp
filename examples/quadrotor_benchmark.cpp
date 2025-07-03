@@ -281,8 +281,8 @@ int main() {
     options_logddp.max_iterations = 1000;
     options_logddp.verbose = true;
     options_logddp.debug = false;
-    options_logddp.tolerance = 1e-6;
-    options_logddp.acceptable_tolerance = 1e-7;
+    options_logddp.tolerance = 1e-5;
+    options_logddp.acceptable_tolerance = 1e-6;
     options_logddp.regularization.initial_value = 1e-4;
     options_logddp.log_barrier.barrier.mu_initial = 1e-0;
     options_logddp.log_barrier.barrier.mu_update_factor = 0.2;
