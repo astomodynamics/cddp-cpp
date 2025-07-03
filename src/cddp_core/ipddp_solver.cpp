@@ -1736,8 +1736,9 @@ namespace cddp
       return; // No constraints case - no barrier update needed
     }
 
-    // Compute termination metric from current infeasibility metrics
-    double termination_metric = std::max({context.inf_du_, context.inf_pr_, context.inf_comp_});
+    // Compute termination metric from current infeasibility metrics with IPOPT-style scaling
+    double scaled_inf_du = computeScaledDualInfeasibility(context);
+    double termination_metric = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
 
     // Check if we should update the barrier parameter
     if (termination_metric <= barrier_opts.mu_update_factor * mu_)
@@ -1775,7 +1776,9 @@ namespace cddp
       if (options.debug)
       {
         std::cout << "[IPDDP Barrier] Termination metric: " << std::scientific << std::setprecision(2)
-                  << termination_metric << " → μ: " << mu_ << std::endl;
+                  << termination_metric << " (scaled inf_du: " << scaled_inf_du 
+                  << ", inf_pr: " << context.inf_pr_ << ", inf_comp: " << context.inf_comp_ 
+                  << ") → μ: " << mu_ << std::endl;
       }
     }
   }
@@ -1813,8 +1816,9 @@ namespace cddp
       int iter,
       std::string &termination_reason) const
   {
-    
-    double termination_metric = std::max({context.inf_du_, context.inf_pr_, context.inf_comp_});
+    // Compute IPOPT-style scaling factors
+    double scaled_inf_du = computeScaledDualInfeasibility(context);
+    double termination_metric = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
 
     if (termination_metric <= options.tolerance)
     {
@@ -1824,7 +1828,7 @@ namespace cddp
         std::cout << "IPDDP: Converged due to scaled optimality gap and constraint "
                      "violation (metric: "
                   << std::scientific << std::setprecision(2)
-                    << termination_metric << ")" << std::endl;
+                    << termination_metric << ", scaled inf_du: " << scaled_inf_du << ")" << std::endl;
         }
       return true;
     }
@@ -1910,6 +1914,60 @@ namespace cddp
       }
     }
     return max_violation;
+  }
+
+  double IPDDPSolver::computeScaledDualInfeasibility(const CDDP &context) const
+  {
+    const auto &constraint_set = context.getConstraintSet();
+    const int horizon = context.getHorizon();
+    const int control_dim = context.getControlDim();
+    
+    // If no constraints, return the unscaled dual infeasibility
+    if (constraint_set.empty())
+    {
+      return context.inf_du_;
+    }
+
+    // IPOPT-style scaling: sd = max{smax, (||y||₁ + ||s||₁)/(m+n)}/smax
+    const double smax = 100.0; // Standard IPOPT value
+    
+    // Compute total L1 norms of dual and slack variables
+    double y_norm_l1 = 0.0;
+    double s_norm_l1 = 0.0;
+    int total_dual_dim = 0; // m: total number of constraints
+
+    for (const auto &constraint_pair : constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      auto y_it = Y_.find(constraint_name);
+      auto s_it = S_.find(constraint_name);
+      
+      if (y_it != Y_.end() && s_it != S_.end())
+      {
+        for (int t = 0; t < horizon; ++t)
+        {
+          const Eigen::VectorXd &y_vec = y_it->second[t];
+          const Eigen::VectorXd &s_vec = s_it->second[t];
+          
+          y_norm_l1 += y_vec.lpNorm<1>();
+          s_norm_l1 += s_vec.lpNorm<1>();
+          total_dual_dim += y_vec.size();
+        }
+      }
+    }
+
+    // m = total_dual_dim (number of constraints)
+    // n = control_dim * horizon (number of control variables)
+    int m = total_dual_dim;
+    int n = control_dim * horizon;
+    int m_plus_n = m + n;
+
+    // Compute scaling factor: sd = max{smax, (||y||₁ + ||s||₁)/(m+n)}/smax
+    double scaling_numerator = (m_plus_n > 0) ? (y_norm_l1 + s_norm_l1) / static_cast<double>(m_plus_n) : 0.0;
+    double sd = std::max(smax, scaling_numerator) / smax;
+    
+    // Return scaled dual infeasibility
+    return context.inf_du_ / sd;
   }
 
 } // namespace cddp

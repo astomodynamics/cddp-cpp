@@ -191,6 +191,13 @@ namespace cddp
         double computeMaxConstraintViolation(const CDDP &context) const;
 
         /**
+         * @brief Compute IPOPT-style scaled dual infeasibility.
+         * @param context CDDP context with dual/slack variables.
+         * @return Scaled dual infeasibility metric.
+         */
+        double computeScaledDualInfeasibility(const CDDP &context) const;
+
+        /**
          * @brief Print iteration info (IPOPT style).
          */
         void printIteration(int iter, double objective, double inf_pr, double inf_du,
