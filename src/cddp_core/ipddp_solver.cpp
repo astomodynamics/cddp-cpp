@@ -1584,13 +1584,9 @@ namespace cddp
     // Filter logic
     if (constraint_violation_new > options.filter.max_violation_threshold)
     {
-      if (constraint_violation_new < 1e-8 * constraint_violation_old)
+      if (constraint_violation_new < (1 - options.filter.violation_acceptance_threshold) * constraint_violation_old)
       {
         filter_acceptance = true;
-      }
-      else
-      {
-        filter_acceptance = false;
       }
     }
     else if (std::max(constraint_violation_new, constraint_violation_old) <
