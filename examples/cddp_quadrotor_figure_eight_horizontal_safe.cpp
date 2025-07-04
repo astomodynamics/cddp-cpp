@@ -199,20 +199,16 @@ int main()
     options.num_threads = 1;
 
     // Line search options
-    options.line_search.max_iterations = 20;
+    options.line_search.max_iterations = 10;
     
     // Regularization options
     options.regularization.initial_value = 1e-3;
 
     // IPDDP-specific options
     options.ipddp.barrier.mu_initial = 1e-1;
-    options.ipddp.barrier.mu_update_factor = 0.5;
-    options.ipddp.barrier.mu_update_power = 1.2;
 
     // MSIPDDP-specific options
-    options.msipddp.barrier.mu_initial = 1e-0;
-    options.msipddp.barrier.mu_update_factor = 0.5;
-    options.msipddp.barrier.mu_update_power = 1.2;
+    options.msipddp.barrier.mu_initial = 1e-1;
     options.msipddp.segment_length = horizon;
     options.msipddp.rollout_type = "nonlinear";
     options.msipddp.use_controlled_rollout = false;
@@ -259,7 +255,7 @@ int main()
     solver_ball.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
 
     // Ball constraint
-    double ball_radius = 0.5; // 70 cm
+    double ball_radius = 0.5; // 50 cm
     Eigen::Vector3d ball_center(0.0, 0.0, constant_altitude); // Center of the ball
     solver_ball.addPathConstraint("BallConstraint", std::make_unique<cddp::BallConstraint>(ball_radius, ball_center));
 
