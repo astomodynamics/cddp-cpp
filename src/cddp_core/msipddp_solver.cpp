@@ -476,6 +476,7 @@ namespace cddp
 
   void MSIPDDPSolver::evaluateTrajectory(CDDP &context)
   {
+    
     const int horizon = context.getHorizon();
     double cost = 0.0;
 
@@ -504,8 +505,11 @@ namespace cddp
       // Evaluate and store dynamics for multi-shooting
       F_[t] = context.getSystem().getDiscreteDynamics(x, u, t * context.getTimestep());
       
-      // Compute next state using dynamics
-      context.X_[t + 1] = F_[t];
+      // Compute next state using dynamics (controlled rollout option)
+      if (options.msipddp.use_controlled_rollout)
+      {
+        context.X_[t + 1] = F_[t];
+      }
     }
 
     // Add terminal cost
