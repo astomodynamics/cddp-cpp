@@ -372,6 +372,8 @@ namespace cddp
           S_ = *best_result.slack_trajectory;
         if (best_result.constraint_eval_trajectory)
           G_ = *best_result.constraint_eval_trajectory;
+        if (best_result.dynamics_trajectory)
+          F_ = *best_result.dynamics_trajectory;
 
         // Update costs and step lengths
         dJ = context.cost_ - best_result.cost;
@@ -1157,6 +1159,7 @@ namespace cddp
     double inf_du = 0.0;   // dual infeasibility (optimality gap; Qu_err)
     double inf_pr = 0.0;   // primal infeasibility (constraint violation)
     double inf_comp = 0.0; // complementary infeasibility
+    double inf_defect = 0.0; // defect norm for multi-shooting
     double step_norm = 0.0;
 
     // If no constraints, use standard DDP recursion
@@ -1166,6 +1169,15 @@ namespace cddp
       {
         const Eigen::VectorXd &x = context.X_[t];
         const Eigen::VectorXd &u = context.U_[t];
+        
+        // MSIPDDP: Access costate variables and compute defect
+        const Eigen::VectorXd &lambda = Lambda_[t];
+        const Eigen::VectorXd &f = F_[t];
+        Eigen::VectorXd d = Eigen::VectorXd::Zero(state_dim);
+        if ((t + 1) < static_cast<int>(context.X_.size()))
+        {
+          d = f - context.X_[t + 1]; // defect: dynamics mismatch
+        }
 
         // Use pre-computed dynamics Jacobians
         const Eigen::MatrixXd &Fx = F_x_[t];
@@ -1180,8 +1192,8 @@ namespace cddp
             context.getObjective().getRunningCostHessians(x, u, t);
 
         // Q expansions from cost
-        Eigen::VectorXd Q_x = l_x + A.transpose() * V_x;
-        Eigen::VectorXd Q_u = l_u + B.transpose() * V_x;
+        Eigen::VectorXd Q_x = l_x + A.transpose() * (V_x + V_xx * d);
+        Eigen::VectorXd Q_u = l_u + B.transpose() * (V_x + V_xx * d);
         Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
         Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
         Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
@@ -1222,6 +1234,11 @@ namespace cddp
         k_u_[t] = k_u;
         K_u_[t] = K_u;
 
+        // MSIPDDP: Compute costate gains for multi-shooting
+        k_lambda_[t] = -lambda + V_x + V_xx * d;
+        K_lambda_[t] = V_xx;
+        K_lambda_[t] = 0.5 * (K_lambda_[t] + K_lambda_[t].transpose()); // Symmetrize
+
         // Update value function
         V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u +
               K_u.transpose() * Q_uu * k_u;
@@ -1236,18 +1253,19 @@ namespace cddp
         // Error tracking
         inf_du = std::max(inf_du, Q_u.lpNorm<Eigen::Infinity>());
         step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
+        inf_defect = std::max(inf_defect, d.lpNorm<Eigen::Infinity>());
       }
 
       // Update termination metrics
       context.inf_du_ = inf_du;
       context.step_norm_ = step_norm;
-      context.inf_pr_ = 0.0;   // No constraints
+      context.inf_pr_ = inf_defect;   // Include defect violations as primal infeasibility
       context.inf_comp_ = 0.0; // No complementary constraints
 
       if (options.debug)
       {
         std::cout << "[MSIPDDP Backward] inf_du: " << std::scientific << std::setprecision(2)
-                  << inf_du << " ||d||: " << context.step_norm_ << " dV: " << dV_.transpose() << std::endl;
+                  << inf_du << " inf_defect: " << inf_defect << " ||d||: " << context.step_norm_ << " dV: " << dV_.transpose() << std::endl;
       }
       return true;
     }
@@ -1258,6 +1276,15 @@ namespace cddp
       {
         const Eigen::VectorXd &x = context.X_[t];
         const Eigen::VectorXd &u = context.U_[t];
+        
+        // MSIPDDP: Access costate variables and compute defect
+        const Eigen::VectorXd &lambda = Lambda_[t];
+        const Eigen::VectorXd &f = F_[t];
+        Eigen::VectorXd d = Eigen::VectorXd::Zero(state_dim);
+        if ((t + 1) < static_cast<int>(context.X_.size()))
+        {
+          d = f - context.X_[t + 1]; // defect: dynamics mismatch
+        }
 
         // Use pre-computed dynamics Jacobians
         const Eigen::MatrixXd &Fx = F_x_[t];
@@ -1300,8 +1327,8 @@ namespace cddp
             context.getObjective().getRunningCostHessians(x, u, t);
 
         // Q expansions from cost
-        Eigen::VectorXd Q_x = l_x + Q_yx.transpose() * y + A.transpose() * V_x;
-        Eigen::VectorXd Q_u = l_u + Q_yu.transpose() * y + B.transpose() * V_x;
+        Eigen::VectorXd Q_x = l_x + Q_yx.transpose() * y + A.transpose() * (V_x + V_xx * d);
+        Eigen::VectorXd Q_u = l_u + Q_yu.transpose() * y + B.transpose() * (V_x + V_xx * d);
         Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
         Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
         Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
@@ -1335,7 +1362,7 @@ namespace cddp
         // Regularization
         Eigen::MatrixXd Q_uu_reg = Q_uu;
         Q_uu_reg.diagonal().array() += context.regularization_;
-        Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
+        Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize NOTE: This is critical
 
         Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg +
                                           Q_yu.transpose() * YSinv * Q_yu);
@@ -1389,6 +1416,11 @@ namespace cddp
           offset += dual_dim;
         }
 
+        // MSIPDDP: Compute costate gains for multi-shooting
+        k_lambda_[t] = -lambda + V_x + V_xx * d;
+        K_lambda_[t] = V_xx;
+        K_lambda_[t] = 0.5 * (K_lambda_[t] + K_lambda_[t].transpose()); // Symmetrize
+
         // Update Q expansions
         Q_u += Q_yu.transpose() * S_inv * rhat;
         Q_x += Q_yx.transpose() * S_inv * rhat;
@@ -1405,17 +1437,18 @@ namespace cddp
               K_u.transpose() * Q_uu * k_u;
         V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u +
                K_u.transpose() * Q_uu * K_u;
-        V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
+        V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize NOTE: This is critical
 
         // Error tracking
         inf_du = std::max(inf_du, Q_u.lpNorm<Eigen::Infinity>());
         inf_pr = std::max(inf_pr, primal_residual.lpNorm<Eigen::Infinity>());
         inf_comp = std::max(inf_comp, complementary_residual.lpNorm<Eigen::Infinity>());
+        inf_defect = std::max(inf_defect, d.lpNorm<Eigen::Infinity>());
         step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
       }
 
       // Update termination metrics (properly separated)
-      context.inf_pr_ = inf_pr;     // Primal infeasibility (constraint violation)
+      context.inf_pr_ = std::max(inf_pr, inf_defect); // Primal infeasibility (constraint + defect violations)
       context.inf_du_ = inf_du;     // Dual infeasibility (optimality gap)
       context.inf_comp_ = inf_comp; // Complementary infeasibility
       context.step_norm_ = step_norm;
@@ -1423,7 +1456,7 @@ namespace cddp
       if (options.debug)
       {
         std::cout << "[MSIPDDP Backward] inf_du: " << std::scientific << std::setprecision(2)
-                  << inf_du << " inf_pr: " << inf_pr << " inf_comp: " << inf_comp
+                  << inf_du << " inf_pr: " << inf_pr << " inf_defect: " << inf_defect << " inf_comp: " << inf_comp
                   << " ||d||: " << context.step_norm_ << " dV: " << dV_.transpose() << std::endl;
       }
       return true;
@@ -1516,7 +1549,9 @@ namespace cddp
     result.state_trajectory = context.X_;
     result.control_trajectory = context.U_;
     result.state_trajectory[0] = context.getInitialState();
-
+    
+    // Initialize dynamics trajectory for forward pass
+    std::vector<Eigen::VectorXd> F_new = F_;
     std::map<std::string, std::vector<Eigen::VectorXd>> Y_new = Y_;
     std::map<std::string, std::vector<Eigen::VectorXd>> S_new = S_;
     std::map<std::string, std::vector<Eigen::VectorXd>> G_new = G_;
@@ -1535,16 +1570,16 @@ namespace cddp
         result.control_trajectory[t] =
             context.U_[t] + alpha * k_u_[t] + K_u_[t] * delta_x;
 
-        // Propagate dynamics and update F_ storage
+        // Propagate dynamics and store in local trajectory
         Eigen::VectorXd next_state = context.getSystem().getDiscreteDynamics(
             result.state_trajectory[t], result.control_trajectory[t],
             t * context.getTimestep());
         result.state_trajectory[t + 1] = next_state;
 
-        // Update dynamics storage for defect computation in multi-shooting
-        if (t < static_cast<int>(F_.size()))
+        // Store dynamics in local trajectory (don't modify F_ during forward pass)
+        if (t < static_cast<int>(F_new.size()))
         {
-          F_[t] = next_state;
+          F_new[t] = next_state;
         }
 
         // Accumulate stage cost
@@ -1564,6 +1599,8 @@ namespace cddp
       result.merit_function = cost_new;
       result.constraint_violation = 0.0;
       result.alpha_du = 1.0; // No dual variables for unconstrained case
+      result.dynamics_trajectory = F_new;
+      
       return result;
     }
 
@@ -1607,16 +1644,16 @@ namespace cddp
       result.control_trajectory[t] =
           context.U_[t] + alpha_s * k_u_[t] + K_u_[t] * delta_x;
 
-      // Propagate dynamics and update F_ storage
+      // Propagate dynamics and store in local trajectory
       Eigen::VectorXd next_state = context.getSystem().getDiscreteDynamics(
           result.state_trajectory[t], result.control_trajectory[t],
           t * context.getTimestep());
       result.state_trajectory[t + 1] = next_state;
 
-      // Update dynamics storage for defect computation in multi-shooting
-      if (t < static_cast<int>(F_.size()))
+      // Store dynamics in local trajectory
+      if (t < static_cast<int>(F_new.size()))
       {
-        F_[t] = next_state;
+        F_new[t] = next_state;
       }
     }
 
@@ -1759,6 +1796,7 @@ namespace cddp
       result.dual_trajectory = Y_new;
       result.slack_trajectory = S_new;
       result.constraint_eval_trajectory = G_new;
+      result.dynamics_trajectory = F_new;
     }
 
     return result;
