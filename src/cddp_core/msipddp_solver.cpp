@@ -821,6 +821,7 @@ namespace cddp
     double filter_constraint_violation = 0.0; // l1 norm for filter (sum of residuals)
     double inf_du = 0.0;                      // dual infeasibility (computed separately in backward pass)
     double inf_comp = 0.0;                    // complementary infeasibility
+    double inf_defect = 0.0;                  // defect infeasibility for multi-shooting
 
     const auto &constraint_set = context.getConstraintSet();
 
@@ -862,8 +863,32 @@ namespace cddp
       inf_comp = 0.0;
     }
 
+    // Compute defect residuals for multi-shooting structure
+    // Only compute defects when using multi-shooting (segment-based) approach
+    const CDDPOptions &options = context.getOptions();
+    if (ms_segment_length_ > 1 && ms_segment_length_ < context.getHorizon())
+    {
+      // Multi-shooting mode: compute defect residuals at segment boundaries
+      for (int t = ms_segment_length_ - 1; t < context.getHorizon(); t += ms_segment_length_)
+      {
+        if (t < static_cast<int>(F_.size()) && (t + 1) < static_cast<int>(context.X_.size()))
+        {
+          // Defect residual: d = F_[t] - X_[t+1] (dynamics violation at segment boundary)
+          Eigen::VectorXd defect_residual = F_[t] - context.X_[t + 1];
+          
+          // Update defect infeasibility metrics
+          inf_defect = std::max(inf_defect, defect_residual.lpNorm<Eigen::Infinity>());
+          
+          // Add defect residuals to filter constraint violation
+          filter_constraint_violation += defect_residual.lpNorm<1>();
+        }
+      }
+    }
+    // Note: In single-shooting mode (segment_length >= horizon), defects are naturally zero
+
+    // Update primal infeasibility to include defect violations
+    context.inf_pr_ = std::max(inf_pr, inf_defect);
     context.merit_function_ = merit_function;
-    context.inf_pr_ = inf_pr; // Store infinity norm as inf_pr
     // Note: inf_du_ (dual infeasibility/optimality gap) is computed in backward pass for constrained case
     context.inf_comp_ = inf_comp;
 
@@ -1510,10 +1535,17 @@ namespace cddp
         result.control_trajectory[t] =
             context.U_[t] + alpha * k_u_[t] + K_u_[t] * delta_x;
 
-        // Propagate dynamics
-        result.state_trajectory[t + 1] = context.getSystem().getDiscreteDynamics(
+        // Propagate dynamics and update F_ storage
+        Eigen::VectorXd next_state = context.getSystem().getDiscreteDynamics(
             result.state_trajectory[t], result.control_trajectory[t],
             t * context.getTimestep());
+        result.state_trajectory[t + 1] = next_state;
+
+        // Update dynamics storage for defect computation in multi-shooting
+        if (t < static_cast<int>(F_.size()))
+        {
+          F_[t] = next_state;
+        }
 
         // Accumulate stage cost
         cost_new += context.getObjective().running_cost(
@@ -1575,10 +1607,17 @@ namespace cddp
       result.control_trajectory[t] =
           context.U_[t] + alpha_s * k_u_[t] + K_u_[t] * delta_x;
 
-      // Propagate dynamics
-      result.state_trajectory[t + 1] = context.getSystem().getDiscreteDynamics(
+      // Propagate dynamics and update F_ storage
+      Eigen::VectorXd next_state = context.getSystem().getDiscreteDynamics(
           result.state_trajectory[t], result.control_trajectory[t],
           t * context.getTimestep());
+      result.state_trajectory[t + 1] = next_state;
+
+      // Update dynamics storage for defect computation in multi-shooting
+      if (t < static_cast<int>(F_.size()))
+      {
+        F_[t] = next_state;
+      }
     }
 
     if (!s_trajectory_feasible)
