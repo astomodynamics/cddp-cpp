@@ -476,7 +476,7 @@ namespace cddp
 
   void MSIPDDPSolver::evaluateTrajectory(CDDP &context)
   {
-    
+    const CDDPOptions &options = context.getOptions();
     const int horizon = context.getHorizon();
     double cost = 0.0;
 
