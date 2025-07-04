@@ -189,58 +189,33 @@ int main()
 
     // Solver options
     cddp::CDDPOptions options;
-    options.max_iterations = 10000;
+    options.max_iterations = 100;
     options.verbose = true;
     options.debug = false;
-    options.enable_parallel = true;
-    options.num_threads = 10;
-    options.tolerance = 1e-3;
-    options.acceptable_tolerance = 1e-2;
-    options.use_ilqr = true; // Use full second-order derivatives for more accurate solutions
-    options.return_iteration_info = true;
-    
-    // Regularization options
-    options.regularization.initial_value = 1e-1;
-    options.regularization.max_value = 1e+7;
-    options.regularization.min_value = 1e-10;
-    options.regularization.update_factor = 10.0;
-    
+    options.tolerance = 1e-6;
+    options.acceptable_tolerance = 1e-7;
+    options.use_ilqr = true;
+    options.enable_parallel = false;
+    options.num_threads = 1;
+
     // Line search options
     options.line_search.max_iterations = 20;
-    options.line_search.initial_step_size = 1.0;
-    options.line_search.min_step_size = 1e-8;
-    options.line_search.step_reduction_factor = 0.5;
     
-    // Filter options
-    options.filter.merit_acceptance_threshold = 1e-6;
-    options.filter.violation_acceptance_threshold = 1e-6;
-    options.filter.max_violation_threshold = 1e+4;
-    options.filter.min_violation_for_armijo_check = 1e-7;
-    options.filter.armijo_constant = 1e-4;
+    // Regularization options
+    options.regularization.initial_value = 1e-3;
 
     // IPDDP-specific options
-    options.ipddp.dual_var_init_scale = 1e-1;
-    options.ipddp.slack_var_init_scale = 1e-2;
     options.ipddp.barrier.mu_initial = 1e-1;
-    options.ipddp.barrier.mu_min_value = 1e-8;
-    options.ipddp.barrier.mu_update_factor = 0.2;
+    options.ipddp.barrier.mu_update_factor = 0.5;
     options.ipddp.barrier.mu_update_power = 1.2;
-    options.ipddp.barrier.min_fraction_to_boundary = 0.99;
-    
+
     // MSIPDDP-specific options
-    options.msipddp.dual_var_init_scale = 1e-2;
-    options.msipddp.slack_var_init_scale = 1e-1;
-    options.msipddp.costate_var_init_scale = 1e-6;
-    options.msipddp.segment_length = horizon / 10;
+    options.msipddp.barrier.mu_initial = 1e-0;
+    options.msipddp.barrier.mu_update_factor = 0.5;
+    options.msipddp.barrier.mu_update_power = 1.2;
+    options.msipddp.segment_length = horizon;
     options.msipddp.rollout_type = "nonlinear";
     options.msipddp.use_controlled_rollout = false;
-    
-    // MSIPDDP barrier options
-    options.msipddp.barrier.mu_initial = 1e-1;
-    options.msipddp.barrier.mu_min_value = 1e-8;
-    options.msipddp.barrier.mu_update_factor = 0.2;
-    options.msipddp.barrier.mu_update_power = 1.2;
-    options.msipddp.barrier.min_fraction_to_boundary = 0.99;
 
     // Instantiate CDDP solver
     cddp::CDDP cddp_solver(
@@ -259,58 +234,17 @@ int main()
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
     cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
 
-    // Initial trajectory guess
-    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
-    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
-
+    // Initial trajectory guess (use reference trajectory like benchmark)
     double hover_thrust = mass * 9.81 / 4.0;
-    for (auto &u : U)
-    {
-        u = hover_thrust * Eigen::VectorXd::Ones(control_dim);
-    }
-
-    X[0] = initial_state;
-    for (int i = 0; i < horizon; ++i)
-    {
-        X[i + 1] = quadrotor.getDiscreteDynamics(X[i], U[i], i * timestep);
-    }
-    cddp_solver.setInitialTrajectory(X, U);
+    std::vector<Eigen::VectorXd> X_init = figure8_reference_states; // Use reference as initial guess
+    std::vector<Eigen::VectorXd> U_init(horizon, hover_thrust * Eigen::VectorXd::Ones(control_dim));
+    cddp_solver.setInitialTrajectory(X_init, U_init);
 
     // Solve the problem
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
     
-    // Update options for the ball constraint problem
     options.max_iterations = 500;
-    options.tolerance = 1e-6;
-    options.acceptable_tolerance = 1e-6;
-    
-    // Update line search options
-    options.line_search.max_iterations = 20;
-    
-    // Update filter options
-    options.filter.merit_acceptance_threshold = 1e-6;
-    options.filter.violation_acceptance_threshold = 1e-6;
-    options.filter.max_violation_threshold = 1e+4;
-    options.filter.min_violation_for_armijo_check = 1e-7;
-    options.filter.armijo_constant = 1e-4;
-    
-    // Update regularization options
-    options.regularization.max_value = 1e+7;
-
-    // Update IPDDP-specific options
-    options.ipddp.dual_var_init_scale = 1e-1;
-    options.ipddp.slack_var_init_scale = 1e-2;
-    options.ipddp.barrier.mu_initial = 1e-0;
-    
-    // Update MSIPDDP-specific options for tighter constraints
-    options.msipddp.dual_var_init_scale = 1e-1;
-    options.msipddp.slack_var_init_scale = 1e-2;
-    options.msipddp.segment_length = horizon / 100; // Smaller segments for better accuracy
-    options.msipddp.rollout_type = "nonlinear";
-    
-    // Update MSIPDDP barrier options for more aggressive convergence
-    options.msipddp.barrier.mu_initial = 1e-0;
-    options.msipddp.barrier.mu_update_factor = 0.5;
+    options.warm_start = true;
 
     // Resolve problem with the ball constraint
     cddp::CDDP solver_ball(
@@ -325,7 +259,7 @@ int main()
     solver_ball.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
 
     // Ball constraint
-    double ball_radius = 0.7; // 70 cm
+    double ball_radius = 0.5; // 70 cm
     Eigen::Vector3d ball_center(0.0, 0.0, constant_altitude); // Center of the ball
     solver_ball.addPathConstraint("BallConstraint", std::make_unique<cddp::BallConstraint>(ball_radius, ball_center));
 

@@ -1740,8 +1740,10 @@ namespace cddp
     double scaled_inf_du = computeScaledDualInfeasibility(context);
     double termination_metric = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
 
-    // Check if we should update the barrier parameter
-    if (termination_metric <= barrier_opts.mu_update_factor * mu_)
+    // More aggressive barrier parameter update strategy
+    double barrier_update_threshold = std::max(barrier_opts.mu_update_factor * mu_, mu_ * 2.0);
+    
+    if (termination_metric <= barrier_update_threshold)
     {
       // Adaptive barrier reduction strategy
       double reduction_factor = barrier_opts.mu_update_factor;
@@ -1750,15 +1752,20 @@ namespace cddp
       {
         double kkt_progress_ratio = termination_metric / mu_;
 
-        // Aggressive reduction if we're significantly satisfying KKT conditions
-        if (kkt_progress_ratio < 0.1 * barrier_opts.mu_update_factor)
+        // Very aggressive reduction for good KKT satisfaction
+        if (kkt_progress_ratio < 0.01)
         {
-          reduction_factor = barrier_opts.mu_update_factor * 0.5;
+          reduction_factor = barrier_opts.mu_update_factor * 0.1;
+        }
+        // Aggressive reduction if we're significantly satisfying KKT conditions
+        else if (kkt_progress_ratio < 0.1)
+        {
+          reduction_factor = barrier_opts.mu_update_factor * 0.3;
         }
         // Moderate reduction if we're moderately satisfying KKT conditions
-        else if (kkt_progress_ratio < 0.5 * barrier_opts.mu_update_factor)
+        else if (kkt_progress_ratio < 0.5)
         {
-          reduction_factor = barrier_opts.mu_update_factor * 0.75;
+          reduction_factor = barrier_opts.mu_update_factor * 0.6;
         }
         // Standard reduction otherwise
       }
@@ -1767,7 +1774,7 @@ namespace cddp
       double new_mu_linear = reduction_factor * mu_;
       double new_mu_superlinear = std::pow(mu_, barrier_opts.mu_update_power);
 
-      mu_ = std::max(options.tolerance / 10.0,
+      mu_ = std::max(options.tolerance / 100.0,
                      std::min(new_mu_linear, new_mu_superlinear));
 
       // Reset filter when barrier parameter changes
