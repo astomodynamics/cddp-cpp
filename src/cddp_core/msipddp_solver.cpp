@@ -857,7 +857,7 @@ namespace cddp
           inf_comp = std::max(inf_comp, complementary_residual.lpNorm<Eigen::Infinity>());
         }
 
-        // Add defect residual calculation (consistent with forwardPass)
+        // Add defect residual calculation 
         if (t < static_cast<int>(F_.size()) && (t + 1) < static_cast<int>(context.X_.size()))
         {
           Eigen::VectorXd defect_residual = F_[t] - context.X_[t + 1];
