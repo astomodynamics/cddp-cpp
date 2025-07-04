@@ -1076,13 +1076,13 @@ namespace cddp
           G_u_[constraint_name][t] =
               constraint_pair.second->getControlJacobian(x, u);
           
-          // // Compute constraint hessians if not using iLQR
-          // if (!options.use_ilqr)
-          // {
-          //   G_xx_[constraint_name][t] = constraint_pair.second->getStateHessian(x, u);
-          //   G_uu_[constraint_name][t] = constraint_pair.second->getControlHessian(x, u);
-          //   G_ux_[constraint_name][t] = constraint_pair.second->getCrossHessian(x, u);
-          // }
+          // Compute constraint hessians if not using iLQR
+          if (!options.use_ilqr)
+          {
+            G_xx_[constraint_name][t] = constraint_pair.second->getStateHessian(x, u);
+            G_uu_[constraint_name][t] = constraint_pair.second->getControlHessian(x, u);
+            G_ux_[constraint_name][t] = constraint_pair.second->getCrossHessian(x, u);
+          }
         }
       }
     }
@@ -1123,13 +1123,13 @@ namespace cddp
                 G_u_[constraint_name][t] =
                     constraint_pair.second->getControlJacobian(x, u);
                 
-                // // Compute constraint hessians if not using iLQR
-                // if (!options.use_ilqr)
-                // {
-                //   G_xx_[constraint_name][t] = constraint_pair.second->getStateHessian(x, u);
-                //   G_uu_[constraint_name][t] = constraint_pair.second->getControlHessian(x, u);
-                //   G_ux_[constraint_name][t] = constraint_pair.second->getCrossHessian(x, u);
-                // }
+                // Compute constraint hessians if not using iLQR
+                if (!options.use_ilqr)
+                {
+                  G_xx_[constraint_name][t] = constraint_pair.second->getStateHessian(x, u);
+                  G_uu_[constraint_name][t] = constraint_pair.second->getControlHessian(x, u);
+                  G_ux_[constraint_name][t] = constraint_pair.second->getCrossHessian(x, u);
+                }
               }
             } }));
       }
@@ -1371,6 +1371,26 @@ namespace cddp
             Q_xx += timestep * lambda(i) * Fxx[i];
             Q_ux += timestep * lambda(i) * Fux[i];
             Q_uu += timestep * lambda(i) * Fuu[i];
+          }
+          
+          // Add constraint hessian terms
+          int offset = 0;
+          for (const auto &constraint_pair : constraint_set)
+          {
+            const std::string &constraint_name = constraint_pair.first;
+            int dual_dim = constraint_pair.second->getDualDim();
+            
+            const auto &G_xx = G_xx_[constraint_name][t];
+            const auto &G_uu = G_uu_[constraint_name][t];
+            const auto &G_ux = G_ux_[constraint_name][t];
+            
+            for (int i = 0; i < dual_dim; ++i)
+            {
+              Q_xx += y(offset + i) * G_xx[i];
+              Q_ux += y(offset + i) * G_ux[i];
+              Q_uu += y(offset + i) * G_uu[i];
+            }
+            offset += dual_dim;
           }
         }
 
