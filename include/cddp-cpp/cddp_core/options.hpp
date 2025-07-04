@@ -59,7 +59,7 @@ struct RegularizationOptions {
  */
 struct SolverSpecificBarrierOptions {
   double mu_initial = 1e-0;   ///< Initial barrier coefficient (mu).
-  double mu_min_value = 1e-8; ///< Minimum allowed value for mu.
+  double mu_min_value = 1e-10; ///< Minimum allowed value for mu.
   double mu_update_factor =
       0.5; ///< Factor to reduce mu when KKT error improves sufficiently.
   double mu_update_power =
