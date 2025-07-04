@@ -125,10 +125,10 @@ int main() {
     Q(0, 0) = 1.0;
     Q(1, 1) = 1.0;
     Q(2, 2) = 1.0;
-    Q(3, 3) = 1.0;
-    Q(4, 4) = 1.0;
-    Q(5, 5) = 1.0;
-    Q(6, 6) = 1.0;
+    // Q(3, 3) = 1.0;
+    // Q(4, 4) = 1.0;
+    // Q(5, 5) = 1.0;
+    // Q(6, 6) = 1.0;
 
     Eigen::MatrixXd R = 0.01 * Eigen::MatrixXd::Identity(control_dim, control_dim);
 
