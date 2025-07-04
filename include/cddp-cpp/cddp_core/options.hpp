@@ -143,7 +143,7 @@ struct MSIPDDPAlgorithmOptions {
   std::string rollout_type =
       "nonlinear"; ///< Rollout type: "nonlinear", "hybrid".
   bool use_controlled_rollout =
-      true; ///< Use controlled rollout (propagates x_{k+1} = f(x_k, u_k)
+      false; ///< Use controlled rollout (propagates x_{k+1} = f(x_k, u_k)
              ///< during initial rollout).
 
   SolverSpecificBarrierOptions
