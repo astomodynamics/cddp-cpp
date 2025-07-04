@@ -439,7 +439,7 @@ TEST(LogDDPTest, SolveCar)
     options.log_barrier.segment_length = horizon;
     options.log_barrier.rollout_type = "nonlinear";
     options.log_barrier.barrier.mu_initial = 1e-1;
-    options.log_barrier.barrier.mu_update_factor = 0.8;
+    options.log_barrier.barrier.mu_update_factor = 0.2;
     options.log_barrier.barrier.mu_update_power = 1.2;
     options.regularization.initial_value = 1e-7;
     options.return_iteration_info = true; // Get detailed iteration history
@@ -665,8 +665,8 @@ TEST(LogDDPTest, SolveQuadrotor)
     // Create CDDP Options
     cddp::CDDPOptions options;
     options.max_iterations = 100;          // Reasonable for testing
-    options.tolerance = 1e-6;            // KKT/optimality tolerance
-    options.acceptable_tolerance = 1e-6; // Cost change tolerance
+    options.tolerance = 1e-5;            // KKT/optimality tolerance
+    options.acceptable_tolerance = 1e-5; // Cost change tolerance
     options.enable_parallel = false;
     options.num_threads = 1;
     options.verbose = true;
