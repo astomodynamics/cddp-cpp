@@ -70,6 +70,12 @@ namespace cddp
         // Constraint derivatives
         std::map<std::string, std::vector<Eigen::MatrixXd>> G_x_; ///< State gradients
         std::map<std::string, std::vector<Eigen::MatrixXd>> G_u_; ///< Control gradients
+        std::map<std::string, std::vector<Eigen::MatrixXd>>
+            G_xx_; ///< Constraint state hessians
+        std::map<std::string, std::vector<Eigen::MatrixXd>>
+            G_uu_; ///< Constraint control hessians
+        std::map<std::string, std::vector<Eigen::MatrixXd>>
+            G_ux_; ///< Constraint mixed hessians
 
         // Control law
         std::vector<Eigen::VectorXd> k_u_; ///< Feedforward gains
