@@ -1712,12 +1712,6 @@ namespace cddp
       result.control_trajectory[t] =
           context.U_[t] + alpha_s * k_u_[t] + K_u_[t] * delta_x;
 
-      // Update costate variables for multi-shooting
-      if (t < static_cast<int>(Lambda_new.size()))
-      {
-        Lambda_new[t] = Lambda_[t] + alpha_s * k_lambda_[t] + K_lambda_[t] * delta_x;
-      }
-
       // Determine if we're at a segment boundary for gap-closing
       bool is_segment_boundary = (ms_segment_length_ > 1) && 
                                  ((t + 1) % ms_segment_length_ == 0) && 
@@ -1809,6 +1803,13 @@ namespace cddp
 
           Y_trial[constraint_name][t] = y_new;
         }
+
+        // Update costate variables for multi-shooting
+        if (t < static_cast<int>(Lambda_new.size()))
+        {
+          Lambda_new[t] = Lambda_[t] + alpha_s * k_lambda_[t] + K_lambda_[t] * delta_x;
+        }
+
         if (!current_alpha_y_globally_feasible)
           break;
       }
@@ -1846,7 +1847,11 @@ namespace cddp
 
         // Primal infeasibility: g + s
         Eigen::VectorXd primal_residual = G_new[constraint_name][t] + s_vec;
-        constraint_violation_new += primal_residual.lpNorm<1>();
+
+        // Primal infeasibility: d = f - x_{k+1}
+        Eigen::VectorXd defect_residual = F_new[t] - result.state_trajectory[t + 1];
+        
+        constraint_violation_new += primal_residual.lpNorm<1>() + defect_residual.lpNorm<1>();
       }
     }
 
