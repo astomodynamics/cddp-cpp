@@ -77,7 +77,7 @@ namespace cddp
           std::cout << "MSIPDDP: Using warm start with existing control gains"
                     << std::endl;
         }
-        mu_ = options.ipddp.barrier.mu_initial * 0.1;
+        mu_ = options.msipddp.barrier.mu_initial * 0.1;
         context.step_norm_ = 0.0;
         evaluateTrajectoryWarmStart(context);
         initializeDualSlackCostateVariablesWarmStart(context);
@@ -96,6 +96,28 @@ namespace cddp
         k_u_.assign(horizon, Eigen::VectorXd::Zero(control_dim));
         K_u_.assign(horizon, Eigen::MatrixXd::Zero(control_dim, state_dim));
         dV_ = Eigen::Vector2d::Zero();
+        
+        // Initialize MSIPDDP-specific costate variables and gains
+        Lambda_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
+        k_lambda_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
+        K_lambda_.assign(horizon, Eigen::MatrixXd::Zero(state_dim, state_dim));
+        
+        // Initialize dynamics storage for multi-shooting
+        F_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
+        
+        // Initialize costate variables with scaling
+        for (int t = 0; t < horizon; ++t)
+        {
+          Lambda_[t] = options.msipddp.costate_var_init_scale * Eigen::VectorXd::Ones(state_dim);
+        }
+        
+        // Set multi-shooting segment length from options
+        ms_segment_length_ = options.msipddp.segment_length;
+        if (ms_segment_length_ < 0)
+        {
+          throw std::runtime_error("MSIPDDP: ms_segment_length must be non-negative");
+        }
+        
         initializeConstraintStorage(context);
 
         // Set barrier parameter based on constraint evaluation
@@ -118,7 +140,7 @@ namespace cddp
           }
           else
           {
-            mu_ = options.ipddp.barrier.mu_initial * 0.1; // Significantly infeasible
+            mu_ = options.msipddp.barrier.mu_initial * 0.1; // Significantly infeasible
           }
         }
 
@@ -172,6 +194,28 @@ namespace cddp
     k_u_.assign(horizon, Eigen::VectorXd::Zero(control_dim));
     K_u_.assign(horizon, Eigen::MatrixXd::Zero(control_dim, state_dim));
     dV_ = Eigen::Vector2d::Zero();
+    
+    // Initialize MSIPDDP-specific costate variables and gains
+    Lambda_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
+    k_lambda_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
+    K_lambda_.assign(horizon, Eigen::MatrixXd::Zero(state_dim, state_dim));
+    
+    // Initialize dynamics storage for multi-shooting
+    F_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
+    
+    // Initialize costate variables with scaling
+    for (int t = 0; t < horizon; ++t)
+    {
+      Lambda_[t] = options.msipddp.costate_var_init_scale * Eigen::VectorXd::Ones(state_dim);
+    }
+    
+    // Set multi-shooting segment length from options
+    ms_segment_length_ = options.msipddp.segment_length;
+    if (ms_segment_length_ < 0)
+    {
+      throw std::runtime_error("MSIPDDP: ms_segment_length must be non-negative");
+    }
+    
     initializeConstraintStorage(context);
 
     // Set barrier parameter
@@ -181,7 +225,7 @@ namespace cddp
     }
     else
     {
-      mu_ = options.ipddp.barrier.mu_initial;
+      mu_ = options.msipddp.barrier.mu_initial;
     }
 
     initializeDualSlackCostateVariables(context);
@@ -457,9 +501,11 @@ namespace cddp
         G_[constraint_name][t] = g_val;
       }
 
+      // Evaluate and store dynamics for multi-shooting
+      F_[t] = context.getSystem().getDiscreteDynamics(x, u, t * context.getTimestep());
+      
       // Compute next state using dynamics
-      context.X_[t + 1] = context.getSystem().getDiscreteDynamics(
-          x, u, t * context.getTimestep());
+      context.X_[t + 1] = F_[t];
     }
 
     // Add terminal cost
@@ -471,6 +517,7 @@ namespace cddp
 
   void MSIPDDPSolver::evaluateTrajectoryWarmStart(CDDP &context)
   {
+    const CDDPOptions &options = context.getOptions();
     const int horizon = context.getHorizon();
     double cost = 0.0;
 
@@ -501,6 +548,14 @@ namespace cddp
         Eigen::VectorXd g_val = constraint_pair.second->evaluate(x, u) -
                                 constraint_pair.second->getUpperBound();
         G_[constraint_name][t] = g_val;
+      }
+      
+      // Evaluate dynamics for multi-shooting
+      F_[t] = context.getSystem().getDiscreteDynamics(x, u, t * context.getTimestep());
+
+      if (options.msipddp.use_controlled_rollout)
+      {
+        context.X_[t + 1] = F_[t];
       }
     }
 
@@ -589,7 +644,7 @@ namespace cddp
               // Check if constraint is severely violated (slack should be
               // reasonable)
               double required_slack =
-                  std::max(options.ipddp.slack_var_init_scale, -g_val(i));
+                  std::max(options.msipddp.slack_var_init_scale, -g_val(i));
               if (s_current(i) < 0.1 * required_slack)
               {
                 need_reinit = true;
@@ -613,7 +668,7 @@ namespace cddp
           {
             // Initialize s_i = max(slack_scale, -g_i) to ensure s_i > 0 (same as
             // cold start)
-            s_init(i) = std::max(options.ipddp.slack_var_init_scale, -g_val(i));
+            s_init(i) = std::max(options.msipddp.slack_var_init_scale, -g_val(i));
 
             // Initialize y_i = mu / s_i to satisfy s_i * y_i = mu (same as cold
             // start)
@@ -627,8 +682,8 @@ namespace cddp
             }
             // Clamp dual variable (same as cold start)
             y_init(i) = std::max(
-                options.ipddp.dual_var_init_scale * 0.01,
-                std::min(y_init(i), options.ipddp.dual_var_init_scale * 100.0));
+                options.msipddp.dual_var_init_scale * 0.01,
+                std::min(y_init(i), options.msipddp.dual_var_init_scale * 100.0));
           }
           Y_[constraint_name][t] = y_init;
           S_[constraint_name][t] = s_init;
@@ -644,10 +699,34 @@ namespace cddp
       }
     }
 
+    // Initialize or preserve costate variables for MSIPDDP
+    bool has_existing_costate = (Lambda_.size() == static_cast<size_t>(horizon));
+    
+    if (!has_existing_costate)
+    {
+      // Initialize costate variables for first time
+      for (int t = 0; t < horizon; ++t)
+      {
+        Lambda_[t] = options.msipddp.costate_var_init_scale * Eigen::VectorXd::Ones(context.getStateDim());
+        k_lambda_[t] = Eigen::VectorXd::Zero(context.getStateDim());
+        K_lambda_[t] = Eigen::MatrixXd::Zero(context.getStateDim(), context.getStateDim());
+      }
+    }
+    else
+    {
+      // Preserve existing costate variables, just initialize gains
+      for (int t = 0; t < horizon; ++t)
+      {
+        k_lambda_[t] = Eigen::VectorXd::Zero(context.getStateDim());
+        K_lambda_[t] = Eigen::MatrixXd::Zero(context.getStateDim(), context.getStateDim());
+      }
+    }
+
     if (options.verbose)
     {
       std::cout << "MSIPDDP: " << (has_existing_dual_slack ? "Preserved" : "Initialized")
-                << " dual/slack variables, μ = " << std::scientific << std::setprecision(2)
+                << " dual/slack variables, " << (has_existing_costate ? "preserved" : "initialized")
+                << " costate variables, μ = " << std::scientific << std::setprecision(2)
                 << mu_ << ", max violation = " << computeMaxConstraintViolation(context) << std::endl;
     }
   }
@@ -686,7 +765,7 @@ namespace cddp
         for (int i = 0; i < dual_dim; ++i)
         {
           // Initialize s_i = max(slack_scale, -g_i) to ensure s_i > 0
-          s_init(i) = std::max(options.ipddp.slack_var_init_scale, -g_val(i));
+          s_init(i) = std::max(options.msipddp.slack_var_init_scale, -g_val(i));
 
           // Initialize y_i = mu / s_i to satisfy s_i * y_i = mu
           if (s_init(i) < 1e-12)
@@ -699,8 +778,8 @@ namespace cddp
           }
           // Clamp dual variable
           y_init(i) = std::max(
-              options.ipddp.dual_var_init_scale * 0.01,
-              std::min(y_init(i), options.ipddp.dual_var_init_scale * 100.0));
+              options.msipddp.dual_var_init_scale * 0.01,
+              std::min(y_init(i), options.msipddp.dual_var_init_scale * 100.0));
         }
         Y_[constraint_name][t] = y_init;
         S_[constraint_name][t] = s_init;
@@ -713,6 +792,17 @@ namespace cddp
         K_s_[constraint_name][t] =
             Eigen::MatrixXd::Zero(dual_dim, context.getStateDim());
       }
+    }
+
+    // Initialize costate variables for MSIPDDP
+    for (int t = 0; t < horizon; ++t)
+    {
+      // Initialize costate variables with proper scaling
+      Lambda_[t] = options.msipddp.costate_var_init_scale * Eigen::VectorXd::Ones(context.getStateDim());
+      
+      // Initialize costate gains to zero
+      k_lambda_[t] = Eigen::VectorXd::Zero(context.getStateDim());
+      K_lambda_[t] = Eigen::MatrixXd::Zero(context.getStateDim(), context.getStateDim());
     }
 
     // Initialize cost using objective evaluation
@@ -1391,7 +1481,7 @@ namespace cddp
 
     const int horizon = context.getHorizon();
     const double tau =
-        std::max(options.ipddp.barrier.min_fraction_to_boundary, 1.0 - mu_);
+        std::max(options.msipddp.barrier.min_fraction_to_boundary, 1.0 - mu_);
 
     // Initialize trajectories
     result.state_trajectory = context.X_;
@@ -1727,7 +1817,7 @@ namespace cddp
   void MSIPDDPSolver::updateBarrierParameters(CDDP &context, bool forward_pass_success)
   {
     const CDDPOptions &options = context.getOptions();
-    const auto &barrier_opts = options.ipddp.barrier;
+    const auto &barrier_opts = options.msipddp.barrier;
     const auto &constraint_set = context.getConstraintSet();
 
     // Only update barrier parameters if we have constraints
