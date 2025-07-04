@@ -96,28 +96,28 @@ namespace cddp
         k_u_.assign(horizon, Eigen::VectorXd::Zero(control_dim));
         K_u_.assign(horizon, Eigen::MatrixXd::Zero(control_dim, state_dim));
         dV_ = Eigen::Vector2d::Zero();
-        
+
         // Initialize MSIPDDP-specific costate variables and gains
         Lambda_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
         k_lambda_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
         K_lambda_.assign(horizon, Eigen::MatrixXd::Zero(state_dim, state_dim));
-        
+
         // Initialize dynamics storage for multi-shooting
         F_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
-        
+
         // Initialize costate variables with scaling
         for (int t = 0; t < horizon; ++t)
         {
           Lambda_[t] = options.msipddp.costate_var_init_scale * Eigen::VectorXd::Ones(state_dim);
         }
-        
+
         // Set multi-shooting segment length from options
         ms_segment_length_ = options.msipddp.segment_length;
         if (ms_segment_length_ < 0)
         {
           throw std::runtime_error("MSIPDDP: ms_segment_length must be non-negative");
         }
-        
+
         initializeConstraintStorage(context);
 
         // Set barrier parameter based on constraint evaluation
@@ -194,28 +194,28 @@ namespace cddp
     k_u_.assign(horizon, Eigen::VectorXd::Zero(control_dim));
     K_u_.assign(horizon, Eigen::MatrixXd::Zero(control_dim, state_dim));
     dV_ = Eigen::Vector2d::Zero();
-    
+
     // Initialize MSIPDDP-specific costate variables and gains
     Lambda_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
     k_lambda_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
     K_lambda_.assign(horizon, Eigen::MatrixXd::Zero(state_dim, state_dim));
-    
+
     // Initialize dynamics storage for multi-shooting
     F_.assign(horizon, Eigen::VectorXd::Zero(state_dim));
-    
+
     // Initialize costate variables with scaling
     for (int t = 0; t < horizon; ++t)
     {
       Lambda_[t] = options.msipddp.costate_var_init_scale * Eigen::VectorXd::Ones(state_dim);
     }
-    
+
     // Set multi-shooting segment length from options
     ms_segment_length_ = options.msipddp.segment_length;
     if (ms_segment_length_ < 0)
     {
       throw std::runtime_error("MSIPDDP: ms_segment_length must be non-negative");
     }
-    
+
     initializeConstraintStorage(context);
 
     // Set barrier parameter
@@ -508,7 +508,7 @@ namespace cddp
 
       // Evaluate and store dynamics for multi-shooting
       F_[t] = context.getSystem().getDiscreteDynamics(x, u, t * context.getTimestep());
-      
+
       // Compute next state using dynamics (controlled rollout option)
       if (options.msipddp.use_controlled_rollout)
       {
@@ -557,7 +557,7 @@ namespace cddp
                                 constraint_pair.second->getUpperBound();
         G_[constraint_name][t] = g_val;
       }
-      
+
       // Evaluate dynamics for multi-shooting
       F_[t] = context.getSystem().getDiscreteDynamics(x, u, t * context.getTimestep());
 
@@ -709,7 +709,7 @@ namespace cddp
 
     // Initialize or preserve costate variables for MSIPDDP
     bool has_existing_costate = (Lambda_.size() == static_cast<size_t>(horizon));
-    
+
     if (!has_existing_costate)
     {
       // Initialize costate variables for first time
@@ -807,7 +807,7 @@ namespace cddp
     {
       // Initialize costate variables with proper scaling
       Lambda_[t] = options.msipddp.costate_var_init_scale * Eigen::VectorXd::Ones(context.getStateDim());
-      
+
       // Initialize costate gains to zero
       k_lambda_[t] = Eigen::VectorXd::Zero(context.getStateDim());
       K_lambda_[t] = Eigen::MatrixXd::Zero(context.getStateDim(), context.getStateDim());
@@ -856,6 +856,14 @@ namespace cddp
           Eigen::VectorXd complementary_residual = y_vec.cwiseProduct(s_vec).array() - mu_;
           inf_comp = std::max(inf_comp, complementary_residual.lpNorm<Eigen::Infinity>());
         }
+
+        // Add defect residual calculation (consistent with forwardPass)
+        if (t < static_cast<int>(F_.size()) && (t + 1) < static_cast<int>(context.X_.size()))
+        {
+          Eigen::VectorXd defect_residual = F_[t] - context.X_[t + 1];
+          inf_defect = std::max(inf_defect, defect_residual.lpNorm<Eigen::Infinity>());
+          filter_constraint_violation += defect_residual.lpNorm<1>();
+        }
       }
     }
     else
@@ -866,29 +874,6 @@ namespace cddp
       inf_du = 0.0;
       inf_comp = 0.0;
     }
-
-    // Compute defect residuals for multi-shooting structure
-    // Only compute defects when using multi-shooting (segment-based) approach
-    const CDDPOptions &options = context.getOptions();
-    if (ms_segment_length_ > 1 && ms_segment_length_ < context.getHorizon())
-    {
-      // Multi-shooting mode: compute defect residuals at segment boundaries
-      for (int t = ms_segment_length_ - 1; t < context.getHorizon(); t += ms_segment_length_)
-      {
-        if (t < static_cast<int>(F_.size()) && (t + 1) < static_cast<int>(context.X_.size()))
-        {
-          // Defect residual: d = F_[t] - X_[t+1] (dynamics violation at segment boundary)
-          Eigen::VectorXd defect_residual = F_[t] - context.X_[t + 1];
-          
-          // Update defect infeasibility metrics
-          inf_defect = std::max(inf_defect, defect_residual.lpNorm<Eigen::Infinity>());
-          
-          // Add defect residuals to filter constraint violation
-          filter_constraint_violation += defect_residual.lpNorm<1>();
-        }
-      }
-    }
-    // Note: In single-shooting mode (segment_length >= horizon), defects are naturally zero
 
     // Update primal infeasibility to include defect violations
     context.inf_pr_ = std::max(inf_pr, inf_defect);
@@ -1075,7 +1060,7 @@ namespace cddp
               constraint_pair.second->getStateJacobian(x, u);
           G_u_[constraint_name][t] =
               constraint_pair.second->getControlJacobian(x, u);
-          
+
           // Compute constraint hessians if not using iLQR
           if (!options.use_ilqr)
           {
@@ -1181,9 +1166,9 @@ namespace cddp
     V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
 
     dV_ = Eigen::Vector2d::Zero();
-    double inf_du = 0.0;   // dual infeasibility (optimality gap; Qu_err)
-    double inf_pr = 0.0;   // primal infeasibility (constraint violation)
-    double inf_comp = 0.0; // complementary infeasibility
+    double inf_du = 0.0;     // dual infeasibility (optimality gap; Qu_err)
+    double inf_pr = 0.0;     // primal infeasibility (constraint violation)
+    double inf_comp = 0.0;   // complementary infeasibility
     double inf_defect = 0.0; // defect norm for multi-shooting
     double step_norm = 0.0;
 
@@ -1194,7 +1179,7 @@ namespace cddp
       {
         const Eigen::VectorXd &x = context.X_[t];
         const Eigen::VectorXd &u = context.U_[t];
-        
+
         // MSIPDDP: Access costate variables and compute defect
         const Eigen::VectorXd &lambda = Lambda_[t];
         const Eigen::VectorXd &f = F_[t];
@@ -1284,8 +1269,8 @@ namespace cddp
       // Update termination metrics
       context.inf_du_ = inf_du;
       context.step_norm_ = step_norm;
-      context.inf_pr_ = inf_defect;   // Include defect violations as primal infeasibility
-      context.inf_comp_ = 0.0; // No complementary constraints
+      context.inf_pr_ = inf_defect; // Include defect violations as primal infeasibility
+      context.inf_comp_ = 0.0;      // No complementary constraints
 
       if (options.debug)
       {
@@ -1301,7 +1286,7 @@ namespace cddp
       {
         const Eigen::VectorXd &x = context.X_[t];
         const Eigen::VectorXd &u = context.U_[t];
-        
+
         // MSIPDDP: Access costate variables and compute defect
         const Eigen::VectorXd &lambda = Lambda_[t];
         const Eigen::VectorXd &f = F_[t];
@@ -1372,18 +1357,18 @@ namespace cddp
             Q_ux += timestep * lambda(i) * Fux[i];
             Q_uu += timestep * lambda(i) * Fuu[i];
           }
-          
+
           // Add constraint hessian terms
           int offset = 0;
           for (const auto &constraint_pair : constraint_set)
           {
             const std::string &constraint_name = constraint_pair.first;
             int dual_dim = constraint_pair.second->getDualDim();
-            
+
             const auto &G_xx = G_xx_[constraint_name][t];
             const auto &G_uu = G_uu_[constraint_name][t];
             const auto &G_ux = G_ux_[constraint_name][t];
-            
+
             for (int i = 0; i < dual_dim; ++i)
             {
               Q_xx += y(offset + i) * G_xx[i];
@@ -1494,8 +1479,8 @@ namespace cddp
 
       // Update termination metrics (properly separated)
       context.inf_pr_ = std::max(inf_pr, inf_defect); // Primal infeasibility (constraint + defect violations)
-      context.inf_du_ = inf_du;     // Dual infeasibility (optimality gap)
-      context.inf_comp_ = inf_comp; // Complementary infeasibility
+      context.inf_du_ = inf_du;                       // Dual infeasibility (optimality gap)
+      context.inf_comp_ = inf_comp;                   // Complementary infeasibility
       context.step_norm_ = step_norm;
 
       if (options.debug)
@@ -1594,7 +1579,7 @@ namespace cddp
     result.state_trajectory = context.X_;
     result.control_trajectory = context.U_;
     result.state_trajectory[0] = context.getInitialState();
-    
+
     // Initialize trajectories for forward pass
     std::vector<Eigen::VectorXd> F_new = F_;
     std::vector<Eigen::VectorXd> Lambda_new = Lambda_;
@@ -1623,8 +1608,8 @@ namespace cddp
         }
 
         // Determine if we're at a segment boundary for gap-closing
-        bool is_segment_boundary = (ms_segment_length_ > 1) && 
-                                   ((t + 1) % ms_segment_length_ == 0) && 
+        bool is_segment_boundary = (ms_segment_length_ > 1) &&
+                                   ((t + 1) % ms_segment_length_ == 0) &&
                                    (t + 1 < horizon);
         bool apply_gap_closing = is_segment_boundary;
 
@@ -1640,9 +1625,9 @@ namespace cddp
           if (options.msipddp.rollout_type == "nonlinear")
           {
             // Nonlinear rollout: Gap-closing with defect correction
-            result.state_trajectory[t + 1] = context.X_[t + 1] + 
-                                           (F_new[t] - F_[t]) + 
-                                           alpha * (F_[t] - context.X_[t + 1]);
+            result.state_trajectory[t + 1] = context.X_[t + 1] +
+                                             (F_new[t] - F_[t]) +
+                                             alpha * (F_[t] - context.X_[t + 1]);
           }
           else if (options.msipddp.rollout_type == "hybrid")
           {
@@ -1652,10 +1637,10 @@ namespace cddp
             const double timestep = context.getTimestep();
             Eigen::MatrixXd A = Eigen::MatrixXd::Identity(context.getStateDim(), context.getStateDim()) + timestep * Fx;
             Eigen::MatrixXd B = timestep * Fu;
-            
-            result.state_trajectory[t + 1] = context.X_[t + 1] + 
-                                           (A + B * K_u_[t]) * delta_x + 
-                                           alpha * (B * k_u_[t] + F_[t] - context.X_[t + 1]);
+
+            result.state_trajectory[t + 1] = context.X_[t + 1] +
+                                             (A + B * K_u_[t]) * delta_x +
+                                             alpha * (B * k_u_[t] + F_[t] - context.X_[t + 1]);
           }
           else
           {
@@ -1688,7 +1673,7 @@ namespace cddp
       result.alpha_du = 1.0; // No dual variables for unconstrained case
       result.dynamics_trajectory = F_new;
       result.costate_trajectory = Lambda_new;
-      
+
       return result;
     }
 
@@ -1733,8 +1718,8 @@ namespace cddp
           context.U_[t] + alpha_s * k_u_[t] + K_u_[t] * delta_x;
 
       // Determine if we're at a segment boundary for gap-closing
-      bool is_segment_boundary = (ms_segment_length_ > 1) && 
-                                 ((t + 1) % ms_segment_length_ == 0) && 
+      bool is_segment_boundary = (ms_segment_length_ > 1) &&
+                                 ((t + 1) % ms_segment_length_ == 0) &&
                                  (t + 1 < horizon);
       bool apply_gap_closing = is_segment_boundary;
 
@@ -1750,9 +1735,12 @@ namespace cddp
         if (options.msipddp.rollout_type == "nonlinear")
         {
           // Nonlinear rollout: Gap-closing with defect correction
-          result.state_trajectory[t + 1] = context.X_[t + 1] + 
-                                         (F_new[t] - F_[t]) + 
-                                         alpha_s * (F_[t] - context.X_[t + 1]);
+          // result.state_trajectory[t + 1] = context.X_[t + 1] +
+          //                                (F_new[t] - F_[t]) +
+          //                                alpha_s * (F_[t] - context.X_[t + 1]);
+          result.state_trajectory[t + 1] = context.X_[t + 1] +
+                                           (F_new[t] - F_[t]) +
+                                           alpha_s * (F_[t] - context.X_[t + 1]);
         }
         else if (options.msipddp.rollout_type == "hybrid")
         {
@@ -1762,10 +1750,10 @@ namespace cddp
           const double timestep = context.getTimestep();
           Eigen::MatrixXd A = Eigen::MatrixXd::Identity(context.getStateDim(), context.getStateDim()) + timestep * Fx;
           Eigen::MatrixXd B = timestep * Fu;
-          
-          result.state_trajectory[t + 1] = context.X_[t + 1] + 
-                                         (A + B * K_u_[t]) * delta_x + 
-                                         alpha_s * (B * k_u_[t] + F_[t] - context.X_[t + 1]);
+
+          result.state_trajectory[t + 1] = context.X_[t + 1] +
+                                           (A + B * K_u_[t]) * delta_x +
+                                           alpha_s * (B * k_u_[t] + F_[t] - context.X_[t + 1]);
         }
         else
         {
@@ -1867,12 +1855,12 @@ namespace cddp
 
         // Primal infeasibility: g + s
         Eigen::VectorXd primal_residual = G_new[constraint_name][t] + s_vec;
-
-        // Primal infeasibility: d = f - x_{k+1}
-        Eigen::VectorXd defect_residual = F_new[t] - result.state_trajectory[t + 1];
-        
-        constraint_violation_new += primal_residual.lpNorm<1>() + defect_residual.lpNorm<1>();
+        constraint_violation_new += primal_residual.lpNorm<1>();
       }
+
+      // Defect infeasibility: d = f - x_{k+1}
+      Eigen::VectorXd defect_residual = F_new[t] - result.state_trajectory[t + 1];
+      constraint_violation_new += defect_residual.lpNorm<1>();
     }
 
     cost_new +=
@@ -1888,13 +1876,9 @@ namespace cddp
     // Filter logic
     if (constraint_violation_new > options.filter.max_violation_threshold)
     {
-      if (constraint_violation_new < 1e-8 * constraint_violation_old)
+      if (constraint_violation_new < (1 - options.filter.violation_acceptance_threshold) * constraint_violation_old)
       {
         filter_acceptance = true;
-      }
-      else
-      {
-        filter_acceptance = false;
       }
     }
     else if (std::max(constraint_violation_new, constraint_violation_old) <
@@ -1938,9 +1922,9 @@ namespace cddp
   }
 
   void MSIPDDPSolver::printIteration(int iter, double objective, double inf_pr,
-                                   double inf_du, double inf_comp, double mu,
-                                   double step_norm, double regularization,
-                                   double alpha_du, double alpha_pr) const
+                                     double inf_du, double inf_comp, double mu,
+                                     double step_norm, double regularization,
+                                     double alpha_du, double alpha_pr) const
   {
     if (iter == 0)
     {
@@ -2048,7 +2032,7 @@ namespace cddp
 
     // More aggressive barrier parameter update strategy
     double barrier_update_threshold = std::max(barrier_opts.mu_update_factor * mu_, mu_ * 2.0);
-    
+
     if (termination_metric <= barrier_update_threshold)
     {
       // Adaptive barrier reduction strategy
@@ -2089,8 +2073,8 @@ namespace cddp
       if (options.debug)
       {
         std::cout << "[MSIPDDP Barrier] Termination metric: " << std::scientific << std::setprecision(2)
-                  << termination_metric << " (scaled inf_du: " << scaled_inf_du 
-                  << ", inf_pr: " << context.inf_pr_ << ", inf_comp: " << context.inf_comp_ 
+                  << termination_metric << " (scaled inf_du: " << scaled_inf_du
+                  << ", inf_pr: " << context.inf_pr_ << ", inf_comp: " << context.inf_comp_
                   << ") → μ: " << mu_ << std::endl;
       }
     }
@@ -2141,8 +2125,8 @@ namespace cddp
         std::cout << "MSIPDDP: Converged due to scaled optimality gap and constraint "
                      "violation (metric: "
                   << std::scientific << std::setprecision(2)
-                    << termination_metric << ", scaled inf_du: " << scaled_inf_du << ")" << std::endl;
-        }
+                  << termination_metric << ", scaled inf_du: " << scaled_inf_du << ")" << std::endl;
+      }
       return true;
     }
 
@@ -2174,8 +2158,6 @@ namespace cddp
 
     return false;
   }
-
-
 
   void MSIPDDPSolver::initializeConstraintStorage(CDDP &context)
   {
@@ -2234,7 +2216,7 @@ namespace cddp
     const auto &constraint_set = context.getConstraintSet();
     const int horizon = context.getHorizon();
     const int control_dim = context.getControlDim();
-    
+
     // If no constraints, return the unscaled dual infeasibility
     if (constraint_set.empty())
     {
@@ -2243,7 +2225,7 @@ namespace cddp
 
     // IPOPT-style scaling: sd = max{smax, (||y||₁ + ||s||₁)/(m+n)}/smax
     const double smax = 100.0; // Standard IPOPT value
-    
+
     // Compute total L1 norms of dual and slack variables
     double y_norm_l1 = 0.0;
     double s_norm_l1 = 0.0;
@@ -2254,14 +2236,14 @@ namespace cddp
       const std::string &constraint_name = constraint_pair.first;
       auto y_it = Y_.find(constraint_name);
       auto s_it = S_.find(constraint_name);
-      
+
       if (y_it != Y_.end() && s_it != S_.end())
       {
         for (int t = 0; t < horizon; ++t)
         {
           const Eigen::VectorXd &y_vec = y_it->second[t];
           const Eigen::VectorXd &s_vec = s_it->second[t];
-          
+
           y_norm_l1 += y_vec.lpNorm<1>();
           s_norm_l1 += s_vec.lpNorm<1>();
           total_dual_dim += y_vec.size();
@@ -2278,7 +2260,7 @@ namespace cddp
     // Compute scaling factor: sd = max{smax, (||y||₁ + ||s||₁)/(m+n)}/smax
     double scaling_numerator = (m_plus_n > 0) ? (y_norm_l1 + s_norm_l1) / static_cast<double>(m_plus_n) : 0.0;
     double sd = std::max(smax, scaling_numerator) / smax;
-    
+
     // Return scaled dual infeasibility
     return context.inf_du_ / sd;
   }
