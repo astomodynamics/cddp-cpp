@@ -209,7 +209,7 @@ int main()
 
     // MSIPDDP-specific options
     options.msipddp.barrier.mu_initial = 1e-1;
-    options.msipddp.segment_length = horizon;
+    options.msipddp.segment_length = 2;
     options.msipddp.rollout_type = "nonlinear";
     options.msipddp.use_controlled_rollout = false;
 
@@ -237,7 +237,7 @@ int main()
     cddp_solver.setInitialTrajectory(X_init, U_init);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
     
     options.max_iterations = 500;
     options.warm_start = true;
@@ -265,7 +265,7 @@ int main()
     solver_ball.setInitialTrajectory(initial_X, initial_U);
     
     // Solve the problem (MSIPDDP, IPDDP)
-    cddp::CDDPSolution solution_ball = solver_ball.solve("IPDDP");
+    cddp::CDDPSolution solution_ball = solver_ball.solve("MSIPDDP");
 
     auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("state_trajectory"));
     auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("control_trajectory"));
