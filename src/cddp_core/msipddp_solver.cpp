@@ -374,6 +374,8 @@ namespace cddp
           G_ = *best_result.constraint_eval_trajectory;
         if (best_result.dynamics_trajectory)
           F_ = *best_result.dynamics_trajectory;
+        if (best_result.costate_trajectory)
+          Lambda_ = *best_result.costate_trajectory;
 
         // Update costs and step lengths
         dJ = context.cost_ - best_result.cost;
@@ -1208,9 +1210,9 @@ namespace cddp
 
           for (int i = 0; i < state_dim; ++i)
           {
-            Q_xx += timestep * V_x(i) * Fxx[i];
-            Q_ux += timestep * V_x(i) * Fux[i];
-            Q_uu += timestep * V_x(i) * Fuu[i];
+            Q_xx += timestep * lambda(i) * Fxx[i];
+            Q_ux += timestep * lambda(i) * Fux[i];
+            Q_uu += timestep * lambda(i) * Fuu[i];
           }
         }
 
@@ -1343,9 +1345,9 @@ namespace cddp
 
           for (int i = 0; i < state_dim; ++i)
           {
-            Q_xx += timestep * V_x(i) * Fxx[i];
-            Q_ux += timestep * V_x(i) * Fux[i];
-            Q_uu += timestep * V_x(i) * Fuu[i];
+            Q_xx += timestep * lambda(i) * Fxx[i];
+            Q_ux += timestep * lambda(i) * Fux[i];
+            Q_uu += timestep * lambda(i) * Fuu[i];
           }
         }
 
@@ -1550,8 +1552,9 @@ namespace cddp
     result.control_trajectory = context.U_;
     result.state_trajectory[0] = context.getInitialState();
     
-    // Initialize dynamics trajectory for forward pass
+    // Initialize trajectories for forward pass
     std::vector<Eigen::VectorXd> F_new = F_;
+    std::vector<Eigen::VectorXd> Lambda_new = Lambda_;
     std::map<std::string, std::vector<Eigen::VectorXd>> Y_new = Y_;
     std::map<std::string, std::vector<Eigen::VectorXd>> S_new = S_;
     std::map<std::string, std::vector<Eigen::VectorXd>> G_new = G_;
@@ -1570,16 +1573,57 @@ namespace cddp
         result.control_trajectory[t] =
             context.U_[t] + alpha * k_u_[t] + K_u_[t] * delta_x;
 
-        // Propagate dynamics and store in local trajectory
-        Eigen::VectorXd next_state = context.getSystem().getDiscreteDynamics(
+        // Update costate variables for multi-shooting
+        if (t < static_cast<int>(Lambda_new.size()))
+        {
+          Lambda_new[t] = Lambda_[t] + alpha * k_lambda_[t] + K_lambda_[t] * delta_x;
+        }
+
+        // Determine if we're at a segment boundary for gap-closing
+        bool is_segment_boundary = (ms_segment_length_ > 1) && 
+                                   ((t + 1) % ms_segment_length_ == 0) && 
+                                   (t + 1 < horizon);
+        bool apply_gap_closing = is_segment_boundary;
+
+        // Evaluate dynamics at current point
+        F_new[t] = context.getSystem().getDiscreteDynamics(
             result.state_trajectory[t], result.control_trajectory[t],
             t * context.getTimestep());
-        result.state_trajectory[t + 1] = next_state;
 
-        // Store dynamics in local trajectory (don't modify F_ during forward pass)
-        if (t < static_cast<int>(F_new.size()))
+        // Apply multi-shooting strategy based on options
+        if (apply_gap_closing)
         {
-          F_new[t] = next_state;
+          // Multi-shooting gap-closing at segment boundaries
+          if (options.msipddp.rollout_type == "nonlinear")
+          {
+            // Nonlinear rollout: Gap-closing with defect correction
+            result.state_trajectory[t + 1] = context.X_[t + 1] + 
+                                           (F_new[t] - F_[t]) + 
+                                           alpha * (F_[t] - context.X_[t + 1]);
+          }
+          else if (options.msipddp.rollout_type == "hybrid")
+          {
+            // Hybrid rollout: Linear approximation + defect correction
+            const auto [Fx, Fu] = context.getSystem().getJacobians(
+                context.X_[t], context.U_[t], t * context.getTimestep());
+            const double timestep = context.getTimestep();
+            Eigen::MatrixXd A = Eigen::MatrixXd::Identity(context.getStateDim(), context.getStateDim()) + timestep * Fx;
+            Eigen::MatrixXd B = timestep * Fu;
+            
+            result.state_trajectory[t + 1] = context.X_[t + 1] + 
+                                           (A + B * K_u_[t]) * delta_x + 
+                                           alpha * (B * k_u_[t] + F_[t] - context.X_[t + 1]);
+          }
+          else
+          {
+            // Default: standard dynamics propagation
+            result.state_trajectory[t + 1] = F_new[t];
+          }
+        }
+        else
+        {
+          // Normal propagation (not at segment boundary)
+          result.state_trajectory[t + 1] = F_new[t];
         }
 
         // Accumulate stage cost
@@ -1600,6 +1644,7 @@ namespace cddp
       result.constraint_violation = 0.0;
       result.alpha_du = 1.0; // No dual variables for unconstrained case
       result.dynamics_trajectory = F_new;
+      result.costate_trajectory = Lambda_new;
       
       return result;
     }
@@ -1644,16 +1689,57 @@ namespace cddp
       result.control_trajectory[t] =
           context.U_[t] + alpha_s * k_u_[t] + K_u_[t] * delta_x;
 
-      // Propagate dynamics and store in local trajectory
-      Eigen::VectorXd next_state = context.getSystem().getDiscreteDynamics(
+      // Update costate variables for multi-shooting
+      if (t < static_cast<int>(Lambda_new.size()))
+      {
+        Lambda_new[t] = Lambda_[t] + alpha_s * k_lambda_[t] + K_lambda_[t] * delta_x;
+      }
+
+      // Determine if we're at a segment boundary for gap-closing
+      bool is_segment_boundary = (ms_segment_length_ > 1) && 
+                                 ((t + 1) % ms_segment_length_ == 0) && 
+                                 (t + 1 < horizon);
+      bool apply_gap_closing = is_segment_boundary;
+
+      // Evaluate dynamics at current point
+      F_new[t] = context.getSystem().getDiscreteDynamics(
           result.state_trajectory[t], result.control_trajectory[t],
           t * context.getTimestep());
-      result.state_trajectory[t + 1] = next_state;
 
-      // Store dynamics in local trajectory
-      if (t < static_cast<int>(F_new.size()))
+      // Apply multi-shooting strategy based on options
+      if (apply_gap_closing)
       {
-        F_new[t] = next_state;
+        // Multi-shooting gap-closing at segment boundaries
+        if (options.msipddp.rollout_type == "nonlinear")
+        {
+          // Nonlinear rollout: Gap-closing with defect correction
+          result.state_trajectory[t + 1] = context.X_[t + 1] + 
+                                         (F_new[t] - F_[t]) + 
+                                         alpha_s * (F_[t] - context.X_[t + 1]);
+        }
+        else if (options.msipddp.rollout_type == "hybrid")
+        {
+          // Hybrid rollout: Linear approximation + defect correction
+          const auto [Fx, Fu] = context.getSystem().getJacobians(
+              context.X_[t], context.U_[t], t * context.getTimestep());
+          const double timestep = context.getTimestep();
+          Eigen::MatrixXd A = Eigen::MatrixXd::Identity(context.getStateDim(), context.getStateDim()) + timestep * Fx;
+          Eigen::MatrixXd B = timestep * Fu;
+          
+          result.state_trajectory[t + 1] = context.X_[t + 1] + 
+                                         (A + B * K_u_[t]) * delta_x + 
+                                         alpha_s * (B * k_u_[t] + F_[t] - context.X_[t + 1]);
+        }
+        else
+        {
+          // Default: standard dynamics propagation
+          result.state_trajectory[t + 1] = F_new[t];
+        }
+      }
+      else
+      {
+        // Normal propagation (not at segment boundary)
+        result.state_trajectory[t + 1] = F_new[t];
       }
     }
 
@@ -1797,6 +1883,7 @@ namespace cddp
       result.slack_trajectory = S_new;
       result.constraint_eval_trajectory = G_new;
       result.dynamics_trajectory = F_new;
+      result.costate_trajectory = Lambda_new;
     }
 
     return result;
