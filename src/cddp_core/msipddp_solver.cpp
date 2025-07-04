@@ -1033,6 +1033,9 @@ namespace cddp
     // Clear and resize storage
     G_x_.clear();
     G_u_.clear();
+    G_xx_.clear();
+    G_uu_.clear();
+    G_ux_.clear();
 
     // If no constraints, return early
     if (constraint_set.empty())
@@ -1046,6 +1049,9 @@ namespace cddp
       const std::string &constraint_name = constraint_pair.first;
       G_x_[constraint_name].resize(horizon);
       G_u_[constraint_name].resize(horizon);
+      G_xx_[constraint_name].resize(horizon);
+      G_uu_[constraint_name].resize(horizon);
+      G_ux_[constraint_name].resize(horizon);
     }
 
     // Threshold for when parallelization is worth it - increased for better
@@ -1069,6 +1075,14 @@ namespace cddp
               constraint_pair.second->getStateJacobian(x, u);
           G_u_[constraint_name][t] =
               constraint_pair.second->getControlJacobian(x, u);
+          
+          // // Compute constraint hessians if not using iLQR
+          // if (!options.use_ilqr)
+          // {
+          //   G_xx_[constraint_name][t] = constraint_pair.second->getStateHessian(x, u);
+          //   G_uu_[constraint_name][t] = constraint_pair.second->getControlHessian(x, u);
+          //   G_ux_[constraint_name][t] = constraint_pair.second->getCrossHessian(x, u);
+          // }
         }
       }
     }
@@ -1097,6 +1111,7 @@ namespace cddp
                                             start_t, end_t]()
                        {
             // Process a chunk of time steps
+            const CDDPOptions &options = context.getOptions();
             for (int t = start_t; t < end_t; ++t) {
               const Eigen::VectorXd &x = context.X_[t];
               const Eigen::VectorXd &u = context.U_[t];
@@ -1107,6 +1122,14 @@ namespace cddp
                     constraint_pair.second->getStateJacobian(x, u);
                 G_u_[constraint_name][t] =
                     constraint_pair.second->getControlJacobian(x, u);
+                
+                // // Compute constraint hessians if not using iLQR
+                // if (!options.use_ilqr)
+                // {
+                //   G_xx_[constraint_name][t] = constraint_pair.second->getStateHessian(x, u);
+                //   G_uu_[constraint_name][t] = constraint_pair.second->getControlHessian(x, u);
+                //   G_ux_[constraint_name][t] = constraint_pair.second->getCrossHessian(x, u);
+                // }
               }
             } }));
       }
