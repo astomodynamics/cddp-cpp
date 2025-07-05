@@ -383,6 +383,9 @@ namespace cddp
         context.merit_function_ = best_result.merit_function;
         context.alpha_pr_ = best_result.alpha_pr;
 
+        // Update filter with accepted point
+        acceptFilterEntry(best_result.merit_function, best_result.constraint_violation);
+
         updateIterationHistory(options, context, history_objective, history_merit_function,
                                history_step_length_primal, history_step_length_dual,
                                history_dual_infeasibility, history_primal_infeasibility,
@@ -393,16 +396,26 @@ namespace cddp
       }
       else
       {
-        context.increaseRegularization();
-        if (context.isRegularizationLimitReached())
+        // Try filter restoration before increasing regularization
+        bool restoration_performed = checkAndPerformFilterRestoration(context);
+        
+        if (!restoration_performed)
         {
-          termination_reason = "RegularizationLimitReached_NotConverged";
-          converged = false;
-          if (options.verbose)
+          context.increaseRegularization();
+          if (context.isRegularizationLimitReached())
           {
-            std::cerr << "MSIPDDP: Regularization limit reached" << std::endl;
+            termination_reason = "RegularizationLimitReached_NotConverged";
+            converged = false;
+            if (options.verbose)
+            {
+              std::cerr << "MSIPDDP: Regularization limit reached" << std::endl;
+            }
+            break;
           }
-          break;
+        }
+        else if (options.debug)
+        {
+          std::cout << "MSIPDDP: Filter restoration performed, retrying forward pass" << std::endl;
         }
       }
 
@@ -881,12 +894,149 @@ namespace cddp
     // Note: inf_du_ (dual infeasibility/optimality gap) is computed in backward pass for constrained case
     context.inf_comp_ = inf_comp;
 
-    // Reset filter with initial point using l1 norm for constraint violation
+    // Simple filter initialization with current point
     filter_.clear();
     filter_.push_back(FilterPoint(merit_function, filter_constraint_violation));
   }
 
   void MSIPDDPSolver::resetFilter(CDDP &context) { resetBarrierFilter(context); }
+
+  bool MSIPDDPSolver::acceptFilterEntry(double merit_function, double constraint_violation)
+  {
+    FilterPoint candidate(merit_function, constraint_violation);
+    
+    // Check if candidate is dominated by any existing filter point
+    for (const auto &filter_point : filter_)
+    {
+      if (filter_point.dominates(candidate))
+      {
+        return false; // Candidate is dominated, reject
+      }
+    }
+    
+    // Remove any filter points that are dominated by the candidate
+    filter_.erase(
+        std::remove_if(filter_.begin(), filter_.end(),
+                      [&candidate](const FilterPoint &point) {
+                        return candidate.dominates(point);
+                      }),
+        filter_.end());
+    
+    // Add the candidate to the filter
+    filter_.push_back(candidate);
+    
+    return true;
+  }
+
+  bool MSIPDDPSolver::isFilterAcceptable(double merit_function, double constraint_violation,
+                                        const SolverSpecificFilterOptions &options,
+                                        double expected_improvement) const
+  {
+    // If filter is empty, any point is acceptable
+    if (filter_.empty())
+    {
+      return true;
+    }
+    
+    // Quick domination check: reject if any filter point dominates candidate
+    FilterPoint candidate(merit_function, constraint_violation);
+    for (const auto &filter_point : filter_)
+    {
+      if (filter_point.dominates(candidate))
+      {
+        return false;
+      }
+    }
+    
+    // Find best filter point for comparison
+    double best_violation = std::numeric_limits<double>::infinity();
+    double best_merit = std::numeric_limits<double>::infinity();
+    
+    for (const auto &filter_point : filter_)
+    {
+      if (filter_point.constraint_violation < best_violation)
+      {
+        best_violation = filter_point.constraint_violation;
+        best_merit = filter_point.merit_function;
+      }
+    }
+    
+    // Simple acceptance test: either improve constraint violation or merit function
+    bool violation_improvement = constraint_violation < best_violation * (1.0 - options.violation_acceptance_threshold);
+    bool merit_improvement = merit_function < best_merit - options.merit_acceptance_threshold * constraint_violation;
+    
+    // For very small violations, use Armijo condition
+    if (constraint_violation < options.min_violation_for_armijo_check && expected_improvement < 0)
+    {
+      return merit_function < best_merit + options.armijo_constant * expected_improvement;
+    }
+    
+    // Additional acceptance criterion: if we're very close to feasibility and making any improvement
+    if (constraint_violation < 1e-6 && merit_function <= best_merit * (1.0 + 1e-8))
+    {
+      return true;  // Accept small improvements when nearly feasible
+    }
+    
+    return violation_improvement || merit_improvement;
+  }
+
+  bool MSIPDDPSolver::checkAndPerformFilterRestoration(CDDP &context)
+  {
+    const CDDPOptions &options = context.getOptions();
+    
+    // Simple restoration criteria: too many points or invalid values
+    bool needs_restoration = (filter_.size() > 5);
+    
+    // Check for numerical issues
+    if (!needs_restoration)
+    {
+      for (const auto &point : filter_)
+      {
+        if (std::isnan(point.merit_function) || std::isnan(point.constraint_violation) ||
+            std::isinf(point.merit_function) || std::isinf(point.constraint_violation))
+        {
+          needs_restoration = true;
+          break;
+        }
+      }
+    }
+    
+    if (needs_restoration && !filter_.empty())
+    {
+      if (options.debug)
+      {
+        std::cout << "MSIPDDP: Filter restoration: " << filter_.size() << " -> ";
+      }
+      
+      // Keep only the best 2 points: best violation and best merit function
+      auto best_violation = *std::min_element(filter_.begin(), filter_.end(),
+        [](const FilterPoint &a, const FilterPoint &b) {
+          return a.constraint_violation < b.constraint_violation;
+        });
+      
+      auto best_merit = *std::min_element(filter_.begin(), filter_.end(),
+        [](const FilterPoint &a, const FilterPoint &b) {
+          return a.merit_function < b.merit_function;
+        });
+      
+      filter_.clear();
+      filter_.push_back(best_violation);
+      if (std::abs(best_merit.constraint_violation - best_violation.constraint_violation) > 1e-12 ||
+          std::abs(best_merit.merit_function - best_violation.merit_function) > 1e-12)
+      {
+        filter_.push_back(best_merit);
+      }
+      
+      if (options.debug)
+      {
+        std::cout << filter_.size() << " points" << std::endl;
+      }
+      
+      return true;
+    }
+    
+    return false;
+  }
 
   void MSIPDDPSolver::precomputeDynamicsDerivatives(CDDP &context)
   {
@@ -1735,9 +1885,6 @@ namespace cddp
         if (options.msipddp.rollout_type == "nonlinear")
         {
           // Nonlinear rollout: Gap-closing with defect correction
-          // result.state_trajectory[t + 1] = context.X_[t + 1] +
-          //                                (F_new[t] - F_[t]) +
-          //                                alpha_s * (F_[t] - context.X_[t + 1]);
           result.state_trajectory[t + 1] = context.X_[t + 1] +
                                            (F_new[t] - F_[t]) +
                                            alpha_s * (F_[t] - context.X_[t + 1]);
@@ -1833,6 +1980,7 @@ namespace cddp
 
     if (!suitable_alpha_y_found)
     {
+
       return result; // Failed dual variable update
     }
 
@@ -1867,43 +2015,10 @@ namespace cddp
         context.getObjective().terminal_cost(result.state_trajectory.back());
     merit_function_new += cost_new;
 
-    // Filter acceptance logic
-    bool filter_acceptance = false;
+    // Enhanced filter acceptance logic using new methods
     double expected_improvement = alpha * dV_(0);
-    double constraint_violation_old = filter_.empty() ? 0.0 : filter_.back().constraint_violation;
-    double merit_function_old = context.merit_function_;
-
-    // Filter logic
-    if (constraint_violation_new > options.filter.max_violation_threshold)
-    {
-      if (constraint_violation_new < (1 - options.filter.violation_acceptance_threshold) * constraint_violation_old)
-      {
-        filter_acceptance = true;
-      }
-    }
-    else if (std::max(constraint_violation_new, constraint_violation_old) <
-                 options.filter.min_violation_for_armijo_check &&
-             expected_improvement < 0)
-    {
-      if (merit_function_new <
-          merit_function_old +
-              options.filter.armijo_constant * expected_improvement)
-      {
-        filter_acceptance = true;
-      }
-    }
-    else
-    {
-      if (merit_function_new <
-              merit_function_old - options.filter.merit_acceptance_threshold *
-                                       constraint_violation_new ||
-          constraint_violation_new <
-              (1 - options.filter.violation_acceptance_threshold) *
-                  constraint_violation_old)
-      {
-        filter_acceptance = true;
-      }
-    }
+    bool filter_acceptance = isFilterAcceptable(merit_function_new, constraint_violation_new,
+                                               options.filter, expected_improvement);
 
     if (filter_acceptance)
     {
@@ -2030,10 +2145,27 @@ namespace cddp
     double scaled_inf_du = computeScaledDualInfeasibility(context);
     double termination_metric = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
 
-    // More aggressive barrier parameter update strategy
-    double barrier_update_threshold = std::max(barrier_opts.mu_update_factor * mu_, mu_ * 2.0);
+    // Adaptive barrier parameter update strategy
+    // Use different thresholds based on current progress
+    double barrier_update_threshold;
+    
+    // If mu is already small, use a more relaxed threshold
+    if (mu_ < 1e-5)
+    {
+      // For small mu, update if we've made any reasonable progress
+      barrier_update_threshold = std::max(termination_metric * 10.0, mu_ * 100.0);
+    }
+    else
+    {
+      // Standard threshold for larger mu values
+      barrier_update_threshold = std::max(barrier_opts.mu_update_factor * mu_, mu_ * 2.0);
+    }
 
-    if (termination_metric <= barrier_update_threshold)
+    // Also consider updating if forward pass succeeded but with very small cost change NOTE: Hand tuning
+    bool slow_progress = forward_pass_success && context.alpha_pr_ > 0 &&
+                        (termination_metric < 1e-3);  // Only when reasonably feasible
+
+    if (termination_metric <= barrier_update_threshold || slow_progress)
     {
       // Adaptive barrier reduction strategy
       double reduction_factor = barrier_opts.mu_update_factor;
@@ -2064,8 +2196,16 @@ namespace cddp
       double new_mu_linear = reduction_factor * mu_;
       double new_mu_superlinear = std::pow(mu_, barrier_opts.mu_update_power);
 
-      mu_ = std::max(options.tolerance / 100.0,
-                     std::min(new_mu_linear, new_mu_superlinear));
+      // Choose the more aggressive reduction when progress is slow
+      if (slow_progress && mu_ > options.tolerance)
+      {
+        mu_ = std::min(new_mu_linear, new_mu_superlinear);
+      }
+      else
+      {
+        mu_ = std::max(options.tolerance / 100.0,
+                       std::min(new_mu_linear, new_mu_superlinear));
+      }
 
       // Reset filter when barrier parameter changes
       resetFilter(context);
@@ -2130,16 +2270,24 @@ namespace cddp
       return true;
     }
 
-    if (std::abs(dJ) < options.acceptable_tolerance)
+    // For acceptable tolerance, also check if we're making minimal progress over several iterations
+    if (std::abs(dJ) < options.acceptable_tolerance && iter > 10)
     {
-      termination_reason = "AcceptableSolutionFound";
-      if (options.verbose)
+      // Check if all infeasibility measures are reasonably small
+      bool acceptable_infeasibility = (context.inf_pr_ < std::sqrt(options.acceptable_tolerance) &&
+                                       context.inf_comp_ < std::sqrt(options.acceptable_tolerance));
+      
+      if (acceptable_infeasibility)
       {
-        std::cout << "MSIPDDP: Converged due to small change in cost (dJ: "
-                  << std::scientific << std::setprecision(2) << std::abs(dJ)
-                  << ")" << std::endl;
+        termination_reason = "AcceptableSolutionFound";
+        if (options.verbose)
+        {
+          std::cout << "MSIPDDP: Converged due to small change in cost (dJ: "
+                    << std::scientific << std::setprecision(2) << std::abs(dJ)
+                    << ") with acceptable infeasibility" << std::endl;
+        }
+        return true;
       }
-      return true;
     }
 
     // Check step norm for early termination
