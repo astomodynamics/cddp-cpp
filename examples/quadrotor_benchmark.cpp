@@ -190,9 +190,6 @@ int main() {
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
 
-    // Quadrotor dynamical system 
-    cddp::Quadrotor quadrotor(timestep, mass, inertia_matrix, arm_length, integration_type);
-
     // Initial trajectory guess (hover thrust)
     double hover_thrust = mass * 9.81 / 4.0;
 
@@ -204,8 +201,8 @@ int main() {
 
     // Helper function to create initial trajectory
     auto createInitialTrajectory = [&]() {
+        std::vector<Eigen::VectorXd> X_init = figure8_reference_states; // Use reference as initial guess
         std::vector<Eigen::VectorXd> U_init(horizon, hover_thrust * Eigen::VectorXd::Ones(control_dim));
-        std::vector<Eigen::VectorXd> X_init = std::vector<Eigen::VectorXd>(horizon + 1, initial_state);
         return std::make_pair(X_init, U_init);
     };
 
@@ -422,7 +419,7 @@ int main() {
     cddp::CDDPOptions options_msipddp;
     options_msipddp.max_iterations = 100;
     options_msipddp.verbose = true;
-    options_msipddp.debug = true;
+    options_msipddp.debug = false;
     options_msipddp.tolerance = 1e-6;
     options_msipddp.acceptable_tolerance = 1e-7;
     options_msipddp.regularization.initial_value = 1e-3;
@@ -451,7 +448,7 @@ int main() {
         options_msipddp
     );
 
-    solver_msipddp.setInitialTrajectory(figure8_reference_states, U_init);
+    solver_msipddp.setInitialTrajectory(X_init, U_init);
 
     // Add constraints for MSIPDDP
     solver_msipddp.addPathConstraint("ControlConstraint",
@@ -489,66 +486,6 @@ int main() {
         psi_msipddp.push_back(euler(2));
     }
 
-    // --------------------------------------------------------
-    // 6. Baseline #5 & #6: IPOPT and SNOPT (using CasADi)
-    // --------------------------------------------------------
-    // NOTE: Both solvers reuse the same NLP problem definition to avoid duplication
-    std::cout << "Solving with IPOPT..." << std::endl;
-    
-    std::vector<Eigen::VectorXd> X_ipopt_sol(horizon + 1, Eigen::VectorXd(state_dim));
-    std::vector<Eigen::VectorXd> U_ipopt_sol(horizon, Eigen::VectorXd(control_dim));
-    std::vector<double> x_ipopt, y_ipopt, z_ipopt;
-    std::vector<double> phi_ipopt, theta_ipopt, psi_ipopt;
-    double solve_time_ipopt_numeric = 0.0;
-    double cost_ipopt = 0.0;
-
-    { // IPOPT specific scope
-        const int n_states = (horizon + 1) * state_dim;
-        const int n_controls = horizon * control_dim;
-        const int n_dec = n_states + n_controls;
-
-        // Define symbolic variables for states and controls
-        casadi::MX X_casadi = casadi::MX::sym("X", n_states);
-        casadi::MX U_casadi = casadi::MX::sym("U", n_controls);
-        casadi::MX z = casadi::MX::vertcat({X_casadi, U_casadi});
-
-        // Helper lambdas to extract the state and control at time step t
-        auto X_t = [=](int t) -> casadi::MX {
-            return X_casadi(casadi::Slice(t * state_dim, (t + 1) * state_dim));
-        };
-        auto U_t = [=](int t) -> casadi::MX {
-            return U_casadi(casadi::Slice(t * control_dim, (t + 1) * control_dim));
-        };
-
-        // Convert Eigen matrices to CasADi
-        casadi::DM Q_dm(Q.rows(), Q.cols());
-        for (int i = 0; i < Q.rows(); i++) {
-            for (int j = 0; j < Q.cols(); j++) {
-                Q_dm(i, j) = Q(i, j) * timestep;
-            }
-        }
-        casadi::DM R_dm(R.rows(), R.cols());
-        for (int i = 0; i < R.rows(); i++) {
-            for (int j = 0; j < R.cols(); j++) {
-                R_dm(i, j) = R(i, j) * timestep;
-            }
-        }
-        casadi::DM Qf_dm(Qf.rows(), Qf.cols());
-        for (int i = 0; i < Qf.rows(); i++) {
-            for (int j = 0; j < Qf.cols(); j++) {
-                Qf_dm(i, j) = Qf(i, j);
-            }
-        }
-
-        // Convert inertia matrix to CasADi
-        casadi::DM inertia_dm(3, 3);
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                inertia_dm(i, j) = inertia_matrix(i, j);
-            }
-        }
-
-    // Quadrotor continuous dynamics function (computes derivatives)
     // --------------------------------------------------------
     // 5. Baseline #5 & #6: IPOPT and SNOPT (using CasADi)
     // --------------------------------------------------------
@@ -1260,7 +1197,7 @@ int main() {
     title(ax_ipddp, "IPDDP");
     auto leg_ipddp = matplot::legend(ax_ipddp);
     leg_ipddp->location(legend::general_alignment::topleft);
-    grid(ax_ipddp, true);}
+    grid(ax_ipddp, true);
 
     // --- Subplot 4: MSIPDDP ---
     auto ax_msipddp = subplot(1, 6, 3);

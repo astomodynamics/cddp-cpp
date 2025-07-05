@@ -271,7 +271,7 @@ int main() {
     options_msipddp.debug = false;
     options_msipddp.tolerance = 1e-5;
     options_msipddp.acceptable_tolerance = 1e-6;
-    options_msipddp.msipddp.segment_length = 5;
+    options_msipddp.msipddp.segment_length = horizon;
     options_msipddp.msipddp.rollout_type = "nonlinear";
     options_msipddp.msipddp.use_controlled_rollout = false;
     options_msipddp.msipddp.barrier.mu_initial = 1e-0;
