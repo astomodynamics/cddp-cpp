@@ -66,39 +66,39 @@ int main() {
     options_10.max_iterations = 10;
     options_10.verbose = true;
     options_10.debug = false;
-    options_10.use_parallel = false;
+    options_10.enable_parallel = false;
     options_10.num_threads = 1;
-    options_10.cost_tolerance = 1e-5;
-    options_10.grad_tolerance = 1e-4;
-    options_10.regularization_type = "control";
-    options_10.regularization_control = 1e-2;
-    options_10.regularization_state = 0.0;
-    options_10.barrier_coeff = 1e-1;
+    options_10.tolerance = 1e-5;
+    options_10.acceptable_tolerance = 1e-4;
+    options_10.regularization.type = "control";
+    options_10.regularization.control = 1e-2;
+    options_10.regularization.state = 0.0;
+    options_10.ipddp.barrier.mu_initial = 1e-1;
 
     cddp::CDDPOptions options_ipddp;
     options_ipddp.max_iterations = 1000;
     options_ipddp.verbose = true;
     options_ipddp.debug = false;
-    options_ipddp.use_parallel = false;
+    options_ipddp.enable_parallel = false;
     options_ipddp.num_threads = 1;
-    options_ipddp.cost_tolerance = 1e-5;
-    options_ipddp.grad_tolerance = 1e-4;
-    options_ipddp.regularization_type = "control";
-    options_ipddp.regularization_control = 1e-4;
-    options_ipddp.regularization_state = 0.0;
-    options_ipddp.barrier_coeff = 1e-1;
+    options_ipddp.tolerance = 1e-5;
+    options_ipddp.acceptable_tolerance = 1e-4;
+    options_ipddp.regularization.type = "control";
+    options_ipddp.regularization.control = 1e-4;
+    options_ipddp.regularization.state = 0.0;
+    options_ipddp.ipddp.barrier.mu_initial = 1e-1;
 
     cddp::CDDPOptions options_asddp;
     options_asddp.max_iterations = 100;
     options_asddp.verbose = true;
     options_asddp.debug = false;
-    options_asddp.use_parallel = false;
+    options_asddp.enable_parallel = false;
     options_asddp.num_threads = 1;
-    options_asddp.cost_tolerance = 1e-5;
-    options_asddp.grad_tolerance = 1e-4;
-    options_asddp.regularization_type = "control";
-    options_asddp.regularization_control = 1e-5;
-    options_asddp.regularization_state = 1e-6;
+    options_asddp.tolerance = 1e-5;
+    options_asddp.acceptable_tolerance = 1e-4;
+    options_asddp.regularization.type = "control";
+    options_asddp.regularization.control = 1e-5;
+    options_asddp.regularization.state = 1e-6;
 
     // Constraint parameters
     // (Used only by baseline #2 and the subsequent 4 solutions,
@@ -135,9 +135,9 @@ int main() {
     solver_unconstrained.setInitialTrajectory(X_unconstrained_init, U_unconstrained_init);
 
     // Solve for baseline #1
-    cddp::CDDPSolution sol_unconstrained = solver_unconstrained.solve("IPDDP");
-    auto X_unconstrained_sol = sol_unconstrained.state_sequence;
-    auto U_unconstrained_sol = sol_unconstrained.control_sequence;
+    cddp::CDDPSolution sol_unconstrained = solver_unconstrained.solve(cddp::SolverType::IPDDP);
+    auto X_unconstrained_sol = std::any_cast<std::vector<Eigen::VectorXd>>(sol_unconstrained.at("state_trajectory"));
+    auto U_unconstrained_sol = std::any_cast<std::vector<Eigen::VectorXd>>(sol_unconstrained.at("control_trajectory"));
 
     // --------------------------------------------------------
     // 3. Baseline #2: IPDDP with constraints (10 iterations)
@@ -152,14 +152,10 @@ int main() {
         std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_ref, timestep),
         options_10
     );
-    solver_ipddp_10.setDynamicalSystem(std::make_unique<cddp::Unicycle>(timestep, integration_type));
-    solver_ipddp_10.setObjective(std::make_unique<cddp::QuadraticObjective>(
-        Q, R, Qf, goal_state, empty_ref, timestep));
-
     // Add constraints
-    solver_ipddp_10.addConstraint("ControlConstraint",
+    solver_ipddp_10.addPathConstraint("ControlConstraint",
         std::make_unique<cddp::ControlConstraint>(control_upper_bound));
-    solver_ipddp_10.addConstraint("BallConstraint",
+    solver_ipddp_10.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
 
     // Simple initial guess
@@ -168,9 +164,9 @@ int main() {
     solver_ipddp_10.setInitialTrajectory(X_unconstrained_sol, U_unconstrained_sol);
 
     // Solve for baseline #2
-    cddp::CDDPSolution sol_ipddp_10 = solver_ipddp_10.solve("IPDDP");
-    auto X_ipddp10_sol = sol_ipddp_10.state_sequence;
-    auto U_ipddp10_sol = sol_ipddp_10.control_sequence;
+    cddp::CDDPSolution sol_ipddp_10 = solver_ipddp_10.solve(cddp::SolverType::IPDDP);
+    auto X_ipddp10_sol = std::any_cast<std::vector<Eigen::VectorXd>>(sol_ipddp_10.at("state_trajectory"));
+    auto U_ipddp10_sol = std::any_cast<std::vector<Eigen::VectorXd>>(sol_ipddp_10.at("control_trajectory"));
 
     // --------------------------------------------------------
     // 4. IPDDP and ASDDP (with constraints) using
@@ -231,53 +227,53 @@ int main() {
 
     // (A) IPDDP from unconstrained
     cddp::CDDP solver_ipddp_from_unconstrained = makeConstrainedSolver("IPDDP");
-    solver_ipddp_from_unconstrained.addConstraint("ControlConstraint",
+    solver_ipddp_from_unconstrained.addPathConstraint("ControlConstraint",
         std::make_unique<cddp::ControlConstraint>(control_upper_bound));
-    solver_ipddp_from_unconstrained.addConstraint("BallConstraint",
+    solver_ipddp_from_unconstrained.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
     solver_ipddp_from_unconstrained.setInitialTrajectory(
         X_unconstrained_sol, U_unconstrained_sol
     );
-    auto sol_ipddp_from_uncon = solver_ipddp_from_unconstrained.solve("IPDDP");
-    auto X_ipddp_from_uncon = sol_ipddp_from_uncon.state_sequence;
+    auto sol_ipddp_from_uncon = solver_ipddp_from_unconstrained.solve(cddp::SolverType::IPDDP);
+    auto X_ipddp_from_uncon = std::any_cast<std::vector<Eigen::VectorXd>>(sol_ipddp_from_uncon.at("state_trajectory"));
 
     // (B) ASDDP from unconstrained
     cddp::CDDP solver_asddp_from_unconstrained = makeConstrainedSolver("ASDDP");
-    solver_asddp_from_unconstrained.addConstraint("ControlBoxConstraint",
+    solver_asddp_from_unconstrained.addPathConstraint("ControlBoxConstraint",
         std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound,
             control_upper_bound));
-    solver_asddp_from_unconstrained.addConstraint("BallConstraint",
+    solver_asddp_from_unconstrained.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
     solver_asddp_from_unconstrained.setInitialTrajectory(
         X_unconstrained_sol, U_unconstrained_sol
     );
-    auto sol_asddp_from_uncon = solver_asddp_from_unconstrained.solve("ASDDP");
-    auto X_asddp_from_uncon = sol_asddp_from_uncon.state_sequence;
+    auto sol_asddp_from_uncon = solver_asddp_from_unconstrained.solve(cddp::SolverType::ASDDP);
+    auto X_asddp_from_uncon = std::any_cast<std::vector<Eigen::VectorXd>>(sol_asddp_from_uncon.at("state_trajectory"));
 
     // (C) IPDDP from ipddp_10 baseline
     cddp::CDDP solver_ipddp_from_ipddp10 = makeConstrainedSolver("IPDDP");
-    solver_ipddp_from_ipddp10.addConstraint("ControlConstraint",
+    solver_ipddp_from_ipddp10.addPathConstraint("ControlConstraint",
         std::make_unique<cddp::ControlConstraint>(control_upper_bound));
-    solver_ipddp_from_ipddp10.addConstraint("BallConstraint",
+    solver_ipddp_from_ipddp10.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
     solver_ipddp_from_ipddp10.setInitialTrajectory(
         X_ipddp10_sol, U_ipddp10_sol
     );
-    auto sol_ipddp_from_ipddp10 = solver_ipddp_from_ipddp10.solve("IPDDP");
-    auto X_ipddp_from_ipddp10 = sol_ipddp_from_ipddp10.state_sequence;
+    auto sol_ipddp_from_ipddp10 = solver_ipddp_from_ipddp10.solve(cddp::SolverType::IPDDP);
+    auto X_ipddp_from_ipddp10 = std::any_cast<std::vector<Eigen::VectorXd>>(sol_ipddp_from_ipddp10.at("state_trajectory"));
 
     // (D) ASDDP from ipddp_10 baseline
     cddp::CDDP solver_asddp_from_ipddp10 = makeConstrainedSolver("ASDDP");
-    solver_asddp_from_ipddp10.addConstraint("ControlBoxConstraint",
+    solver_asddp_from_ipddp10.addPathConstraint("ControlBoxConstraint",
         std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound,
             control_upper_bound));
-    solver_asddp_from_ipddp10.addConstraint("BallConstraint",
+    solver_asddp_from_ipddp10.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
     solver_asddp_from_ipddp10.setInitialTrajectory(
         X_ipddp10_sol, U_ipddp10_sol
     );
-    auto sol_asddp_from_ipddp10 = solver_asddp_from_ipddp10.solve("ASDDP");
-    auto X_asddp_from_ipddp10 = sol_asddp_from_ipddp10.state_sequence;
+    auto sol_asddp_from_ipddp10 = solver_asddp_from_ipddp10.solve(cddp::SolverType::ASDDP);
+    auto X_asddp_from_ipddp10 = std::any_cast<std::vector<Eigen::VectorXd>>(sol_asddp_from_ipddp10.at("state_trajectory"));
 
     // --------------------------------------------------------
     // 5. Convert all 6 solutions to (x,y) data for a single plot

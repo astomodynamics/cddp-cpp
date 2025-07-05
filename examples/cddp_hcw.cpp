@@ -92,10 +92,20 @@ int main() {
     std::vector<Eigen::VectorXd> empty_reference_states;
     auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
 
-    // Create the CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    // Set solver options
+    cddp::CDDPOptions options;
+    options.max_iterations    = 300;       // Max number of CDDP iterations
+    options.verbose           = true;      // Print progress
+    options.tolerance    = 1e-3;      // Stop if improvement below this
+    options.acceptable_tolerance    = 1e-3;      // Stop if gradient below this
+    options.regularization.type = "control";  // Common regularization approach
+    options.debug             = false;     
+    options.enable_parallel      = true;      
+    options.num_threads       = 8;         // Parallelization
+
+    // Create the CDDP solver with new API
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::move(system), std::move(objective), options);
 
     // Optionally add control constraints (e.g., max thruster force)
     Eigen::VectorXd umin(CONTROL_DIM);
@@ -104,20 +114,8 @@ int main() {
     umin << -1.0, -1.0, -1.0;
     umax <<  1.0,  1.0,  1.0;
 
-    cddp_solver.addConstraint("ControlBoxConstraint",
+    cddp_solver.addPathConstraint("ControlBoxConstraint",
         std::make_unique<cddp::ControlBoxConstraint>(umin, umax));
-
-    // Set solver options
-    cddp::CDDPOptions options;
-    options.max_iterations    = 300;       // Max number of CDDP iterations
-    options.verbose           = true;      // Print progress
-    options.cost_tolerance    = 1e-3;      // Stop if improvement below this
-    options.grad_tolerance    = 1e-3;      // Stop if gradient below this
-    options.regularization_type = "control";  // Common regularization approach
-    options.debug             = false;     
-    options.use_parallel      = true;      
-    options.num_threads       = 8;         // Parallelization
-    cddp_solver.setOptions(options);
 
     // Initialize the trajectory (X,U) with something nontrivial
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(STATE_DIM));
@@ -135,10 +133,10 @@ int main() {
     // Compute the initial cost by rolling out the initial controls
     double J_init = 0.0;
     for (int t = 0; t < horizon; t++) {
-        J_init += cddp_solver.getObjective().running_cost(X[t], U[t], t);
-        X[t+1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t], t * timestep);
+        J_init += cddp_solver.getObjective()->running_cost(X[t], U[t], t);
+        X[t+1] = cddp_solver.getDynamicalSystem()->getDiscreteDynamics(X[t], U[t], t * timestep);
     }
-    J_init += cddp_solver.getObjective().terminal_cost(X[horizon]);
+    J_init += cddp_solver.getObjective()->terminal_cost(X[horizon]);
     std::cout << "[Info] Initial cost: " << J_init << std::endl;
     std::cout << "[Info] Initial final state: " << X[horizon].transpose() << std::endl;
 
@@ -146,19 +144,19 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::ASDDP);
 
     // Extract solution and print result
-    double J_final = solution.cost_sequence.back();
+    auto cost_sequence = std::any_cast<std::vector<double>>(solution.at("cost_trajectory"));
+    double J_final = cost_sequence.back();
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
+    
     std::cout << "\n[Result] CDDP solved." << std::endl;
     std::cout << "[Result] Final cost: " << J_final << std::endl;
     std::cout << "[Result] Final state: "
-              << solution.state_sequence.back().transpose() << std::endl;
-
-    // Plot results
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
-    auto t_sol = solution.time_sequence;
+              << X_sol.back().transpose() << std::endl;
 
     // Create plot directory
     const std::string plotDirectory = "../results/tests";

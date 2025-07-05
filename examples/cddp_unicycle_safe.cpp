@@ -69,10 +69,10 @@ int main() {
     options.max_iterations = 100;
     options.verbose = true;
     options.debug = false;
-    options.cost_tolerance = 1e-5;
-    options.grad_tolerance = 1e-4;
-    options.regularization_type = "control";
-    options.regularization_control = 1e-5;
+    options.tolerance = 1e-5;
+    options.acceptable_tolerance = 1e-4;
+    options.regularization.type = "control";
+    options.regularization.control = 1e-5;
 
     // Define control box constraints
     Eigen::VectorXd control_lower_bound(control_dim);
@@ -93,12 +93,8 @@ int main() {
         options
     );
 
-    // Set system, objective, constraints, and initial guess
-    solver_baseline.setDynamicalSystem(std::make_unique<cddp::Unicycle>(timestep, integration_type));
-    solver_baseline.setObjective(std::make_unique<cddp::QuadraticObjective>(
-        Q, R, Qf, goal_state, empty_reference_states, timestep
-    ));
-    solver_baseline.addConstraint("ControlBoxConstraint",
+    // Set constraints
+    solver_baseline.addPathConstraint("ControlBoxConstraint",
         std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
 
     // Simple initial guess: states = initial_state, controls = zeros
@@ -107,8 +103,8 @@ int main() {
     solver_baseline.setInitialTrajectory(X_baseline, U_baseline);
 
     // Solve
-    cddp::CDDPSolution solution_baseline = solver_baseline.solve("ASCDDP");
-    auto X_baseline_sol = solution_baseline.state_sequence; // size horizon + 1
+    cddp::CDDPSolution solution_baseline = solver_baseline.solve(cddp::SolverType::ASDDP);
+    auto X_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_baseline.at("state_trajectory")); // size horizon + 1
 
     // -------------------------------------------------------
     // 3. Solve with BallConstraint
@@ -122,17 +118,13 @@ int main() {
         std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep),
         options
     );
-    solver_ball.setDynamicalSystem(std::make_unique<cddp::Unicycle>(timestep, integration_type));
-    solver_ball.setObjective(std::make_unique<cddp::QuadraticObjective>(
-        Q, R, Qf, goal_state, empty_reference_states, timestep
-    ));
-    solver_ball.addConstraint("ControlBoxConstraint",
+    solver_ball.addPathConstraint("ControlBoxConstraint",
         std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
 
     // Add the BallConstraint
     double radius = 0.4;
     Eigen::Vector2d center(1.0, 1.0);
-    solver_ball.addConstraint("BallConstraint",
+    solver_ball.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
 
     // Initial trajectory for the ball-constrained solver
@@ -141,8 +133,8 @@ int main() {
     solver_ball.setInitialTrajectory(X_ball, U_ball);
 
     // Solve
-    cddp::CDDPSolution solution_ball = solver_ball.solve("ASCDDP");
-    auto X_ball_sol = solution_ball.state_sequence;  // horizon+1
+    cddp::CDDPSolution solution_ball = solver_ball.solve(cddp::SolverType::ASDDP);
+    auto X_ball_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("state_trajectory"));  // horizon+1
 
     // -------------------------------------------------------
     // 4. Prepare Data for Plotting

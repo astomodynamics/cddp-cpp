@@ -53,10 +53,15 @@ int main() {
     Eigen::VectorXd initial_state(state_dim);
     initial_state << 0.0, 0.0, M_PI/4.0; 
 
-    // Create CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    // Set options
+    cddp::CDDPOptions options;
+    options.max_iterations = 10;
+    options.ipddp.barrier.mu_initial = 1e-2;
+    options.ipddp.barrier.update_factor = 0.1;
+
+    // Create CDDP solver with new API
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::move(system), std::move(objective), options);
 
     // Define constraints
     Eigen::VectorXd control_lower_bound(control_dim);
@@ -65,15 +70,8 @@ int main() {
     control_upper_bound << 1.0, M_PI;
     
     // Add the constraint to the solver
-    cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+    cddp_solver.addPathConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
     auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
-
-    // Set options
-    cddp::CDDPOptions options;
-    options.max_iterations = 10;
-    options.barrier_coeff = 1e-2;
-    options.barrier_factor = 0.1;
-    cddp_solver.setOptions(options);
 
     // Set initial trajectory
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -81,12 +79,12 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve("CLCDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::CLDDP);
 
     // Extract solution
-    auto X_sol = solution.state_sequence; // size: horizon + 1
-    auto U_sol = solution.control_sequence; // size: horizon
-    auto t_sol = solution.time_sequence; // size: horizon + 1
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory")); // size: horizon + 1
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory")); // size: horizon
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points")); // size: horizon + 1
 
     // Create directory for saving plot (if it doesn't exist)
     const std::string plotDirectory = "../results/tests";

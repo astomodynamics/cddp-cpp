@@ -64,10 +64,28 @@ int main() {
     Eigen::VectorXd initial_state(state_dim);
     initial_state << 0.0, 0.0, 0.0, 0.0;
 
-    // Create CDDP solver.
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    // Solver options.
+    cddp::CDDPOptions options;
+    options.max_iterations = 500;
+    options.tolerance = 1e-7;
+    options.acceptable_tolerance = 1e-6;
+    options.regularization.type = "control";
+    options.regularization.control = 1e-5;
+    options.use_ilqr = true;
+    options.enable_parallel = true;
+    options.num_threads = 12;
+    options.debug = false;
+    options.ipddp.barrier.mu_initial = 1e-1;
+    options.msipddp.segment_length = horizon;
+    options.msipddp.rollout_type = "nonlinear";
+    options.msipddp.defect_tolerance_for_single_shooting = 1e-5;
+    options.ipddp.barrier.update_factor = 0.2;
+    options.ipddp.barrier.update_power = 1.2;
+    options.line_search.minimum_reduction_ratio = 1e-4;
+
+    // Create CDDP solver with new API.
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::move(system), std::move(objective), options);
 
     // Control constraints.
     Eigen::VectorXd control_lower_bound(control_dim);
@@ -76,32 +94,12 @@ int main() {
     control_upper_bound << 5.0;   // Maximum positive force.
     
     // FIXME: For MSIPDDP 
-    cddp_solver.addConstraint("ControlConstraint", 
+    cddp_solver.addPathConstraint("ControlConstraint", 
         std::make_unique<cddp::ControlConstraint>( control_upper_bound));
 
     // FIXME: For CLDDP
-    // cddp_solver.addConstraint("ControlBoxConstraint", 
+    // cddp_solver.addPathConstraint("ControlBoxConstraint", 
     //     std::make_unique<cddp::ControlBoxConstraint>( control_lower_bound, control_upper_bound));
-
-    // Solver options.
-    cddp::CDDPOptions options;
-    options.max_iterations = 500;
-    options.cost_tolerance = 1e-7;
-    options.grad_tolerance = 1e-6;
-    options.regularization_type = "control";
-    options.regularization_control = 1e-5;
-    options.is_ilqr = true;
-    options.use_parallel = true;
-    options.num_threads = 12;
-    options.debug = false;
-    options.barrier_coeff = 1e-1;
-    options.ms_segment_length = horizon;
-    options.ms_rollout_type = "nonlinear";
-    options.ms_defect_tolerance_for_single_shooting = 1e-5;
-    options.barrier_update_factor = 0.2;
-    options.barrier_update_power = 1.2;
-    options.minimum_reduction_ratio = 1e-4;
-    cddp_solver.setOptions(options);
 
     // Initial trajectory.
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -131,10 +129,10 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve.
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
-    auto t_sol = solution.time_sequence;
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP);
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
 
     // Create plot directory.
     const std::string plotDirectory = "../results/tests";

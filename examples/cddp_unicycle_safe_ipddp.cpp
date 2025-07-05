@@ -69,14 +69,14 @@ int main() {
     options.max_iterations = 100;
     options.verbose = true;
     options.debug = false;
-    options.use_parallel = false;
+    options.enable_parallel = false;
     options.num_threads = 1;
-    options.cost_tolerance = 1e-4;
-    options.grad_tolerance = 1e-3;
-    options.regularization_type = "control";
-    options.regularization_control = 1e-2;
-    options.regularization_state = 1e-3;
-    options.barrier_coeff = 1e-1;
+    options.tolerance = 1e-4;
+    options.acceptable_tolerance = 1e-3;
+    options.regularization.type = "control";
+    options.regularization.control = 1e-2;
+    options.regularization.state = 1e-3;
+    options.ipddp.barrier.mu_initial = 1e-1;
 
     // Define control constraint
     Eigen::VectorXd control_upper_bound(control_dim);
@@ -105,12 +105,10 @@ int main() {
             Q, R, Qf, goal_state, empty_reference_states, timestep),
         options
     );
-    solver_baseline.setDynamicalSystem(std::make_unique<cddp::Unicycle>(timestep, integration_type));
-    solver_baseline.setObjective(std::make_unique<cddp::QuadraticObjective>(
-        Q, R, Qf, goal_state, empty_reference_states, timestep));
+    // Solver with new API already set up with system and objective
 
     // Add a control constraint
-    solver_baseline.addConstraint("ControlConstraint",
+    solver_baseline.addPathConstraint("ControlConstraint",
         std::make_unique<cddp::ControlConstraint>(control_upper_bound));
 
     // Naive initial trajectory
@@ -119,10 +117,10 @@ int main() {
     solver_baseline.setInitialTrajectory(X_baseline_init, U_baseline_init);
 
     // Solve
-    cddp::CDDPSolution solution_baseline = solver_baseline.solve("MSIPDDP");
-    auto X_baseline_sol = solution_baseline.state_sequence;   // horizon+1
-    auto U_baseline_sol = solution_baseline.control_sequence; // horizon
-    auto T_baseline_sol = solution_baseline.time_sequence;    // horizon+1
+    cddp::CDDPSolution solution_baseline = solver_baseline.solve(cddp::SolverType::MSIPDDP);
+    auto X_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_baseline.at("state_trajectory"));   // horizon+1
+    auto U_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_baseline.at("control_trajectory")); // horizon
+    auto T_baseline_sol = std::any_cast<std::vector<double>>(solution_baseline.at("time_points"));    // horizon+1
 
     // --------------------------
     // 3. Solve - WITH Ball constraint (naive init)
@@ -137,14 +135,12 @@ int main() {
             Q, R, Qf, goal_state, empty_reference_states, timestep),
         options
     );
-    solver_ball.setDynamicalSystem(std::make_unique<cddp::Unicycle>(timestep, integration_type));
-    solver_ball.setObjective(std::make_unique<cddp::QuadraticObjective>(
-        Q, R, Qf, goal_state, empty_reference_states, timestep));
+    // Solver with new API already set up with system and objective
 
     // Add constraints
-    solver_ball.addConstraint("ControlConstraint",
+    solver_ball.addPathConstraint("ControlConstraint",
         std::make_unique<cddp::ControlConstraint>(control_upper_bound));
-    solver_ball.addConstraint("BallConstraint",
+    solver_ball.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
 
     // Naive initial trajectory
@@ -153,10 +149,10 @@ int main() {
     solver_ball.setInitialTrajectory(X_ball_init, U_ball_init);
 
     // Solve
-    cddp::CDDPSolution solution_ball = solver_ball.solve("MSIPDDP");
-    auto X_ball_sol = solution_ball.state_sequence;
-    auto U_ball_sol = solution_ball.control_sequence;
-    auto T_ball_sol = solution_ball.time_sequence;
+    cddp::CDDPSolution solution_ball = solver_ball.solve(cddp::SolverType::MSIPDDP);
+    auto X_ball_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("state_trajectory"));
+    auto U_ball_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("control_trajectory"));
+    auto T_ball_sol = std::any_cast<std::vector<double>>(solution_ball.at("time_points"));
 
     // --------------------------
     // 4. Solve - WITH Ball constraint (baseline init)
@@ -171,25 +167,22 @@ int main() {
             Q, R, Qf, goal_state, empty_reference_states, timestep),
         options
     );
-    solver_ball_with_baseline.setDynamicalSystem(
-        std::make_unique<cddp::Unicycle>(timestep, integration_type));
-    solver_ball_with_baseline.setObjective(std::make_unique<cddp::QuadraticObjective>(
-        Q, R, Qf, goal_state, empty_reference_states, timestep));
+    // Solver with new API already set up with system and objective
 
     // Add constraints
-    solver_ball_with_baseline.addConstraint("ControlConstraint",
+    solver_ball_with_baseline.addPathConstraint("ControlConstraint",
         std::make_unique<cddp::ControlConstraint>(control_upper_bound));
-    solver_ball_with_baseline.addConstraint("BallConstraint",
+    solver_ball_with_baseline.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
 
     // Use baseline solution as initialization
     solver_ball_with_baseline.setInitialTrajectory(X_baseline_sol, U_baseline_sol);
 
     // Solve
-    cddp::CDDPSolution solution_ball_with_baseline = solver_ball_with_baseline.solve("IPDDP");
-    auto X_ball_with_baseline_sol = solution_ball_with_baseline.state_sequence;
-    auto U_ball_with_baseline_sol = solution_ball_with_baseline.control_sequence;
-    auto T_ball_with_baseline_sol = solution_ball_with_baseline.time_sequence;
+    cddp::CDDPSolution solution_ball_with_baseline = solver_ball_with_baseline.solve(cddp::SolverType::IPDDP);
+    auto X_ball_with_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball_with_baseline.at("state_trajectory"));
+    auto U_ball_with_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball_with_baseline.at("control_trajectory"));
+    auto T_ball_with_baseline_sol = std::any_cast<std::vector<double>>(solution_ball_with_baseline.at("time_points"));
 
     // --------------------------
     // 5. Convert solutions to std::vectors for plotting
