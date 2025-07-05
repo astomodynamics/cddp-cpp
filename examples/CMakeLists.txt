@@ -122,7 +122,7 @@ if (CDDP_CPP_CASADI AND CDDP_CPP_SNOPT)
     target_link_libraries(snopt_unicycle cddp)
 endif()
 
-if (CDDP_CPP_CASADI AND CDDP_CPP_IPOPT AND CDDP_CPP_SNOPT)
+if (CDDP_CPP_CASADI AND CDDP_CPP_SNOPT)
     add_executable(quadrotor_benchmark quadrotor_benchmark.cpp)
     target_link_libraries(quadrotor_benchmark cddp)
 
