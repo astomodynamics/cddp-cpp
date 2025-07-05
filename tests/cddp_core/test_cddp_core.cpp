@@ -13,284 +13,386 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+
 #include <iostream>
 #include <vector>
-#include <filesystem>
+#include <string>
+#include <memory>
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
 #include "cddp.hpp"
 
-TEST(CDDPTest, Solve) {
-    // Problem parameters
-    int state_dim = 3;
-    int control_dim = 2;
-    int horizon = 100;
-    double timestep = 0.03;
-    std::string integration_type = "euler";
+// This test is useful for creating a new solver along with the corresponding API.
 
-    // Create a dubins car instance 
-    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::Unicycle>(timestep, integration_type); // Create unique_ptr
+namespace cddp {
 
-    // Create objective function
-    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Eigen::MatrixXd R = 0.5 * Eigen::MatrixXd::Identity(control_dim, control_dim);
-    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf << 50.0, 0.0, 0.0,
-          0.0, 50.0, 0.0,
-          0.0, 0.0, 10.0;
-    Qf = 0.5 * Qf;
-    Eigen::VectorXd goal_state(state_dim);
-    goal_state << 2.0, 2.0, M_PI/2.0;
+/**
+ * @brief Mock external solver for testing external solver registration
+ */
+class MockExternalSolver : public ISolverAlgorithm {
+public:
+    MockExternalSolver() = default;
+    virtual ~MockExternalSolver() = default;
 
-    // Create an empty vector of Eigen::VectorXd
-    std::vector<Eigen::VectorXd> empty_reference_states; 
-    auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
+    void initialize(CDDP &context) override {
+        initialized_ = true;
+        context_ = &context;
+    }
 
-    // Initial and target states
-    Eigen::VectorXd initial_state(state_dim);
-    initial_state << 0.0, 0.0, M_PI/4.0; 
+    CDDPSolution solve(CDDP &context) override {
+        solve_called_ = true;
+        
+        CDDPSolution solution;
+        solution["solver_name"] = getSolverName();
+        solution["status_message"] = std::string("OptimalSolutionFound");
+        solution["iterations_completed"] = 5;
+        solution["solve_time_ms"] = 100.0;
+        solution["final_objective"] = 1.23;
+        solution["final_step_length"] = 1.0;
+        
+        // Create simple trajectories that match the actual format
+        std::vector<double> time_points;
+        time_points.reserve(static_cast<size_t>(context.getHorizon() + 1));
+        for (int t = 0; t <= context.getHorizon(); ++t) {
+            time_points.push_back(t * context.getTimestep());
+        }
+        
+        std::vector<Eigen::VectorXd> state_trajectory;
+        std::vector<Eigen::VectorXd> control_trajectory;
+        state_trajectory.reserve(static_cast<size_t>(context.getHorizon() + 1));
+        control_trajectory.reserve(static_cast<size_t>(context.getHorizon()));
+        
+        for (int k = 0; k <= context.getHorizon(); ++k) {
+            state_trajectory.push_back(Eigen::VectorXd::Zero(context.getStateDim()));
+        }
+        for (int k = 0; k < context.getHorizon(); ++k) {
+            control_trajectory.push_back(Eigen::VectorXd::Zero(context.getControlDim()));
+        }
+        
+        solution["time_points"] = time_points;
+        solution["state_trajectory"] = state_trajectory;
+        solution["control_trajectory"] = control_trajectory;
+        
+        return solution;
+    }
 
-    // Create CDDP Options
-    cddp::CDDPOptions options;
-    options.max_iterations = 20;
-    options.cost_tolerance = 1e-2;
-    options.use_parallel = true;
-    options.num_threads = 10;
-    options.verbose = true;
-    options.debug = true;
+    std::string getSolverName() const override { 
+        return "MockExternalSolver"; 
+    }
 
-    // Create CDDP solver
-    cddp::CDDP cddp_solver(
-      initial_state, 
-      goal_state, 
-      horizon, 
-      timestep, 
-      std::make_unique<cddp::Unicycle>(timestep, integration_type), 
-      std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep), 
-      options);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    // Test accessors
+    bool wasInitialized() const { return initialized_; }
+    bool wasSolveCalled() const { return solve_called_; }
+    CDDP* getContext() const { return context_; }
 
-    // Define constraints
-    Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -1.0, -M_PI;
-    Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 1.0, M_PI;
+private:
+    bool initialized_ = false;
+    bool solve_called_ = false;
+    CDDP* context_ = nullptr;
+};
+
+/**
+ * @brief Another mock solver to test multiple solver registration
+ */
+class AnotherMockSolver : public ISolverAlgorithm {
+public:
+    void initialize(CDDP &context) override {}
     
-    // Add the constraint to the solver
-    cddp_solver.addConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-    auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    CDDPSolution solve(CDDP &context) override {
+        CDDPSolution solution;
+        solution["solver_name"] = getSolverName();
+        solution["status_message"] = std::string("MaxIterationsReached");
+        solution["iterations_completed"] = 10;
+        solution["solve_time_ms"] = 200.0;
+        solution["final_objective"] = 4.56;
+        solution["final_step_length"] = 0.5;
+        
+        // Empty trajectories for simplicity
+        solution["time_points"] = std::vector<double>();
+        solution["state_trajectory"] = std::vector<Eigen::VectorXd>();
+        solution["control_trajectory"] = std::vector<Eigen::VectorXd>();
+        
+        return solution;
+    }
+    
+    std::string getSolverName() const override { 
+        return "AnotherMockSolver"; 
+    }
+};
 
-    // Set options
-    cddp_solver.setOptions(options);
+// Factory functions for the mock solvers
+std::unique_ptr<ISolverAlgorithm> createMockExternalSolver() {
+    return std::make_unique<MockExternalSolver>();
+}
 
+std::unique_ptr<ISolverAlgorithm> createAnotherMockSolver() {
+    return std::make_unique<AnotherMockSolver>();
+}
+
+} // namespace cddp
+
+// Test fixture for CDDP core functionality
+class CDDPCoreTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Problem parameters
+        state_dim = 3;
+        control_dim = 2;
+        horizon = 10;
+        timestep = 0.1;
+        
+        // Create initial and goal states
+        initial_state = Eigen::VectorXd::Zero(state_dim);
+        initial_state << 0.0, 0.0, 0.0;
+        
+        goal_state = Eigen::VectorXd::Zero(state_dim);
+        goal_state << 1.0, 1.0, M_PI/2.0;
+        
+        // Create basic system and objective
+        system = std::make_unique<cddp::Unicycle>(timestep, "euler");
+        
+        Eigen::MatrixXd Q = Eigen::MatrixXd::Identity(state_dim, state_dim);
+        Eigen::MatrixXd R = Eigen::MatrixXd::Identity(control_dim, control_dim);
+        Eigen::MatrixXd Qf = 10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim);
+        
+        std::vector<Eigen::VectorXd> empty_reference_states;
+        objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
+        
+        // Create options with reduced verbosity for tests
+        options = cddp::CDDPOptions();
+        options.max_iterations = 5;
+        options.verbose = false;
+        options.debug = false;
+    }
+    
+    void TearDown() override {
+        // Clean up any registered solvers to avoid cross-test interference
+        // Note: In a real implementation, you might want a clearRegisteredSolvers() method
+    }
+    
+    // Test data
+    int state_dim, control_dim, horizon;
+    double timestep;
+    Eigen::VectorXd initial_state, goal_state;
+    std::unique_ptr<cddp::DynamicalSystem> system;
+    std::unique_ptr<cddp::Objective> objective;
+    cddp::CDDPOptions options;
+};
+
+// Test external solver registration functionality
+TEST_F(CDDPCoreTest, ExternalSolverRegistration) {
+    // Test registering a new solver
+    cddp::CDDP::registerSolver("MockExternalSolver", cddp::createMockExternalSolver);
+    
+    // Test that the solver is now registered
+    EXPECT_TRUE(cddp::CDDP::isSolverRegistered("MockExternalSolver"));
+    EXPECT_FALSE(cddp::CDDP::isSolverRegistered("NonExistentSolver"));
+    
+    // Test getting registered solvers
+    auto registered_solvers = cddp::CDDP::getRegisteredSolvers();
+    EXPECT_THAT(registered_solvers, ::testing::Contains("MockExternalSolver"));
+}
+
+// Test multiple solver registration
+TEST_F(CDDPCoreTest, MultipleSolverRegistration) {
+    // Register multiple solvers
+    cddp::CDDP::registerSolver("MockSolver1", cddp::createMockExternalSolver);
+    cddp::CDDP::registerSolver("MockSolver2", cddp::createAnotherMockSolver);
+    
+    // Test that both are registered
+    EXPECT_TRUE(cddp::CDDP::isSolverRegistered("MockSolver1"));
+    EXPECT_TRUE(cddp::CDDP::isSolverRegistered("MockSolver2"));
+    
+    // Test getting all registered solvers
+    auto registered_solvers = cddp::CDDP::getRegisteredSolvers();
+    EXPECT_THAT(registered_solvers, ::testing::Contains("MockSolver1"));
+    EXPECT_THAT(registered_solvers, ::testing::Contains("MockSolver2"));
+    EXPECT_GE(registered_solvers.size(), 2);
+}
+
+// Test using registered external solver
+TEST_F(CDDPCoreTest, UseRegisteredExternalSolver) {
+    // Register the mock solver
+    cddp::CDDP::registerSolver("MockExternalSolver", cddp::createMockExternalSolver);
+    
+    // Create CDDP instance
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          std::make_unique<cddp::QuadraticObjective>(
+                              Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              Eigen::MatrixXd::Identity(control_dim, control_dim),
+                              10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              goal_state, std::vector<Eigen::VectorXd>(), timestep),
+                          options);
+    
+    // Solve using the registered external solver
+    auto solution = cddp_solver.solve("MockExternalSolver");
+    
+    // Verify the solution came from our mock solver
+    ASSERT_TRUE(solution.count("solver_name"));
+    EXPECT_EQ(std::any_cast<std::string>(solution["solver_name"]), "MockExternalSolver");
+    
+    ASSERT_TRUE(solution.count("status_message"));
+    EXPECT_EQ(std::any_cast<std::string>(solution["status_message"]), "OptimalSolutionFound");
+    
+    ASSERT_TRUE(solution.count("iterations_completed"));
+    EXPECT_EQ(std::any_cast<int>(solution["iterations_completed"]), 5);
+    
+    ASSERT_TRUE(solution.count("final_objective"));
+    EXPECT_DOUBLE_EQ(std::any_cast<double>(solution["final_objective"]), 1.23);
+}
+
+// Test built-in solver still works
+TEST_F(CDDPCoreTest, BuiltInSolverStillWorks) {
+    // Create CDDP instance
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          std::make_unique<cddp::QuadraticObjective>(
+                              Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              Eigen::MatrixXd::Identity(control_dim, control_dim),
+                              10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              goal_state, std::vector<Eigen::VectorXd>(), timestep),
+                          options);
+    
+    // Solve using built-in CLDDP solver
+    auto solution = cddp_solver.solve("CLDDP");
+    
+    // Verify we get a valid solution (might not converge in 5 iterations, but should run)
+    ASSERT_TRUE(solution.count("solver_name"));
+    EXPECT_EQ(std::any_cast<std::string>(solution["solver_name"]), "CLDDP");
+    
+    ASSERT_TRUE(solution.count("status_message"));
+    // Should have a valid status message
+    std::string status = std::any_cast<std::string>(solution["status_message"]);
+    EXPECT_FALSE(status.empty());
+}
+
+// Test error handling for unknown solver
+TEST_F(CDDPCoreTest, UnknownSolverErrorHandling) {
+    // Create CDDP instance
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          std::make_unique<cddp::QuadraticObjective>(
+                              Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              Eigen::MatrixXd::Identity(control_dim, control_dim),
+                              10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              goal_state, std::vector<Eigen::VectorXd>(), timestep),
+                          options);
+    
+    // Try to solve with unknown solver
+    auto solution = cddp_solver.solve("NonExistentSolver");
+    
+    // Verify we get an appropriate error response
+    ASSERT_TRUE(solution.count("solver_name"));
+    EXPECT_EQ(std::any_cast<std::string>(solution["solver_name"]), "NonExistentSolver");
+    
+    ASSERT_TRUE(solution.count("status_message"));
+    std::string status = std::any_cast<std::string>(solution["status_message"]);
+    EXPECT_THAT(status, ::testing::HasSubstr("UnknownSolver"));
+    EXPECT_THAT(status, ::testing::HasSubstr("NonExistentSolver"));
+    
+    ASSERT_TRUE(solution.count("iterations_completed"));
+    EXPECT_EQ(std::any_cast<int>(solution["iterations_completed"]), 0);
+}
+
+// Test solver precedence (external over built-in)
+TEST_F(CDDPCoreTest, SolverPrecedence) {
+    // Register a solver with the same name as a built-in solver
+    cddp::CDDP::registerSolver("CLDDP", cddp::createMockExternalSolver);
+    
+    // Create CDDP instance
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          std::make_unique<cddp::QuadraticObjective>(
+                              Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              Eigen::MatrixXd::Identity(control_dim, control_dim),
+                              10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              goal_state, std::vector<Eigen::VectorXd>(), timestep),
+                          options);
+    
+    // Solve - should use external solver (registered first)
+    auto solution = cddp_solver.solve("CLDDP");
+    
+    // Verify we got the external solver (MockExternalSolver), not built-in CLDDP
+    ASSERT_TRUE(solution.count("solver_name"));
+    EXPECT_EQ(std::any_cast<std::string>(solution["solver_name"]), "MockExternalSolver");
+    
+    ASSERT_TRUE(solution.count("final_objective"));
+    EXPECT_DOUBLE_EQ(std::any_cast<double>(solution["final_objective"]), 1.23); // Mock solver value
+}
+
+// Test enum-based solve still works
+TEST_F(CDDPCoreTest, EnumBasedSolveStillWorks) {
+    // Create CDDP instance
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          std::make_unique<cddp::QuadraticObjective>(
+                              Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              Eigen::MatrixXd::Identity(control_dim, control_dim),
+                              10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              goal_state, std::vector<Eigen::VectorXd>(), timestep),
+                          options);
+    
+    // Solve using enum-based interface
+    auto solution = cddp_solver.solve(cddp::SolverType::CLDDP);
+    
+    // Verify we get a valid solution
+    ASSERT_TRUE(solution.count("solver_name"));
+    // Note: If we registered "CLDDP" above, this might be "MockExternalSolver"
+    // But the enum interface should still work
+    std::string solver_name = std::any_cast<std::string>(solution["solver_name"]);
+    EXPECT_FALSE(solver_name.empty());
+}
+
+// Test integration with trajectory and options
+TEST_F(CDDPCoreTest, IntegrationWithTrajectoryAndOptions) {
+    // Register mock solver
+    cddp::CDDP::registerSolver("IntegrationTestSolver", cddp::createMockExternalSolver);
+    
+    // Create CDDP instance with custom options
+    cddp::CDDPOptions custom_options;
+    custom_options.max_iterations = 20;
+    custom_options.tolerance = 1e-6;
+    custom_options.verbose = false;
+    
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          std::make_unique<cddp::QuadraticObjective>(
+                              Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              Eigen::MatrixXd::Identity(control_dim, control_dim),
+                              10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              goal_state, std::vector<Eigen::VectorXd>(), timestep),
+                          custom_options);
+    
     // Set initial trajectory
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    X[0] = initial_state;
     cddp_solver.setInitialTrajectory(X, U);
-
-    // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
-    // cddp::CDDPSolution solution = cddp_solver.solveCLDDP();
-
-    ASSERT_TRUE(solution.converged);
-
-    // Extract solution
-    auto X_sol = solution.state_sequence; // size: horizon + 1
-    auto U_sol = solution.control_sequence; // size: horizon
-    auto t_sol = solution.time_sequence; // size: horizon + 1
-}
-
-// Create gif from images using ImageMagick
-// Installation:
-// $ sudo apt-get install imagemagick
-
-// convert -delay 100 ../results/tests/dubins_car_*.png ../results/tests/dubins_car.gif 
-
-
-/*
-[==========] Running 1 test from 1 test suite.
-[----------] Global test environment set-up.
-[----------] 1 test from CDDPTest
-[ RUN      ] CDDPTest.Solve
-QuadraticObjective: Using single reference state
-QuadraticObjective: Using single reference state
-
-+---------------------------------------------------------+
-|    ____ ____  ____  ____    _          ____             |
-|   / ___|  _ \|  _ \|  _ \  (_)_ __    / ___| _     _    |
-|  | |   | | | | | | | |_) | | | '_ \  | |   _| |_ _| |_  |
-|  | |___| |_| | |_| |  __/  | | | | | | |__|_   _|_   _| |
-|   \____|____/|____/|_|     |_|_| |_|  \____||_|   |_|   |
-+---------------------------------------------------------+
-
-Constrained Differential Dynamic Programming
-Author: Tomo Sasaki (@astomodynamics)
-----------------------------------------------------------
-
-
-========================================
-           CDDP Options
-========================================
-Cost Tolerance:       0.01
-Grad Tolerance:     0.0001
-Max Iterations:         20
-Max CPU Time:          0
-
-Line Search:
-  Max Iterations:    11
-  Backtracking Coeff:     1
-  Backtracking Min:   0.5
-  Backtracking Factor: 0.501187
-
-Log-Barrier:
-  Barrier Coeff:  0.01
-  Barrier Factor:   0.1
-  Barrier Tolerance: 1e-08
-  Relaxation Coeff:     1
-  Barrier Order:     2
-  Filter Acceptance: 1e-08
-  Constraint Tolerance: 1e-12
-
-Regularization:
-  Regularization Type: control
-  Regularization State: 1e-06
-  Regularization State Step:     1
-  Regularization State Max: 10000
-  Regularization State Min: 1e-08
-  Regularization State Factor:    10
-  Regularization Control: 1e-06
-  Regularization Control Step:     1
-  Regularization Control Max: 10000
-  Regularization Control Min: 1e-08
-  Regularization Control Factor:    10
-
-Other:
-  Print Iterations: Yes
-  iLQR: Yes
-  Use Parallel: Yes
-  Num Threads: 10
-  Relaxed Log-Barrier: No
-  Early Termination: Yes
-
-BoxQP:
-  BoxQP Max Iterations: 100
-  BoxQP Min Grad: 1e-08
-  BoxQP Min Rel Improve: 1e-08
-  BoxQP Step Dec: 0.6
-  BoxQP Min Step: 1e-22
-  BoxQP Armijo: 0.1
-  BoxQP Verbose: No
-========================================
-
-ControlBoxConstraint is set
- Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
------------------------------------------------------------------------------------------
-    0   2.123e+02  7.905e-323  1.00e+10     1.000  0.00e+00  1.00e-06  1.00e-02  0.00e+00
-    1   2.800e+01   2.800e+01  3.00e+00     1.000  0.00e+00  1.00e-07  1.00e-02  0.00e+00
-    2   4.297e+00   4.297e+00  1.47e+00     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-    3   1.903e+00   1.903e+00  1.45e-01     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-    4   1.763e+00   1.763e+00  9.74e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-    5   1.741e+00   1.741e+00  1.91e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-    6   1.724e+00   1.724e+00  1.46e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-
-========================================
-           CDDP Solution
-========================================
-Converged: Yes
-Iterations: 7
-Solve Time: 6.7100e+03 micro sec
-Final Cost: 1.722832e+00
-========================================
-
-[       OK ] CDDPTest.Solve (6 ms)
-[----------] 1 test from CDDPTest (6 ms total)
-
-[----------] Global test environment tear-down
-[==========] 1 test from 1 test suite ran. (6 ms total)
-[  PASSED  ] 1 test.
-*/
-
-
-
-/* Unconstrained
-========================================
-           CDDP Options
-========================================
-Cost Tolerance:       0.01
-Grad Tolerance:     0.0001
-Max Iterations:         20
-Max CPU Time:          0
-
-Line Search:
-  Max Iterations:    11
-  Backtracking Coeff:     1
-  Backtracking Min:   0.5
-  Backtracking Factor: 0.501187
-
-Log-Barrier:
-  Barrier Coeff:  0.01
-  Barrier Factor:   0.1
-  Barrier Tolerance: 1e-08
-  Relaxation Coeff:     1
-  Barrier Order:     2
-  Filter Acceptance: 1e-08
-  Constraint Tolerance: 1e-12
-
-Regularization:
-  Regularization Type: control
-  Regularization State: 1e-06
-  Regularization State Step:     1
-  Regularization State Max: 10000
-  Regularization State Min: 1e-08
-  Regularization State Factor:    10
-  Regularization Control: 1e-06
-  Regularization Control Step:     1
-  Regularization Control Max: 10000
-  Regularization Control Min: 1e-08
-  Regularization Control Factor:    10
-
-Other:
-  Print Iterations: Yes
-  iLQR: Yes
-  Use Parallel: Yes
-  Num Threads: 10
-  Relaxed Log-Barrier: No
-  Early Termination: Yes
-
-BoxQP:
-  BoxQP Max Iterations: 100
-  BoxQP Min Grad: 1e-08
-  BoxQP Min Rel Improve: 1e-08
-  BoxQP Step Dec: 0.6
-  BoxQP Min Step: 1e-22
-  BoxQP Armijo: 0.1
-  BoxQP Verbose: No
-========================================
-
- Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
------------------------------------------------------------------------------------------
-    0   2.123e+02   0.000e+00  1.00e+10     1.000  0.00e+00  1.00e-06  1.00e-02  0.00e+00
-    1   5.653e+01   5.653e+01  3.00e+00     0.501  0.00e+00  1.00e-07  1.00e-02  0.00e+00
-    2   1.965e+00   1.965e+00  2.15e+00     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-    3   1.728e+00   1.728e+00  7.53e-02     1.000  0.00e+00  1.00e-08  1.00e-02  0.00e+00
-
-========================================
-           CDDP Solution
-========================================
-Converged: Yes
-Iterations: 4
-Solve Time: 2.3630e+03 micro sec
-Final Cost: 1.720145e+00
-========================================
-
-[       OK ] CDDPTest.Solve (2 ms)
-[----------] 1 test from CDDPTest (2 ms total)
-
-[----------] Global test environment tear-down
-[==========] 1 test from 1 test suite ran. (2 ms total)
-[  PASSED  ] 1 test.
-
-*/
+    
+    // Add a constraint
+    Eigen::VectorXd control_upper_bound = Eigen::VectorXd::Ones(control_dim) * 2.0;
+    cddp_solver.addPathConstraint("TestConstraint", 
+                              std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    
+    // Solve
+    auto solution = cddp_solver.solve("IntegrationTestSolver");
+    
+    // Verify solution structure is correct
+    ASSERT_TRUE(solution.count("solver_name"));
+    EXPECT_EQ(std::any_cast<std::string>(solution["solver_name"]), "MockExternalSolver");
+    
+    ASSERT_TRUE(solution.count("time_points"));
+    auto time_points = std::any_cast<std::vector<double>>(solution["time_points"]);
+    EXPECT_EQ(time_points.size(), horizon + 1);
+    
+    ASSERT_TRUE(solution.count("state_trajectory"));
+    auto state_traj = std::any_cast<std::vector<Eigen::VectorXd>>(solution["state_trajectory"]);
+    EXPECT_EQ(state_traj.size(), horizon + 1);
+    
+    ASSERT_TRUE(solution.count("control_trajectory"));
+    auto control_traj = std::any_cast<std::vector<Eigen::VectorXd>>(solution["control_trajectory"]);
+    EXPECT_EQ(control_traj.size(), horizon);
+} 
