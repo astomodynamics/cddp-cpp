@@ -150,6 +150,33 @@ namespace cddp
         void resetFilter(CDDP &context);
 
         /**
+         * @brief Accept new filter entry with domination check.
+         * @param merit_function Merit function value
+         * @param constraint_violation Constraint violation measure
+         * @return true if entry was accepted, false otherwise
+         */
+        bool acceptFilterEntry(double merit_function, double constraint_violation);
+
+        /**
+         * @brief Check if candidate point is acceptable to filter.
+         * @param merit_function Merit function value
+         * @param constraint_violation Constraint violation measure  
+         * @param options Filter options
+         * @param expected_improvement Expected improvement from model
+         * @return true if point is acceptable, false otherwise
+         */
+        bool isFilterAcceptable(double merit_function, double constraint_violation,
+                               const SolverSpecificFilterOptions &options,
+                               double expected_improvement) const;
+
+        /**
+         * @brief Check if filter needs restoration and perform if necessary.
+         * @param context CDDP context
+         * @return true if restoration was successful, false otherwise
+         */
+        bool checkAndPerformFilterRestoration(CDDP &context);
+
+        /**
          * @brief Perform backward pass (primal-dual Riccati).
          * @return True if successful.
          */
