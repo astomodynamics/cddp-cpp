@@ -95,9 +95,6 @@ target_link_libraries(cddp_spacecraft_roe_rpo cddp)
 add_executable(mpc_hcw mpc_hcw.cpp)
 target_link_libraries(mpc_hcw cddp)
 
-add_executable(cddp_quadrotor_mpc cddp_quadrotor_mpc.cpp)
-target_link_libraries(cddp_quadrotor_mpc cddp)
-
 add_executable(cddp_unicycle_mpc cddp_unicycle_mpc.cpp)
 target_link_libraries(cddp_unicycle_mpc cddp)
 
