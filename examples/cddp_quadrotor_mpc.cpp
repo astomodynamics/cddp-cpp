@@ -72,12 +72,14 @@ int main()
     const int state_dim = 13;   // [x, y, z, qw, qx, qy, qz, vx, vy, vz, omega_x, omega_y, omega_z]
     const int control_dim = 4;  // [f1, f2, f3, f4]
     const int mpc_horizon = 20; // MPC prediction horizon
-    const double mpc_timestep = 0.05; // MPC timestep
+    const double mpc_timestep = 0.1; // MPC timestep (aligned with MPC update rate)
     const std::string integration_type = "rk4";
 
     // Simulation parameters
     const double sim_time = 12.0;
-    const double sim_dt = 0.05; // Controller timestep
+    const double sim_dt = 0.01;      // Simulation timestep (100 Hz)
+    const double mpc_dt = 0.1;       // MPC update rate (10 Hz)
+    const int mpc_update_freq = static_cast<int>(mpc_dt / sim_dt); // Update MPC every 10 sim steps
 
     // Quadrotor parameters
     const double mass = 1.0;       // 1kg quadrotor
@@ -87,31 +89,49 @@ int main()
     inertia_matrix(1, 1) = 0.01; // Iyy
     inertia_matrix(2, 2) = 0.02; // Izz
 
-    // Create a quadrotor instance for dynamics propagation
-    auto dyn_system_template = std::make_unique<cddp::Quadrotor>(mpc_timestep, mass, inertia_matrix, arm_length, integration_type);
+    // Create a quadrotor instance for dynamics propagation (using sim_dt for actual simulation)
+    auto dyn_system_template = std::make_unique<cddp::Quadrotor>(sim_dt, mass, inertia_matrix, arm_length, integration_type);
 
     // Cost matrices
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Q(0, 0) = 10.0;  // x position
-    Q(1, 1) = 10.0;  // y position
-    Q(2, 2) = 10.0;  // z position
-    Q(3, 3) = 1.0;   // qw
-    Q(4, 4) = 1.0;   // qx
-    Q(5, 5) = 1.0;   // qy
-    Q(6, 6) = 1.0;   // qz
-    Q(7, 7) = 1.0;   // vx
-    Q(8, 8) = 1.0;   // vy
-    Q(9, 9) = 1.0;   // vz
+    Q(0, 0) = 1.0;  // x position
+    Q(1, 1) = 1.0;  // y position
+    Q(2, 2) = 1.0;  // z position
+    Q(3, 3) = 0.0;   // qw
+    Q(4, 4) = 0.0;   // qx
+    Q(5, 5) = 0.0;   // qy
+    Q(6, 6) = 0.0;   // qz
+    Q(7, 7) = 0.1;   // vx
+    Q(8, 8) = 0.1;   // vy
+    Q(9, 9) = 0.1;   // vz
 
-    Eigen::MatrixXd R = 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim);
-    Eigen::MatrixXd Qf = 50.0 * Q; // Terminal cost weight
+    Eigen::MatrixXd R = 0.01 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = 0.01 * Q;
 
     // Generate target state for single waypoint navigation
     Eigen::VectorXd target_state = generateTargetState(state_dim);
 
-    // Generate waypoint trajectory (constant target for point-to-point navigation)
+    // Generate waypoint trajectory with smooth ramp to target
     int total_sim_steps = static_cast<int>(sim_time / sim_dt);
-    std::vector<Eigen::VectorXd> waypoint_trajectory(total_sim_steps + mpc_horizon + 1, target_state);
+    std::vector<Eigen::VectorXd> waypoint_trajectory;
+    
+    // Time to reach target (seconds)
+    const double target_time = 6.0;  // Reach target in 6 seconds instead of 2
+    
+    for (int i = 0; i <= total_sim_steps + mpc_horizon; ++i)
+    {
+        double t = i * sim_dt;
+        double s = std::min(1.0, t / target_time);  // Progress from 0 to 1
+        
+        // Use smooth S-curve (smoothstep function)
+        double smooth_s = s * s * (3.0 - 2.0 * s);
+        
+        Eigen::VectorXd ref_state = Eigen::VectorXd::Zero(state_dim);
+        ref_state.head(3) = smooth_s * target_state.head(3);  // Interpolate position
+        ref_state(3) = 1.0;  // Identity quaternion
+        
+        waypoint_trajectory.push_back(ref_state);
+    }
 
     // Initial state (at origin with identity quaternion)
     Eigen::VectorXd current_state = Eigen::VectorXd::Zero(state_dim);
@@ -120,17 +140,17 @@ int main()
     // IPDDP Solver Options
     cddp::CDDPOptions options_ipddp;
     options_ipddp.max_iterations = 20;
-    options_ipddp.tolerance = 1e-4;
+    options_ipddp.tolerance = 1e-3;
     options_ipddp.verbose = false;
     options_ipddp.debug = false;
-    options_ipddp.enable_parallel = false;
-    options_ipddp.num_threads = 1;
-    options_ipddp.regularization.initial_value = 1e-4;
+    options_ipddp.enable_parallel = true;
+    options_ipddp.num_threads = 10;
+    options_ipddp.regularization.initial_value = 1e-3;
     options_ipddp.warm_start = true;
 
     // Control constraints (motor thrust limits)
     const double min_force = 0.0;
-    const double max_force = 5.0;
+    const double max_force = 4.0;
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
 
@@ -156,74 +176,175 @@ int main()
     // 2. MPC Loop
     // --------------------------
     std::cout << "Running IPDDP-based MPC for Quadrotor Point-to-Point Control..." << std::endl;
+    std::cout << "Simulation: " << 1.0/sim_dt << " Hz, MPC: " << 1.0/mpc_dt << " Hz" << std::endl;
     double current_time = 0.0;
     int sim_steps = static_cast<int>(sim_time / sim_dt);
 
+    // Storage for first MPC solution
+    std::vector<Eigen::VectorXd> first_mpc_states;
+    std::vector<Eigen::VectorXd> first_mpc_controls;
+    bool first_solution_saved = false;
+
+    // Storage for current MPC solution
+    std::vector<Eigen::VectorXd> current_mpc_states;
+    std::vector<Eigen::VectorXd> current_mpc_controls;
+    std::vector<Eigen::MatrixXd> current_mpc_gains;
+    Eigen::VectorXd current_control = Eigen::VectorXd::Zero(control_dim);
+    
+    // Initialize with hover thrust
+    current_control = (mass * 9.81 / 4.0) * Eigen::VectorXd::Ones(control_dim);
+
     for (int k = 0; k < sim_steps; ++k)
     {
-        // Get current reference trajectory slice for the MPC horizon
-        std::vector<Eigen::VectorXd> mpc_ref_traj;
-        int ref_start_idx = k;
-        for (int i = 0; i <= mpc_horizon; ++i)
+        // Only update MPC at specified frequency
+        if (k % mpc_update_freq == 0)
         {
-            int idx = std::min(ref_start_idx + i, (int)waypoint_trajectory.size() - 1);
-            mpc_ref_traj.push_back(waypoint_trajectory[idx]);
+            // Get current reference trajectory slice for the MPC horizon
+            std::vector<Eigen::VectorXd> mpc_ref_traj;
+            int ref_start_idx = k;
+            for (int i = 0; i <= mpc_horizon; ++i)
+            {
+                int idx = std::min(ref_start_idx + i * mpc_update_freq, (int)waypoint_trajectory.size() - 1);
+                mpc_ref_traj.push_back(waypoint_trajectory[idx]);
+            }
+            Eigen::VectorXd mpc_goal_state = mpc_ref_traj.back();
+
+            // Create objective for this MPC step
+            auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, mpc_goal_state, mpc_ref_traj, mpc_timestep);
+
+            // Create CDDP solver instance for this MPC step
+            auto system = std::make_unique<cddp::Quadrotor>(mpc_timestep, mass, inertia_matrix, arm_length, integration_type);
+            cddp::CDDP cddp_solver(current_state, mpc_goal_state, mpc_horizon, mpc_timestep,
+                                   std::move(system), std::move(objective), options_ipddp);
+
+            // Add control constraints
+            cddp_solver.addPathConstraint("ControlConstraint",
+                std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+
+            // Set initial trajectory (warm start)
+            cddp_solver.setInitialTrajectory(X_guess, U_guess);
+
+            // Solve the OCP
+            cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
+
+            // Extract and apply the first control
+            auto status = std::any_cast<std::string>(solution.at("status_message"));
+            if (status != "OptimalSolutionFound" && status != "AcceptableSolutionFound")
+            {
+                std::cerr << "Warning: Solver did not converge at time " << current_time << ". Status: " << status << std::endl;
+            }
+
+            // Extract solution
+            current_mpc_states = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+            current_mpc_controls = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+            
+            // Extract feedback gains if available
+            if (solution.find("control_feedback_gains_K") != solution.end())
+            {
+                current_mpc_gains = std::any_cast<std::vector<Eigen::MatrixXd>>(solution.at("control_feedback_gains_K"));
+            }
+        
+            // Save first MPC solution for analysis
+            if (!first_solution_saved && k == 0)
+            {
+                first_mpc_states = current_mpc_states;
+                first_mpc_controls = current_mpc_controls;
+                first_solution_saved = true;
+                
+                // Print first solution analysis
+                std::cout << "\n=== First MPC Solution Analysis ===" << std::endl;
+            std::cout << "Initial state: [" << current_state.head(3).transpose() << "]" << std::endl;
+            std::cout << "Target state: [" << target_state.head(3).transpose() << "]" << std::endl;
+            std::cout << "MPC horizon: " << mpc_horizon << " steps, dt: " << mpc_timestep << "s" << std::endl;
+            std::cout << "Total prediction time: " << mpc_horizon * mpc_timestep << "s" << std::endl;
+            
+            // Analyze trajectory feasibility
+            std::cout << "\nTrajectory analysis:" << std::endl;
+            for (int i = 0; i <= mpc_horizon; i += 5)
+            {
+                Eigen::Vector3d pos = current_mpc_states[i].head(3);
+                Eigen::Vector3d vel = current_mpc_states[i].segment(7, 3);
+                std::cout << "t=" << i * mpc_timestep << "s: pos=[" << pos.transpose() 
+                          << "], vel=[" << vel.transpose() << "], |vel|=" << vel.norm() << "m/s" << std::endl;
+            }
+            
+            // Check control effort
+            std::cout << "\nControl analysis:" << std::endl;
+            double total_thrust_avg = 0.0;
+            double max_thrust = 0.0;
+            for (int i = 0; i < mpc_horizon; ++i)
+            {
+                double total_thrust = current_mpc_controls[i].sum();
+                total_thrust_avg += total_thrust;
+                max_thrust = std::max(max_thrust, total_thrust);
+                if (i % 5 == 0)
+                {
+                    std::cout << "t=" << i * mpc_timestep << "s: controls=[" << current_mpc_controls[i].transpose() 
+                              << "], total=" << total_thrust << "N" << std::endl;
+                }
+            }
+            total_thrust_avg /= mpc_horizon;
+            std::cout << "Average total thrust: " << total_thrust_avg << "N (hover: " << mass * 9.81 << "N)" << std::endl;
+            std::cout << "Max total thrust: " << max_thrust << "N" << std::endl;
+            
+            // Final state analysis
+            Eigen::Vector3d final_pos = current_mpc_states.back().head(3);
+            double final_error = (final_pos - target_state.head(3)).norm();
+            std::cout << "\nPredicted final position: [" << final_pos.transpose() << "]" << std::endl;
+            std::cout << "Predicted final error: " << final_error << "m" << std::endl;
+            std::cout << "================================\n" << std::endl;
+            }
+            
+            // Warm start for the next iteration: shift the solution
+            for(int i = 0; i < mpc_horizon - 1; ++i)
+            {
+                X_guess[i] = current_mpc_states[i + 1];
+                U_guess[i] = current_mpc_controls[i + 1];
+            }
+            X_guess[mpc_horizon - 1] = current_mpc_states[mpc_horizon];
+            X_guess[mpc_horizon] = current_mpc_states[mpc_horizon];
+            U_guess[mpc_horizon - 1] = current_mpc_controls[mpc_horizon - 1];
         }
-        Eigen::VectorXd mpc_goal_state = mpc_ref_traj.back();
-
-        // Create objective for this MPC step
-        auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, mpc_goal_state, mpc_ref_traj, mpc_timestep);
-
-        // Create CDDP solver instance for this MPC step
-        auto system = std::make_unique<cddp::Quadrotor>(mpc_timestep, mass, inertia_matrix, arm_length, integration_type);
-        cddp::CDDP cddp_solver(current_state, mpc_goal_state, mpc_horizon, mpc_timestep,
-                               std::move(system), std::move(objective), options_ipddp);
-
-        // Add control constraints
-        cddp_solver.addPathConstraint("ControlConstraint",
-            std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
-
-        // Set initial trajectory (warm start)
-        cddp_solver.setInitialTrajectory(X_guess, U_guess);
-
-        // Solve the OCP
-        cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
-
-        // Extract and apply the first control
-        auto status = std::any_cast<std::string>(solution.at("status_message"));
-        if (status != "OptimalSolutionFound" && status != "AcceptableSolutionFound")
+        
+        // Determine which control to apply
+        // We need to figure out which MPC control interval we're in
+        int steps_per_mpc_interval = static_cast<int>(mpc_timestep / sim_dt);
+        int mpc_idx = (k % mpc_update_freq) / steps_per_mpc_interval;
+        
+        if (!current_mpc_controls.empty() && mpc_idx < current_mpc_controls.size())
         {
-            std::cerr << "Warning: Solver did not converge at step " << k << ". Status: " << status << std::endl;
+            // Option 1: Simple open-loop control
+            current_control = current_mpc_controls[mpc_idx];
+            
+            // Option 2: Use feedback gains if available (commented out for now)
+            // if (!current_mpc_gains.empty() && mpc_idx < current_mpc_gains.size() && mpc_idx < current_mpc_states.size())
+            // {
+            //     Eigen::VectorXd state_error = current_state - current_mpc_states[mpc_idx];
+            //     current_control = current_mpc_controls[mpc_idx] - current_mpc_gains[mpc_idx] * state_error;
+            //     
+            //     // Ensure control constraints are satisfied
+            //     for (int i = 0; i < control_dim; ++i)
+            //     {
+            //         current_control(i) = std::max(control_lower_bound(i), std::min(control_upper_bound(i), current_control(i)));
+            //     }
+            // }
         }
-
-        auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-        Eigen::VectorXd control_to_apply = U_sol[0];
         
         // Propagate system dynamics
-        current_state = dyn_system_template->getDiscreteDynamics(current_state, control_to_apply, 0.0);
+        current_state = dyn_system_template->getDiscreteDynamics(current_state, current_control, 0.0);
 
         // Update history
         state_history.push_back(current_state);
-        control_history.push_back(control_to_apply);
+        control_history.push_back(current_control);
         current_time += sim_dt;
         time_history.push_back(current_time);
 
-        // Warm start for the next iteration: shift the solution
-        auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-        for(int i = 0; i < mpc_horizon - 1; ++i)
+        // Progress output (every second)
+        if (k % static_cast<int>(1.0 / sim_dt) == 0)
         {
-            X_guess[i] = X_sol[i + 1];
-            U_guess[i] = U_sol[i + 1];
-        }
-        X_guess[mpc_horizon - 1] = X_sol[mpc_horizon];
-        X_guess[mpc_horizon] = X_sol[mpc_horizon];
-        U_guess[mpc_horizon - 1] = U_sol[mpc_horizon - 1];
-
-        // Progress output
-        if (k % 20 == 0)
-        {
-            std::cout << "MPC Step: " << k+1 << "/" << sim_steps << ", Time: " << current_time 
-                      << "s, Position: [" << current_state.head(3).transpose() << "]" << std::endl;
+            std::cout << "Time: " << current_time 
+                      << "s, Position: [" << current_state.head(3).transpose() << "]" 
+                      << ", MPC updates: " << k/mpc_update_freq << std::endl;
         }
     }
     std::cout << "Simulation finished." << std::endl;
@@ -343,6 +464,124 @@ int main()
     // Save and show plot
     save(plotDirectory + "/quadrotor_mpc.png");
     std::cout << "Saved plot to " << plotDirectory << "/quadrotor_mpc.png" << std::endl;
+
+    // Create separate plot for first MPC solution
+    if (first_solution_saved)
+    {
+        auto f2 = figure(true);
+        f2->size(1200, 800);
+        
+        // Extract first MPC trajectory data
+        std::vector<double> first_x, first_y, first_z;
+        std::vector<double> first_time;
+        for (int i = 0; i <= mpc_horizon; ++i)
+        {
+            first_x.push_back(first_mpc_states[i](0));
+            first_y.push_back(first_mpc_states[i](1));
+            first_z.push_back(first_mpc_states[i](2));
+            first_time.push_back(i * mpc_timestep);
+        }
+        
+        // 3D trajectory
+        auto ax2_1 = subplot(2, 2, 1);
+        auto first_traj = plot3(ax2_1, first_x, first_y, first_z);
+        first_traj->line_width(3);
+        first_traj->color("blue");
+        first_traj->display_name("First MPC Prediction");
+        
+        hold(ax2_1, true);
+        // Add markers at key points
+        auto start_pt = scatter3(ax2_1, std::vector<double>{first_x.front()}, 
+                                std::vector<double>{first_y.front()}, 
+                                std::vector<double>{first_z.front()});
+        start_pt->marker_color("g").marker_size(150).display_name("Start");
+        
+        auto end_pt = scatter3(ax2_1, std::vector<double>{first_x.back()}, 
+                              std::vector<double>{first_y.back()}, 
+                              std::vector<double>{first_z.back()});
+        end_pt->marker_color("r").marker_size(150).display_name("Predicted End");
+        
+        auto target_pt = scatter3(ax2_1, std::vector<double>{target_state(0)}, 
+                                 std::vector<double>{target_state(1)}, 
+                                 std::vector<double>{target_state(2)});
+        target_pt->marker_color("k").marker_size(150).display_name("Target");
+        
+        title(ax2_1, "First MPC Predicted Trajectory (3D)");
+        xlabel(ax2_1, "X [m]");
+        ylabel(ax2_1, "Y [m]");
+        zlabel(ax2_1, "Z [m]");
+        legend(ax2_1, "show");
+        grid(ax2_1, true);
+        
+        // Position components vs time
+        auto ax2_2 = subplot(2, 2, 2);
+        plot(ax2_2, first_time, first_x, "r-")->line_width(2).display_name("x");
+        hold(ax2_2, true);
+        plot(ax2_2, first_time, first_y, "g-")->line_width(2).display_name("y");
+        plot(ax2_2, first_time, first_z, "b-")->line_width(2).display_name("z");
+        // Add target lines
+        plot(ax2_2, first_time, std::vector<double>(first_time.size(), target_state(0)), "r--")->line_width(1);
+        plot(ax2_2, first_time, std::vector<double>(first_time.size(), target_state(1)), "g--")->line_width(1);
+        plot(ax2_2, first_time, std::vector<double>(first_time.size(), target_state(2)), "b--")->line_width(1);
+        title(ax2_2, "First MPC Position Prediction");
+        xlabel(ax2_2, "Time [s]");
+        ylabel(ax2_2, "Position [m]");
+        legend(ax2_2, "show");
+        grid(ax2_2, true);
+        
+        // Velocity profile
+        auto ax2_3 = subplot(2, 2, 3);
+        std::vector<double> first_vx, first_vy, first_vz, first_v_norm;
+        for (const auto& state : first_mpc_states)
+        {
+            Eigen::Vector3d vel = state.segment(7, 3);
+            first_vx.push_back(vel(0));
+            first_vy.push_back(vel(1));
+            first_vz.push_back(vel(2));
+            first_v_norm.push_back(vel.norm());
+        }
+        plot(ax2_3, first_time, first_vx, "r-")->line_width(2).display_name("vx");
+        hold(ax2_3, true);
+        plot(ax2_3, first_time, first_vy, "g-")->line_width(2).display_name("vy");
+        plot(ax2_3, first_time, first_vz, "b-")->line_width(2).display_name("vz");
+        plot(ax2_3, first_time, first_v_norm, "k-")->line_width(3).display_name("|v|");
+        title(ax2_3, "First MPC Velocity Prediction");
+        xlabel(ax2_3, "Time [s]");
+        ylabel(ax2_3, "Velocity [m/s]");
+        legend(ax2_3, "show");
+        grid(ax2_3, true);
+        
+        // Control inputs
+        auto ax2_4 = subplot(2, 2, 4);
+        std::vector<double> first_f1, first_f2, first_f3, first_f4, first_total;
+        std::vector<double> first_control_time;
+        for (int i = 0; i < mpc_horizon; ++i)
+        {
+            first_f1.push_back(first_mpc_controls[i](0));
+            first_f2.push_back(first_mpc_controls[i](1));
+            first_f3.push_back(first_mpc_controls[i](2));
+            first_f4.push_back(first_mpc_controls[i](3));
+            first_total.push_back(first_mpc_controls[i].sum());
+            first_control_time.push_back(i * mpc_timestep);
+        }
+        plot(ax2_4, first_control_time, first_f1, "r-")->line_width(2).display_name("f1");
+        hold(ax2_4, true);
+        plot(ax2_4, first_control_time, first_f2, "g-")->line_width(2).display_name("f2");
+        plot(ax2_4, first_control_time, first_f3, "b-")->line_width(2).display_name("f3");
+        plot(ax2_4, first_control_time, first_f4, "m-")->line_width(2).display_name("f4");
+        plot(ax2_4, first_control_time, first_total, "k-")->line_width(3).display_name("Total");
+        // Add hover thrust line
+        plot(ax2_4, first_control_time, std::vector<double>(first_control_time.size(), mass * 9.81), "k--")
+            ->line_width(2).display_name("Hover");
+        title(ax2_4, "First MPC Control Prediction");
+        xlabel(ax2_4, "Time [s]");
+        ylabel(ax2_4, "Force [N]");
+        legend(ax2_4, "show");
+        grid(ax2_4, true);
+        
+        save(plotDirectory + "/quadrotor_first_mpc_solution.png");
+        std::cout << "Saved first MPC solution plot to " << plotDirectory << "/quadrotor_first_mpc_solution.png" << std::endl;
+    }
 
     // Print final statistics
     Eigen::Vector3d final_pos = current_state.head(3);
