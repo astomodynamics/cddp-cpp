@@ -38,6 +38,9 @@ target_link_libraries(cddp_manipulator cddp)
 add_executable(cddp_pendulum cddp_pendulum.cpp)
 target_link_libraries(cddp_pendulum cddp)
 
+add_executable(cddp_quadrotor_mpc cddp_quadrotor_mpc.cpp)
+target_link_libraries(cddp_quadrotor_mpc cddp)
+
 add_executable(cddp_quadrotor_circle cddp_quadrotor_circle.cpp)
 target_link_libraries(cddp_quadrotor_circle cddp)
 
