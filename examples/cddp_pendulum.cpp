@@ -38,8 +38,6 @@ int main() {
     double length = 0.5;
     double damping = 0.01;
     std::string integration_type = "euler";
-    std::unique_ptr<cddp::DynamicalSystem> system =
-        std::make_unique<cddp::Pendulum>(timestep, length, mass, damping, integration_type);
     
     // Cost matrices
     Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
@@ -52,8 +50,6 @@ int main() {
     goal_state << 0.0, 0.0;  // Upright position with zero velocity
     
     std::vector<Eigen::VectorXd> empty_reference_states;
-    auto objective = std::make_unique<cddp::QuadraticObjective>(
-        Q, R, Qf, goal_state, empty_reference_states, timestep);
     
     // Initial state (pendulum pointing down)
     Eigen::VectorXd initial_state(state_dim);
@@ -67,32 +63,39 @@ int main() {
     }
     
     // (Optional) Calculate initial cost
+    auto temp_objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
     double J = 0.0;
     for (int t = 0; t < horizon; ++t) {
-        J += objective->running_cost(X_init[t], zero_control_sequence[t], t);
+        J += temp_objective->running_cost(X_init[t], zero_control_sequence[t], t);
     }
-    J += objective->terminal_cost(X_init[horizon]);
-    
-    // Create and configure the CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    J += temp_objective->terminal_cost(X_init[horizon]);
     
     // Control constraints
     Eigen::VectorXd control_lower_bound(control_dim);
     control_lower_bound << -100.0;
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 100.0;
-    cddp_solver.addConstraint("ControlBoxConstraint",
-        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
     
     // Solver options
     cddp::CDDPOptions options;
     options.max_iterations = 20;
-    options.cost_tolerance = 1e-3;
-    options.regularization_type = "none";
-    options.regularization_control = 1e-7;
-    cddp_solver.setOptions(options);
+    options.tolerance = 1e-4;
+    options.acceptable_tolerance = 1e-5;
+    options.regularization.initial_value = 1e-7;
+    
+    // Create and configure the CDDP solver with new API
+    cddp::CDDP cddp_solver(
+        initial_state,
+        goal_state,
+        horizon,
+        timestep,
+        std::make_unique<cddp::Pendulum>(timestep, length, mass, damping, integration_type),
+        std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep),
+        options
+    );
+    
+    cddp_solver.addPathConstraint("ControlBoxConstraint",
+        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
     
     // Set initial trajectory for the solver
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -103,9 +106,9 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
     
     // Solve the optimal control problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP);
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
     
     // Create plot directory if it doesn't exist
     const std::string plotDirectory = "../results/tests";

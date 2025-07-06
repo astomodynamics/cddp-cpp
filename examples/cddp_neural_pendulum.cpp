@@ -174,35 +174,33 @@ int main()
     // Construct initial trajectory
     std::vector<Eigen::VectorXd> X_init(horizon + 1, initial_state);
 
-    // Create CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    // Solver options
+    cddp::CDDPOptions options;
+    options.max_iterations = 20;
+    options.regularization.type = "none";
+    options.regularization.control = 1e-7;
+
+    // Create CDDP solver with new API
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::move(system), std::move(objective), options);
 
     // Control constraints
     Eigen::VectorXd control_lower_bound(control_dim);
     control_lower_bound << -10.0;    // clamp torque
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 10.0; 
-    cddp_solver.addConstraint("ControlBoxConstraint", 
+    cddp_solver.addPathConstraint("ControlBoxConstraint", 
         std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-
-    // Solver options
-    cddp::CDDPOptions options;
-    options.max_iterations = 20;
-    options.regularization_type = "none";
-    options.regularization_control = 1e-7;
-    cddp_solver.setOptions(options);
 
     // Set initial guess
     cddp_solver.setInitialTrajectory(X_init, zero_control_sequence);
 
     // Solve
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::ASDDP);
 
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
-    auto t_sol = solution.time_sequence;
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
 
     // Create a directory for plots
     const std::string plotDirectory = "../results/tests_neural";

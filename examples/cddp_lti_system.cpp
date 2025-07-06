@@ -92,28 +92,26 @@ int main() {
     std::vector<Eigen::VectorXd> empty_reference_states;
     auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
 
-    // Create CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    // Solver options
+    cddp::CDDPOptions options;
+    options.max_iterations = 10;
+    options.verbose = true;
+    options.regularization.initial_value = 0.0;
+    options.num_threads = 11;
+    options.enable_parallel = true;
+    options.debug = false;
+
+    // Create CDDP solver with new API
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::move(system), std::move(objective), options);
 
     // Control constraints
     Eigen::VectorXd control_lower_bound = -0.6 * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_upper_bound = 0.6 * Eigen::VectorXd::Ones(control_dim);
 
-    cddp_solver.addConstraint("ControlBoxConstraint", 
+    cddp_solver.addPathConstraint("ControlBoxConstraint", 
         std::make_unique<cddp::ControlBoxConstraint>(
             control_lower_bound, control_upper_bound));
-
-    // Solver options
-    cddp::CDDPOptions options;
-    options.max_iterations = 10;
-    options.verbose = true;
-    options.regularization_type = "control";
-    options.num_threads = 11;
-    options.use_parallel = true;
-    options.debug = false;
-    cddp_solver.setOptions(options);
 
     // Initialize trajectories
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -145,13 +143,17 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve using the CDDP solver
-    cddp::CDDPSolution solution = cddp_solver.solve();
-    // Alternatively: cddp::CDDPSolution solution = cddp_solver.solveLogCDDP();
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::ASDDP);
+    // Alternatively: cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::LogDDP);
 
     // Extract solution trajectories
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
-    auto t_sol = solution.time_sequence;
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
+    auto cost_sequence = std::any_cast<std::vector<double>>(solution.at("cost_trajectory"));
+    auto iterations = std::any_cast<int>(solution.at("iterations"));
+    auto converged = std::any_cast<bool>(solution.at("converged"));
+    auto solve_time = std::any_cast<long long>(solution.at("solve_time"));
 
     // Create directory for plots if it doesn't exist
     const std::string plotDirectory = "../results/tests";
@@ -164,10 +166,10 @@ int main() {
 
     // Print optimization statistics
     std::cout << "\nOptimization Results:" << std::endl;
-    std::cout << "Iterations: " << solution.iterations << std::endl;
-    std::cout << "Final cost: " << solution.cost_sequence.back() << std::endl;
-    std::cout << "Converged: " << (solution.converged ? "Yes" : "No") << std::endl;
-    std::cout << "Solve time: " << solution.solve_time << " microseconds" << std::endl;
+    std::cout << "Iterations: " << iterations << std::endl;
+    std::cout << "Final cost: " << cost_sequence.back() << std::endl;
+    std::cout << "Converged: " << (converged ? "Yes" : "No") << std::endl;
+    std::cout << "Solve time: " << solve_time << " microseconds" << std::endl;
 
     return 0;
 }

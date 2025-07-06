@@ -80,16 +80,13 @@ int main() {
     // Setup IPDDP solver options
     cddp::CDDPOptions options;
     options.max_iterations       = 500;    // May need more iterations for one-shot solve
-    options.max_line_search_iterations = 21; 
-    options.cost_tolerance       = 1e-5;  // Tighter tolerance for final solve
-    options.grad_tolerance       = 1e-5;  // Tighter tolerance for final solve
+    options.line_search.max_iterations = 21; 
+    options.tolerance            = 1e-5;  // Tighter tolerance for final solve
     options.verbose             = true;  // Show solver progress
-    options.use_parallel         = false;
+    options.enable_parallel      = false;
     options.num_threads          = 8;
-    options.regularization_type  = "both"; 
-    options.regularization_state = 1e-5; 
-    options.regularization_control = 1e-5;
-    options.barrier_coeff        = 1e-1; // Starting barrier coefficient
+    options.regularization.initial_value = 1e-5;
+    options.ipddp.barrier.mu_initial = 1e-1; // Starting barrier coefficient
 
     // =========================================================================
     // 2.1) Solve Unconstrained Problem for Initial Guess
@@ -107,11 +104,9 @@ int main() {
     // Use simpler options for the initial guess solve
     cddp::CDDPOptions options_init = options; // Copy base options
     options_init.max_iterations = 100;      // Fewer iterations might suffice
-    options_init.cost_tolerance = 1e-4;       // Looser tolerance
-    options_init.grad_tolerance = 1e-4;       // Looser tolerance
+    options_init.tolerance = 1e-4;       // Looser tolerance
     options_init.verbose = false;           // Less verbose for initial solve
-    options_init.regularization_type = "control"; // Simpler regularization often works
-    options_init.regularization_control = 1e-4;
+    options_init.regularization.initial_value = 1e-4;
 
     cddp::CDDP cddp_solver_init(/*initial_state=*/initial_state,
                                 /*goal_state=*/goal_state,
@@ -132,7 +127,8 @@ int main() {
     // Solve the unconstrained problem (e.g., using IPDDP)
     cddp::CDDPSolution initial_solution = cddp_solver_init.solve("IPDDP");
 
-    if (initial_solution.state_sequence.empty()) {
+    auto initial_states = std::any_cast<std::vector<Eigen::VectorXd>>(initial_solution.at("state_trajectory"));
+    if (initial_states.empty()) {
         std::cerr << "Failed to find an initial guess solution. Exiting." << std::endl;
         return 1;
     }
@@ -153,7 +149,7 @@ int main() {
 
     // Add Control  Constraint
     Eigen::VectorXd u_upper = Eigen::VectorXd::Constant(3, u_max);
-    cddp_solver.addConstraint("ControlConstraint",
+    cddp_solver.addPathConstraint("ControlConstraint",
         std::make_unique<cddp::ControlConstraint>(u_upper));
 
     // Add Linear Constraints for X-Y Plane Cone Boundary (|y| <= x * tan(fov) for x >= 0)
@@ -171,29 +167,30 @@ int main() {
     //     std::make_unique<cddp::LinearConstraint>(A_cone_xy, b_cone_xy));
 
     // Add Second Order Cone Constraint
-    cddp_solver.addConstraint("SecondOrderConeConstraint",
+    cddp_solver.addPathConstraint("SecondOrderConeConstraint",
         std::make_unique<cddp::SecondOrderConeConstraint>(origin, axis, fov, 1e-6));
 
     // Initialize trajectory guess
     // Use the solution from the unconstrained solve as the initial guess
-    std::vector<Eigen::VectorXd> X_init = initial_solution.state_sequence;
-    std::vector<Eigen::VectorXd> U_init = initial_solution.control_sequence;
+    std::vector<Eigen::VectorXd> X_init = std::any_cast<std::vector<Eigen::VectorXd>>(initial_solution.at("state_trajectory"));
+    std::vector<Eigen::VectorXd> U_init = std::any_cast<std::vector<Eigen::VectorXd>>(initial_solution.at("control_trajectory"));
 
     // Assign the initial trajectory guess to the solver
     cddp_solver.setInitialTrajectory(X_init, U_init);
     
     // Solve the Trajectory Optimization Problem
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP"); 
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP); 
 
     
     // =========================================================================
     // 3) Visualize the Trajectory
     // =========================================================================
-    if (!solution.state_sequence.empty()) {
+    auto solution_states = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    if (!solution_states.empty()) {
         namespace plt = matplot;
 
         std::vector<double> x_traj, y_traj, z_traj;
-        for (const auto& state : solution.state_sequence) {
+        for (const auto& state : solution_states) {
             if (state.size() >= 3) { // Ensure state has at least 3 dimensions (x, y, z)
                 x_traj.push_back(state(0));
                 y_traj.push_back(state(1));

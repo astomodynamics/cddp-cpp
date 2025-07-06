@@ -284,21 +284,17 @@ int main()
     // Solver options.
     cddp::CDDPOptions options;
     options.max_iterations = 1000;
-    options.cost_tolerance = 1e-7;
-    options.grad_tolerance = 1e-6;
-    options.regularization_type = "control";
-    options.regularization_control = 1e-5;
-    options.is_ilqr = true;
-    options.use_parallel = true;
+    options.tolerance = 1e-6;
+    options.regularization.initial_value = 1e-5;
+    options.use_ilqr = true;
+    options.enable_parallel = true;
     options.num_threads = 12;
     options.debug = false;
-    options.barrier_coeff = 1e-1;
-    options.ms_segment_length = horizon;
-    options.ms_rollout_type = "nonlinear";
-    options.ms_defect_tolerance_for_single_shooting = 1e-5;
-    options.barrier_update_factor = 0.2;
-    options.barrier_update_power = 1.2;
-    options.minimum_reduction_ratio = 1e-4;
+    options.ipddp.barrier.mu_initial = 1e-1;
+    options.msipddp.segment_length = horizon;
+    options.msipddp.rollout_type = "nonlinear";
+    options.ipddp.barrier.mu_update_factor = 0.2;
+    options.ipddp.barrier.mu_update_power = 1.2;
 
     // Create CDDP solver.
     cddp::CDDP cddp_solver(
@@ -319,20 +315,20 @@ int main()
 
     // // Add Control Constraint 
     // Eigen::VectorXd u_upper_accel = Eigen::VectorXd::Constant(control_dim, u_force_max_N);
-    // cddp_solver.addConstraint("ControlConstraint",
+    // cddp_solver.addPathConstraint("ControlConstraint",
     //     std::make_unique<cddp::ControlConstraint>(u_upper_accel));
 
     // Solve the Trajectory Optimization Problem
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
     // Extract the solution
-    std::vector<Eigen::VectorXd> X_solution_roe = solution.state_sequence;
-    std::vector<Eigen::VectorXd> U_solution_accel = solution.control_sequence;
+    std::vector<Eigen::VectorXd> X_solution_roe = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    std::vector<Eigen::VectorXd> U_solution_accel = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
 
     // Print the solution
     // std::cout << "Solution: " << solution.cost << std::endl;
-    std::cout << "Solution: " << solution.state_sequence.back().transpose() * a_ref_m << std::endl;
-    std::cout << "Solution: " << solution.control_sequence.back().transpose() << std::endl;
+    std::cout << "Solution: " << X_solution_roe.back().transpose() * a_ref_m << std::endl;
+    std::cout << "Solution: " << U_solution_accel.back().transpose() << std::endl;
 
     if (!X_solution_roe.empty() && !U_solution_accel.empty())
     {

@@ -163,26 +163,23 @@ int main()
     Eigen::VectorXd initial_state = Eigen::VectorXd::Zero(state_dim);
     initial_state(3) = 1.0; // Identity quaternion: qw = 1
 
-    // Create the CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    // Solver options
+    cddp::CDDPOptions options;
+    options.max_iterations = 2000;
+    options.line_search.max_iterations = 15;
+    options.regularization.initial_value = 1e-4;
+
+    // Create the CDDP solver with new API
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::move(system), std::move(objective), options);
 
     // Control constraints (motor thrust limits)
     double min_force = 0.0; // Motors can only produce thrust upward
     double max_force = 5.0; // Maximum thrust per motor
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addConstraint("ControlConstraint",
-                              std::make_unique<cddp::ControlConstraint>(control_upper_bound));
-
-    // Solver options
-    cddp::CDDPOptions options;
-    options.max_iterations = 2000;
-    options.max_line_search_iterations = 15;
-    options.regularization_type = "control";
-    options.regularization_control = 1e-4;
-    cddp_solver.setOptions(options);
+    cddp_solver.addPathConstraint("ControlConstraint",
+                                  std::make_unique<cddp::ControlConstraint>(control_upper_bound));
 
     // Initial trajectory: allocate state and control trajectories
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -202,10 +199,10 @@ int main()
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the optimal control problem
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
-    auto t_sol = solution.time_sequence;
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP);
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
 
     std::cout << "Final state: " << X_sol.back().transpose() << std::endl;
 
