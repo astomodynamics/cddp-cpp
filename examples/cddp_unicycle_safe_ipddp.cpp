@@ -73,9 +73,7 @@ int main() {
     options.num_threads = 1;
     options.tolerance = 1e-4;
     options.acceptable_tolerance = 1e-3;
-    options.regularization.type = "control";
-    options.regularization.control = 1e-2;
-    options.regularization.state = 1e-3;
+    options.regularization.initial_value = 1e-2;
     options.ipddp.barrier.mu_initial = 1e-1;
 
     // Define control constraint

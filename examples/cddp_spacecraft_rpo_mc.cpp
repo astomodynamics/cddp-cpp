@@ -189,20 +189,19 @@ int main()
         // Setup IPDDP solver options
         cddp::CDDPOptions options;
         options.max_iterations = 1000;
-        options.max_line_search_iterations = 21;
-        options.cost_tolerance = 1e-7;
-        options.grad_tolerance = 1e-7;
+        options.line_search.max_iterations = 21;
+        options.tolerance = 1e-7;
         options.verbose = false;
         options.debug = false;
-        options.header_and_footer = false;
-        options.use_parallel = false;
+        options.print_solver_header_footer = false;
+        options.enable_parallel = false;
         options.num_threads = 1;
-        options.regularization_type = "control";
-        options.regularization_control = 1e-5;
-        options.barrier_coeff = 1e-1;
-        options.is_ilqr = true;
-        options.ms_segment_length = horizon / 10;
-        options.ms_rollout_type = "nonlinear";
+        // Regularization type is now implicit in new API
+        options.regularization.initial_value = 1e-5;
+        options.ipddp.barrier.mu_initial = 1e-1;
+        options.use_ilqr = true;
+        options.msipddp.segment_length = horizon / 10;
+        options.msipddp.rollout_type = "nonlinear";
 
         // Initial trajectory.
         std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -226,20 +225,24 @@ int main()
 
         // Add Control Constraint
         Eigen::VectorXd u_upper = Eigen::VectorXd::Constant(3, u_max);
-        cddp_solver.addConstraint("ControlConstraint",
+        cddp_solver.addPathConstraint("ControlConstraint",
                                   std::make_unique<cddp::ControlConstraint>(u_upper));
 
         // Solve the Trajectory Optimization Problem
         cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
 
-        if (!solution.state_sequence.empty() && !solution.control_sequence.empty() && solution.converged)
+        auto state_trajectory = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+        auto control_trajectory = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+        bool converged = std::any_cast<bool>(solution.at("converged"));
+        
+        if (!state_trajectory.empty() && !control_trajectory.empty() && converged)
         {
             std::cout << "Run " << mc_run + 1 << " converged." << std::endl;
             successful_runs++;
             if (first_successful_X_solution.empty())
             {
-                first_successful_X_solution = solution.state_sequence;
-                first_successful_U_solution = solution.control_sequence;
+                first_successful_X_solution = state_trajectory;
+                first_successful_U_solution = control_trajectory;
             }
         }
         else

@@ -167,8 +167,7 @@ int main()
     cddp::CDDPOptions options;
     options.max_iterations = 2000;
     options.line_search.max_iterations = 15;
-    options.regularization.type = "control";
-    options.regularization.control = 1e-4;
+    options.regularization.initial_value = 1e-4;
 
     // Create the CDDP solver with new API
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,

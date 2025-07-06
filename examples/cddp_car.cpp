@@ -166,10 +166,6 @@ int main()
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 0.5, 2.0;
 
-    cddp_solver.addPathConstraint("ControlBoxConstraint",
-                              std::make_unique<cddp::ControlBoxConstraint>(
-                                  control_lower_bound, control_upper_bound));
-
     // Solver options
     cddp::CDDPOptions options;
     options.max_iterations = 500;
@@ -191,6 +187,10 @@ int main()
         std::make_unique<cddp::CarParkingObjective>(goal_state, timestep),
         options
     );
+
+    cddp_solver.addPathConstraint("ControlBoxConstraint",
+                              std::make_unique<cddp::ControlBoxConstraint>(
+                                  control_lower_bound, control_upper_bound));
 
     // Initialize with random controls
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -254,7 +254,7 @@ int main()
     // Extract solution trajectories
     auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
     auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = solution.time_sequence;
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
 
     // Prepare trajectory data
     std::vector<double> x_hist, y_hist;

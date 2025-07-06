@@ -57,7 +57,7 @@ int main() {
     cddp::CDDPOptions options;
     options.max_iterations = 10;
     options.ipddp.barrier.mu_initial = 1e-2;
-    options.ipddp.barrier.update_factor = 0.1;
+    options.ipddp.barrier.mu_update_factor = 0.1;
 
     // Create CDDP solver with new API
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,

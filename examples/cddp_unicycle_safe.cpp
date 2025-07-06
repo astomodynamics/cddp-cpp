@@ -71,8 +71,7 @@ int main() {
     options.debug = false;
     options.tolerance = 1e-5;
     options.acceptable_tolerance = 1e-4;
-    options.regularization.type = "control";
-    options.regularization.control = 1e-5;
+    options.regularization.initial_value = 1e-5;
 
     // Define control box constraints
     Eigen::VectorXd control_lower_bound(control_dim);

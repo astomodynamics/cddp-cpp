@@ -237,41 +237,45 @@ int main()
     // Trajectory plot
     auto ax1 = subplot(2, 1, 1);
     plot(ax1, x_hist, y_hist, "b-")->line_width(2).display_name("Actual Trajectory");
-    hold(on);
+    hold(true);
     plot(ax1, x_ref, y_ref, "r--")->line_width(2).display_name("Reference Trajectory");
 
     // Plot obstacles
     for(const auto& obs : obstacles)
     {
-        auto circle = f->draw_circle(obs(0), obs(1), obs(2));
-        circle->color("gray");
-        circle->face_color("gray");
-        circle->face_alpha(0.5);
+        std::vector<double> circle_x, circle_y;
+        for (double theta = 0; theta <= 2*M_PI; theta += 0.01) {
+            circle_x.push_back(obs(0) + obs(2) * std::cos(theta));
+            circle_y.push_back(obs(1) + obs(2) * std::sin(theta));
+        }
+        plot(ax1, circle_x, circle_y, "k--")->line_width(2).display_name("Obstacle");
     }
     
     // Mark start and end
-    scatter(ax1, {x_hist.front()}, {y_hist.front()}, 100, "g")->marker_style(line_spec::marker_style::circle).marker_face(true).display_name("Start");
-    scatter(ax1, {x_hist.back()}, {y_hist.back()}, 100, "r")->marker_style(line_spec::marker_style::square).marker_face(true).display_name("End");
+    auto start_scatter = scatter(ax1, std::vector<double>{x_hist.front()}, std::vector<double>{y_hist.front()});
+    start_scatter->marker_color("g").marker_size(100).display_name("Start");
+    auto end_scatter = scatter(ax1, std::vector<double>{x_hist.back()}, std::vector<double>{y_hist.back()});
+    end_scatter->marker_color("r").marker_size(100).display_name("End");
     
     title(ax1, "Unicycle MPC-CBF Tracking");
     xlabel(ax1, "X [m]");
     ylabel(ax1, "Y [m]");
     legend(ax1, "show");
-    grid(ax1, on);
-    axis(ax1, "equal");
+    grid(ax1, true);
+    axis(ax1, equal);
 
     // Control plot
     auto ax2 = subplot(2, 1, 2);
     std::vector<double> control_time_hist = time_history;
     control_time_hist.pop_back(); // control history is one step shorter
     plot(ax2, control_time_hist, v_hist, "b-")->line_width(2).display_name("Linear Velocity (v)");
-    hold(on);
+    hold(true);
     plot(ax2, control_time_hist, omega_hist, "g-")->line_width(2).display_name("Angular Velocity (omega)");
     title(ax2, "Control Inputs vs. Time");
     xlabel(ax2, "Time [s]");
     ylabel(ax2, "Control Value");
     legend(ax2, "show");
-    grid(ax2, on);
+    grid(ax2, true);
 
     // Save and show plot
     const std::string plotDirectory = "../results/examples";

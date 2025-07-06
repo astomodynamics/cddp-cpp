@@ -63,11 +63,12 @@ int main() {
     }
     
     // (Optional) Calculate initial cost
+    auto temp_objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
     double J = 0.0;
     for (int t = 0; t < horizon; ++t) {
-        J += objective->running_cost(X_init[t], zero_control_sequence[t], t);
+        J += temp_objective->running_cost(X_init[t], zero_control_sequence[t], t);
     }
-    J += objective->terminal_cost(X_init[horizon]);
+    J += temp_objective->terminal_cost(X_init[horizon]);
     
     // Control constraints
     Eigen::VectorXd control_lower_bound(control_dim);

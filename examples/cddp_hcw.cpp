@@ -98,7 +98,6 @@ int main() {
     options.verbose           = true;      // Print progress
     options.tolerance    = 1e-3;      // Stop if improvement below this
     options.acceptable_tolerance    = 1e-3;      // Stop if gradient below this
-    options.regularization.type = "control";  // Common regularization approach
     options.debug             = false;     
     options.enable_parallel      = true;      
     options.num_threads       = 8;         // Parallelization
@@ -133,10 +132,10 @@ int main() {
     // Compute the initial cost by rolling out the initial controls
     double J_init = 0.0;
     for (int t = 0; t < horizon; t++) {
-        J_init += cddp_solver.getObjective()->running_cost(X[t], U[t], t);
-        X[t+1] = cddp_solver.getDynamicalSystem()->getDiscreteDynamics(X[t], U[t], t * timestep);
+        J_init += cddp_solver.getObjective().running_cost(X[t], U[t], t);
+        X[t+1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t], t * timestep);
     }
-    J_init += cddp_solver.getObjective()->terminal_cost(X[horizon]);
+    J_init += cddp_solver.getObjective().terminal_cost(X[horizon]);
     std::cout << "[Info] Initial cost: " << J_init << std::endl;
     std::cout << "[Info] Initial final state: " << X[horizon].transpose() << std::endl;
 

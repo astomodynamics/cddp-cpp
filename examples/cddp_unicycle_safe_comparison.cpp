@@ -70,9 +70,7 @@ int main() {
     options_10.num_threads = 1;
     options_10.tolerance = 1e-5;
     options_10.acceptable_tolerance = 1e-4;
-    options_10.regularization.type = "control";
-    options_10.regularization.control = 1e-2;
-    options_10.regularization.state = 0.0;
+    options_10.regularization.initial_value = 1e-2;
     options_10.ipddp.barrier.mu_initial = 1e-1;
 
     cddp::CDDPOptions options_ipddp;
@@ -83,9 +81,7 @@ int main() {
     options_ipddp.num_threads = 1;
     options_ipddp.tolerance = 1e-5;
     options_ipddp.acceptable_tolerance = 1e-4;
-    options_ipddp.regularization.type = "control";
-    options_ipddp.regularization.control = 1e-4;
-    options_ipddp.regularization.state = 0.0;
+    options_ipddp.regularization.initial_value = 1e-4;
     options_ipddp.ipddp.barrier.mu_initial = 1e-1;
 
     cddp::CDDPOptions options_asddp;
@@ -96,9 +92,7 @@ int main() {
     options_asddp.num_threads = 1;
     options_asddp.tolerance = 1e-5;
     options_asddp.acceptable_tolerance = 1e-4;
-    options_asddp.regularization.type = "control";
-    options_asddp.regularization.control = 1e-5;
-    options_asddp.regularization.state = 1e-6;
+    options_asddp.regularization.initial_value = 1e-5;
 
     // Constraint parameters
     // (Used only by baseline #2 and the subsequent 4 solutions,

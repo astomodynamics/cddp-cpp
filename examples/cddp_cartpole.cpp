@@ -69,8 +69,7 @@ int main() {
     options.max_iterations = 500;
     options.tolerance = 1e-7;
     options.acceptable_tolerance = 1e-6;
-    options.regularization.type = "control";
-    options.regularization.control = 1e-5;
+    options.regularization.initial_value = 1e-5;
     options.use_ilqr = true;
     options.enable_parallel = true;
     options.num_threads = 12;
@@ -78,10 +77,8 @@ int main() {
     options.ipddp.barrier.mu_initial = 1e-1;
     options.msipddp.segment_length = horizon;
     options.msipddp.rollout_type = "nonlinear";
-    options.msipddp.defect_tolerance_for_single_shooting = 1e-5;
-    options.ipddp.barrier.update_factor = 0.2;
-    options.ipddp.barrier.update_power = 1.2;
-    options.line_search.minimum_reduction_ratio = 1e-4;
+    options.ipddp.barrier.mu_update_factor = 0.2;
+    options.ipddp.barrier.mu_update_power = 1.2;
 
     // Create CDDP solver with new API.
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,

@@ -190,19 +190,16 @@ int main()
     // Create CDDP solver options
     cddp::CDDPOptions options;
     options.max_iterations = 10000;
-    options.cost_tolerance = 1e-6;
-    options.grad_tolerance = 1e-6;
+    options.tolerance = 1e-6;
     options.verbose = true;
     options.debug = false;
-    options.use_parallel = true;
+    options.enable_parallel = true;
     options.num_threads = 10;
-    options.regularization_type = "control";
-    options.regularization_control = 1e-4;
-    options.regularization_state = 0.0;
-    options.barrier_coeff = 1e-1;
-    options.is_ilqr = true;
-    options.ms_segment_length = horizon / 10;
-    options.ms_rollout_type = "nonlinear";
+    options.regularization.initial_value = 1e-4;
+    options.ipddp.barrier.mu_initial = 1e-1;
+    options.use_ilqr = true;
+    options.msipddp.segment_length = horizon / 10;
+    options.msipddp.rollout_type = "nonlinear";
 
     // Instantiate CDDP solver
     cddp::CDDP cddp_solver(
@@ -240,10 +237,10 @@ int main()
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
-    auto t_sol = solution.time_sequence;
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::MSIPDDP);
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
 
     std::cout << "Final state = " << X_sol.back().transpose() << std::endl;
 

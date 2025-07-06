@@ -96,7 +96,7 @@ int main() {
     cddp::CDDPOptions options;
     options.max_iterations = 10;
     options.verbose = true;
-    options.regularization.type = "control";
+    options.regularization.initial_value = 0.0;
     options.num_threads = 11;
     options.enable_parallel = true;
     options.debug = false;
@@ -131,11 +131,11 @@ int main() {
     double J = 0.0;
     double cost = 0.0;
     for (size_t t = 0; t < horizon; t++) {
-        cost = cddp_solver.getObjective()->running_cost(X[t], U[t], t);
+        cost = cddp_solver.getObjective().running_cost(X[t], U[t], t);
         J += cost;
-        X[t + 1] = cddp_solver.getDynamicalSystem()->getDiscreteDynamics(X[t], U[t], t * timestep);
+        X[t + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[t], U[t], t * timestep);
     }
-    J += cddp_solver.getObjective()->terminal_cost(X.back());
+    J += cddp_solver.getObjective().terminal_cost(X.back());
     std::cout << "Initial state: " << X[0].transpose() << std::endl;
     std::cout << "Final state: " << X.back().transpose() << std::endl;
     std::cout << "Initial cost: " << J << std::endl;

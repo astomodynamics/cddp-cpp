@@ -167,16 +167,14 @@ int main() {
     options.verbose = true;  
     options.tolerance = 1e-7;
     options.acceptable_tolerance = 1e-4;
-    options.regularization.type = "control";
-    options.regularization.state = 0.0;
-    options.regularization.control = 1e-7;
+    options.regularization.initial_value = 1e-7;
     options.debug = false;
     options.use_ilqr = true;
     options.enable_parallel = false;
     options.num_threads = 1;
     options.msipddp.barrier.mu_initial = 1e-0;
-    options.msipddp.dual_scale = 1e-1;
-    options.msipddp.slack_scale = 1e-2;
+    options.msipddp.dual_var_init_scale = 1e-1;
+    options.msipddp.slack_var_init_scale = 1e-2;
     options.msipddp.segment_length = horizon / 100;
     options.msipddp.rollout_type = "nonlinear";
 
@@ -198,7 +196,7 @@ int main() {
     for (int i = 0; i < horizon; ++i) {
         U[i](0) = 0.01;
         U[i](1) = 0.01;
-        X[i + 1] = cddp_solver.getDynamicalSystem()->getDiscreteDynamics(X[i], U[i], i * timestep);
+        X[i + 1] = cddp_solver.getSystem().getDiscreteDynamics(X[i], U[i], i * timestep);
     }
     cddp_solver.setInitialTrajectory(X, U);
 
