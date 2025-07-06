@@ -248,6 +248,17 @@ namespace cddp
     return total_dual_dim;
   }
 
+  int MSIPDDPSolver::getTotalTerminalDualDim(const CDDP &context) const
+  {
+    int total_terminal_dual_dim = 0;
+    const auto &terminal_constraint_set = context.getTerminalConstraintSet();
+    for (const auto &constraint_pair : terminal_constraint_set)
+    {
+      total_terminal_dual_dim += constraint_pair.second->getDualDim();
+    }
+    return total_terminal_dual_dim;
+  }
+
   CDDPSolution MSIPDDPSolver::solve(CDDP &context)
   {
     const CDDPOptions &options = context.getOptions();
@@ -531,6 +542,31 @@ namespace cddp
 
     // Add terminal cost
     cost += context.getObjective().terminal_cost(context.X_.back());
+    
+    // Evaluate terminal constraints
+    const auto &terminal_constraint_set = context.getTerminalConstraintSet();
+    for (const auto &constraint_pair : terminal_constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      Eigen::VectorXd g_val = constraint_pair.second->evaluate(context.X_.back(), Eigen::VectorXd()) -
+                              constraint_pair.second->getUpperBound();
+      
+      // Check if it's equality or inequality constraint
+      Eigen::VectorXd lower_bound = constraint_pair.second->getLowerBound();
+      Eigen::VectorXd upper_bound = constraint_pair.second->getUpperBound();
+      bool is_equality = (lower_bound - upper_bound).isZero(1e-10);
+      
+      if (is_equality)
+      {
+        // For equality constraint, store as h(x) = 0
+        G_eq_terminal_[constraint_name] = g_val + upper_bound; // Convert back to h(x) form
+      }
+      else
+      {
+        // For inequality constraint, store as g(x) <= 0
+        G_ineq_terminal_[constraint_name] = g_val;
+      }
+    }
 
     // Store the cost
     context.cost_ = cost;
@@ -582,6 +618,31 @@ namespace cddp
 
     // Add terminal cost
     cost += context.getObjective().terminal_cost(context.X_.back());
+    
+    // Evaluate terminal constraints
+    const auto &terminal_constraint_set = context.getTerminalConstraintSet();
+    for (const auto &constraint_pair : terminal_constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      Eigen::VectorXd g_val = constraint_pair.second->evaluate(context.X_.back(), Eigen::VectorXd()) -
+                              constraint_pair.second->getUpperBound();
+      
+      // Check if it's equality or inequality constraint
+      Eigen::VectorXd lower_bound = constraint_pair.second->getLowerBound();
+      Eigen::VectorXd upper_bound = constraint_pair.second->getUpperBound();
+      bool is_equality = (lower_bound - upper_bound).isZero(1e-10);
+      
+      if (is_equality)
+      {
+        // For equality constraint, store as h(x) = 0
+        G_eq_terminal_[constraint_name] = g_val + upper_bound; // Convert back to h(x) form
+      }
+      else
+      {
+        // For inequality constraint, store as g(x) <= 0
+        G_ineq_terminal_[constraint_name] = g_val;
+      }
+    }
 
     // Store the cost
     context.cost_ = cost;
@@ -743,6 +804,59 @@ namespace cddp
       }
     }
 
+    // Initialize terminal constraint dual/slack variables (no warm start preservation for terminal constraints yet)
+    const auto &terminal_constraint_set = context.getTerminalConstraintSet();
+    for (const auto &constraint_pair : terminal_constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      const auto &constraint = constraint_pair.second;
+      int dual_dim = constraint->getDualDim();
+      
+      // Check if it's equality or inequality constraint
+      Eigen::VectorXd lower_bound = constraint->getLowerBound();
+      Eigen::VectorXd upper_bound = constraint->getUpperBound();
+      bool is_equality = (lower_bound - upper_bound).isZero(1e-10);
+      
+      if (is_equality)
+      {
+        // Initialize equality constraint dual variables
+        Y_eq_terminal_[constraint_name] = options.msipddp.dual_var_init_scale * Eigen::VectorXd::Ones(dual_dim);
+        k_y_eq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+      }
+      else
+      {
+        // Initialize inequality constraint dual and slack variables
+        const Eigen::VectorXd &g_val = G_ineq_terminal_[constraint_name];
+        Eigen::VectorXd y_init(dual_dim);
+        Eigen::VectorXd s_init(dual_dim);
+        
+        for (int i = 0; i < dual_dim; ++i)
+        {
+          // Initialize slack variable: s = -g(x) for feasibility
+          s_init(i) = std::max(options.msipddp.slack_var_init_scale, -g_val(i));
+          
+          // Initialize y_i = mu / s_i to satisfy s_i * y_i = mu
+          if (s_init(i) < 1e-12)
+          {
+            y_init(i) = mu_ / 1e-12;
+          }
+          else
+          {
+            y_init(i) = mu_ / s_init(i);
+          }
+          // Clamp dual variable
+          y_init(i) = std::max(
+              options.msipddp.dual_var_init_scale * 0.01,
+              std::min(y_init(i), options.msipddp.dual_var_init_scale * 100.0));
+        }
+        
+        Y_ineq_terminal_[constraint_name] = y_init;
+        S_ineq_terminal_[constraint_name] = s_init;
+        k_y_ineq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+        k_s_ineq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+      }
+    }
+
     if (options.verbose)
     {
       std::cout << "MSIPDDP: " << (has_existing_dual_slack ? "Preserved" : "Initialized")
@@ -824,6 +938,59 @@ namespace cddp
       // Initialize costate gains to zero
       k_lambda_[t] = Eigen::VectorXd::Zero(context.getStateDim());
       K_lambda_[t] = Eigen::MatrixXd::Zero(context.getStateDim(), context.getStateDim());
+    }
+
+    // Initialize terminal dual and slack variables
+    const auto &terminal_constraint_set = context.getTerminalConstraintSet();
+    for (const auto &constraint_pair : terminal_constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      const auto &constraint = constraint_pair.second;
+      int dual_dim = constraint->getDualDim();
+      
+      // Check if it's equality or inequality constraint
+      Eigen::VectorXd lower_bound = constraint->getLowerBound();
+      Eigen::VectorXd upper_bound = constraint->getUpperBound();
+      bool is_equality = (lower_bound - upper_bound).isZero(1e-10);
+      
+      if (is_equality)
+      {
+        // Initialize equality constraint dual variables
+        Y_eq_terminal_[constraint_name] = options.msipddp.dual_var_init_scale * Eigen::VectorXd::Ones(dual_dim);
+        k_y_eq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+      }
+      else
+      {
+        // Initialize inequality constraint dual and slack variables
+        const Eigen::VectorXd &g_val = G_ineq_terminal_[constraint_name];
+        Eigen::VectorXd y_init(dual_dim);
+        Eigen::VectorXd s_init(dual_dim);
+        
+        for (int i = 0; i < dual_dim; ++i)
+        {
+          // Initialize slack variable: s = -g(x) for feasibility
+          s_init(i) = std::max(options.msipddp.slack_var_init_scale, -g_val(i));
+          
+          // Initialize y_i = mu / s_i to satisfy s_i * y_i = mu
+          if (s_init(i) < 1e-12)
+          {
+            y_init(i) = mu_ / 1e-12;
+          }
+          else
+          {
+            y_init(i) = mu_ / s_init(i);
+          }
+          // Clamp dual variable
+          y_init(i) = std::max(
+              options.msipddp.dual_var_init_scale * 0.01,
+              std::min(y_init(i), options.msipddp.dual_var_init_scale * 100.0));
+        }
+        
+        Y_ineq_terminal_[constraint_name] = y_init;
+        S_ineq_terminal_[constraint_name] = s_init;
+        k_y_ineq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+        k_s_ineq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+      }
     }
 
     // Initialize cost using objective evaluation
@@ -1314,6 +1481,12 @@ namespace cddp
     Eigen::MatrixXd V_xx =
         context.getObjective().getFinalCostHessian(context.X_.back());
     V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
+    
+    // Modify value function for terminal constraints
+    if (!modifyTerminalValueFunction(context, V_x, V_xx))
+    {
+      return false;
+    }
 
     dV_ = Eigen::Vector2d::Zero();
     double inf_du = 0.0;     // dual infeasibility (optimality gap; Qu_err)
@@ -2310,9 +2483,10 @@ namespace cddp
   void MSIPDDPSolver::initializeConstraintStorage(CDDP &context)
   {
     const auto &constraint_set = context.getConstraintSet();
+    const auto &terminal_constraint_set = context.getTerminalConstraintSet();
     const int horizon = context.getHorizon();
 
-    // Clear and initialize constraint storage
+    // Clear and initialize path constraint storage
     G_.clear();
     G_x_.clear();
     G_u_.clear();
@@ -2323,7 +2497,7 @@ namespace cddp
     k_s_.clear();
     K_s_.clear();
 
-    // Initialize storage for each constraint
+    // Initialize storage for each path constraint
     for (const auto &constraint_pair : constraint_set)
     {
       const std::string &constraint_name = constraint_pair.first;
@@ -2334,6 +2508,49 @@ namespace cddp
       K_y_[constraint_name].resize(horizon);
       k_s_[constraint_name].resize(horizon);
       K_s_[constraint_name].resize(horizon);
+    }
+    
+    // Clear and initialize terminal constraint storage
+    G_ineq_terminal_.clear();
+    G_eq_terminal_.clear();
+    G_x_ineq_terminal_.clear();
+    G_x_eq_terminal_.clear();
+    G_xx_ineq_terminal_.clear();
+    G_xx_eq_terminal_.clear();
+    Y_ineq_terminal_.clear();
+    Y_eq_terminal_.clear();
+    S_ineq_terminal_.clear();
+    k_y_ineq_terminal_.clear();
+    k_y_eq_terminal_.clear();
+    k_s_ineq_terminal_.clear();
+    
+    // Initialize storage for each terminal constraint - separate by type
+    for (const auto &constraint_pair : terminal_constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      const int dual_dim = constraint_pair.second->getDualDim();
+      
+      // Check if it's equality or inequality constraint by comparing bounds
+      Eigen::VectorXd lower_bound = constraint_pair.second->getLowerBound();
+      Eigen::VectorXd upper_bound = constraint_pair.second->getUpperBound();
+      bool is_equality = (lower_bound - upper_bound).isZero(1e-10);
+      
+      if (is_equality)
+      {
+        // Equality constraint: h(x) = 0
+        G_eq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+        Y_eq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+        k_y_eq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+      }
+      else
+      {
+        // Inequality constraint: g(x) <= 0
+        G_ineq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+        Y_ineq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+        S_ineq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+        k_y_ineq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+        k_s_ineq_terminal_[constraint_name] = Eigen::VectorXd::Zero(dual_dim);
+      }
     }
   }
 
@@ -2411,6 +2628,104 @@ namespace cddp
 
     // Return scaled dual infeasibility
     return context.inf_du_ / sd;
+  }
+
+  bool MSIPDDPSolver::modifyTerminalValueFunction(CDDP &context,
+                                                 Eigen::VectorXd& V_x,
+                                                 Eigen::MatrixXd& V_xx)
+  {
+    const auto &terminal_constraint_set = context.getTerminalConstraintSet();
+    if (terminal_constraint_set.empty())
+    {
+      // No terminal constraints, nothing to modify
+      return true;
+    }
+    
+    const int state_dim = context.getStateDim();
+    const Eigen::VectorXd &x_terminal = context.X_.back();
+    
+    // Compute terminal constraint gradients and Hessians
+    for (const auto &constraint_pair : terminal_constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      const auto &constraint = constraint_pair.second;
+      
+      // Get constraint gradient
+      Eigen::MatrixXd G_x = constraint->getStateJacobian(x_terminal, Eigen::VectorXd());
+      
+      // Check if it's equality or inequality constraint
+      Eigen::VectorXd lower_bound = constraint->getLowerBound();
+      Eigen::VectorXd upper_bound = constraint->getUpperBound();
+      bool is_equality = (lower_bound - upper_bound).isZero(1e-10);
+      
+      if (is_equality)
+      {
+        // Store equality constraint gradient
+        G_x_eq_terminal_[constraint_name] = G_x;
+        
+        // Get constraint Hessians
+        G_xx_eq_terminal_[constraint_name] = constraint->getStateHessian(x_terminal, Eigen::VectorXd());
+        
+        // Modify value function for equality constraints
+        const Eigen::VectorXd &y_eq = Y_eq_terminal_[constraint_name];
+        V_x += G_x.transpose() * y_eq;
+        
+        // Add Hessian contribution
+        for (int i = 0; i < constraint->getDualDim(); ++i)
+        {
+          if (i < static_cast<int>(G_xx_eq_terminal_[constraint_name].size()))
+          {
+            V_xx += y_eq(i) * G_xx_eq_terminal_[constraint_name][i];
+          }
+        }
+      }
+      else
+      {
+        // Store inequality constraint gradient
+        G_x_ineq_terminal_[constraint_name] = G_x;
+        
+        // Get constraint Hessians
+        G_xx_ineq_terminal_[constraint_name] = constraint->getStateHessian(x_terminal, Eigen::VectorXd());
+        
+        // Modify value function for inequality constraints with barrier terms
+        const Eigen::VectorXd &y_ineq = Y_ineq_terminal_[constraint_name];
+        const Eigen::VectorXd &s_ineq = S_ineq_terminal_[constraint_name];
+        const Eigen::VectorXd &g_ineq = G_ineq_terminal_[constraint_name];
+        
+        V_x += G_x.transpose() * y_ineq;
+        
+        // Add Hessian contribution
+        for (int i = 0; i < constraint->getDualDim(); ++i)
+        {
+          if (i < static_cast<int>(G_xx_ineq_terminal_[constraint_name].size()))
+          {
+            V_xx += y_ineq(i) * G_xx_ineq_terminal_[constraint_name][i];
+          }
+        }
+        
+        // Add barrier term contribution for inequality constraints
+        // This comes from the interior point formulation
+        for (int i = 0; i < constraint->getDualDim(); ++i)
+        {
+          double s_i = s_ineq(i);
+          double y_i = y_ineq(i);
+          
+          // Barrier Hessian contribution: d²/dx²(-μ log(s))
+          // Since s = -g(x) for feasibility, we have ds/dx = -dg/dx
+          // The contribution is: μ/s² * (dg/dx)^T * (dg/dx)
+          if (s_i > 1e-10) // Avoid division by very small slack
+          {
+            Eigen::VectorXd g_x_i = G_x.row(i).transpose();
+            V_xx += (mu_ / (s_i * s_i)) * g_x_i * g_x_i.transpose();
+          }
+        }
+      }
+    }
+    
+    // Ensure V_xx is symmetric
+    V_xx = 0.5 * (V_xx + V_xx.transpose());
+    
+    return true;
   }
 
 } // namespace cddp

@@ -59,6 +59,52 @@ namespace cddp
          */
         std::string getSolverName() const override;
 
+    protected:
+        /**
+         * @brief Modify terminal value function for constraints.
+         * 
+         * This method can be overridden by derived classes (like TCMSIPDDP)
+         * to incorporate terminal constraints into the value function.
+         * 
+         * @param context CDDP context
+         * @param V_x Terminal value gradient (input/output)
+         * @param V_xx Terminal value Hessian (input/output)
+         * @return True if successful
+         */
+        virtual bool modifyTerminalValueFunction(CDDP &context,
+                                               Eigen::VectorXd& V_x,
+                                               Eigen::MatrixXd& V_xx);
+
+        // Protected members for derived class access
+        double mu_;                       ///< Barrier parameter
+        std::vector<FilterPoint> filter_; ///< Filter for line search
+        
+        // Control law
+        std::vector<Eigen::VectorXd> k_u_; ///< Feedforward gains
+        std::vector<Eigen::MatrixXd> K_u_; ///< Feedback gains
+        Eigen::Vector2d dV_;               ///< Expected value change
+
+        // Interior point variables
+        std::map<std::string, std::vector<Eigen::VectorXd>> G_; ///< Constraint values
+        std::map<std::string, std::vector<Eigen::VectorXd>> Y_; ///< Dual variables
+        std::map<std::string, std::vector<Eigen::VectorXd>> S_; ///< Slack variables
+        
+        // Terminal constraint variables - separated by type
+        // For inequality constraints: g(x) ≤ upper_bound
+        std::map<std::string, Eigen::VectorXd> G_ineq_terminal_; ///< Terminal inequality constraint values
+        std::map<std::string, Eigen::VectorXd> Y_ineq_terminal_; ///< Terminal inequality dual variables
+        std::map<std::string, Eigen::VectorXd> S_ineq_terminal_; ///< Terminal inequality slack variables
+        
+        // For equality constraints: h(x) = bound
+        std::map<std::string, Eigen::VectorXd> G_eq_terminal_; ///< Terminal equality constraint values
+        std::map<std::string, Eigen::VectorXd> Y_eq_terminal_; ///< Terminal equality dual variables (no slack needed)
+        
+        // Terminal constraint derivatives
+        std::map<std::string, Eigen::MatrixXd> G_x_ineq_terminal_; ///< Terminal inequality constraint gradients
+        std::map<std::string, Eigen::MatrixXd> G_x_eq_terminal_; ///< Terminal equality constraint gradients
+        std::map<std::string, std::vector<Eigen::MatrixXd>> G_xx_ineq_terminal_; ///< Terminal inequality Hessians
+        std::map<std::string, std::vector<Eigen::MatrixXd>> G_xx_eq_terminal_; ///< Terminal equality Hessians
+
     private:
         // Dynamics storage
         std::vector<Eigen::VectorXd> F_;   ///< Dynamics evaluations
@@ -78,21 +124,16 @@ namespace cddp
         std::map<std::string, std::vector<std::vector<Eigen::MatrixXd>>>
             G_ux_; ///< Constraint mixed hessians (time x dual_dim)
 
-        // Control law
-        std::vector<Eigen::VectorXd> k_u_; ///< Feedforward gains
-        std::vector<Eigen::MatrixXd> K_u_; ///< Feedback gains
-        Eigen::Vector2d dV_;               ///< Expected value change
-
-        // Interior point variables
-        std::map<std::string, std::vector<Eigen::VectorXd>> G_; ///< Constraint values
-        std::map<std::string, std::vector<Eigen::VectorXd>> Y_; ///< Dual variables
-        std::map<std::string, std::vector<Eigen::VectorXd>> S_; ///< Slack variables
-
         // Interior point gains
         std::map<std::string, std::vector<Eigen::VectorXd>> k_y_; ///< Dual feedforward
         std::map<std::string, std::vector<Eigen::MatrixXd>> K_y_; ///< Dual feedback
         std::map<std::string, std::vector<Eigen::VectorXd>> k_s_; ///< Slack feedforward
         std::map<std::string, std::vector<Eigen::MatrixXd>> K_s_; ///< Slack feedback
+        
+        // Terminal constraint gains (inequality only needs slack gains)
+        std::map<std::string, Eigen::VectorXd> k_y_ineq_terminal_; ///< Terminal inequality dual feedforward
+        std::map<std::string, Eigen::VectorXd> k_s_ineq_terminal_; ///< Terminal inequality slack feedforward
+        std::map<std::string, Eigen::VectorXd> k_y_eq_terminal_; ///< Terminal equality dual feedforward
 
         // MSIPDDP-specific costate variables and gains
         std::vector<Eigen::VectorXd>
@@ -104,10 +145,6 @@ namespace cddp
         
         // Multi-shooting specific parameters
         int ms_segment_length_; ///< Length of shooting segments
-
-        // Barrier method parameters
-        double mu_;                       ///< Barrier parameter
-        std::vector<FilterPoint> filter_; ///< Filter for line search
 
         /**
          * @brief Precompute dynamics derivatives in parallel.
@@ -180,7 +217,7 @@ namespace cddp
          * @brief Perform backward pass (primal-dual Riccati).
          * @return True if successful.
          */
-        bool backwardPass(CDDP &context);
+        virtual bool backwardPass(CDDP &context);
 
         /**
          * @brief Perform forward pass with line search.
@@ -193,17 +230,22 @@ namespace cddp
          * @param alpha Step size.
          * @return Forward pass result.
          */
-        ForwardPassResult forwardPass(CDDP &context, double alpha);
+        virtual ForwardPassResult forwardPass(CDDP &context, double alpha);
 
         /**
          * @brief Update barrier parameter.
          */
-        void updateBarrierParameters(CDDP &context, bool forward_pass_success);
+        virtual void updateBarrierParameters(CDDP &context, bool forward_pass_success);
 
         /**
          * @brief Get total dual dimension.
          */
         int getTotalDualDim(const CDDP &context) const;
+        
+        /**
+         * @brief Get total terminal dual dimension.
+         */
+        int getTotalTerminalDualDim(const CDDP &context) const;
 
         /**
          * @brief Update iteration history if tracking enabled.
@@ -220,7 +262,7 @@ namespace cddp
          * @brief Check convergence criteria.
          * @return True if converged.
          */
-        bool checkConvergence(const CDDPOptions &options, const CDDP &context,
+        virtual bool checkConvergence(const CDDPOptions &options, const CDDP &context,
                               double dJ, int iter, std::string &termination_reason) const;
 
 
@@ -240,7 +282,7 @@ namespace cddp
          * @param context CDDP context with dual/slack variables.
          * @return Scaled dual infeasibility metric.
          */
-        double computeScaledDualInfeasibility(const CDDP &context) const;
+        virtual double computeScaledDualInfeasibility(const CDDP &context) const;
 
         /**
          * @brief Print iteration info (IPOPT style).

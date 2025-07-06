@@ -25,6 +25,7 @@
 #include "gtest/gtest.h"
 
 #include "cddp.hpp"
+#include "cddp_core/terminal_constraint.hpp"
 
 TEST(MSIPDDPTest, SolvePendulum)
 {
@@ -821,5 +822,274 @@ TEST(MSIPDDPTest, SolveQuadrotor)
     EXPECT_TRUE(warm_status == "OptimalSolutionFound" || warm_status == "AcceptableSolutionFound") 
         << "Warm start should also converge";
     EXPECT_LE(warm_iterations, iterations_completed + 20) << "Warm start should not take significantly more iterations";
+}
+
+TEST(MSIPDDPTest, QuadrotorTerminalConstraints)
+{
+    // Test MSIPDDP with terminal constraints for quadrotor point-to-point motion
+    // This demonstrates enforcing terminal state constraints instead of relying on terminal cost
+    
+    int state_dim = 13;  // [x, y, z, qw, qx, qy, qz, vx, vy, vz, wx, wy, wz]
+    int control_dim = 4; // [f1, f2, f3, f4] - motor forces
+    int horizon = 100;
+    double timestep = 0.02;
+    
+    // Quadrotor parameters
+    double mass = 1.0;
+    double arm_length = 0.2;
+    Eigen::Matrix3d inertia_matrix = Eigen::Matrix3d::Zero();
+    inertia_matrix(0, 0) = 0.01; // Ixx
+    inertia_matrix(1, 1) = 0.01; // Iyy
+    inertia_matrix(2, 2) = 0.02; // Izz
+    
+    std::string integration_type = "rk4";
+    
+    // Create quadrotor system
+    auto system = std::make_unique<cddp::Quadrotor>(timestep, mass, inertia_matrix, arm_length, integration_type);
+    
+    // Cost matrices - reduced terminal cost since we'll use constraints
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Q.diagonal().segment(0, 3).setConstant(1.0);   // Small position tracking
+    Q.diagonal().segment(7, 3).setConstant(0.1);  // Small velocity tracking
+    
+    Eigen::MatrixXd R = 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    
+    // Small terminal cost (we'll enforce terminal state via constraints)
+    Eigen::MatrixXd Qf = 10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim);
+    
+    // Goal state: hover at position (2, 1, 1.5)
+    Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
+    goal_state(0) = 2.0;  // x
+    goal_state(1) = 1.0;  // y
+    goal_state(2) = 1.5;  // z
+    goal_state(3) = 1.0;  // qw (identity quaternion)
+    
+    // Initial state: at origin
+    Eigen::VectorXd initial_state = Eigen::VectorXd::Zero(state_dim);
+    initial_state(3) = 1.0; // qw = 1 (identity quaternion)
+    
+    // Create objective
+    std::vector<Eigen::VectorXd> empty_reference_states;
+    auto objective = std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep);
+    
+    // Create CDDP solver
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
+    cddp_solver.setDynamicalSystem(std::move(system));
+    cddp_solver.setObjective(std::move(objective));
+    
+    // Add control constraints
+    double min_force = 0.0;  // Motors can only produce upward thrust
+    double max_force = 5.0;  // Maximum thrust per motor
+    Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
+    Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
+    
+    cddp_solver.addPathConstraint("ControlConstraint",
+                                  std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+    
+    // Add terminal position constraint (equality)
+    // We want final position to be exactly at the goal
+    class PositionTerminalConstraint : public cddp::TerminalConstraint {
+    public:
+        PositionTerminalConstraint(const Eigen::Vector3d& target_pos) 
+            : TerminalConstraint("PositionTerminal"), target_pos_(target_pos) {}
+        
+        int getDualDim() const override { return 3; }
+        
+        Eigen::VectorXd evaluate(const Eigen::VectorXd &state, const Eigen::VectorXd &) const override {
+            return state.head(3) - target_pos_;
+        }
+        
+        Eigen::VectorXd getLowerBound() const override {
+            return Eigen::VectorXd::Zero(3);
+        }
+        
+        Eigen::VectorXd getUpperBound() const override {
+            return Eigen::VectorXd::Zero(3);
+        }
+        
+        Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &) const override {
+            Eigen::MatrixXd J = Eigen::MatrixXd::Zero(3, state.size());
+            J.block(0, 0, 3, 3) = Eigen::Matrix3d::Identity();
+            return J;
+        }
+        
+        double computeViolation(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override {
+            return evaluate(state, control).norm();
+        }
+        
+        double computeViolationFromValue(const Eigen::VectorXd &g) const override {
+            return g.norm();
+        }
+        
+        std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &) const override {
+            std::vector<Eigen::MatrixXd> H(3, Eigen::MatrixXd::Zero(state.size(), state.size()));
+            return H;
+        }
+        
+    private:
+        Eigen::Vector3d target_pos_;
+    };
+    
+    // Add terminal velocity constraint (should be near zero for hovering)
+    // This is an inequality constraint: |v| <= v_max
+    class VelocityTerminalConstraint : public cddp::TerminalConstraint {
+    public:
+        VelocityTerminalConstraint(double v_max) 
+            : TerminalConstraint("VelocityTerminal"), v_max_(v_max) {}
+        
+        int getDualDim() const override { return 1; }
+        
+        Eigen::VectorXd evaluate(const Eigen::VectorXd &state, const Eigen::VectorXd &) const override {
+            Eigen::Vector3d velocity = state.segment(7, 3);
+            Eigen::VectorXd g(1);
+            g(0) = velocity.norm() - v_max_;
+            return g;
+        }
+        
+        Eigen::VectorXd getLowerBound() const override {
+            return Eigen::VectorXd::Constant(1, -std::numeric_limits<double>::infinity());
+        }
+        
+        Eigen::VectorXd getUpperBound() const override {
+            return Eigen::VectorXd::Zero(1);
+        }
+        
+        Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state, const Eigen::VectorXd &) const override {
+            Eigen::MatrixXd J = Eigen::MatrixXd::Zero(1, state.size());
+            Eigen::Vector3d velocity = state.segment(7, 3);
+            double v_norm = velocity.norm();
+            if (v_norm > 1e-6) {
+                J.block(0, 7, 1, 3) = velocity.transpose() / v_norm;
+            }
+            return J;
+        }
+        
+        double computeViolation(const Eigen::VectorXd &state, const Eigen::VectorXd &control) const override {
+            Eigen::VectorXd g = evaluate(state, control);
+            return std::max(0.0, g(0));
+        }
+        
+        double computeViolationFromValue(const Eigen::VectorXd &g) const override {
+            return std::max(0.0, g(0));
+        }
+        
+        std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state, const Eigen::VectorXd &) const override {
+            std::vector<Eigen::MatrixXd> H(1, Eigen::MatrixXd::Zero(state.size(), state.size()));
+            Eigen::Vector3d velocity = state.segment(7, 3);
+            double v_norm = velocity.norm();
+            
+            if (v_norm > 1e-6) {
+                // Hessian of |v| w.r.t. v
+                Eigen::Matrix3d H_v = (Eigen::Matrix3d::Identity() / v_norm) - 
+                                      (velocity * velocity.transpose()) / (v_norm * v_norm * v_norm);
+                H[0].block(7, 7, 3, 3) = H_v;
+            }
+            return H;
+        }
+        
+    private:
+        double v_max_;
+    };
+    
+    // Add terminal constraints
+    Eigen::Vector3d target_position(2.0, 1.0, 1.5);
+    cddp_solver.addTerminalConstraint("PositionEquality",
+                                      std::make_unique<PositionTerminalConstraint>(target_position));
+    
+    double max_terminal_velocity = 0.1;  // Must be nearly stationary at the end
+    cddp_solver.addTerminalConstraint("VelocityInequality",
+                                      std::make_unique<VelocityTerminalConstraint>(max_terminal_velocity));
+    
+    // Set options
+    cddp::CDDPOptions options;
+    options.max_iterations = 200;
+    options.tolerance = 1e-5;  // Tighter tolerance for terminal constraints
+    options.acceptable_tolerance = 1e-4;
+    options.verbose = true;
+    options.debug = false;
+    options.regularization.initial_value = 1e-6;
+    
+    // MSIPDDP specific options for better constraint satisfaction
+    options.msipddp.barrier.mu_initial = 0.01;
+    options.msipddp.barrier.mu_min_value = 1e-10;
+    options.msipddp.barrier.mu_update_factor = 0.2;
+    options.msipddp.barrier.mu_update_power = 1.5;
+    
+    cddp_solver.setOptions(options);
+    
+    // Set initial trajectory (simple hover trajectory)
+    std::vector<Eigen::VectorXd> X(horizon + 1);
+    std::vector<Eigen::VectorXd> U(horizon);
+    
+    double hover_force = (mass * 9.81) / 4.0;  // Each motor provides 1/4 of weight
+    Eigen::VectorXd hover_control(control_dim);
+    hover_control.setConstant(hover_force);
+    
+    for (int t = 0; t <= horizon; ++t) {
+        X[t] = initial_state;
+    }
+    for (int t = 0; t < horizon; ++t) {
+        U[t] = hover_control;
+    }
+    
+    cddp_solver.setInitialTrajectory(X, U);
+    
+    // Solve
+    std::cout << "\n=== Testing MSIPDDP with Quadrotor Terminal Constraints ===" << std::endl;
+    std::cout << "Goal: Move quadrotor from origin to position (" 
+              << target_position.transpose() << ") with near-zero terminal velocity" << std::endl;
+    
+    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
+    
+    // Check results
+    auto status_message = std::any_cast<std::string>(solution.at("status_message"));
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto final_state = X_sol.back();
+    
+    // Extract final position and velocity
+    Eigen::Vector3d final_position = final_state.head(3);
+    Eigen::Vector3d final_velocity = final_state.segment(7, 3);
+    
+    std::cout << "\nResults:" << std::endl;
+    std::cout << "Status: " << status_message << std::endl;
+    std::cout << "Final position: " << final_position.transpose() << std::endl;
+    std::cout << "Target position: " << target_position.transpose() << std::endl;
+    std::cout << "Position error: " << (final_position - target_position).norm() << std::endl;
+    std::cout << "Final velocity: " << final_velocity.transpose() << std::endl;
+    std::cout << "Velocity magnitude: " << final_velocity.norm() << std::endl;
+    
+    // Verify constraints are satisfied
+    std::cout << "\nConstraint satisfaction:" << std::endl;
+    std::cout << "Position constraint violation: " << (final_position - target_position).norm() 
+              << " (tolerance: " << options.tolerance << ")" << std::endl;
+    std::cout << "Velocity constraint violation: " << std::max(0.0, final_velocity.norm() - max_terminal_velocity) 
+              << " (max allowed: " << max_terminal_velocity << ")" << std::endl;
+    
+    // Check control bounds
+    bool controls_feasible = true;
+    for (const auto& u : U_sol) {
+        if ((u.array() < control_lower_bound.array() - 1e-6).any() || 
+            (u.array() > control_upper_bound.array() + 1e-6).any()) {
+            controls_feasible = false;
+            break;
+        }
+    }
+    std::cout << "Control bounds satisfied: " << (controls_feasible ? "YES" : "NO") << std::endl;
+    
+    // Assertions
+    EXPECT_TRUE(status_message == "OptimalSolutionFound" || status_message == "AcceptableSolutionFound")
+        << "Solver should converge";
+    
+    // Terminal position constraint (equality)
+    EXPECT_NEAR((final_position - target_position).norm(), 0.0, 1e-2)
+        << "Terminal position should match target";
+    
+    // Terminal velocity constraint (inequality)
+    EXPECT_LE(final_velocity.norm(), max_terminal_velocity + 1e-3)
+        << "Terminal velocity should satisfy inequality constraint";
+    
+    // Control bounds
+    EXPECT_TRUE(controls_feasible) << "All controls should be within bounds";
 }
 
