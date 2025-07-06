@@ -151,7 +151,13 @@ struct ForwardPassResult {
       slack_trajectory;
   std::optional<std::map<std::string, std::vector<Eigen::VectorXd>>>
       constraint_eval_trajectory;
-
+  std::optional<std::map<std::string, Eigen::VectorXd>>
+      terminal_constraint_dual;
+  std::optional<std::map<std::string, Eigen::VectorXd>>
+      terminal_slack;
+  std::optional<std::map<std::string, Eigen::VectorXd>>
+      terminal_constraint_value;
+  
   // Default constructor
   ForwardPassResult() = default;
 };
@@ -351,6 +357,7 @@ public:
 
   // Regularization management
   double regularization_; ///< Current regularization parameter
+  double terminal_regularization_; ///< Current terminal regularization parameter
 
   // Getters for current iteration metrics
   double getCurrentCost() const { return cost_; }
@@ -384,6 +391,28 @@ public:
    * @return True if limit reached, false otherwise.
    */
   bool isRegularizationLimitReached() const;
+
+  /**
+   * @brief Increase terminal regularization parameter.
+   */
+  void increaseTerminalRegularization();
+
+  /**
+   * @brief Decrease terminal regularization parameter.
+   */
+  void decreaseTerminalRegularization();
+
+  /**
+   * @brief Check if terminal regularization limit has been reached.
+   * @return True if limit reached, false otherwise.
+   */
+  bool isTerminalRegularizationLimitReached() const;
+
+  /**
+   * @brief Get current terminal regularization value.
+   * @return Current terminal regularization parameter.
+   */
+  double getCurrentTerminalRegularization() const { return terminal_regularization_; }
 
 protected:
   /**
