@@ -14,14 +14,19 @@
  limitations under the License.
 */
 
+// Quadrotor Model Predictive Control (MPC) Example
+// This example demonstrates:
+// - Multi-rate MPC: Control at 10Hz, simulation at 100Hz
+// - Smooth trajectory generation using S-curve
+// - Quaternion-based attitude representation
+// - Animated visualization with thrust-based propeller coloring
+
 #include <iostream>
 #include <vector>
 #include <cmath>
 #include <filesystem>
 #include <memory>
 #include <cstdlib>
-#include <thread>
-#include <chrono>
 
 #include "cddp.hpp"
 #include "matplot/matplot.h"
@@ -47,6 +52,24 @@ Eigen::Vector3d quaternionToEuler(double qw, double qx, double qy, double qz)
     double psi = std::atan2(siny_cosp, cosy_cosp);
 
     return Eigen::Vector3d(phi, theta, psi);
+}
+
+// Compute rotation matrix from a unit quaternion [qw, qx, qy, qz]
+Eigen::Matrix3d getRotationMatrixFromQuaternion(double qw, double qx, double qy, double qz)
+{
+    Eigen::Matrix3d R;
+    R(0, 0) = 1 - 2 * (qy * qy + qz * qz);
+    R(0, 1) = 2 * (qx * qy - qz * qw);
+    R(0, 2) = 2 * (qx * qz + qy * qw);
+
+    R(1, 0) = 2 * (qx * qy + qz * qw);
+    R(1, 1) = 1 - 2 * (qx * qx + qz * qz);
+    R(1, 2) = 2 * (qy * qz - qx * qw);
+
+    R(2, 0) = 2 * (qx * qz - qy * qw);
+    R(2, 1) = 2 * (qy * qz + qx * qw);
+    R(2, 2) = 1 - 2 * (qx * qx + qy * qy);
+    return R;
 }
 
 // Helper function: Generate target state for single waypoint navigation
@@ -180,11 +203,6 @@ int main()
     double current_time = 0.0;
     int sim_steps = static_cast<int>(sim_time / sim_dt);
 
-    // Storage for first MPC solution
-    std::vector<Eigen::VectorXd> first_mpc_states;
-    std::vector<Eigen::VectorXd> first_mpc_controls;
-    bool first_solution_saved = false;
-
     // Storage for current MPC solution
     std::vector<Eigen::VectorXd> current_mpc_states;
     std::vector<Eigen::VectorXd> current_mpc_controls;
@@ -244,56 +262,6 @@ int main()
                 current_mpc_gains = std::any_cast<std::vector<Eigen::MatrixXd>>(solution.at("control_feedback_gains_K"));
             }
         
-            // Save first MPC solution for analysis
-            if (!first_solution_saved && k == 0)
-            {
-                first_mpc_states = current_mpc_states;
-                first_mpc_controls = current_mpc_controls;
-                first_solution_saved = true;
-                
-                // Print first solution analysis
-                std::cout << "\n=== First MPC Solution Analysis ===" << std::endl;
-            std::cout << "Initial state: [" << current_state.head(3).transpose() << "]" << std::endl;
-            std::cout << "Target state: [" << target_state.head(3).transpose() << "]" << std::endl;
-            std::cout << "MPC horizon: " << mpc_horizon << " steps, dt: " << mpc_timestep << "s" << std::endl;
-            std::cout << "Total prediction time: " << mpc_horizon * mpc_timestep << "s" << std::endl;
-            
-            // Analyze trajectory feasibility
-            std::cout << "\nTrajectory analysis:" << std::endl;
-            for (int i = 0; i <= mpc_horizon; i += 5)
-            {
-                Eigen::Vector3d pos = current_mpc_states[i].head(3);
-                Eigen::Vector3d vel = current_mpc_states[i].segment(7, 3);
-                std::cout << "t=" << i * mpc_timestep << "s: pos=[" << pos.transpose() 
-                          << "], vel=[" << vel.transpose() << "], |vel|=" << vel.norm() << "m/s" << std::endl;
-            }
-            
-            // Check control effort
-            std::cout << "\nControl analysis:" << std::endl;
-            double total_thrust_avg = 0.0;
-            double max_thrust = 0.0;
-            for (int i = 0; i < mpc_horizon; ++i)
-            {
-                double total_thrust = current_mpc_controls[i].sum();
-                total_thrust_avg += total_thrust;
-                max_thrust = std::max(max_thrust, total_thrust);
-                if (i % 5 == 0)
-                {
-                    std::cout << "t=" << i * mpc_timestep << "s: controls=[" << current_mpc_controls[i].transpose() 
-                              << "], total=" << total_thrust << "N" << std::endl;
-                }
-            }
-            total_thrust_avg /= mpc_horizon;
-            std::cout << "Average total thrust: " << total_thrust_avg << "N (hover: " << mass * 9.81 << "N)" << std::endl;
-            std::cout << "Max total thrust: " << max_thrust << "N" << std::endl;
-            
-            // Final state analysis
-            Eigen::Vector3d final_pos = current_mpc_states.back().head(3);
-            double final_error = (final_pos - target_state.head(3)).norm();
-            std::cout << "\nPredicted final position: [" << final_pos.transpose() << "]" << std::endl;
-            std::cout << "Predicted final error: " << final_error << "m" << std::endl;
-            std::cout << "================================\n" << std::endl;
-            }
             
             // Warm start for the next iteration: shift the solution
             for(int i = 0; i < mpc_horizon - 1; ++i)
@@ -465,122 +433,171 @@ int main()
     save(plotDirectory + "/quadrotor_mpc.png");
     std::cout << "Saved plot to " << plotDirectory << "/quadrotor_mpc.png" << std::endl;
 
-    // Create separate plot for first MPC solution
-    if (first_solution_saved)
+    // --------------------------
+    // 4. Animation
+    // --------------------------
+    std::cout << "Generating animation frames..." << std::endl;
+    
+    // Animation of the quadrotor frame
+    auto f_anim = figure();
+    f_anim->size(800, 600);
+    auto ax_anim = f_anim->current_axes();
+
+    // For collecting the trajectory as we go
+    std::vector<double> anim_x, anim_y, anim_z;
+    anim_x.reserve(state_history.size());
+    anim_y.reserve(state_history.size());
+    anim_z.reserve(state_history.size());
+
+    // Render every Nth frame to reduce #images
+    int frame_stride = 20;  // With 100Hz simulation, this gives 5 fps animation
+    double prop_radius = 0.02; // radius for small spheres at motor ends
+    int frame_count = 0;
+
+    for (size_t i = 0; i < state_history.size(); i += frame_stride)
     {
-        auto f2 = figure(true);
-        f2->size(1200, 800);
-        
-        // Extract first MPC trajectory data
-        std::vector<double> first_x, first_y, first_z;
-        std::vector<double> first_time;
-        for (int i = 0; i <= mpc_horizon; ++i)
-        {
-            first_x.push_back(first_mpc_states[i](0));
-            first_y.push_back(first_mpc_states[i](1));
-            first_z.push_back(first_mpc_states[i](2));
-            first_time.push_back(i * mpc_timestep);
+        ax_anim->clear();
+        ax_anim->hold(true);
+        ax_anim->grid(true);
+
+        // Current state
+        double x = state_history[i](0);
+        double y = state_history[i](1);
+        double z = state_history[i](2);
+
+        // Accumulate path
+        anim_x.push_back(x);
+        anim_y.push_back(y);
+        anim_z.push_back(z);
+
+        // Plot the partial trajectory so far (in gray)
+        if (anim_x.size() > 1) {
+            auto path_plot = plot3(ax_anim, anim_x, anim_y, anim_z);
+            path_plot->line_width(2);
+            path_plot->line_style("-");
+            path_plot->color("gray");
         }
-        
-        // 3D trajectory
-        auto ax2_1 = subplot(2, 2, 1);
-        auto first_traj = plot3(ax2_1, first_x, first_y, first_z);
-        first_traj->line_width(3);
-        first_traj->color("blue");
-        first_traj->display_name("First MPC Prediction");
-        
-        hold(ax2_1, true);
-        // Add markers at key points
-        auto start_pt = scatter3(ax2_1, std::vector<double>{first_x.front()}, 
-                                std::vector<double>{first_y.front()}, 
-                                std::vector<double>{first_z.front()});
-        start_pt->marker_color("g").marker_size(150).display_name("Start");
-        
-        auto end_pt = scatter3(ax2_1, std::vector<double>{first_x.back()}, 
-                              std::vector<double>{first_y.back()}, 
-                              std::vector<double>{first_z.back()});
-        end_pt->marker_color("r").marker_size(150).display_name("Predicted End");
-        
-        auto target_pt = scatter3(ax2_1, std::vector<double>{target_state(0)}, 
-                                 std::vector<double>{target_state(1)}, 
-                                 std::vector<double>{target_state(2)});
-        target_pt->marker_color("k").marker_size(150).display_name("Target");
-        
-        title(ax2_1, "First MPC Predicted Trajectory (3D)");
-        xlabel(ax2_1, "X [m]");
-        ylabel(ax2_1, "Y [m]");
-        zlabel(ax2_1, "Z [m]");
-        legend(ax2_1, "show");
-        grid(ax2_1, true);
-        
-        // Position components vs time
-        auto ax2_2 = subplot(2, 2, 2);
-        plot(ax2_2, first_time, first_x, "r-")->line_width(2).display_name("x");
-        hold(ax2_2, true);
-        plot(ax2_2, first_time, first_y, "g-")->line_width(2).display_name("y");
-        plot(ax2_2, first_time, first_z, "b-")->line_width(2).display_name("z");
-        // Add target lines
-        plot(ax2_2, first_time, std::vector<double>(first_time.size(), target_state(0)), "r--")->line_width(1);
-        plot(ax2_2, first_time, std::vector<double>(first_time.size(), target_state(1)), "g--")->line_width(1);
-        plot(ax2_2, first_time, std::vector<double>(first_time.size(), target_state(2)), "b--")->line_width(1);
-        title(ax2_2, "First MPC Position Prediction");
-        xlabel(ax2_2, "Time [s]");
-        ylabel(ax2_2, "Position [m]");
-        legend(ax2_2, "show");
-        grid(ax2_2, true);
-        
-        // Velocity profile
-        auto ax2_3 = subplot(2, 2, 3);
-        std::vector<double> first_vx, first_vy, first_vz, first_v_norm;
-        for (const auto& state : first_mpc_states)
-        {
-            Eigen::Vector3d vel = state.segment(7, 3);
-            first_vx.push_back(vel(0));
-            first_vy.push_back(vel(1));
-            first_vz.push_back(vel(2));
-            first_v_norm.push_back(vel.norm());
+
+        // Plot reference trajectory (in light red dashed)
+        std::vector<double> ref_x_show, ref_y_show, ref_z_show;
+        int ref_end = std::min((int)waypoint_trajectory.size(), (int)(i + 200)); // Show future reference
+        for (int j = 0; j < ref_end; j += 10) {
+            ref_x_show.push_back(waypoint_trajectory[j](0));
+            ref_y_show.push_back(waypoint_trajectory[j](1));
+            ref_z_show.push_back(waypoint_trajectory[j](2));
         }
-        plot(ax2_3, first_time, first_vx, "r-")->line_width(2).display_name("vx");
-        hold(ax2_3, true);
-        plot(ax2_3, first_time, first_vy, "g-")->line_width(2).display_name("vy");
-        plot(ax2_3, first_time, first_vz, "b-")->line_width(2).display_name("vz");
-        plot(ax2_3, first_time, first_v_norm, "k-")->line_width(3).display_name("|v|");
-        title(ax2_3, "First MPC Velocity Prediction");
-        xlabel(ax2_3, "Time [s]");
-        ylabel(ax2_3, "Velocity [m/s]");
-        legend(ax2_3, "show");
-        grid(ax2_3, true);
-        
-        // Control inputs
-        auto ax2_4 = subplot(2, 2, 4);
-        std::vector<double> first_f1, first_f2, first_f3, first_f4, first_total;
-        std::vector<double> first_control_time;
-        for (int i = 0; i < mpc_horizon; ++i)
-        {
-            first_f1.push_back(first_mpc_controls[i](0));
-            first_f2.push_back(first_mpc_controls[i](1));
-            first_f3.push_back(first_mpc_controls[i](2));
-            first_f4.push_back(first_mpc_controls[i](3));
-            first_total.push_back(first_mpc_controls[i].sum());
-            first_control_time.push_back(i * mpc_timestep);
+        if (!ref_x_show.empty()) {
+            auto ref_traj = plot3(ax_anim, ref_x_show, ref_y_show, ref_z_show);
+            ref_traj->line_width(1);
+            ref_traj->line_style("--");
+            ref_traj->color({1.0, 0.6, 0.6}); // Light red
         }
-        plot(ax2_4, first_control_time, first_f1, "r-")->line_width(2).display_name("f1");
-        hold(ax2_4, true);
-        plot(ax2_4, first_control_time, first_f2, "g-")->line_width(2).display_name("f2");
-        plot(ax2_4, first_control_time, first_f3, "b-")->line_width(2).display_name("f3");
-        plot(ax2_4, first_control_time, first_f4, "m-")->line_width(2).display_name("f4");
-        plot(ax2_4, first_control_time, first_total, "k-")->line_width(3).display_name("Total");
-        // Add hover thrust line
-        plot(ax2_4, first_control_time, std::vector<double>(first_control_time.size(), mass * 9.81), "k--")
-            ->line_width(2).display_name("Hover");
-        title(ax2_4, "First MPC Control Prediction");
-        xlabel(ax2_4, "Time [s]");
-        ylabel(ax2_4, "Force [N]");
-        legend(ax2_4, "show");
-        grid(ax2_4, true);
+
+        // Plot target point
+        auto target_pt = scatter3(ax_anim, std::vector<double>{target_state(0)}, 
+                                std::vector<double>{target_state(1)}, 
+                                std::vector<double>{target_state(2)});
+        target_pt->marker_color("red").marker_size(100);
+
+        // Build rotation from quaternion
+        Eigen::Vector4d quat(state_history[i](3), state_history[i](4), 
+                            state_history[i](5), state_history[i](6));
+        Eigen::Matrix3d R = getRotationMatrixFromQuaternion(quat(0), quat(1), quat(2), quat(3));
+
+        // Arm endpoints (front, right, back, left)
+        std::vector<Eigen::Vector3d> arm_endpoints;
+        arm_endpoints.push_back(Eigen::Vector3d(arm_length, 0, 0));
+        arm_endpoints.push_back(Eigen::Vector3d(0, arm_length, 0));
+        arm_endpoints.push_back(Eigen::Vector3d(-arm_length, 0, 0));
+        arm_endpoints.push_back(Eigen::Vector3d(0, -arm_length, 0));
+
+        // Transform to world coords
+        for (auto &pt : arm_endpoints)
+        {
+            pt = Eigen::Vector3d(x, y, z) + R * pt;
+        }
+
+        // Front-back arm (blue)
+        std::vector<double> fx = {arm_endpoints[0].x(), arm_endpoints[2].x()};
+        std::vector<double> fy = {arm_endpoints[0].y(), arm_endpoints[2].y()};
+        std::vector<double> fz = {arm_endpoints[0].z(), arm_endpoints[2].z()};
+        auto fb_arm = plot3(ax_anim, fx, fy, fz);
+        fb_arm->line_width(3.0);
+        fb_arm->color("blue");
+
+        // Right-left arm (red)
+        std::vector<double> rx = {arm_endpoints[1].x(), arm_endpoints[3].x()};
+        std::vector<double> ry = {arm_endpoints[1].y(), arm_endpoints[3].y()};
+        std::vector<double> rz = {arm_endpoints[1].z(), arm_endpoints[3].z()};
+        auto rl_arm = plot3(ax_anim, rx, ry, rz);
+        rl_arm->line_width(3.0);
+        rl_arm->color("red");
+
+        // Draw propellers as circles
+        auto circle_points = linspace(0, 2 * M_PI, 20);
+        for (size_t motor_idx = 0; motor_idx < arm_endpoints.size(); ++motor_idx)
+        {
+            const auto &motor_pos = arm_endpoints[motor_idx];
+            std::vector<double> circ_x, circ_y, circ_z;
+            
+            // Color based on thrust (if available)
+            std::string color = "green";
+            if (i < control_history.size()) {
+                double thrust = control_history[i](motor_idx);
+                double normalized_thrust = thrust / max_force;
+                if (normalized_thrust > 0.7) color = "red";
+                else if (normalized_thrust > 0.4) color = "orange";
+                else color = "green";
+            }
+            
+            for (auto angle : circle_points)
+            {
+                circ_x.push_back(motor_pos.x() + prop_radius * cos(angle));
+                circ_y.push_back(motor_pos.y() + prop_radius * sin(angle));
+                circ_z.push_back(motor_pos.z());
+            }
+            auto prop_plot = plot3(ax_anim, circ_x, circ_y, circ_z);
+            prop_plot->line_style("solid");
+            prop_plot->line_width(2.0);
+            prop_plot->color(color);
+        }
+
+        // Add time annotation in the title
+        std::string time_str = "Time: " + std::to_string(i * sim_dt).substr(0, 4) + "s";
+
+        title(ax_anim, "Quadrotor MPC Animation - " + time_str);
+        xlabel(ax_anim, "X [m]");
+        ylabel(ax_anim, "Y [m]");
+        zlabel(ax_anim, "Z [m]");
+        xlim(ax_anim, {-1, 4});
+        ylim(ax_anim, {-2, 2});
+        zlim(ax_anim, {0, 3});
+
+        ax_anim->view(30, -45);
+
+        std::string frameFile = plotDirectory + "/quadrotor_mpc_frame_" + std::to_string(frame_count) + ".png";
+        f_anim->draw();
+        f_anim->save(frameFile);
         
-        save(plotDirectory + "/quadrotor_first_mpc_solution.png");
-        std::cout << "Saved first MPC solution plot to " << plotDirectory << "/quadrotor_first_mpc_solution.png" << std::endl;
+        if (frame_count % 10 == 0) {
+            std::cout << "Generated frame " << frame_count << "/" << state_history.size()/frame_stride << std::endl;
+        }
+        frame_count++;
+    }
+
+    // Generate GIF from frames using ImageMagick
+    std::cout << "Creating animation..." << std::endl;
+    std::string gif_command = "convert -delay 20 -loop 0 " + plotDirectory + "/quadrotor_mpc_frame_*.png " + plotDirectory + "/quadrotor_mpc.gif";
+    int result = std::system(gif_command.c_str());
+    
+    if (result == 0) {
+        std::cout << "Animation saved to " << plotDirectory << "/quadrotor_mpc.gif" << std::endl;
+        
+        // Clean up frame files
+        std::string cleanup_command = "rm " + plotDirectory + "/quadrotor_mpc_frame_*.png";
+        std::system(cleanup_command.c_str());
+    } else {
+        std::cout << "Failed to create animation. Frame files are kept in " << plotDirectory << std::endl;
     }
 
     // Print final statistics
