@@ -197,14 +197,11 @@ int main()
     options.max_iterations = 10000;
     options.verbose = true;
     options.debug = false;
-    options.use_parallel = true;
+    options.enable_parallel = true;
     options.num_threads = 10;
-    options.cost_tolerance = 1e-3;
-    options.grad_tolerance = 1e-2;
-    options.regularization_type = "control";
-    options.regularization_control = 1e-4;
-    options.regularization_state = 0.0;
-    options.barrier_coeff = 1e-3;
+    options.tolerance = 1e-3;
+    options.regularization.initial_value = 1e-4;
+    options.ipddp.barrier.mu_initial = 1e-3;
 
     // Create the CDDP solver
     cddp::CDDP cddp_solver(
@@ -221,7 +218,7 @@ int main()
     double max_force = 4.0; // Maximum thrust per motor
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound));
 
     // Initial trajectory: allocate state and control trajectories
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -241,10 +238,10 @@ int main()
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the optimal control problem
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
-    auto t_sol = solution.time_sequence;
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP);
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
 
     std::cout << "Final state: " << X_sol.back().transpose() << std::endl;
 

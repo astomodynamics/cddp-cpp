@@ -66,14 +66,12 @@ int main() {
     options.max_iterations = 1000;
     options.verbose = true;
     options.debug = false;
-    options.use_parallel = false;
+    options.enable_parallel = false;
     options.num_threads = 1;
-    options.cost_tolerance = 1e-5;
-    options.grad_tolerance = 1e-4;
-    options.regularization_type = "both";
-    options.regularization_control = 1e-2;
-    options.regularization_state = 1e-3;
-    options.barrier_coeff = 1e-1;
+    options.tolerance = 1e-5;
+    options.acceptable_tolerance = 1e-4;
+    options.regularization.initial_value = 1e-2;
+    options.ipddp.barrier.mu_initial = 1e-1;
 
     // Control constraint
     Eigen::VectorXd control_upper_bound(control_dim);
@@ -92,27 +90,23 @@ int main() {
         options
     );
 
-    // Set dynamical system & objective explicitly
-    cddp_solver.setDynamicalSystem(std::make_unique<cddp::Unicycle>(timestep, integration_type));
-    cddp_solver.setObjective(std::make_unique<cddp::QuadraticObjective>(
-        Q, R, Qf, goal_state, empty_reference_states, timestep
-    ));
+    // Solver with new API already set up with system and objective
 
     // Add constraints
     // Control constraint
-    cddp_solver.addConstraint("ControlConstraint",
+    cddp_solver.addPathConstraint("ControlConstraint",
         std::make_unique<cddp::ControlConstraint>(control_upper_bound));
 
     // First ball constraint
     double radius1 = 0.4;
     Eigen::Vector2d center1(1.0, 1.0);
-    cddp_solver.addConstraint("BallConstraint1",
+    cddp_solver.addPathConstraint("BallConstraint1",
         std::make_unique<cddp::BallConstraint>(radius1, center1));
 
     // Second ball constraint
     double radius2 = 0.4;
     Eigen::Vector2d center2(1.5, 2.5);
-    cddp_solver.addConstraint("BallConstraint2",
+    cddp_solver.addPathConstraint("BallConstraint2",
         std::make_unique<cddp::BallConstraint>(radius2, center2));
 
     // Linear constraint: y <= 1.0x + 0.5
@@ -120,7 +114,7 @@ int main() {
     A << -1.0, 1.0, 0.0;
     Eigen::VectorXd b(1);
     b << 0.5;
-    cddp_solver.addConstraint("LinearConstraint",
+    cddp_solver.addPathConstraint("LinearConstraint",
         std::make_unique<cddp::LinearConstraint>(A, b));
 
     // Initial trajectory guess
@@ -132,9 +126,9 @@ int main() {
     cddp_solver.setInitialTrajectory(X_sol, U_sol);
 
     // Solve
-    cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
-    X_sol = solution.state_sequence;
-    U_sol = solution.control_sequence;
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP);
+    X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
 
     // Add this line to check the actual starting state in the solution
     std::cout << "Actual starting state in solution: " << X_sol[0].transpose() << std::endl;

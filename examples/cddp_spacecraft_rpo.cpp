@@ -162,19 +162,18 @@ int main()
     // Setup IPDDP solver options
     cddp::CDDPOptions options;
     options.max_iterations = 1000; // May need more iterations for one-shot solve
-    options.max_line_search_iterations = 21;
-    options.cost_tolerance = 1e-7; // Tighter tolerance for final solve
-    options.grad_tolerance = 1e-7; // Tighter tolerance for final solve
+    options.line_search.max_iterations = 21;
+    options.tolerance = 1e-7; // Tighter tolerance for final solve
     options.verbose = true;        // Show solver progress
-    options.use_parallel = false;
+    options.enable_parallel = false;
     options.num_threads = 8;
-    options.regularization_type = "control";
-    options.regularization_control = 1e-3;
-    options.barrier_coeff = 1e-0; // Starting barrier coefficient
-    options.is_ilqr = true;
+    // Regularization type is now implicit in new API
+    options.regularization.initial_value = 1e-3;
+    options.ipddp.barrier.mu_initial = 1e-0; // Starting barrier coefficient
+    options.use_ilqr = true;
     options.debug = false;
-    options.ms_segment_length = horizon;
-    options.ms_rollout_type = "nonlinear";
+    options.msipddp.segment_length = horizon;
+    options.msipddp.rollout_type = "nonlinear";
 
     // Initial trajectory.
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -200,7 +199,7 @@ int main()
 
     // Add Control Constraint
     Eigen::VectorXd u_upper = Eigen::VectorXd::Constant(3, u_max);
-    cddp_solver.addConstraint("ControlConstraint",
+    cddp_solver.addPathConstraint("ControlConstraint",
         std::make_unique<cddp::ControlConstraint>(u_upper));
 
     // // Add Thrust Magnitude Constraint
@@ -210,15 +209,15 @@ int main()
     // Add Ball Constraint (for keep-out zone)
     double radius = 90.0;
     Eigen::Vector2d center(0.0, 0.0);
-    cddp_solver.addConstraint("BallConstraint",
+    cddp_solver.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center, 0.1));
 
     // Solve the Trajectory Optimization Problem
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
     // Extract the solution
-    std::vector<Eigen::VectorXd> X_solution = solution.state_sequence;
-    std::vector<Eigen::VectorXd> U_solution = solution.control_sequence;
+    std::vector<Eigen::VectorXd> X_solution = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    std::vector<Eigen::VectorXd> U_solution = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
 
     if (!X_solution.empty() && !U_solution.empty())
     {

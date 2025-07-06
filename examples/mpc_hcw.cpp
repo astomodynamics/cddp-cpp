@@ -22,7 +22,8 @@
 
 #include "cddp.hpp"
 
-namespace plt = matplotlibcpp;
+#include "matplot/matplot.h"
+using namespace matplot;
 namespace fs = std::filesystem;
 using namespace cddp;
 
@@ -175,16 +176,13 @@ int main() {
         // Adjust solver options if desired (similar to cddp_hcw.cpp)
         cddp::CDDPOptions options;
         options.max_iterations       = 50;    
-        options.max_line_search_iterations = 21; 
-        options.cost_tolerance       = 1e-2;  
-        options.grad_tolerance       = 1e-2; 
+        options.line_search.max_iterations = 21; 
+        options.tolerance            = 1e-2;
         options.verbose             = false;
-        options.use_parallel         = false;
+        options.enable_parallel      = false;
         options.num_threads          = 8;
         // Regularization
-        options.regularization_type  = "control";
-        options.regularization_state = 1e-5; 
-        options.regularization_control = 1e-5;
+        options.regularization.initial_value = 1e-5;
 
         // ---------------------------------------------------------------------
         // (C) Setup CDDP solver
@@ -201,7 +199,7 @@ int main() {
         Eigen::VectorXd u_lower(3), u_upper(3);
         u_lower << u_min, u_min, u_min;
         u_upper << u_max, u_max, u_max;
-        cddp_solver.addConstraint(
+        cddp_solver.addPathConstraint(
             "ControlBoxConstraint",
             std::make_unique<cddp::ControlBoxConstraint>(u_lower, u_upper)
         );
@@ -236,7 +234,7 @@ int main() {
 
         // // Propagate the initial guess through the dynamics
         for (int k = 0; k < N; ++k) {
-            X_init[k + 1] = hcw_system.getDiscreteDynamics(X_init[k], U_init[k]);
+            X_init[k + 1] = hcw_system.getDiscreteDynamics(X_init[k], U_init[k], k * dt_mpc);
         }
 
         // Assign them to the solver
@@ -262,10 +260,11 @@ int main() {
                 cddp::CDDPSolution sol = cddp_solver.solve();
                 
                 // Extract the *first* control from that horizon
-                current_u = sol.control_sequence[0];
+                auto control_traj = std::any_cast<std::vector<Eigen::VectorXd>>(sol.at("control_trajectory"));
+                current_u = control_traj[0];
 
-                auto X_sequence = sol.state_sequence;
-                auto U_sequence = sol.control_sequence;
+                auto X_sequence = std::any_cast<std::vector<Eigen::VectorXd>>(sol.at("state_trajectory"));
+                auto U_sequence = std::any_cast<std::vector<Eigen::VectorXd>>(sol.at("control_trajectory"));
 
                 cddp_solver.setInitialTrajectory(X_sequence, U_sequence);
             }
@@ -274,7 +273,7 @@ int main() {
             // Advance the state by one simulation step dt_sim
             // -----------------------------------------------------------------
             { 
-                current_state = hcw_system.getDiscreteDynamics(current_state, current_u);
+                current_state = hcw_system.getDiscreteDynamics(current_state, current_u, k * dt_sim);
             }
 
             // Save data
@@ -287,8 +286,9 @@ int main() {
     // 3) Plot the X-Y trajectories for all samples
     // =========================================================================
     {
-        plt::figure_size(800, 600);
-        plt::title("HCW MPC Trajectories (x vs y)");
+        auto fig = figure();
+        fig->size(800, 600);
+        title("HCW MPC Trajectories (x vs y)");
         for (int i = 0; i < num_samples; ++i) {
             std::vector<double> xvals, yvals;
             xvals.reserve(tN);
@@ -297,7 +297,7 @@ int main() {
                 xvals.push_back(X_data[i][k](0)); // rx
                 yvals.push_back(X_data[i][k](1)); // ry
             }
-            plt::plot(xvals, yvals);
+            plot(xvals, yvals);
         }
         
         // Plot the initial conditions
@@ -305,18 +305,18 @@ int main() {
             std::vector<double> xvals, yvals;
             xvals.push_back(initial_conditions[i](0));
             yvals.push_back(initial_conditions[i](1));
-            plt::plot(xvals, yvals, "ro");
+            plot(xvals, yvals, "ro");
         }
 
-        plt::xlabel("x [m]");
-        plt::ylabel("y [m]");
+        xlabel("x [m]");
+        ylabel("y [m]");
         // axis limit
-        plt::xlim(-10, 110);
-        plt::ylim(-100, 100);
+        xlim({-10, 110});
+        ylim({-100, 100});
 
-        // plt::xlim(-100, 100);
-        // plt::ylim(-10, 110);
-        plt::grid(true);
+        // xlim(-100, 100);
+        // ylim(-10, 110);
+        grid(true);
 
         // Create results directory
         const std::string plotDirectory = "../results/simulations";
@@ -324,14 +324,14 @@ int main() {
             fs::create_directories(plotDirectory);
         }
         std::string figPath = plotDirectory + "/hcw_mpc_cddp_xaxis_trajectories.png";
-        plt::save(figPath);
-        // plt::show();
+        save(figPath);
+        // show();
     }
 
     // Plot control 
     {
-        plt::figure_size(800, 600);
-        plt::title("HCW MPC Control Inputs");
+        figure()->size(800, 600);
+        title("HCW MPC Control Inputs");
         for (int i = 0; i < num_samples; ++i) {
             std::vector<double> time_vals;
             std::vector<double> u1_vals, u2_vals, u3_vals, u_ub, u_lb;
@@ -349,29 +349,29 @@ int main() {
                 u_ub.push_back(u_max);
                 u_lb.push_back(u_min);
             }
-            plt::subplot(3, 1, 1);
-            plt::plot(time_vals, u1_vals);
-            plt::plot(time_vals, u_ub, "r--");
-            plt::plot(time_vals, u_lb, "r--");
-            plt::xlabel("Time [s]");
-            plt::ylabel("u1");
-            plt::grid(true);
+            subplot(3, 1, 1);
+            plot(time_vals, u1_vals);
+            plot(time_vals, u_ub, "r--");
+            plot(time_vals, u_lb, "r--");
+            xlabel("Time [s]");
+            ylabel("u1");
+            grid(true);
 
-            plt::subplot(3, 1, 2);
-            plt::plot(time_vals, u2_vals);
-            plt::plot(time_vals, u_ub, "r--");
-            plt::plot(time_vals, u_lb, "r--");
-            plt::xlabel("Time [s]");
-            plt::ylabel("u2");
-            plt::grid(true);
+            subplot(3, 1, 2);
+            plot(time_vals, u2_vals);
+            plot(time_vals, u_ub, "r--");
+            plot(time_vals, u_lb, "r--");
+            xlabel("Time [s]");
+            ylabel("u2");
+            grid(true);
 
-            plt::subplot(3, 1, 3);
-            plt::plot(time_vals, u3_vals);
-            plt::plot(time_vals, u_ub, "r--");
-            plt::plot(time_vals, u_lb, "r--");
-            plt::xlabel("Time [s]");
-            plt::ylabel("u3");
-            plt::grid(true);
+            subplot(3, 1, 3);
+            plot(time_vals, u3_vals);
+            plot(time_vals, u_ub, "r--");
+            plot(time_vals, u_lb, "r--");
+            xlabel("Time [s]");
+            ylabel("u3");
+            grid(true);
         }
         // Create results directory
         const std::string plotDirectory = "../results/simulations";
@@ -380,8 +380,8 @@ int main() {
             fs::create_directories(plotDirectory);
         }
         std::string figPath = plotDirectory + "/hcw_mpc_cddp_controls.png";
-        plt::save(figPath);
-        // plt::show();
+        save(figPath);
+        // show();
     }
 
 

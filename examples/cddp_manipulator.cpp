@@ -59,24 +59,22 @@ int main() {
     auto objective = std::make_unique<cddp::QuadraticObjective>(
         Q, R, Qf, goal_state, empty_reference_states, timestep);
 
-    // Create and configure the CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    // Solver options
+    cddp::CDDPOptions options;
+    options.max_iterations = 100;
+    options.line_search.max_iterations = 20;
+    options.verbose = true;
+
+    // Create and configure the CDDP solver with new API
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::move(system), std::move(objective), options);
 
     // Control constraints: joint torques limited to ±max_torque
     double max_torque = 50.0;
     Eigen::VectorXd control_lower_bound = -max_torque * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_upper_bound =  max_torque * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addConstraint("ControlBoxConstraint", 
+    cddp_solver.addPathConstraint("ControlBoxConstraint", 
         std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-
-    // Solver options
-    cddp::CDDPOptions options;
-    options.max_iterations = 100;
-    options.max_line_search_iterations = 20;
-    options.verbose = true;
-    cddp_solver.setOptions(options);
 
     // Initialize trajectories: here we use linear interpolation between initial and goal state
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -88,9 +86,13 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the optimal control problem
-    cddp::CDDPSolution solution = cddp_solver.solve();
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::ASDDP);
 
     // -------------------- Extract Trajectories for Static Plots --------------------
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
+    
     std::vector<double> time;     // for state trajectories
     std::vector<double> time_ctrl; // for control trajectories
     // For joint angles and velocities (each has 3 joints)
@@ -98,19 +100,19 @@ int main() {
     std::vector<std::vector<double>> joint_torques(3);
 
     // Loop over the time sequence to extract states and controls
-    for (size_t i = 0; i < solution.time_sequence.size(); ++i) {
-        time.push_back(solution.time_sequence[i]);
-        if (i < solution.state_sequence.size()) {
+    for (size_t i = 0; i < t_sol.size(); ++i) {
+        time.push_back(t_sol[i]);
+        if (i < X_sol.size()) {
             for (int j = 0; j < 3; ++j) {
-                joint_angles[j].push_back(solution.state_sequence[i](j));
-                joint_velocities[j].push_back(solution.state_sequence[i](j + 3));
+                joint_angles[j].push_back(X_sol[i](j));
+                joint_velocities[j].push_back(X_sol[i](j + 3));
             }
         }
-        if (i < solution.control_sequence.size()) {
+        if (i < U_sol.size()) {
             for (int j = 0; j < 3; ++j) {
-                joint_torques[j].push_back(solution.control_sequence[i](j));
+                joint_torques[j].push_back(U_sol[i](j));
             }
-            time_ctrl.push_back(solution.time_sequence[i]);
+            time_ctrl.push_back(t_sol[i]);
         }
     }
 
@@ -171,12 +173,12 @@ int main() {
     cddp::Manipulator manipulator(timestep, "rk4");
 
     // Animate every 5th frame of the solution
-    for (size_t i = 0; i < solution.state_sequence.size(); i += 5) {
+    for (size_t i = 0; i < X_sol.size(); i += 5) {
         ax2_fig2->clear();  // clear current figure
         ax2_fig2->hold(true);  // hold the current plot
         ax2_fig2->grid(true);  // enable grid
         
-        const auto& state = solution.state_sequence[i];
+        const auto& state = X_sol[i];
 
         auto transforms = manipulator.getTransformationMatrices(state(0), state(1), state(2));
         Eigen::Matrix4d T01 = transforms[0];

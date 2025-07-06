@@ -161,37 +161,33 @@ int main() {
     // Create the nonlinear objective for car parking
     auto objective = std::make_unique<cddp::CarParkingObjective>(goal_state, timestep);
 
-    // Create CDDP solver for the car model
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
+    // Set solver options
+    cddp::CDDPOptions options;
+    options.max_iterations = 600;
+    options.verbose = true;  
+    options.tolerance = 1e-7;
+    options.acceptable_tolerance = 1e-4;
+    options.regularization.initial_value = 1e-7;
+    options.debug = false;
+    options.use_ilqr = true;
+    options.enable_parallel = false;
+    options.num_threads = 1;
+    options.msipddp.barrier.mu_initial = 1e-0;
+    options.msipddp.dual_var_init_scale = 1e-1;
+    options.msipddp.slack_var_init_scale = 1e-2;
+    options.msipddp.segment_length = horizon / 100;
+    options.msipddp.rollout_type = "nonlinear";
+
+    // Create CDDP solver for the car model with new API
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::move(system), std::move(objective), options);
 
     // Define control constraints
     Eigen::VectorXd control_lower_bound(control_dim);
     control_lower_bound << -0.5, -2.0;  // [steering_angle, acceleration]
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 0.5, 2.0;
-    cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound));
-
-    // Set solver options
-    cddp::CDDPOptions options;
-    options.max_iterations = 600;
-    options.verbose = true;  
-    options.cost_tolerance = 1e-7;
-    options.grad_tolerance = 1e-4;
-    options.regularization_type = "control";
-    options.regularization_state = 0.0;
-    options.regularization_control = 1e-7;
-    options.debug = false;
-    options.is_ilqr = true;
-    options.use_parallel = false;
-    options.num_threads = 1;
-    options.barrier_coeff = 1e-0;
-    options.dual_scale = 1e-1;
-    options.slack_scale = 1e-2;
-    options.ms_segment_length = horizon / 100;
-    options.ms_rollout_type = "nonlinear";
-    cddp_solver.setOptions(options);
+    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound));
 
     // Initialize the trajectory with zero controls
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -204,17 +200,17 @@ int main() {
     }
     cddp_solver.setInitialTrajectory(X, U);
 
-    // Solve the problem using IPDDP
-    cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
+    // Solve the problem using MSIPDDP
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::MSIPDDP);
 
     // Extract solution trajectories
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
-    auto t_sol = solution.time_sequence;
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
 
     // Prepare trajectory data for plotting
     std::vector<double> x_hist, y_hist;
-    for (const auto& state : solution.state_sequence) {
+    for (const auto& state : X_sol) {
         x_hist.push_back(state(0));
         y_hist.push_back(state(1));
     }
