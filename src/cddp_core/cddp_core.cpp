@@ -48,6 +48,7 @@ CDDP::CDDP(const Eigen::VectorXd &initial_state,
       alpha_pr_(
           options.line_search.initial_step_size), // Initialize from options
       alpha_du_(0.0), regularization_(options.regularization.initial_value),
+      terminal_regularization_(options.regularization.initial_value),
       total_dual_dim_(0) {
 
   if (objective_ && !reference_state.isZero() &&
@@ -215,40 +216,40 @@ bool CDDP::removePathConstraint(const std::string &constraint_name) {
   return false; // Constraint not found
 }
 
-// void CDDP::addTerminalConstraint(std::string constraint_name,
-// std::unique_ptr<Constraint> constraint) {
-//     if (!constraint) {
-//         throw std::runtime_error("Cannot add null constraint.");
-//     }
+void CDDP::addTerminalConstraint(std::string constraint_name,
+std::unique_ptr<Constraint> constraint) {
+    if (!constraint) {
+        throw std::runtime_error("Cannot add null constraint.");
+    }
 
-//     // Get dual dimension BEFORE moving the constraint
-//     int dual_dim = constraint->getDualDim();
+    // Get dual dimension BEFORE moving the constraint
+    int dual_dim = constraint->getDualDim();
 
-//     terminal_constraint_set_[constraint_name] = std::move(constraint);
+    terminal_constraint_set_[constraint_name] = std::move(constraint);
 
-//     // Increment total dual dimension
-//     total_dual_dim_ += dual_dim;
+    // Increment total dual dimension
+    total_dual_dim_ += dual_dim;
 
-//     initialized_ = false; // Constraint set changed, need to reinitialize
-// }
+    initialized_ = false; // Constraint set changed, need to reinitialize
+}
 
-// bool CDDP::removeTerminalConstraint(const std::string &constraint_name) {
-//     auto it = terminal_constraint_set_.find(constraint_name);
-//     if (it != terminal_constraint_set_.end()) {
-//         // Decrement total dual dimension
-//         total_dual_dim_ -= it->second->getDualDim();
+bool CDDP::removeTerminalConstraint(const std::string &constraint_name) {
+    auto it = terminal_constraint_set_.find(constraint_name);
+    if (it != terminal_constraint_set_.end()) {
+        // Decrement total dual dimension
+        total_dual_dim_ -= it->second->getDualDim();
 
-//         // Remove the constraint from the set
-//         terminal_constraint_set_.erase(it);
+        // Remove the constraint from the set
+        terminal_constraint_set_.erase(it);
 
-//         // Mark as needing reinitialization since constraint set changed
-//         initialized_ = false;
+        // Mark as needing reinitialization since constraint set changed
+        initialized_ = false;
 
-//         return true; // Successfully removed
-//     }
+        return true; // Successfully removed
+    }
 
-//     return false; // Constraint not found
-// }
+    return false; // Constraint not found
+}
 
 namespace {
 std::string solverTypeToString(SolverType solver_type) {
@@ -417,6 +418,7 @@ void CDDP::initializeProblemIfNecessary() {
   inf_du_ = std::numeric_limits<double>::infinity();
   inf_comp_ = std::numeric_limits<double>::infinity();
   regularization_ = options_.regularization.initial_value;
+  terminal_regularization_ = options_.regularization.initial_value;
 
   initialized_ = true;
 }
@@ -439,6 +441,26 @@ void CDDP::decreaseRegularization() {
 
 bool CDDP::isRegularizationLimitReached() const {
   return regularization_ >= options_.regularization.max_value;
+}
+
+void CDDP::increaseTerminalRegularization() {
+  terminal_regularization_ *= options_.regularization.update_factor;
+
+  // Clamp to maximum value
+  terminal_regularization_ =
+      std::min(terminal_regularization_, options_.regularization.max_value);
+}
+
+void CDDP::decreaseTerminalRegularization() {
+  terminal_regularization_ /= options_.regularization.update_factor;
+
+  // Clamp to minimum value
+  terminal_regularization_ =
+      std::max(terminal_regularization_, options_.regularization.min_value);
+}
+
+bool CDDP::isTerminalRegularizationLimitReached() const {
+  return terminal_regularization_ >= options_.regularization.max_value;
 }
 
 bool CDDP::isKKTToleranceSatisfied() const {
