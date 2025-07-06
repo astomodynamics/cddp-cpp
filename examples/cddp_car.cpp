@@ -152,8 +152,6 @@ int main()
 
     // Create car instance
     double wheelbase = 2.0;
-    std::unique_ptr<cddp::DynamicalSystem> system =
-        std::make_unique<cddp::Car>(timestep, wheelbase, integration_type);
 
     // Initial and goal states
     Eigen::VectorXd initial_state(state_dim);
@@ -162,21 +160,13 @@ int main()
     Eigen::VectorXd goal_state(state_dim);
     goal_state << 0.0, 0.0, 0.0, 0.0; // NOT USED IN THIS EXAMPLE
 
-    // Create the nonlinear objective
-    auto objective = std::make_unique<cddp::CarParkingObjective>(goal_state, timestep);
-
-    // Create CDDP solver
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
-    cddp_solver.setDynamicalSystem(std::move(system));
-    cddp_solver.setObjective(std::move(objective));
-
     // Control constraints
     Eigen::VectorXd control_lower_bound(control_dim);
     control_lower_bound << -0.5, -2.0; // [steering_angle, acceleration]
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 0.5, 2.0;
 
-    cddp_solver.addConstraint("ControlBoxConstraint",
+    cddp_solver.addPathConstraint("ControlBoxConstraint",
                               std::make_unique<cddp::ControlBoxConstraint>(
                                   control_lower_bound, control_upper_bound));
 
@@ -184,15 +174,23 @@ int main()
     cddp::CDDPOptions options;
     options.max_iterations = 500;
     options.verbose = true;
-    options.cost_tolerance = 1e-7;
-    options.grad_tolerance = 1e-4;
-    options.regularization_type = "control";
-    options.regularization_state = 0.0;
-    options.regularization_control = 1e-7;
+    options.tolerance = 1e-7;
+    options.acceptable_tolerance = 1e-4;
+    options.regularization.initial_value = 1e-7;
     options.debug = false;
-    options.use_parallel = true;
+    options.enable_parallel = true;
     options.num_threads = 10;
-    cddp_solver.setOptions(options);
+
+    // Create CDDP solver with new API
+    cddp::CDDP cddp_solver(
+        initial_state,
+        goal_state,
+        horizon,
+        timestep,
+        std::make_unique<cddp::Car>(timestep, wheelbase, integration_type),
+        std::make_unique<cddp::CarParkingObjective>(goal_state, timestep),
+        options
+    );
 
     // Initialize with random controls
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -225,7 +223,7 @@ int main()
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve the problem
-    cddp::CDDPSolution solution = cddp_solver.solve("CLCDDP");
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::CLDDP);
     // ========================================
     //    CDDP Solution
     // ========================================
@@ -234,7 +232,7 @@ int main()
     // Solve Time: 5.507e+05 micro sec
     // Final Cost: 1.90517
     // ========================================
-    // cddp::CDDPSolution solution = cddp_solver.solve("LogCDDP"); // TODO: Fix this solver
+    // cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::LogDDP);
     // ========================================
     //    CDDP Solution
     // ========================================
@@ -243,7 +241,7 @@ int main()
     // Solve Time: 5.441e+05 micro sec
     // Final Cost: 1.90517
     // ========================================
-    // cddp::CDDPSolution solution = cddp_solver.solve("ASCDDP");
+    // cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::ASDDP);
     // ========================================
     // CDDP Solution
     // ========================================
@@ -254,8 +252,8 @@ int main()
     // ========================================
 
     // Extract solution trajectories
-    auto X_sol = solution.state_sequence;
-    auto U_sol = solution.control_sequence;
+    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
     auto t_sol = solution.time_sequence;
 
     // Prepare trajectory data
