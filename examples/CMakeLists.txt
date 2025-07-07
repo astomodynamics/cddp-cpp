@@ -41,6 +41,12 @@ target_link_libraries(cddp_pendulum cddp)
 add_executable(cddp_quadrotor_mpc cddp_quadrotor_mpc.cpp)
 target_link_libraries(cddp_quadrotor_mpc cddp)
 
+add_executable(cddp_quadrotor_mpc_collision_avoidance cddp_quadrotor_mpc_collision_avoidance.cpp)
+target_link_libraries(cddp_quadrotor_mpc_collision_avoidance cddp)
+
+add_executable(cddp_quadrotor_mpc_figure_eight cddp_quadrotor_mpc_figure_eight.cpp)
+target_link_libraries(cddp_quadrotor_mpc_figure_eight cddp)
+
 add_executable(cddp_quadrotor_circle cddp_quadrotor_circle.cpp)
 target_link_libraries(cddp_quadrotor_circle cddp)
 
