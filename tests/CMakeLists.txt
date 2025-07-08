@@ -54,6 +54,10 @@ add_executable(test_quadrotor dynamics_model/test_quadrotor.cpp)
 target_link_libraries(test_quadrotor gtest gmock gtest_main cddp)
 gtest_discover_tests(test_quadrotor)
 
+add_executable(test_quadrotor_rate dynamics_model/test_quadrotor_rate.cpp)
+target_link_libraries(test_quadrotor_rate gtest gmock gtest_main cddp)
+gtest_discover_tests(test_quadrotor_rate)
+
 add_executable(test_spacecraft_landing2d dynamics_model/test_spacecraft_landing2d.cpp)
 target_link_libraries(test_spacecraft_landing2d gtest gmock gtest_main cddp Eigen3::Eigen)
 gtest_discover_tests(test_spacecraft_landing2d)
