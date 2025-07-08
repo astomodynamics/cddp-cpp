@@ -158,6 +158,9 @@ struct ForwardPassResult {
   std::optional<std::map<std::string, Eigen::VectorXd>>
       terminal_constraint_value;
   
+  // PIPDDP: Parameter trajectory for parameter optimization
+  std::optional<Eigen::VectorXd> parameter_trajectory;
+  
   // Default constructor
   ForwardPassResult() = default;
 };
