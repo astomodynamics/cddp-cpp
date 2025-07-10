@@ -128,6 +128,45 @@ if (CDDP_CPP_CASADI AND CDDP_CPP_SNOPT)
 
     add_executable(unicycle_benchmark unicycle_benchmark.cpp)
     target_link_libraries(unicycle_benchmark cddp)
+    
+    # If ACADOS is available, enable it for the benchmark
+    if (CDDP_CPP_ACADOS)
+        target_compile_definitions(unicycle_benchmark PRIVATE CDDP_CPP_ACADOS_ENABLED=1)
+        target_compile_definitions(quadrotor_benchmark PRIVATE CDDP_CPP_ACADOS_ENABLED=1)
+        
+        # Add ACADOS generated sources for unicycle benchmark
+        set(ACADOS_GENERATED_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/c_generated_code)
+        
+        set(ACADOS_UNICYCLE_SOURCES
+            ${ACADOS_GENERATED_SRC_DIR}/acados_solver_unicycle.c
+            ${ACADOS_GENERATED_SRC_DIR}/unicycle_model/unicycle_expl_ode_fun.c
+            ${ACADOS_GENERATED_SRC_DIR}/unicycle_model/unicycle_expl_vde_forw.c
+            ${ACADOS_GENERATED_SRC_DIR}/unicycle_model/unicycle_expl_vde_adj.c
+            ${ACADOS_GENERATED_SRC_DIR}/unicycle_constraints/unicycle_constr_h_fun.c
+            ${ACADOS_GENERATED_SRC_DIR}/unicycle_constraints/unicycle_constr_h_fun_jac_uxt_zt.c
+        )
+        
+        target_sources(unicycle_benchmark PRIVATE ${ACADOS_UNICYCLE_SOURCES})
+        target_include_directories(unicycle_benchmark PRIVATE 
+            ${ACADOS_GENERATED_SRC_DIR}
+            ${ACADOS_GENERATED_SRC_DIR}/unicycle_model
+            ${ACADOS_GENERATED_SRC_DIR}/unicycle_constraints
+        )
+        
+        # Add ACADOS generated sources for quadrotor benchmark
+        set(ACADOS_QUADROTOR_SOURCES
+            ${ACADOS_GENERATED_SRC_DIR}/acados_solver_quadrotor.c
+            ${ACADOS_GENERATED_SRC_DIR}/quadrotor_model/quadrotor_expl_ode_fun.c
+            ${ACADOS_GENERATED_SRC_DIR}/quadrotor_model/quadrotor_expl_vde_forw.c
+            ${ACADOS_GENERATED_SRC_DIR}/quadrotor_model/quadrotor_expl_vde_adj.c
+        )
+        
+        target_sources(quadrotor_benchmark PRIVATE ${ACADOS_QUADROTOR_SOURCES})
+        target_include_directories(quadrotor_benchmark PRIVATE 
+            ${ACADOS_GENERATED_SRC_DIR}
+            ${ACADOS_GENERATED_SRC_DIR}/quadrotor_model
+        )
+    endif()
 endif()
 
 if (CDDP_CPP_CASADI AND CDDP_CPP_SQP)
