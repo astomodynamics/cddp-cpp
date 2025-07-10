@@ -28,6 +28,14 @@
 #include "cddp.hpp"
 #include "matplot/matplot.h"
 
+// ACADOS includes (conditional compilation)
+#ifdef CDDP_CPP_ACADOS_ENABLED
+extern "C" {
+#include "acados_solver_quadrotor.h"
+#include "acados_c/ocp_nlp_interface.h"
+}
+#endif
+
 using namespace matplot;
 namespace fs = std::filesystem;
 
@@ -1080,7 +1088,207 @@ int main() {
     }
 
     // --------------------------------------------------------
-    // 7. Reference trajectory for comparison
+    // 7. ACADOS Solver (using C interface)
+    // --------------------------------------------------------
+    std::cout << "Solving with ACADOS..." << std::endl;
+    
+    std::vector<Eigen::VectorXd> X_acados_sol(horizon + 1, Eigen::VectorXd(state_dim));
+    std::vector<Eigen::VectorXd> U_acados_sol(horizon, Eigen::VectorXd(control_dim));
+    std::vector<double> x_acados, y_acados, z_acados;
+    std::vector<double> phi_acados, theta_acados, psi_acados;
+    double solve_time_acados_numeric = 0.0;
+    double cost_acados = 0.0;
+
+#ifdef CDDP_CPP_ACADOS_ENABLED
+    try { // ACADOS specific scope with exception handling
+        std::cout << "ACADOS: Using generated solver" << std::endl;
+        
+        const int N = horizon;
+        
+        auto start_time_acados = std::chrono::high_resolution_clock::now();
+        
+        std::cout << "ACADOS: Creating solver capsule..." << std::endl;
+        // Create solver capsule
+        quadrotor_solver_capsule *capsule = quadrotor_acados_create_capsule();
+        int status = quadrotor_acados_create(capsule);
+        
+        if (status) {
+            std::cerr << "ACADOS solver creation failed with status " << status << std::endl;
+            quadrotor_acados_free_capsule(capsule);
+            throw std::runtime_error("Failed to create ACADOS solver");
+        }
+        
+        // Get internal structures
+        ocp_nlp_config *nlp_config = quadrotor_acados_get_nlp_config(capsule);
+        ocp_nlp_dims *nlp_dims = quadrotor_acados_get_nlp_dims(capsule);
+        ocp_nlp_in *nlp_in = quadrotor_acados_get_nlp_in(capsule);
+        ocp_nlp_out *nlp_out = quadrotor_acados_get_nlp_out(capsule);
+        
+        // Set initial state constraint
+        double x0[13];
+        for (int i = 0; i < 13; i++) {
+            x0[i] = initial_state(i);
+        }
+        ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, nlp_out, 0, "lbx", x0);
+        ocp_nlp_constraints_model_set(nlp_config, nlp_dims, nlp_in, nlp_out, 0, "ubx", x0);
+        
+        std::cout << "ACADOS: Setting reference trajectory..." << std::endl;
+        // Set reference trajectory
+        for (int i = 0; i < N; i++) {
+            double yref[17];  // [u(4); x(13)]
+            // Control reference is zero (penalize u'*R*u not (u-u_ref)'*R*(u-u_ref))
+            for (int j = 0; j < 4; j++) {
+                yref[j] = 0.0;
+            }
+            // State reference from figure-8
+            for (int j = 0; j < 13; j++) {
+                yref[4 + j] = figure8_reference_states[i](j);
+            }
+            ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, i, "yref", yref);
+        }
+        
+        // Terminal reference (use goal_state, not figure8_reference_states[N])
+        double yref_e[13];
+        for (int j = 0; j < 13; j++) {
+            yref_e[j] = goal_state(j);
+        }
+        ocp_nlp_cost_model_set(nlp_config, nlp_dims, nlp_in, N, "yref", yref_e);
+        
+        std::cout << "ACADOS: Initializing trajectory..." << std::endl;
+        // Initialize trajectory
+        for (int i = 0; i <= N; i++) {
+            double x_init_stage[13];
+            for (int j = 0; j < 13; j++) {
+                x_init_stage[j] = X_init[i](j);
+            }
+            ocp_nlp_out_set(nlp_config, nlp_dims, nlp_out, nlp_in, i, "x", x_init_stage);
+        }
+        
+        for (int i = 0; i < N; i++) {
+            double u_init_stage[4];
+            for (int j = 0; j < 4; j++) {
+                u_init_stage[j] = U_init[i](j);
+            }
+            ocp_nlp_out_set(nlp_config, nlp_dims, nlp_out, nlp_in, i, "u", u_init_stage);
+        }
+        
+        std::cout << "ACADOS: Solving..." << std::endl;
+        // Solve
+        status = quadrotor_acados_solve(capsule);
+        
+        auto end_time_acados = std::chrono::high_resolution_clock::now();
+        solve_time_acados_numeric = std::chrono::duration<double>(end_time_acados - start_time_acados).count();
+        
+        // Extract solution
+        for (int i = 0; i <= N; i++) {
+            double x_sol[13];
+            ocp_nlp_out_get(nlp_config, nlp_dims, nlp_out, i, "x", x_sol);
+            for (int j = 0; j < 13; j++) {
+                X_acados_sol[i](j) = x_sol[j];
+            }
+        }
+        
+        for (int i = 0; i < N; i++) {
+            double u_sol[4];
+            ocp_nlp_out_get(nlp_config, nlp_dims, nlp_out, i, "u", u_sol);
+            for (int j = 0; j < 4; j++) {
+                U_acados_sol[i](j) = u_sol[j];
+            }
+        }
+        
+        // Compute cost by evaluating objective function (matching CDDP cost computation)
+        cost_acados = 0.0;
+        for (int i = 0; i <= N; i++) {
+            if (i < N) {
+                Eigen::VectorXd x_err = X_acados_sol[i] - figure8_reference_states[i];
+                // Note: Other solvers penalize u'*R*u, not (u-u_ref)'*R*(u-u_ref)
+                // Multiply by timestep to match IPOPT/SNOPT cost scaling
+                cost_acados += timestep * (x_err.transpose() * Q * x_err + U_acados_sol[i].transpose() * R * U_acados_sol[i]).value();
+            } else {
+                // Terminal cost uses goal_state, not figure8_reference_states[N]
+                Eigen::VectorXd x_err = X_acados_sol[i] - goal_state;
+                cost_acados += (x_err.transpose() * Qf * x_err).value();
+            }
+        }
+        
+        // Get solver statistics
+        ocp_nlp_solver *solver = quadrotor_acados_get_nlp_solver(capsule);
+        int sqp_iter;
+        ocp_nlp_get(solver, "sqp_iter", &sqp_iter);
+        
+        double time_tot;
+        ocp_nlp_get(solver, "time_tot", &time_tot);
+        
+        std::cout << "ACADOS status: " << status << " (0 = success, 1 = max iter, 2 = unbounded, 3 = timeout, 4 = NaN/Inf)" << std::endl;
+        std::cout << "ACADOS iterations: " << sqp_iter << std::endl;
+        std::cout << "ACADOS Optimal Cost: " << cost_acados << std::endl;
+        std::cout << "ACADOS solve time: " << solve_time_acados_numeric << " seconds" << std::endl;
+        
+        // Cleanup
+        quadrotor_acados_free(capsule);
+        quadrotor_acados_free_capsule(capsule);
+        
+    } catch (const std::exception& e) {
+        std::cerr << "ACADOS error: " << e.what() << std::endl;
+        std::cerr << "Using fallback solution" << std::endl;
+        
+        // Use initial trajectory as fallback
+        X_acados_sol = X_init;
+        U_acados_sol = U_init;
+        
+        // Calculate cost manually for placeholder
+        cost_acados = 0.0;
+        for (int t = 0; t < horizon; ++t) {
+            Eigen::VectorXd x_diff = X_acados_sol[t] - figure8_reference_states[t];
+            cost_acados += timestep * (x_diff.transpose() * Q * x_diff).value();
+            cost_acados += timestep * (U_acados_sol[t].transpose() * R * U_acados_sol[t]).value();
+        }
+        Eigen::VectorXd x_final_diff = X_acados_sol[horizon] - goal_state;
+        cost_acados += (x_final_diff.transpose() * Qf * x_final_diff).value();
+        
+        solve_time_acados_numeric = 0.001; // 1ms fallback time
+    }
+#else
+    { // ACADOS not available - use initial trajectory
+        std::cout << "ACADOS not available. Using initial trajectory as placeholder." << std::endl;
+        X_acados_sol = X_init;
+        U_acados_sol = U_init;
+        
+        // Calculate cost manually for placeholder
+        cost_acados = 0.0;
+        for (int t = 0; t < horizon; ++t) {
+            Eigen::VectorXd x_diff = X_acados_sol[t] - figure8_reference_states[t];
+            cost_acados += timestep * (x_diff.transpose() * Q * x_diff).value();
+            cost_acados += timestep * (U_acados_sol[t].transpose() * R * U_acados_sol[t]).value();
+        }
+        Eigen::VectorXd x_final_diff = X_acados_sol[horizon] - goal_state;
+        cost_acados += (x_final_diff.transpose() * Qf * x_final_diff).value();
+        
+        std::cout << "ACADOS Optimal Cost: " << cost_acados << std::endl;
+        std::cout << "ACADOS solve time: " << solve_time_acados_numeric << " seconds" << std::endl;
+    }
+#endif
+
+    // Extract data for plotting
+    for (size_t i = 0; i < X_acados_sol.size(); ++i)
+    {
+        x_acados.push_back(X_acados_sol[i](0));
+        y_acados.push_back(X_acados_sol[i](1));
+        z_acados.push_back(X_acados_sol[i](2));
+
+        double qw = X_acados_sol[i](3);
+        double qx = X_acados_sol[i](4);
+        double qy = X_acados_sol[i](5);
+        double qz = X_acados_sol[i](6);
+
+        Eigen::Vector3d euler = quaternionToEuler(qw, qx, qy, qz);
+        phi_acados.push_back(euler(0));
+        theta_acados.push_back(euler(1));
+        psi_acados.push_back(euler(2));
+    }
+
+    // --------------------------------------------------------
+    // 8. Reference trajectory for comparison
     // --------------------------------------------------------
     std::vector<double> x_ref, y_ref, z_ref;
     for (const auto& ref_state : figure8_reference_states) {
@@ -1318,11 +1526,12 @@ int main() {
         solve_time_ipddp / 1000000.0,      // Convert to seconds
         solve_time_msipddp / 1000000.0,    // Convert to seconds
         solve_time_ipopt_numeric,          // Already in seconds
-        solve_time_snopt_numeric           // Already in seconds
+        solve_time_snopt_numeric,          // Already in seconds
+        solve_time_acados_numeric          // Already in seconds
     };
 
     std::vector<std::string> solver_names = {
-        "ASDDP", "LogDDP", "IPDDP", "MSIPDDP", "IPOPT", "SNOPT"
+        "ASDDP", "LogDDP", "IPDDP", "MSIPDDP", "IPOPT", "SNOPT", "ACADOS"
     };
 
     auto ax_times = time_figure->current_axes();
@@ -1360,6 +1569,8 @@ int main() {
               << " | " << std::setw(13) << solve_time_ipopt_numeric << "\n";
     std::cout << "SNOPT     | " << std::setw(10) << cost_snopt 
               << " | " << std::setw(13) << solve_time_snopt_numeric << "\n";
+    std::cout << "ACADOS    | " << std::setw(10) << cost_acados 
+              << " | " << std::setw(13) << solve_time_acados_numeric << "\n";
     std::cout << "========================================\n\n";
 
     return 0;
