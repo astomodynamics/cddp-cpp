@@ -75,6 +75,16 @@ else()
   set(SNOPT_ROOT /home/astomodynamics/.local/lib/snopt)  # Linux default path
 endif()
 
+# ACADOS Configuration
+# For ACADOS installation, see: https://docs.acados.org/
+option(CDDP_CPP_ACADOS "Whether to use ACADOS solver." OFF)
+option(ACADOS_ROOT "Path to ACADOS installation" "")
+if(APPLE)
+  set(ACADOS_ROOT /usr/local/lib/acados)  # macOS default path
+else()
+  set(ACADOS_ROOT /home/astomodynamics/acados)  # Linux default path
+endif()
+
 # LibTorch Configuration
 # If you want to install LibTorch, please follow the instructions at:
 # https://pytorch.org/
@@ -442,6 +452,61 @@ if (CDDP_CPP_SNOPT)
     message(STATUS "Successfully linked SNOPT.")
   else()
     message(FATAL_ERROR "Could not find SNOPT libraries. Please check SNOPT_ROOT: ${SNOPT_ROOT}")
+  endif()
+endif()
+
+# ACADOS
+if (CDDP_CPP_ACADOS)
+  if (NOT ACADOS_ROOT)
+    message(FATAL_ERROR "Please set ACADOS_ROOT to your ACADOS installation directory.")
+  endif()
+  
+  # Set ACADOS paths
+  set(ACADOS_INCLUDE_DIRS ${ACADOS_ROOT}/include)
+  set(ACADOS_LIB_DIR ${ACADOS_ROOT}/lib)
+  set(BLASFEO_INCLUDE_DIR ${ACADOS_ROOT}/include/blasfeo/include)
+  set(HPIPM_INCLUDE_DIR ${ACADOS_ROOT}/include/hpipm/include)
+  
+  # Find ACADOS libraries 
+  find_library(ACADOS_LIBRARY NAMES acados PATHS ${ACADOS_LIB_DIR})
+  find_library(HPIPM_LIBRARY NAMES hpipm PATHS ${ACADOS_LIB_DIR})
+  find_library(BLASFEO_LIBRARY NAMES blasfeo PATHS ${ACADOS_LIB_DIR})
+  find_library(QPOASES_E_LIBRARY NAMES qpOASES_e PATHS ${ACADOS_LIB_DIR})
+  
+  # Find header files
+  find_path(ACADOS_C_INCLUDE_DIR acados_c/ocp_nlp_interface.h PATHS ${ACADOS_INCLUDE_DIRS})
+  
+  # Set up library list
+  set(ACADOS_LIBRARIES)
+  if(ACADOS_LIBRARY)
+    list(APPEND ACADOS_LIBRARIES ${ACADOS_LIBRARY})
+  endif()
+  if(HPIPM_LIBRARY)
+    list(APPEND ACADOS_LIBRARIES ${HPIPM_LIBRARY})
+  endif()
+  if(BLASFEO_LIBRARY)
+    list(APPEND ACADOS_LIBRARIES ${BLASFEO_LIBRARY})
+  endif()
+  if(QPOASES_E_LIBRARY)
+    list(APPEND ACADOS_LIBRARIES ${QPOASES_E_LIBRARY})
+  endif()
+  
+  if (ACADOS_LIBRARIES AND ACADOS_C_INCLUDE_DIR)
+    message(STATUS "Found ACADOS libraries: ${ACADOS_LIBRARIES}")
+    message(STATUS "ACADOS include directory: ${ACADOS_C_INCLUDE_DIR}")
+    
+    include_directories(${ACADOS_C_INCLUDE_DIR})
+    include_directories(${BLASFEO_INCLUDE_DIR})
+    include_directories(${HPIPM_INCLUDE_DIR})
+    link_directories(${ACADOS_LIB_DIR})
+    target_link_libraries(${PROJECT_NAME} ${ACADOS_LIBRARIES})
+    
+    # Add preprocessor definition to enable ACADOS in code
+    target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_ACADOS_ENABLED=1)
+    
+    message(STATUS "Successfully linked ACADOS.")
+  else()
+    message(FATAL_ERROR "Could not find ACADOS libraries. Please check ACADOS_ROOT: ${ACADOS_ROOT}")
   endif()
 endif()
 
