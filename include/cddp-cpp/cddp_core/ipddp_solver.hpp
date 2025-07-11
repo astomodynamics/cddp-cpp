@@ -245,28 +245,6 @@ namespace cddp
          */
         void printSolutionSummary(const CDDPSolution &solution) const;
         
-        /**
-         * @brief Check and correct matrix inertia for positive definiteness.
-         * @param Q_uu Control cost hessian matrix
-         * @param regularization Current regularization parameter
-         * @return Corrected regularization value
-         */
-        double correctInertia(Eigen::MatrixXd& Q_uu, double regularization) const;
-        
-        /**
-         * @brief Compute second-order correction step.
-         * @param context CDDP context
-         * @param alpha Step size
-         * @return Correction result
-         */
-        ForwardPassResult computeSOC(CDDP &context, double alpha);
-        
-        /**
-         * @brief Specialized backward pass for small problems (3 states, 2 controls).
-         * @param context CDDP context
-         * @return True if successful
-         */
-        bool backwardPassSmall(CDDP &context);
     };
 
 } // namespace cddp

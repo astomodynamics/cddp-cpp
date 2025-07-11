@@ -128,8 +128,6 @@ namespace cddp
         double dual_var_init_scale = 1e-1;  ///< Initial scale for dual variables.
         double slack_var_init_scale = 1e-2; ///< Initial scale for slack variables.
 
-        // Algorithm features
-        bool use_second_order_correction = false; ///< Enable second-order correction steps
 
         SolverSpecificBarrierOptions
             barrier; ///< Barrier method parameters for IPDDP.

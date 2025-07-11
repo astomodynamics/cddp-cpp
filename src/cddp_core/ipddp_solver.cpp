@@ -480,6 +480,7 @@ namespace cddp
   void IPDDPSolver::evaluateTrajectory(CDDP &context)
   {
     const int horizon = context.getHorizon();
+    const CDDPOptions &options = context.getOptions();
     double cost = 0.0;
 
     // Set initial state
@@ -1064,84 +1065,6 @@ namespace cddp
     }
   }
 
-  bool IPDDPSolver::backwardPassSmall(CDDP &context)
-  {
-    // Specialized implementation for 3-state, 2-control problems
-    const CDDPOptions &options = context.getOptions();
-    const int horizon = context.getHorizon();
-    const double timestep = context.getTimestep();
-    
-    // Pre-compute dynamics jacobians
-    precomputeDynamicsDerivatives(context);
-    
-    // Use fixed-size matrices for better performance
-    Eigen::Vector3d V_x = context.getObjective().getFinalCostGradient(context.X_.back());
-    Eigen::Matrix3d V_xx = context.getObjective().getFinalCostHessian(context.X_.back());
-    V_xx = 0.5 * (V_xx + V_xx.transpose());
-    
-    dV_ = Eigen::Vector2d::Zero();
-    double inf_du = 0.0;
-    double step_norm = 0.0;
-    
-    for (int t = horizon - 1; t >= 0; --t)
-    {
-      const Eigen::VectorXd &x = context.X_[t];
-      const Eigen::VectorXd &u = context.U_[t];
-      
-      // Fixed-size matrices for 3x3 and 3x2 operations
-      Eigen::Matrix3d A = Eigen::Matrix3d::Identity() + timestep * F_x_[t];
-      Eigen::Matrix<double, 3, 2> B = timestep * F_u_[t];
-      
-      // Cost derivatives
-      auto [l_x, l_u] = context.getObjective().getRunningCostGradients(x, u, t);
-      auto [l_xx, l_uu, l_ux] = context.getObjective().getRunningCostHessians(x, u, t);
-      
-      // Q expansions using fixed-size operations
-      Eigen::Vector3d Q_x = l_x + A.transpose() * V_x;
-      Eigen::Vector2d Q_u = l_u + B.transpose() * V_x;
-      Eigen::Matrix3d Q_xx = l_xx + A.transpose() * V_xx * A;
-      Eigen::Matrix<double, 2, 3> Q_ux = l_ux + B.transpose() * V_xx * A;
-      Eigen::Matrix2d Q_uu = l_uu + B.transpose() * V_xx * B;
-      
-      // Regularization with inertia correction
-      Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
-      Q_uu.diagonal().array() += context.regularization_;
-      
-      // Solve using fixed-size LDLT
-      Eigen::LDLT<Eigen::Matrix2d> ldlt(Q_uu);
-      if (ldlt.info() != Eigen::Success)
-      {
-        return false;
-      }
-      
-      Eigen::Vector2d k_u = -ldlt.solve(Q_u);
-      Eigen::Matrix<double, 2, 3> K_u = -ldlt.solve(Q_ux);
-      
-      k_u_[t] = k_u;
-      K_u_[t] = K_u;
-      
-      // Update value function
-      V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u + K_u.transpose() * Q_uu * k_u;
-      V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u + K_u.transpose() * Q_uu * K_u;
-      V_xx = 0.5 * (V_xx + V_xx.transpose());
-      
-      // Accumulate cost improvement
-      dV_[0] += k_u.dot(Q_u);
-      dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
-      
-      // Error tracking
-      inf_du = std::max(inf_du, Q_u.lpNorm<Eigen::Infinity>());
-      step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
-    }
-    
-    context.inf_du_ = inf_du;
-    context.step_norm_ = step_norm;
-    context.inf_pr_ = 0.0;
-    context.inf_comp_ = 0.0;
-    
-    return true;
-  }
-
   bool IPDDPSolver::backwardPass(CDDP &context)
   {
     const CDDPOptions &options = context.getOptions();
@@ -1151,11 +1074,6 @@ namespace cddp
     const double timestep = context.getTimestep();
     const auto &constraint_set = context.getConstraintSet();
     const int total_dual_dim = getTotalDualDim(context);
-    
-    // Use specialized implementation for small problems
-    if (state_dim == 3 && control_dim == 2 && constraint_set.empty()) {
-      return backwardPassSmall(context);
-    }
 
     // Pre-compute dynamics jacobians and hessians for all time steps
     precomputeDynamicsDerivatives(context);
@@ -1228,9 +1146,9 @@ namespace cddp
           }
         }
 
-        // Regularization with IPOPT-style inertia correction
+        // Apply standard DDP regularization
         Q_uu = 0.5 * (Q_uu + Q_uu.transpose()); // symmetrize NOTE: This is critical
-        double effective_reg = correctInertia(Q_uu, context.regularization_);
+        Q_uu.diagonal().array() += context.regularization_;
 
         // Use cached LDLT solver or compute new factorization
         if (!workspace_.ldlt_valid[t] || workspace_.ldlt_solvers[t].matrixLDLT().rows() != control_dim) {
@@ -1245,7 +1163,7 @@ namespace cddp
         {
           if (options.debug)
           {
-            std::cerr << "IPDDP: Backward pass failed at time " << t << " even after inertia correction" << std::endl;
+            std::cerr << "IPDDP: Backward pass failed at time " << t << " (Q_uu not positive definite)" << std::endl;
           }
           workspace_.ldlt_valid[t] = false;
           return false;
@@ -1368,22 +1286,22 @@ namespace cddp
         Eigen::VectorXd complementary_residual = y.cwiseProduct(s).array() - mu_; // complementary infeasibility
         Eigen::VectorXd rhat = y.cwiseProduct(primal_residual) - complementary_residual;
 
-        // Regularization with IPOPT-style inertia correction
+        // Apply standard DDP regularization
         Eigen::MatrixXd Q_uu_reg = Q_uu;
         Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
         
         // Add constraint contribution
         Q_uu_reg.noalias() += Q_yu.transpose() * YSinv * Q_yu;
         
-        // Apply inertia correction
-        double effective_reg = correctInertia(Q_uu_reg, context.regularization_);
+        // Apply standard DDP regularization
+        Q_uu_reg.diagonal().array() += context.regularization_;
 
         Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
         if (ldlt.info() != Eigen::Success)
         {
           if (options.debug)
           {
-            std::cerr << "IPDDP: Backward pass failed at time " << t << " even after inertia correction" << std::endl;
+            std::cerr << "IPDDP: Backward pass failed at time " << t << " (Q_uu not positive definite)" << std::endl;
           }
           return false;
         }
@@ -1485,6 +1403,14 @@ namespace cddp
     best_result.merit_function = std::numeric_limits<double>::infinity();
     best_result.success = false;
 
+    // Store current merit function value and directional derivative
+    double merit_0 = context.merit_function_;
+    double directional_derivative = dV_(0);  // Expected improvement
+    
+    // Adaptive backtracking parameters
+    const int max_adaptive_iterations = 5;
+    const double min_alpha = 1e-8;
+    
     if (!options.enable_parallel)
     {
       // Single-threaded execution with early termination
@@ -1505,7 +1431,7 @@ namespace cddp
     }
     else
     {
-      // Multi-threaded execution
+      // Multi-threaded execution (use standard alphas for now)
       std::vector<std::future<ForwardPassResult>> futures;
       futures.reserve(context.alphas_.size());
 
@@ -1541,18 +1467,6 @@ namespace cddp
       }
     }
 
-    // Try second-order correction if regular forward pass didn't succeed well
-    if (!best_result.success || best_result.merit_function > 0.99 * context.merit_function_) {
-      if (options.ipddp.use_second_order_correction) {
-        ForwardPassResult soc_result = computeSOC(context, 1.0);
-        if (soc_result.success && soc_result.merit_function < best_result.merit_function) {
-          best_result = soc_result;
-          if (options.debug) {
-            std::cout << "IPDDP: SOC improved solution" << std::endl;
-          }
-        }
-      }
-    }
 
     return best_result;
   }
@@ -1877,108 +1791,6 @@ namespace cddp
     std::cout << std::endl;
   }
 
-  double IPDDPSolver::correctInertia(Eigen::MatrixXd& Q_uu, double regularization) const
-  {
-    // IPOPT-style inertia correction
-    // Check eigenvalues of Q_uu
-    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eigensolver(Q_uu);
-    double min_eigenvalue = eigensolver.eigenvalues().minCoeff();
-    
-    // If matrix is not positive definite, add regularization
-    const double min_eigenvalue_threshold = 1e-6;
-    if (min_eigenvalue < min_eigenvalue_threshold) {
-      // Compute correction factor to ensure minimum eigenvalue
-      double correction = min_eigenvalue_threshold - min_eigenvalue + regularization;
-      Q_uu.diagonal().array() += correction;
-      return regularization + correction;
-    }
-    
-    return regularization;
-  }
-
-  ForwardPassResult IPDDPSolver::computeSOC(CDDP &context, double alpha)
-  {
-    const CDDPOptions &options = context.getOptions();
-    const auto &constraint_set = context.getConstraintSet();
-    
-    ForwardPassResult result;
-    result.success = false;
-    result.alpha_pr = alpha;
-    
-    const int horizon = context.getHorizon();
-    const int state_dim = context.getStateDim();
-    const int control_dim = context.getControlDim();
-    const double timestep = context.getTimestep();
-    
-    // Initialize SOC trajectories from current solution
-    result.state_trajectory = context.X_;
-    result.control_trajectory = context.U_;
-    
-    // Store current state for restoration if needed
-    std::vector<Eigen::VectorXd> X_backup = context.X_;
-    std::vector<Eigen::VectorXd> U_backup = context.U_;
-    
-    // Forward simulate with SOC correction
-    for (int t = 0; t < horizon; ++t)
-    {
-      const Eigen::VectorXd &x = result.state_trajectory[t];
-      const Eigen::VectorXd &u_ref = context.U_[t];
-      
-      // Compute state deviation
-      Eigen::VectorXd dx = x - context.X_[t];
-      
-      // Apply feedback control with second-order correction
-      Eigen::VectorXd du = k_u_[t] + K_u_[t] * dx;
-      
-      // Apply second-order correction term (approximation to nonlinear dynamics)
-      if (!options.use_ilqr && dx.norm() > 1e-6) {
-        // Add quadratic correction based on state deviation
-        Eigen::VectorXd soc_correction = Eigen::VectorXd::Zero(control_dim);
-        for (int i = 0; i < state_dim; ++i) {
-          if (t < F_uu_.size() && i < F_uu_[t].size()) {
-            soc_correction += 0.5 * dx(i) * F_uu_[t][i] * du;
-          }
-        }
-        du += alpha * soc_correction;
-      }
-      
-      // Apply control with step size
-      result.control_trajectory[t] = u_ref + alpha * du;
-      
-      // Simulate forward
-      try {
-        result.state_trajectory[t + 1] = context.getSystem().getDiscreteDynamics(
-            x, result.control_trajectory[t], t * timestep);
-      } catch (const std::exception &e) {
-        if (options.debug) {
-          std::cerr << "IPDDP SOC: Dynamics evaluation failed at time " << t << std::endl;
-        }
-        return result;
-      }
-    }
-    
-    // Evaluate cost with SOC trajectory
-    double cost = 0.0;
-    for (int t = 0; t < horizon; ++t) {
-      cost += context.getObjective().running_cost(
-          result.state_trajectory[t], result.control_trajectory[t], t);
-    }
-    cost += context.getObjective().terminal_cost(result.state_trajectory.back());
-    
-    // Check if SOC improved the solution
-    if (cost < context.cost_) {
-      result.cost = cost;
-      result.success = true;
-      result.merit_function = cost; // Simplified for unconstrained case
-      
-      if (options.debug) {
-        std::cout << "IPDDP SOC: Improved cost from " << context.cost_ 
-                  << " to " << cost << std::endl;
-      }
-    }
-    
-    return result;
-  }
 
   void IPDDPSolver::printSolutionSummary(const CDDPSolution &solution) const
   {
@@ -2113,21 +1925,29 @@ namespace cddp
         std::cout << "IPDDP: Converged due to scaled optimality gap and constraint "
                      "violation (metric: "
                   << std::scientific << std::setprecision(2)
-                    << termination_metric << ", scaled inf_du: " << scaled_inf_du << ")" << std::endl;
-        }
+                  << termination_metric << ", scaled inf_du: " << scaled_inf_du << ")" << std::endl;
+      }
       return true;
     }
 
-    if (std::abs(dJ) < options.acceptable_tolerance)
+    // For acceptable tolerance, also check if we're making minimal progress over several iterations
+    if (std::abs(dJ) < options.acceptable_tolerance && iter > 10)
     {
-      termination_reason = "AcceptableSolutionFound";
-      if (options.verbose)
+      // Check if all infeasibility measures are reasonably small
+      bool acceptable_infeasibility = (context.inf_pr_ < std::sqrt(options.acceptable_tolerance) &&
+                                       context.inf_comp_ < std::sqrt(options.acceptable_tolerance));
+      
+      if (acceptable_infeasibility)
       {
-        std::cout << "IPDDP: Converged due to small change in cost (dJ: "
-                  << std::scientific << std::setprecision(2) << std::abs(dJ)
-                  << ")" << std::endl;
+        termination_reason = "AcceptableSolutionFound";
+        if (options.verbose)
+        {
+          std::cout << "IPDDP: Converged due to small change in cost (dJ: "
+                    << std::scientific << std::setprecision(2) << std::abs(dJ)
+                    << ") with acceptable infeasibility" << std::endl;
+        }
+        return true;
       }
-      return true;
     }
 
     // Check step norm for early termination
