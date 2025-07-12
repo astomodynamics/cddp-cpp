@@ -23,6 +23,9 @@ target_link_libraries(cddp_car cddp)
 add_executable(cddp_car_ipddp cddp_car_ipddp.cpp)
 target_link_libraries(cddp_car_ipddp cddp)
 
+add_executable(cddp_forklift_ipddp cddp_forklift_ipddp.cpp)
+target_link_libraries(cddp_forklift_ipddp cddp)
+
 add_executable(cddp_cartpole cddp_cartpole.cpp)
 target_link_libraries(cddp_cartpole cddp)
 
