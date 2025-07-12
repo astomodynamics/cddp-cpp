@@ -34,6 +34,10 @@ add_executable(test_dreyfus_rocket dynamics_model/test_dreyfus_rocket.cpp)
 target_link_libraries(test_dreyfus_rocket gtest gmock gtest_main cddp)
 gtest_discover_tests(test_dreyfus_rocket)
 
+add_executable(test_forklift dynamics_model/test_forklift.cpp)
+target_link_libraries(test_forklift gtest gmock gtest_main cddp)
+gtest_discover_tests(test_forklift)
+
 add_executable(test_unicycle dynamics_model/test_unicycle.cpp)
 target_link_libraries(test_unicycle gtest gmock gtest_main cddp)
 gtest_discover_tests(test_unicycle)
