@@ -97,6 +97,36 @@ namespace cddp
         double mu_;                       ///< Barrier parameter
         std::vector<FilterPoint> filter_; ///< Filter for line search
 
+        // Pre-allocated workspace for performance optimization
+        struct Workspace {
+            // Backward pass workspace
+            std::vector<Eigen::MatrixXd> A_matrices;     ///< A = I + dt*F_x
+            std::vector<Eigen::MatrixXd> B_matrices;     ///< B = dt*F_u
+            std::vector<Eigen::MatrixXd> Q_xx_matrices;  ///< Q_xx workspace
+            std::vector<Eigen::MatrixXd> Q_ux_matrices;  ///< Q_ux workspace
+            std::vector<Eigen::MatrixXd> Q_uu_matrices;  ///< Q_uu workspace
+            std::vector<Eigen::VectorXd> Q_x_vectors;    ///< Q_x workspace
+            std::vector<Eigen::VectorXd> Q_u_vectors;    ///< Q_u workspace
+            
+            // LDLT solver cache
+            std::vector<Eigen::LDLT<Eigen::MatrixXd>> ldlt_solvers; ///< Cached LDLT factorizations
+            std::vector<bool> ldlt_valid;                            ///< Validity flags for LDLT cache
+            
+            // Constraint workspace
+            Eigen::VectorXd y_combined;      ///< Combined dual variables
+            Eigen::VectorXd s_combined;      ///< Combined slack variables
+            Eigen::VectorXd g_combined;      ///< Combined constraint values
+            Eigen::MatrixXd Q_yu_combined;   ///< Combined Q_yu matrix
+            Eigen::MatrixXd Q_yx_combined;   ///< Combined Q_yx matrix
+            Eigen::MatrixXd YSinv;           ///< Y * S^{-1} matrix
+            Eigen::MatrixXd bigRHS;          ///< RHS matrix for solving
+            
+            // Forward pass workspace
+            std::vector<Eigen::VectorXd> delta_x_vectors; ///< State deviation vectors
+            
+            bool initialized = false;
+        } workspace_;
+
         /**
          * @brief Precompute dynamics derivatives in parallel.
          */
@@ -214,6 +244,7 @@ namespace cddp
          * @brief Print solution summary.
          */
         void printSolutionSummary(const CDDPSolution &solution) const;
+        
     };
 
 } // namespace cddp

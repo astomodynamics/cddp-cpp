@@ -34,6 +34,10 @@ add_executable(test_dreyfus_rocket dynamics_model/test_dreyfus_rocket.cpp)
 target_link_libraries(test_dreyfus_rocket gtest gmock gtest_main cddp)
 gtest_discover_tests(test_dreyfus_rocket)
 
+add_executable(test_forklift dynamics_model/test_forklift.cpp)
+target_link_libraries(test_forklift gtest gmock gtest_main cddp)
+gtest_discover_tests(test_forklift)
+
 add_executable(test_unicycle dynamics_model/test_unicycle.cpp)
 target_link_libraries(test_unicycle gtest gmock gtest_main cddp)
 gtest_discover_tests(test_unicycle)
@@ -53,6 +57,10 @@ gtest_discover_tests(test_pendulum)
 add_executable(test_quadrotor dynamics_model/test_quadrotor.cpp)
 target_link_libraries(test_quadrotor gtest gmock gtest_main cddp)
 gtest_discover_tests(test_quadrotor)
+
+add_executable(test_quadrotor_rate dynamics_model/test_quadrotor_rate.cpp)
+target_link_libraries(test_quadrotor_rate gtest gmock gtest_main cddp)
+gtest_discover_tests(test_quadrotor_rate)
 
 add_executable(test_spacecraft_landing2d dynamics_model/test_spacecraft_landing2d.cpp)
 target_link_libraries(test_spacecraft_landing2d gtest gmock gtest_main cddp Eigen3::Eigen)
