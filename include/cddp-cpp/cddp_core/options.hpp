@@ -128,6 +128,7 @@ namespace cddp
         double dual_var_init_scale = 1e-1;  ///< Initial scale for dual variables.
         double slack_var_init_scale = 1e-2; ///< Initial scale for slack variables.
 
+
         SolverSpecificBarrierOptions
             barrier; ///< Barrier method parameters for IPDDP.
     };
