@@ -44,3 +44,20 @@ jobs:
         mkdir -p build && cd build
         cmake .. 
         make -j4
+
+    # For Windows, build using MSVC and vcpkg or choco for dependencies
+    - name: Install dependencies on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
+        choco install eigen -y
+
+    - name: Build on Windows
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        mkdir build
+        cd build
+        cmake ..
+        cmake --build . --config Release
