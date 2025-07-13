@@ -1151,13 +1151,14 @@ namespace cddp
         Q_uu.diagonal().array() += context.regularization_;
 
         // Use cached LDLT solver or compute new factorization
-        if (!workspace_.ldlt_valid[t] || workspace_.ldlt_solvers[t].matrixLDLT().rows() != control_dim) {
+        bool need_recompute = !workspace_.ldlt_valid[t] || 
+                             (workspace_.ldlt_valid[t] && workspace_.ldlt_solvers[t].matrixLDLT().rows() != control_dim);
+        
+        if (need_recompute) {
           workspace_.ldlt_solvers[t].compute(Q_uu);
           workspace_.ldlt_valid[t] = true;
-        } else {
-          // Reuse existing factorization structure
-          workspace_.ldlt_solvers[t].compute(Q_uu);
         }
+        // If valid and correct size, reuse existing factorization without recomputing
         
         if (workspace_.ldlt_solvers[t].info() != Eigen::Success)
         {
