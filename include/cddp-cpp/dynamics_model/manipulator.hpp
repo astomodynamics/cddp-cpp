@@ -18,6 +18,8 @@
 #define CDDP_MANIPULATOR_HPP
 
 #include "cddp_core/dynamical_system.hpp"
+#define _USE_MATH_DEFINES
+#include <cmath>
 #include <Eigen/Dense>
 
 namespace cddp {
