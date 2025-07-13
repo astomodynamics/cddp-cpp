@@ -38,6 +38,53 @@ namespace cddp
     int control_dim = context.getControlDim();
     int state_dim = context.getStateDim();
 
+    // Initialize workspace if not already done
+    if (!workspace_.initialized) {
+      // Allocate backward pass workspace
+      workspace_.A_matrices.resize(horizon);
+      workspace_.B_matrices.resize(horizon);
+      workspace_.Q_xx_matrices.resize(horizon);
+      workspace_.Q_ux_matrices.resize(horizon);
+      workspace_.Q_uu_matrices.resize(horizon);
+      workspace_.Q_x_vectors.resize(horizon);
+      workspace_.Q_u_vectors.resize(horizon);
+      
+      // Allocate LDLT solver cache
+      workspace_.ldlt_solvers.resize(horizon);
+      workspace_.ldlt_valid.resize(horizon, false);
+      
+      // Allocate forward pass workspace
+      workspace_.delta_x_vectors.resize(horizon + 1);
+      
+      for (int t = 0; t < horizon; ++t) {
+        workspace_.A_matrices[t] = Eigen::MatrixXd::Zero(state_dim, state_dim);
+        workspace_.B_matrices[t] = Eigen::MatrixXd::Zero(state_dim, control_dim);
+        workspace_.Q_xx_matrices[t] = Eigen::MatrixXd::Zero(state_dim, state_dim);
+        workspace_.Q_ux_matrices[t] = Eigen::MatrixXd::Zero(control_dim, state_dim);
+        workspace_.Q_uu_matrices[t] = Eigen::MatrixXd::Zero(control_dim, control_dim);
+        workspace_.Q_x_vectors[t] = Eigen::VectorXd::Zero(state_dim);
+        workspace_.Q_u_vectors[t] = Eigen::VectorXd::Zero(control_dim);
+      }
+      
+      for (int t = 0; t <= horizon; ++t) {
+        workspace_.delta_x_vectors[t] = Eigen::VectorXd::Zero(state_dim);
+      }
+      
+      // Allocate constraint workspace if needed
+      if (!constraint_set.empty()) {
+        int total_dual_dim = getTotalDualDim(context);
+        workspace_.y_combined = Eigen::VectorXd::Zero(total_dual_dim);
+        workspace_.s_combined = Eigen::VectorXd::Zero(total_dual_dim);
+        workspace_.g_combined = Eigen::VectorXd::Zero(total_dual_dim);
+        workspace_.Q_yu_combined = Eigen::MatrixXd::Zero(total_dual_dim, control_dim);
+        workspace_.Q_yx_combined = Eigen::MatrixXd::Zero(total_dual_dim, state_dim);
+        workspace_.YSinv = Eigen::MatrixXd::Zero(total_dual_dim, total_dual_dim);
+        workspace_.bigRHS = Eigen::MatrixXd::Zero(control_dim, 1 + state_dim);
+      }
+      
+      workspace_.initialized = true;
+    }
+
     // Validate reference state consistency
     if ((context.getReferenceState() - context.getObjective().getReferenceState()).norm() > 1e-6)
     {
@@ -433,6 +480,7 @@ namespace cddp
   void IPDDPSolver::evaluateTrajectory(CDDP &context)
   {
     const int horizon = context.getHorizon();
+    const CDDPOptions &options = context.getOptions();
     double cost = 0.0;
 
     // Set initial state
@@ -907,22 +955,28 @@ namespace cddp
     const int horizon = context.getHorizon();
     const auto &constraint_set = context.getConstraintSet();
 
-    // Clear and resize storage
-    G_x_.clear();
-    G_u_.clear();
-
     // If no constraints, return early
     if (constraint_set.empty())
     {
       return;
     }
 
-    // Initialize storage for each constraint
+    // Initialize storage for each constraint only if not already allocated
     for (const auto &constraint_pair : constraint_set)
     {
       const std::string &constraint_name = constraint_pair.first;
-      G_x_[constraint_name].resize(horizon);
-      G_u_[constraint_name].resize(horizon);
+      if (G_x_.find(constraint_name) == G_x_.end() || G_x_[constraint_name].size() != horizon) {
+        G_x_[constraint_name].resize(horizon);
+        G_u_[constraint_name].resize(horizon);
+        // Pre-allocate matrices with correct dimensions
+        int state_dim = context.getStateDim();
+        int control_dim = context.getControlDim();
+        int constraint_dim = constraint_pair.second->getDualDim();
+        for (int t = 0; t < horizon; ++t) {
+          G_x_[constraint_name][t] = Eigen::MatrixXd::Zero(constraint_dim, state_dim);
+          G_u_[constraint_name][t] = Eigen::MatrixXd::Zero(constraint_dim, control_dim);
+        }
+      }
     }
 
     // Threshold for when parallelization is worth it - increased for better
@@ -1051,21 +1105,30 @@ namespace cddp
         // Use pre-computed dynamics Jacobians
         const Eigen::MatrixXd &Fx = F_x_[t];
         const Eigen::MatrixXd &Fu = F_u_[t];
-        Eigen::MatrixXd A =
-            Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep * Fx;
-        Eigen::MatrixXd B = timestep * Fu;
+        
+        // Use pre-allocated workspace matrices
+        Eigen::MatrixXd &A = workspace_.A_matrices[t];
+        Eigen::MatrixXd &B = workspace_.B_matrices[t];
+        A.noalias() = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep * Fx;
+        B.noalias() = timestep * Fu;
 
         // Cost & derivatives
         auto [l_x, l_u] = context.getObjective().getRunningCostGradients(x, u, t);
         auto [l_xx, l_uu, l_ux] =
             context.getObjective().getRunningCostHessians(x, u, t);
 
-        // Q expansions from cost
-        Eigen::VectorXd Q_x = l_x + A.transpose() * V_x;
-        Eigen::VectorXd Q_u = l_u + B.transpose() * V_x;
-        Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
-        Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
-        Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
+        // Q expansions from cost - use pre-allocated workspace
+        Eigen::VectorXd &Q_x = workspace_.Q_x_vectors[t];
+        Eigen::VectorXd &Q_u = workspace_.Q_u_vectors[t];
+        Eigen::MatrixXd &Q_xx = workspace_.Q_xx_matrices[t];
+        Eigen::MatrixXd &Q_ux = workspace_.Q_ux_matrices[t];
+        Eigen::MatrixXd &Q_uu = workspace_.Q_uu_matrices[t];
+        
+        Q_x.noalias() = l_x + A.transpose() * V_x;
+        Q_u.noalias() = l_u + B.transpose() * V_x;
+        Q_xx.noalias() = l_xx + A.transpose() * V_xx * A;
+        Q_ux.noalias() = l_ux + B.transpose() * V_xx * A;
+        Q_uu.noalias() = l_uu + B.transpose() * V_xx * B;
 
         // Add state hessian term if not using iLQR
         if (!options.use_ilqr)
@@ -1083,23 +1146,31 @@ namespace cddp
           }
         }
 
-        // Regularization
-        Eigen::MatrixXd Q_uu_reg = Q_uu;
-        Q_uu_reg.diagonal().array() += context.regularization_;
-        Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize NOTE: This is critical
+        // Apply standard DDP regularization
+        Q_uu = 0.5 * (Q_uu + Q_uu.transpose()); // symmetrize NOTE: This is critical
+        Q_uu.diagonal().array() += context.regularization_;
 
-        Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
-        if (ldlt.info() != Eigen::Success)
+        // Use cached LDLT solver or compute new factorization
+        if (!workspace_.ldlt_valid[t] || workspace_.ldlt_solvers[t].matrixLDLT().rows() != control_dim) {
+          workspace_.ldlt_solvers[t].compute(Q_uu);
+          workspace_.ldlt_valid[t] = true;
+        } else {
+          // Reuse existing factorization structure
+          workspace_.ldlt_solvers[t].compute(Q_uu);
+        }
+        
+        if (workspace_.ldlt_solvers[t].info() != Eigen::Success)
         {
           if (options.debug)
           {
-            std::cerr << "IPDDP: Backward pass failed at time " << t << std::endl;
+            std::cerr << "IPDDP: Backward pass failed at time " << t << " (Q_uu not positive definite)" << std::endl;
           }
+          workspace_.ldlt_valid[t] = false;
           return false;
         }
 
-        Eigen::VectorXd k_u = -ldlt.solve(Q_u);
-        Eigen::MatrixXd K_u = -ldlt.solve(Q_ux);
+        Eigen::VectorXd k_u = -workspace_.ldlt_solvers[t].solve(Q_u);
+        Eigen::MatrixXd K_u = -workspace_.ldlt_solvers[t].solve(Q_ux);
         k_u_[t] = k_u;
         K_u_[t] = K_u;
 
@@ -1147,12 +1218,12 @@ namespace cddp
             Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep * Fx;
         Eigen::MatrixXd B = timestep * Fu;
 
-        // Gather dual and slack variables across all constraints
-        Eigen::VectorXd y = Eigen::VectorXd::Zero(total_dual_dim);
-        Eigen::VectorXd s = Eigen::VectorXd::Zero(total_dual_dim);
-        Eigen::VectorXd g = Eigen::VectorXd::Zero(total_dual_dim);
-        Eigen::MatrixXd Q_yu = Eigen::MatrixXd::Zero(total_dual_dim, control_dim);
-        Eigen::MatrixXd Q_yx = Eigen::MatrixXd::Zero(total_dual_dim, state_dim);
+        // Use pre-allocated workspace for constraint variables
+        Eigen::VectorXd &y = workspace_.y_combined;
+        Eigen::VectorXd &s = workspace_.s_combined;
+        Eigen::VectorXd &g = workspace_.g_combined;
+        Eigen::MatrixXd &Q_yu = workspace_.Q_yu_combined;
+        Eigen::MatrixXd &Q_yx = workspace_.Q_yx_combined;
 
         int offset = 0;
         for (const auto &constraint_pair : constraint_set)
@@ -1203,39 +1274,48 @@ namespace cddp
           }
         }
 
-        Eigen::MatrixXd Y = y.asDiagonal();
-        Eigen::MatrixXd S = s.asDiagonal();
-        Eigen::MatrixXd S_inv = S.inverse();
-        Eigen::MatrixXd YSinv = Y * S_inv;
+        // Optimize diagonal matrix operations
+        Eigen::MatrixXd &YSinv = workspace_.YSinv;
+        YSinv.setZero();
+        for (int i = 0; i < total_dual_dim; ++i) {
+          YSinv(i, i) = y(i) / s(i);
+        }
 
         // Residuals
         Eigen::VectorXd primal_residual = g + s;                                  // primal infeasibility
         Eigen::VectorXd complementary_residual = y.cwiseProduct(s).array() - mu_; // complementary infeasibility
         Eigen::VectorXd rhat = y.cwiseProduct(primal_residual) - complementary_residual;
 
-        // Regularization
+        // Apply standard DDP regularization
         Eigen::MatrixXd Q_uu_reg = Q_uu;
-        Q_uu_reg.diagonal().array() += context.regularization_;
         Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
+        
+        // Add constraint contribution
+        Q_uu_reg.noalias() += Q_yu.transpose() * YSinv * Q_yu;
+        
+        // Apply standard DDP regularization
+        Q_uu_reg.diagonal().array() += context.regularization_;
 
-        Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg +
-                                          Q_yu.transpose() * YSinv * Q_yu);
+        Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
         if (ldlt.info() != Eigen::Success)
         {
           if (options.debug)
           {
-            std::cerr << "IPDDP: Backward pass failed at time " << t << std::endl;
+            std::cerr << "IPDDP: Backward pass failed at time " << t << " (Q_uu not positive definite)" << std::endl;
           }
           return false;
         }
 
-        Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
-        bigRHS.col(0) = Q_u + Q_yu.transpose() * S_inv * rhat;
-        Eigen::MatrixXd M = Q_ux + Q_yu.transpose() * YSinv * Q_yx;
-        for (int col = 0; col < state_dim; col++)
-        {
-          bigRHS.col(col + 1) = M.col(col);
+        // Use pre-allocated workspace
+        Eigen::MatrixXd &bigRHS = workspace_.bigRHS;
+        // Compute S_inv * rhat efficiently
+        Eigen::VectorXd S_inv_rhat(total_dual_dim);
+        for (int i = 0; i < total_dual_dim; ++i) {
+          S_inv_rhat(i) = rhat(i) / s(i);
         }
+        bigRHS.col(0).noalias() = Q_u + Q_yu.transpose() * S_inv_rhat;
+        // Compute M = Q_ux + Q_yu.transpose() * YSinv * Q_yx efficiently
+        bigRHS.rightCols(state_dim).noalias() = Q_ux + Q_yu.transpose() * YSinv * Q_yx;
 
         Eigen::MatrixXd kK = -ldlt.solve(bigRHS);
 
@@ -1250,10 +1330,14 @@ namespace cddp
         k_u_[t] = k_u;
         K_u_[t] = K_u;
 
-        // Compute gains for constraints
-        Eigen::VectorXd k_y = S_inv * (rhat + Y * Q_yu * k_u);
+        // Compute gains for constraints efficiently
+        Eigen::VectorXd k_y(total_dual_dim);
+        Eigen::VectorXd temp = Q_yu * k_u;
+        for (int i = 0; i < total_dual_dim; ++i) {
+          k_y(i) = (rhat(i) + y(i) * temp(i)) / s(i);
+        }
         Eigen::MatrixXd K_y = YSinv * (Q_yx + Q_yu * K_u);
-        Eigen::VectorXd k_s = -primal_residual - Q_yu * k_u;
+        Eigen::VectorXd k_s = -primal_residual - temp;
         Eigen::MatrixXd K_s = -Q_yx - Q_yu * K_u;
 
         offset = 0;
@@ -1270,12 +1354,12 @@ namespace cddp
           offset += dual_dim;
         }
 
-        // Update Q expansions
-        Q_u += Q_yu.transpose() * S_inv * rhat;
-        Q_x += Q_yx.transpose() * S_inv * rhat;
-        Q_xx += Q_yx.transpose() * YSinv * Q_yx;
-        Q_ux += Q_yx.transpose() * YSinv * Q_yu;
-        Q_uu += Q_yu.transpose() * YSinv * Q_yu;
+        // Update Q expansions efficiently
+        Q_u.noalias() += Q_yu.transpose() * S_inv_rhat;
+        Q_x.noalias() += Q_yx.transpose() * S_inv_rhat;
+        Q_xx.noalias() += Q_yx.transpose() * YSinv * Q_yx;
+        Q_ux.noalias() += Q_yx.transpose() * YSinv * Q_yu;
+        Q_uu.noalias() += Q_yu.transpose() * YSinv * Q_yu;
 
         // Update cost improvement
         dV_[0] += k_u.dot(Q_u);
@@ -1319,6 +1403,14 @@ namespace cddp
     best_result.merit_function = std::numeric_limits<double>::infinity();
     best_result.success = false;
 
+    // Store current merit function value and directional derivative
+    double merit_0 = context.merit_function_;
+    double directional_derivative = dV_(0);  // Expected improvement
+    
+    // Adaptive backtracking parameters
+    const int max_adaptive_iterations = 5;
+    const double min_alpha = 1e-8;
+    
     if (!options.enable_parallel)
     {
       // Single-threaded execution with early termination
@@ -1339,7 +1431,7 @@ namespace cddp
     }
     else
     {
-      // Multi-threaded execution
+      // Multi-threaded execution (use standard alphas for now)
       std::vector<std::future<ForwardPassResult>> futures;
       futures.reserve(context.alphas_.size());
 
@@ -1374,6 +1466,7 @@ namespace cddp
         }
       }
     }
+
 
     return best_result;
   }
@@ -1698,6 +1791,7 @@ namespace cddp
     std::cout << std::endl;
   }
 
+
   void IPDDPSolver::printSolutionSummary(const CDDPSolution &solution) const
   {
     std::cout << "\n========================================\n";
@@ -1831,21 +1925,29 @@ namespace cddp
         std::cout << "IPDDP: Converged due to scaled optimality gap and constraint "
                      "violation (metric: "
                   << std::scientific << std::setprecision(2)
-                    << termination_metric << ", scaled inf_du: " << scaled_inf_du << ")" << std::endl;
-        }
+                  << termination_metric << ", scaled inf_du: " << scaled_inf_du << ")" << std::endl;
+      }
       return true;
     }
 
-    if (std::abs(dJ) < options.acceptable_tolerance)
+    // For acceptable tolerance, also check if we're making minimal progress over several iterations
+    if (std::abs(dJ) < options.acceptable_tolerance && iter > 10)
     {
-      termination_reason = "AcceptableSolutionFound";
-      if (options.verbose)
+      // Check if all infeasibility measures are reasonably small
+      bool acceptable_infeasibility = (context.inf_pr_ < std::sqrt(options.acceptable_tolerance) &&
+                                       context.inf_comp_ < std::sqrt(options.acceptable_tolerance));
+      
+      if (acceptable_infeasibility)
       {
-        std::cout << "IPDDP: Converged due to small change in cost (dJ: "
-                  << std::scientific << std::setprecision(2) << std::abs(dJ)
-                  << ")" << std::endl;
+        termination_reason = "AcceptableSolutionFound";
+        if (options.verbose)
+        {
+          std::cout << "IPDDP: Converged due to small change in cost (dJ: "
+                    << std::scientific << std::setprecision(2) << std::abs(dJ)
+                    << ") with acceptable infeasibility" << std::endl;
+        }
+        return true;
       }
-      return true;
     }
 
     // Check step norm for early termination
