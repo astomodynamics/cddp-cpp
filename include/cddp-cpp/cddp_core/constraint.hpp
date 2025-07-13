@@ -19,6 +19,7 @@
 
 #include <Eigen/Dense>
 #include <algorithm>
+#define _USE_MATH_DEFINES
 #include <cmath> // For std::acos, std::sqrt, std::max, M_PI
 #include <iostream>
 #include <limits>
