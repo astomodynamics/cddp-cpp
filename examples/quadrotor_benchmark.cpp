@@ -439,7 +439,7 @@ int main() {
     options_msipddp.filter.max_violation_threshold = 1e+7;
     options_msipddp.filter.min_violation_for_armijo_check = 1e-7;
     options_msipddp.filter.armijo_constant = 1e-4;
-    options_msipddp.msipddp.segment_length = 10;
+    options_msipddp.msipddp.segment_length = 2;
     options_msipddp.msipddp.rollout_type = "nonlinear";
     options_msipddp.use_ilqr = true;
     options_msipddp.enable_parallel = false;
