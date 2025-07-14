@@ -139,6 +139,9 @@ namespace cddp
             // MSIPDDP-specific workspace
             std::vector<Eigen::VectorXd> d_vectors;       ///< Defect vectors
             
+            // Predictor-corrector workspace
+            // Note: Predictor directions are computed locally in backwardPass and not stored
+            
             bool initialized = false;
         } workspace_;
 
