@@ -155,6 +155,10 @@ namespace cddp
             false; ///< Use controlled rollout (propagates x_{k+1} = f(x_k, u_k)
                    ///< during initial rollout).
 
+        // Predictor-corrector options
+        bool use_predictor_corrector = true; ///< Enable Mehrotra predictor-corrector step (experimental - debugging numerical stability).
+        double predictor_fraction_to_boundary = 1e-3; ///< Safety margin for predictor step length.
+
         SolverSpecificBarrierOptions
             barrier; ///< Barrier method parameters for MSIPDDP..
     };

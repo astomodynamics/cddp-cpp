@@ -285,6 +285,8 @@ int main() {
     options_msipddp.msipddp.barrier.mu_initial = 1e-0;
     options_msipddp.msipddp.barrier.mu_update_factor = 0.5;
     options_msipddp.msipddp.barrier.mu_update_power = 1.2;
+    options_msipddp.msipddp.use_predictor_corrector = true; 
+    options_msipddp.msipddp.predictor_fraction_to_boundary = 1e-3; 
     
     cddp::CDDP solver_msipddp(
         initial_state,

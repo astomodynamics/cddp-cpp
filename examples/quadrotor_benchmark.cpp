@@ -445,6 +445,8 @@ int main() {
     options_msipddp.enable_parallel = false;
     options_msipddp.num_threads = 1;
     options_msipddp.msipddp.use_controlled_rollout = false;
+    options_msipddp.msipddp.use_predictor_corrector = true; 
+    options_msipddp.msipddp.predictor_fraction_to_boundary = 1e-3; 
     
     cddp::CDDP solver_msipddp(
         initial_state,
