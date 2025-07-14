@@ -540,19 +540,19 @@ namespace cddp
     getStateJacobian(const Eigen::VectorXd &state,
                      const Eigen::VectorXd &control) const override
     {
-      return Eigen::MatrixXd::Zero(dim_, state.size());
+      Eigen::MatrixXd jac(2 * state.size(), state.size());
+      jac.topLeftCorner(state.size(), state.size()) =
+          -Eigen::MatrixXd::Identity(state.size(), state.size()) * scale_factor_;
+      jac.bottomRightCorner(state.size(), state.size()) =
+          Eigen::MatrixXd::Identity(state.size(), state.size()) * scale_factor_;
+      return jac;
     }
 
     Eigen::MatrixXd
     getControlJacobian(const Eigen::VectorXd &state,
                        const Eigen::VectorXd &control) const override
     {
-      Eigen::MatrixXd jac(2 * state.size(), state.size());
-      jac.topLeftCorner(state.size(), state.size()) =
-          -Eigen::MatrixXd::Identity(state.size(), state.size());
-      jac.bottomRightCorner(state.size(), state.size()) =
-          Eigen::MatrixXd::Identity(state.size(), state.size());
-      return jac;
+      return Eigen::MatrixXd::Zero(2 * state.size(), control.size());
     }
 
     double computeViolation(const Eigen::VectorXd &state,
