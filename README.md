@@ -1,13 +1,5 @@
 # Constrained Differential Dynamic Programming (CDDP) solver in C++
-```<span style="color:lightblue">
-+---------------------------------------------------------+
-|    ____ ____  ____  ____    _          ____             |
-|   / ___|  _ \|  _ \|  _ \  (_)_ __    / ___| _     _    |
-|  | |   | | | | | | | |_) | | | '_ \  | |   _| |_ _| |_  |
-|  | |___| |_| | |_| |  __/  | | | | | | |__|_   _|_   _| |
-|   \____|____/|____/|_|     |_|_| |_|  \____||_|   |_|   |
-+---------------------------------------------------------+
-```
+<img src="docs/assets/cddp_in_cpp.png" width="800" alt="CDDP IN CPP">
 
 **This library is under active development.**  Star the repo :star: to stay updated on its progress and eventual release. I welcome any suggestions as I'm building this library to gain practical C++ experience.
 

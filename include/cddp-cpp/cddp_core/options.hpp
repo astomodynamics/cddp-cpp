@@ -345,8 +345,9 @@ namespace cddp
             0.0;             ///< Maximum CPU time for the solver in seconds (0 for unlimited).
         bool verbose = true; ///< Enable verbose printing during solving.
         bool debug = false;  ///< Enable additional debug prints.
-        bool print_solver_header_footer =
-            true; ///< Print header and footer summary for the solve.
+        bool print_solver_header =
+            true; ///< Print solver header banner.
+        bool print_solver_options = false; ///< Print solver options. 
         bool use_ilqr =
             true; ///< Use iLQR (ignore second-order dynamics derivatives).
         bool enable_parallel =
