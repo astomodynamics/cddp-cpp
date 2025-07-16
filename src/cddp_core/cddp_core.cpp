@@ -23,15 +23,16 @@
 #include "cddp_core/msipddp_solver.hpp" // For MSIPDDPSolver
 #include "cddp_core/options.hpp"        // For CDDPOptions structure
 #include <cmath>                        // For std::min, std::max
-#include <iomanip>                      // For std::setw
+#include <functional>
+#include <iomanip> // For std::setw
 #include <iostream>
 #include <map>
-#include <functional>
+#include <array>
 
 namespace cddp {
 
 // Static registry definition
-std::map<std::string, std::function<std::unique_ptr<ISolverAlgorithm>()>> 
+std::map<std::string, std::function<std::unique_ptr<ISolverAlgorithm>()>>
     CDDP::external_solver_registry_;
 
 // Constructor
@@ -44,7 +45,8 @@ CDDP::CDDP(const Eigen::VectorXd &initial_state,
       objective_(std::move(objective)), options_(options),
       initialized_(false), // Will be set true by initializeProblemIfNecessary
                            // or by strategies
-      cost_(0.0), merit_function_(0.0), inf_pr_(0.0), inf_du_(0.0), inf_comp_(0.0),
+      cost_(0.0), merit_function_(0.0), inf_pr_(0.0), inf_du_(0.0),
+      inf_comp_(0.0),
       alpha_pr_(
           options.line_search.initial_step_size), // Initialize from options
       alpha_du_(0.0), regularization_(options.regularization.initial_value),
@@ -217,38 +219,38 @@ bool CDDP::removePathConstraint(const std::string &constraint_name) {
 }
 
 void CDDP::addTerminalConstraint(std::string constraint_name,
-std::unique_ptr<Constraint> constraint) {
-    if (!constraint) {
-        throw std::runtime_error("Cannot add null constraint.");
-    }
+                                 std::unique_ptr<Constraint> constraint) {
+  if (!constraint) {
+    throw std::runtime_error("Cannot add null constraint.");
+  }
 
-    // Get dual dimension BEFORE moving the constraint
-    int dual_dim = constraint->getDualDim();
+  // Get dual dimension BEFORE moving the constraint
+  int dual_dim = constraint->getDualDim();
 
-    terminal_constraint_set_[constraint_name] = std::move(constraint);
+  terminal_constraint_set_[constraint_name] = std::move(constraint);
 
-    // Increment total dual dimension
-    total_dual_dim_ += dual_dim;
+  // Increment total dual dimension
+  total_dual_dim_ += dual_dim;
 
-    initialized_ = false; // Constraint set changed, need to reinitialize
+  initialized_ = false; // Constraint set changed, need to reinitialize
 }
 
 bool CDDP::removeTerminalConstraint(const std::string &constraint_name) {
-    auto it = terminal_constraint_set_.find(constraint_name);
-    if (it != terminal_constraint_set_.end()) {
-        // Decrement total dual dimension
-        total_dual_dim_ -= it->second->getDualDim();
+  auto it = terminal_constraint_set_.find(constraint_name);
+  if (it != terminal_constraint_set_.end()) {
+    // Decrement total dual dimension
+    total_dual_dim_ -= it->second->getDualDim();
 
-        // Remove the constraint from the set
-        terminal_constraint_set_.erase(it);
+    // Remove the constraint from the set
+    terminal_constraint_set_.erase(it);
 
-        // Mark as needing reinitialization since constraint set changed
-        initialized_ = false;
+    // Mark as needing reinitialization since constraint set changed
+    initialized_ = false;
 
-        return true; // Successfully removed
-    }
+    return true; // Successfully removed
+  }
 
-    return false; // Constraint not found
+  return false; // Constraint not found
 }
 
 namespace {
@@ -277,11 +279,12 @@ CDDPSolution CDDP::solve(SolverType solver_type) {
 }
 
 // Virtual factory method
-std::unique_ptr<ISolverAlgorithm> CDDP::createSolver(const std::string& solver_type) {
+std::unique_ptr<ISolverAlgorithm>
+CDDP::createSolver(const std::string &solver_type) {
   // First check external registry
   auto it = external_solver_registry_.find(solver_type);
   if (it != external_solver_registry_.end()) {
-    return it->second();  // Call the factory function
+    return it->second(); // Call the factory function
   }
 
   // Fall back to built-in solvers
@@ -298,8 +301,8 @@ std::unique_ptr<ISolverAlgorithm> CDDP::createSolver(const std::string& solver_t
   } else if (solver_type == "ALDDP") {
     return std::make_unique<AlddpSolver>();
   }
-  
-  return nullptr;  // Solver not found
+
+  return nullptr; // Solver not found
 }
 
 CDDPSolution CDDP::solve(const std::string &solver_type) {
@@ -309,13 +312,14 @@ CDDPSolution CDDP::solve(const std::string &solver_type) {
 
   // Strategy selection and instantiation
   solver_ = createSolver(solver_type);
-  
+
   if (!solver_) {
     // Solver not found - return error solution
     CDDPSolution solution;
     solution["solver_name"] = solver_type;
-    solution["status_message"] = 
-        std::string("UnknownSolver - No solver registered for '") + solver_type + "'";
+    solution["status_message"] =
+        std::string("UnknownSolver - No solver registered for '") +
+        solver_type + "'";
     solution["iterations_completed"] = 0;
     solution["solve_time_ms"] = 0.0;
     solution["final_objective"] = 0.0;
@@ -327,9 +331,10 @@ CDDPSolution CDDP::solve(const std::string &solver_type) {
     solution["control_trajectory"] = std::vector<Eigen::VectorXd>();
 
     if (options_.verbose) {
-      std::cout << "Solver type '" << solver_type << "' not found. Available solvers: ";
+      std::cout << "Solver type '" << solver_type
+                << "' not found. Available solvers: ";
       auto available = getRegisteredSolvers();
-      for (const auto& name : available) {
+      for (const auto &name : available) {
         std::cout << name << " ";
       }
       std::cout << "CLDDP ASDDP LogDDP IPDDP MSIPDDP ALDDP" << std::endl;
@@ -466,32 +471,84 @@ bool CDDP::isTerminalRegularizationLimitReached() const {
 bool CDDP::isKKTToleranceSatisfied() const {
   return (inf_pr_ <= options_.tolerance && inf_du_ <= options_.tolerance);
 }
-
-void CDDP::printSolverInfo() {
-  std::cout << "\n";
-  std::cout << "\033[34m"; // Set text color to blue
-  std::cout << "+---------------------------------------------------------+"
-            << std::endl;
-  std::cout << "|    ____ ____  ____  ____    _          ____             |"
-            << std::endl;
-  std::cout << "|   / ___|  _ \\|  _ \\|  _ \\  (_)_ __    / ___| _     _    |"
-            << std::endl;
-  std::cout << "|  | |   | | | | | | | |_) | | | '_ \\  | |   _| |_ _| |_  |"
-            << std::endl;
-  std::cout << "|  | |___| |_| | |_| |  __/  | | | | | | |__|_   _|_   _| |"
-            << std::endl;
-  std::cout << "|   \\____|____/|____/|_|     |_|_| |_|  \\____||_|   |_|   |"
-            << std::endl;
-  std::cout << "+---------------------------------------------------------+"
-            << std::endl;
-  std::cout << "\n";
-  std::cout << "Constrained Differential Dynamic Programming\n";
-  std::cout << "Author: Tomo Sasaki (@astomodynamics)\n";
-  std::cout << "----------------------------------------------------------\n";
-  std::cout << "\033[0m"; // Reset text color
-  std::cout << "\n";
+namespace ansi {
+  inline std::string rgb(unsigned r, unsigned g, unsigned b) {
+      return "\033[38;2;" + std::to_string(r) + ';' + std::to_string(g) + ';' + std::to_string(b) + 'm';
+  }
+  constexpr const char* reset() { return "\033[0m"; }
+  constexpr const char* bold()   { return "\033[1m"; }
+  constexpr const char* italic() { return "\033[3m"; }
+  constexpr const char* dim()    { return "\033[2m"; }
 }
 
+/* 6-row block fonts ─ trimmed (no trailing blanks) */
+static constexpr std::array<const char*, 6> C{
+  " ██████╗",
+  "██╔════╝",
+  "██║     ",
+  "██║     ",
+  "╚██████╗",
+  " ╚═════╝"
+};
+static constexpr std::array<const char*, 6> D{
+  "██████╗ ",
+  "██╔══██╗",
+  "██║  ██║",
+  "██║  ██║",
+  "██████╔╝",
+  "╚═════╝ "
+};
+static constexpr std::array<const char*, 6> P{
+  "██████╗ ",
+  "██╔══██╗",
+  "██████╔╝",
+  "██╔═══╝ ",
+  "██║     ",
+  "╚═╝     "
+};
+static constexpr std::array<const char*, 6> I{
+  "██╗",
+  "██║",
+  "██║",
+  "██║",
+  "██║",
+  "╚═╝"
+};
+static constexpr std::array<const char*, 6> N{
+  "███╗   ██╗",
+  "████╗  ██║",
+  "██╔██╗ ██║",
+  "██║╚██╗██║",
+  "██║ ╚████║",
+  "╚═╝  ╚═══╝"
+};
+
+void CDDP::printSolverInfo()
+{
+  std::cout << '\n';
+  constexpr auto letterSep  = "";      // now zero-width
+  constexpr auto groupSep   = " ";     // keep single-space gap between groups
+
+  for (std::size_t row = 0; row < 6; ++row) {
+      // gradient: dark-blue → gold
+      std::cout << ansi::rgb( 10,  61,  98) << C[row] << letterSep;
+      std::cout << ansi::rgb( 40,  80, 105) << D[row] << letterSep;
+      std::cout << ansi::rgb( 70,  99, 112) << D[row] << letterSep;
+      std::cout << ansi::rgb(100, 118, 119) << P[row] << groupSep;
+
+      std::cout << ansi::rgb(130, 137, 126) << I[row] << letterSep << N[row] << groupSep;
+
+      std::cout << ansi::rgb(160, 156, 133) << C[row] << letterSep;
+      std::cout << ansi::rgb(180, 166, 128) << P[row] << letterSep;
+      std::cout << ansi::rgb(196, 177, 123) << P[row] << '\n';
+  }
+
+  std::cout << ansi::reset();
+  std::cout << '\n'
+            << ansi::bold() << "Constrained Differential Dynamic Programming" << ansi::reset() << '\n'
+            << ansi::rgb(196,177,123) << ansi::dim() << ansi::italic()
+            << "Author: Tomo Sasaki (@astomodynamics)" << ansi::reset() << "\n\n";
+}
 // Helper function to print SolverSpecificBarrierOptions
 void print_solver_specific_barrier_options(
     const SolverSpecificBarrierOptions &barrier_opts,
@@ -542,8 +599,8 @@ void CDDP::printOptions(const CDDPOptions &options) {
             << (options.verbose ? "Yes" : "No") << "\n";
   std::cout << "  Debug Mode: " << std::setw(10)
             << (options.debug ? "Yes" : "No") << "\n";
-  std::cout << "  Print Header/Footer: " << std::setw(10)
-            << (options.print_solver_header_footer ? "Yes" : "No") << "\n";
+  std::cout << "  Print Solver Header: " << std::setw(10)
+            << (options.print_solver_header ? "Yes" : "No") << "\n";
   std::cout << "  Use iLQR Approximations: " << std::setw(10)
             << (options.use_ilqr ? "Yes" : "No") << "\n";
   std::cout << "  Enable Parallel Computation: " << std::setw(10)
@@ -641,18 +698,20 @@ void CDDP::printOptions(const CDDPOptions &options) {
 }
 
 // Static methods for solver registration
-void CDDP::registerSolver(const std::string& solver_name, 
-                         std::function<std::unique_ptr<ISolverAlgorithm>()> factory) {
+void CDDP::registerSolver(
+    const std::string &solver_name,
+    std::function<std::unique_ptr<ISolverAlgorithm>()> factory) {
   external_solver_registry_[solver_name] = factory;
 }
 
-bool CDDP::isSolverRegistered(const std::string& solver_name) {
-  return external_solver_registry_.find(solver_name) != external_solver_registry_.end();
+bool CDDP::isSolverRegistered(const std::string &solver_name) {
+  return external_solver_registry_.find(solver_name) !=
+         external_solver_registry_.end();
 }
 
 std::vector<std::string> CDDP::getRegisteredSolvers() {
   std::vector<std::string> names;
-  for (const auto& pair : external_solver_registry_) {
+  for (const auto &pair : external_solver_registry_) {
     names.push_back(pair.first);
   }
   return names;
