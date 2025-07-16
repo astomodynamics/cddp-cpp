@@ -414,6 +414,17 @@ public:
    */
   double getCurrentTerminalRegularization() const { return terminal_regularization_; }
 
+  /**
+   * @brief Print solver information banner.
+   */
+  void printSolverInfo();
+
+  /**
+   * @brief Print solver options.
+   * @param options The options to print
+   */
+  void printOptions(const CDDPOptions &options);
+
 protected:
   /**
    * @brief Create solver instance (virtual for extensibility)
@@ -446,8 +457,6 @@ private:
   static std::map<std::string, std::function<std::unique_ptr<ISolverAlgorithm>()>> external_solver_registry_;
 
   void initializeProblemIfNecessary();
-  void printSolverInfo();
-  void printOptions(const CDDPOptions &options);
 };
 
 } // namespace cddp

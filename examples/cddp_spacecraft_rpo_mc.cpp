@@ -193,7 +193,7 @@ int main()
         options.tolerance = 1e-7;
         options.verbose = false;
         options.debug = false;
-        options.print_solver_header_footer = false;
+        options.print_solver_header = false;
         options.enable_parallel = false;
         options.num_threads = 1;
         // Regularization type is now implicit in new API

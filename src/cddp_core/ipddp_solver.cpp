@@ -255,6 +255,16 @@ namespace cddp
   {
     const CDDPOptions &options = context.getOptions();
 
+    // Print solver header if requested
+    if (options.print_solver_header) {
+      context.printSolverInfo();
+    }
+
+    // Print solver options if requested
+    if (options.print_solver_options) {
+      context.printOptions(options);
+    }
+
     // Prepare solution map
     CDDPSolution solution;
     solution["solver_name"] = getSolverName();
@@ -473,6 +483,7 @@ namespace cddp
     {
       printSolutionSummary(solution);
     }
+
 
     return solution;
   }

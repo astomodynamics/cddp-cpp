@@ -218,6 +218,16 @@ std::string LogDDPSolver::getSolverName() const { return "LogDDP"; }
 CDDPSolution LogDDPSolver::solve(CDDP &context) {
   const CDDPOptions &options = context.getOptions();
 
+  // Print solver header if requested
+  if (options.print_solver_header) {
+    context.printSolverInfo();
+  }
+
+  // Print solver options if requested
+  if (options.print_solver_options) {
+    context.printOptions(options);
+  }
+
   // Prepare solution map with old-style structure for compatibility
   CDDPSolution solution;
   solution["solver_name"] = getSolverName();
@@ -462,6 +472,7 @@ CDDPSolution LogDDPSolver::solve(CDDP &context) {
   if (options.verbose) {
     printSolutionSummary(solution);
   }
+
 
   return solution;
 }
