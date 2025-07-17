@@ -64,6 +64,114 @@ TEST(StateBoxConstraint, Evaluate) {
     ASSERT_TRUE(constraint_value.isApprox(state));
 }
 
+TEST(ControlConstraintTest, Evaluate) {
+  // Create a constraint with upper bounds
+  Eigen::VectorXd upper_bound(2);
+  upper_bound << 1.0, 2.0;
+  cddp::ControlConstraint constraint(upper_bound);
+
+  // Test with a control signal within the bounds
+  Eigen::VectorXd state(2);
+  state << 0.5, 1.0;
+  Eigen::VectorXd control(2);
+  control << 0.5, 1.0;
+  Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
+  Eigen::VectorXd expected_value(2 * control.size());
+  expected_value.head(control.size()) = -control;
+  expected_value.tail(control.size()) = control;
+  ASSERT_TRUE(constraint_value.isApprox(expected_value));
+
+  // Test with a control signal outside the bounds
+  control << 1.5, -2.5;
+  constraint_value = constraint.evaluate(state, control);
+  expected_value.head(control.size()) = -control;
+  expected_value.tail(control.size()) = control;
+  ASSERT_TRUE(constraint_value.isApprox(expected_value));
+}
+
+TEST(StateConstraintTest, Evaluate) {
+  // Create a constraint with upper bounds
+  Eigen::VectorXd upper_bound(2);
+  upper_bound << 1.0, 2.0;
+  cddp::StateConstraint constraint(upper_bound);
+
+  // Test with a control signal within the bounds
+  Eigen::VectorXd state(2);
+  state << 0.5, 1.0;
+  Eigen::VectorXd control(2);
+  control << 0.5, 1.0;
+  Eigen::VectorXd constraint_value = constraint.evaluate(state, control);
+  Eigen::VectorXd expected_value(2 * state.size());
+  expected_value.head(state.size()) = -state;
+  expected_value.tail(state.size()) = state;
+  ASSERT_TRUE(constraint_value.isApprox(expected_value));
+
+  // Test with a control signal outside the bounds
+  state << 1.5, -2.5;
+  constraint_value = constraint.evaluate(state, control);
+  expected_value.head(state.size()) = -state;
+  expected_value.tail(state.size()) = state;
+  ASSERT_TRUE(constraint_value.isApprox(expected_value));
+}
+
+TEST(ControlConstraintTest, Jacobians) {
+  // Create a constraint with upper bounds
+  Eigen::VectorXd upper_bound(2);
+  upper_bound << 1.0, 2.0;
+  cddp::ControlConstraint constraint(upper_bound);
+
+  // Test Jacobians
+  Eigen::VectorXd state(2);
+  state << 0.5, 1.0;
+  Eigen::VectorXd control(2);
+  control << 0.5, 1.0;
+
+  // Get Jacobians
+  Eigen::MatrixXd state_jac = constraint.getStateJacobian(state, control);
+  Eigen::MatrixXd control_jac = constraint.getControlJacobian(state, control);
+
+  // State Jacobian should be zero
+  ASSERT_EQ(state_jac.rows(), 4); 
+  ASSERT_EQ(state_jac.cols(), 2); 
+  ASSERT_TRUE(state_jac.isZero());
+
+  // Control Jacobian should be [-I; I]
+  Eigen::MatrixXd expected_control_jac(4, 2);
+  expected_control_jac.topRows(2) = -Eigen::MatrixXd::Identity(2, 2);
+  expected_control_jac.bottomRows(2) = Eigen::MatrixXd::Identity(2, 2);
+  ASSERT_TRUE(control_jac.isApprox(expected_control_jac));
+}
+
+TEST(StateConstraintTest, Jacobians) {
+  // Create a constraint with upper bounds
+  Eigen::VectorXd upper_bound(2);
+  upper_bound << 1.0, 2.0;
+  cddp::StateConstraint constraint(upper_bound);
+
+  // Test Jacobians
+  Eigen::VectorXd state(2);
+  state << 0.5, 1.0;
+  Eigen::VectorXd control(2);
+  control << 0.5, 1.0;
+
+  // Get Jacobians
+  Eigen::MatrixXd state_jac = constraint.getStateJacobian(state, control);
+  Eigen::MatrixXd control_jac = constraint.getControlJacobian(state, control);
+
+  // State Jacobian should be [-I; I] 
+  Eigen::MatrixXd expected_state_jac(4, 2);
+  expected_state_jac.topRows(2) = -Eigen::MatrixXd::Identity(2, 2);
+  expected_state_jac.bottomRows(2) = Eigen::MatrixXd::Identity(2, 2);
+  ASSERT_TRUE(state_jac.isApprox(expected_state_jac));
+
+  // Control Jacobian should be zero
+  ASSERT_EQ(control_jac.rows(), 4); 
+  ASSERT_EQ(control_jac.cols(), 2); 
+  ASSERT_TRUE(control_jac.isZero());
+}
+
+
+
 TEST(CircleConstraintTest, Evaluate) {
     // Create a circle constraint with a radius of 2.0
     cddp::BallConstraint constraint(2.0, Eigen::Vector2d(0.0, 0.0));
