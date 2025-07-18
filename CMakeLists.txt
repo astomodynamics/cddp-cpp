@@ -326,7 +326,6 @@ set(dynamics_model_srcs
   src/dynamics_model/unicycle.cpp
   src/dynamics_model/bicycle.cpp
   src/dynamics_model/cartpole.cpp
-  src/dynamics_model/acrobot.cpp
   src/dynamics_model/car.cpp
   src/dynamics_model/forklift.cpp
   src/dynamics_model/dubins_car.cpp
