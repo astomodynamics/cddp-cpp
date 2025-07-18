@@ -54,6 +54,10 @@ add_executable(test_pendulum dynamics_model/test_pendulum.cpp)
 target_link_libraries(test_pendulum gtest gmock gtest_main cddp)
 gtest_discover_tests(test_pendulum)
 
+add_executable(test_acrobot dynamics_model/test_acrobot.cpp)
+target_link_libraries(test_acrobot gtest gmock gtest_main cddp)
+gtest_discover_tests(test_acrobot)
+
 add_executable(test_quadrotor dynamics_model/test_quadrotor.cpp)
 target_link_libraries(test_quadrotor gtest gmock gtest_main cddp)
 gtest_discover_tests(test_quadrotor)
