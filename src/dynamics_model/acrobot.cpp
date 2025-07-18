@@ -73,7 +73,7 @@ Eigen::VectorXd Acrobot::getContinuousDynamics(
     C << friction_*theta1_dot, friction_*theta2_dot;
     
     // Gravity term G
-    double g1 = ((m1_ + m2_)*l1_*c1 + m2_*l1_*c12) * gravity_;
+    double g1 = ((m1_ + m2_)*l1_*c1 + m2_*l2_*c12) * gravity_;
     double g2 = m2_*l2_*c12*gravity_;
     
     Eigen::Vector2d G;
@@ -140,7 +140,7 @@ VectorXdual2nd Acrobot::getContinuousDynamicsAutodiff(
     C << friction_*theta1_dot, friction_*theta2_dot;
     
     // Gravity term G
-    dual2nd g1 = ((m1_ + m2_)*l1_*c1 + m2_*l1_*c12) * gravity_;
+    dual2nd g1 = ((m1_ + m2_)*l1_*c1 + m2_*l2_*c12) * gravity_;
     dual2nd g2 = m2_*l2_*c12*gravity_;
     
     Eigen::Matrix<dual2nd, 2, 1> G;
