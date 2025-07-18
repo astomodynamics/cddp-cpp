@@ -53,7 +53,7 @@ Eigen::VectorXd Acrobot::getContinuousDynamics(
     
     // Mass matrix M
     double m11 = m1_*l1_*l1_ + J1_ + m2_*(l1_*l1_ + l2_*l2_ + 2*l1_*l2_*c2) + J2_;
-    double m12 = m2_*(l2_*l2_ + l1_*l2_*c2 + J2_);
+    double m12 = m2_*(l2_*l2_ + l1_*l2_*c2) + J2_;
     double m22 = l2_*l2_*m2_ + J2_;
     
     Eigen::Matrix2d M;
@@ -120,7 +120,7 @@ VectorXdual2nd Acrobot::getContinuousDynamicsAutodiff(
     
     // Mass matrix M
     dual2nd m11 = m1_*l1_*l1_ + J1_ + m2_*(l1_*l1_ + l2_*l2_ + 2*l1_*l2_*c2) + J2_;
-    dual2nd m12 = m2_*(l2_*l2_ + l1_*l2_*c2 + J2_);
+    dual2nd m12 = m2_*(l2_*l2_ + l1_*l2_*c2) + J2_;
     dual2nd m22 = dual2nd(l2_*l2_*m2_ + J2_);
     
     Eigen::Matrix<dual2nd, 2, 2> M;
