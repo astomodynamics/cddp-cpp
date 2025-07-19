@@ -23,16 +23,6 @@
 namespace cddp
 {
     /**
-     * @brief Barrier parameter update strategy for interior point methods.
-     */
-    enum class BarrierStrategy
-    {
-        ADAPTIVE,    ///< Adaptive strategy based on KKT progress (default)
-        MONOTONIC,   ///< Monotonic decrease with fixed reduction factor
-        IPOPT        ///< IPOPT-style adaptive barrier update
-    };
-
-    /**
      * @brief Options for the line search procedure.
      *
      * These parameters control how the step size (alpha) is determined during the
@@ -81,8 +71,6 @@ namespace cddp
         double min_fraction_to_boundary =
             0.99; ///< Minimum fraction to boundary for primal/dual step calculation
                   ///< (tau).
-        BarrierStrategy strategy = 
-            BarrierStrategy::ADAPTIVE; ///< Barrier parameter update strategy.
     };
 
     /**

@@ -1838,106 +1838,56 @@ namespace cddp
       return; // No constraints case - no barrier update needed
     }
 
-    // Select barrier update strategy
-    switch (barrier_opts.strategy)
+    // Compute termination metric from current infeasibility metrics with IPOPT-style scaling
+    double scaled_inf_du = computeScaledDualInfeasibility(context);
+    double termination_metric = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
+
+    // More aggressive barrier parameter update strategy
+    double barrier_update_threshold = std::max(barrier_opts.mu_update_factor * mu_, mu_ * 2.0);
+    
+    if (termination_metric <= barrier_update_threshold)
     {
-      case BarrierStrategy::MONOTONIC:
+      // Adaptive barrier reduction strategy
+      double reduction_factor = barrier_opts.mu_update_factor;
+
+      if (mu_ > 1e-12)
       {
-        // Monotonic decrease: always reduce by fixed factor
-        mu_ = std::max(barrier_opts.mu_min_value, 
-                       barrier_opts.mu_update_factor * mu_);
-        resetFilter(context);
-        if (options.debug)
+        double kkt_progress_ratio = termination_metric / mu_;
+
+        // Very aggressive reduction for good KKT satisfaction
+        if (kkt_progress_ratio < 0.01)
         {
-          std::cout << "[IPDDP Barrier] Monotonic update: μ = " 
-                    << std::scientific << std::setprecision(2) << mu_ << std::endl;
+          reduction_factor = barrier_opts.mu_update_factor * 0.1;
         }
-        break;
+        // Aggressive reduction if we're significantly satisfying KKT conditions
+        else if (kkt_progress_ratio < 0.1)
+        {
+          reduction_factor = barrier_opts.mu_update_factor * 0.3;
+        }
+        // Moderate reduction if we're moderately satisfying KKT conditions
+        else if (kkt_progress_ratio < 0.5)
+        {
+          reduction_factor = barrier_opts.mu_update_factor * 0.6;
+        }
+        // Standard reduction otherwise
       }
-      
-      case BarrierStrategy::IPOPT:
+
+      // Update barrier parameter with bounds
+      double new_mu_linear = reduction_factor * mu_;
+      double new_mu_superlinear = std::pow(mu_, barrier_opts.mu_update_power);
+
+      mu_ = std::max(options.tolerance / 100.0,
+                     std::min(new_mu_linear, new_mu_superlinear));
+
+      // Reset filter when barrier parameter changes
+      resetFilter(context);
+
+      if (options.debug)
       {
-        // IPOPT-style barrier update
-        double scaled_inf_du = computeScaledDualInfeasibility(context);
-        double error_k = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
-        
-        // IPOPT uses: μ_new = max(ε_tol/10, min(κ_μ * μ, μ^θ_μ))
-        // where update happens when error_k ≤ κ_ε * μ
-        double kappa_epsilon = 10.0; // IPOPT default
-        
-        if (error_k <= kappa_epsilon * mu_)
-        {
-          double new_mu_linear = barrier_opts.mu_update_factor * mu_;
-          double new_mu_superlinear = std::pow(mu_, barrier_opts.mu_update_power);
-          mu_ = std::max(options.tolerance / 10.0,
-                         std::min(new_mu_linear, new_mu_superlinear));
-          resetFilter(context);
-          if (options.debug)
-          {
-            std::cout << "[IPDDP Barrier] IPOPT update: error = " 
-                      << std::scientific << std::setprecision(2) << error_k 
-                      << " ≤ " << kappa_epsilon << " * μ = " << kappa_epsilon * mu_
-                      << " → μ = " << mu_ << std::endl;
-          }
-        }
-        break;
-      }
-      
-      case BarrierStrategy::ADAPTIVE:
-      default:
-      {
-        // Current adaptive strategy (default)
-        double scaled_inf_du = computeScaledDualInfeasibility(context);
-        double termination_metric = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
-
-        // More aggressive barrier parameter update strategy
-        double barrier_update_threshold = std::max(barrier_opts.mu_update_factor * mu_, mu_ * 2.0);
-        
-        if (termination_metric <= barrier_update_threshold)
-        {
-          // Adaptive barrier reduction strategy
-          double reduction_factor = barrier_opts.mu_update_factor;
-
-          if (mu_ > 1e-12)
-          {
-            double kkt_progress_ratio = termination_metric / mu_;
-
-            // Very aggressive reduction for good KKT satisfaction
-            if (kkt_progress_ratio < 0.01)
-            {
-              reduction_factor = barrier_opts.mu_update_factor * 0.1;
-            }
-            // Aggressive reduction if we're significantly satisfying KKT conditions
-            else if (kkt_progress_ratio < 0.1)
-            {
-              reduction_factor = barrier_opts.mu_update_factor * 0.3;
-            }
-            // Moderate reduction if we're moderately satisfying KKT conditions
-            else if (kkt_progress_ratio < 0.5)
-            {
-              reduction_factor = barrier_opts.mu_update_factor * 0.6;
-            }
-            // Standard reduction otherwise
-          }
-
-          // Update barrier parameter with bounds
-          double new_mu_linear = reduction_factor * mu_;
-          double new_mu_superlinear = std::pow(mu_, barrier_opts.mu_update_power);
-
-          mu_ = std::max(options.tolerance / 100.0,
-                         std::min(new_mu_linear, new_mu_superlinear));
-
-          // Reset filter when barrier parameter changes
-          resetFilter(context);
-
-          if (options.debug)
-          {
-            std::cout << "[IPDDP Barrier] Adaptive update: termination metric = " 
-                      << std::scientific << std::setprecision(2) << termination_metric 
-                      << " → μ = " << mu_ << std::endl;
-          }
-        }
-        break;
+        std::cout << "[IPDDP Barrier] Termination metric: " << std::scientific << std::setprecision(2)
+                  << termination_metric << " (scaled inf_du: " << scaled_inf_du 
+                  << ", inf_pr: " << context.inf_pr_ << ", inf_comp: " << context.inf_comp_ 
+                  << ") → μ: " << mu_ << std::endl;
       }
     }
   }
