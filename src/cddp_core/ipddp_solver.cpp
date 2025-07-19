@@ -1847,11 +1847,6 @@ namespace cddp
         mu_ = std::max(barrier_opts.mu_min_value, 
                        barrier_opts.mu_update_factor * mu_);
         resetFilter(context);
-        if (options.debug)
-        {
-          std::cout << "[IPDDP Barrier] Monotonic update: μ = " 
-                    << std::scientific << std::setprecision(2) << mu_ << std::endl;
-        }
         break;
       }
       
@@ -1862,7 +1857,6 @@ namespace cddp
         double error_k = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
         
         // IPOPT uses: μ_new = max(ε_tol/10, min(κ_μ * μ, μ^θ_μ))
-        // where update happens when error_k ≤ κ_ε * μ
         double kappa_epsilon = 10.0; // IPOPT default
         
         if (error_k <= kappa_epsilon * mu_)
@@ -1872,13 +1866,6 @@ namespace cddp
           mu_ = std::max(options.tolerance / 10.0,
                          std::min(new_mu_linear, new_mu_superlinear));
           resetFilter(context);
-          if (options.debug)
-          {
-            std::cout << "[IPDDP Barrier] IPOPT update: error = " 
-                      << std::scientific << std::setprecision(2) << error_k 
-                      << " ≤ " << kappa_epsilon << " * μ = " << kappa_epsilon * mu_
-                      << " → μ = " << mu_ << std::endl;
-          }
         }
         break;
       }
@@ -1929,13 +1916,6 @@ namespace cddp
 
           // Reset filter when barrier parameter changes
           resetFilter(context);
-
-          if (options.debug)
-          {
-            std::cout << "[IPDDP Barrier] Adaptive update: termination metric = " 
-                      << std::scientific << std::setprecision(2) << termination_metric 
-                      << " → μ = " << mu_ << std::endl;
-          }
         }
         break;
       }
