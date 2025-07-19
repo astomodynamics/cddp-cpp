@@ -14,6 +14,9 @@
 
 # CMakeLists.txt for the CDDP examples
 
+add_executable(test_barrier_strategies test_barrier_strategies.cpp)
+target_link_libraries(test_barrier_strategies cddp)
+
 add_executable(cddp_bicycle cddp_bicycle.cpp)
 target_link_libraries(cddp_bicycle cddp)
 
