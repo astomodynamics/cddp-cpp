@@ -2253,81 +2253,129 @@ namespace cddp
       return; // No constraints case - no barrier update needed
     }
 
-    // Compute termination metric from current infeasibility metrics with IPOPT-style scaling
-    double scaled_inf_du = computeScaledDualInfeasibility(context);
-    double termination_metric = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
-
-    // Adaptive barrier parameter update strategy
-    // Use different thresholds based on current progress
-    double barrier_update_threshold;
-    
-    // If mu is already small, use a more relaxed threshold
-    if (mu_ < 1e-5)
+    // Select barrier update strategy
+    switch (barrier_opts.strategy)
     {
-      // For small mu, update if we've made any reasonable progress
-      barrier_update_threshold = std::max(termination_metric * 10.0, mu_ * 100.0);
-    }
-    else
-    {
-      // Standard threshold for larger mu values
-      barrier_update_threshold = std::max(barrier_opts.mu_update_factor * mu_, mu_ * 2.0);
-    }
-
-    // Also consider updating if forward pass succeeded but with very small cost change NOTE: Hand tuning
-    bool slow_progress = forward_pass_success && context.alpha_pr_ > 0 &&
-                        (termination_metric < 1e-3);  // Only when reasonably feasible
-
-    if (termination_metric <= barrier_update_threshold || slow_progress)
-    {
-      // Adaptive barrier reduction strategy
-      double reduction_factor = barrier_opts.mu_update_factor;
-
-      if (mu_ > 1e-12)
+      case BarrierStrategy::MONOTONIC:
       {
-        double kkt_progress_ratio = termination_metric / mu_;
-
-        // Very aggressive reduction for good KKT satisfaction
-        if (kkt_progress_ratio < 0.01)
+        // Monotonic decrease: always reduce by fixed factor
+        mu_ = std::max(barrier_opts.mu_min_value, 
+                       barrier_opts.mu_update_factor * mu_);
+        resetFilter(context);
+        if (options.debug)
         {
-          reduction_factor = barrier_opts.mu_update_factor * 0.1;
+          std::cout << "[MSIPDDP Barrier] Monotonic update: μ = " 
+                    << std::scientific << std::setprecision(2) << mu_ << std::endl;
         }
-        // Aggressive reduction if we're significantly satisfying KKT conditions
-        else if (kkt_progress_ratio < 0.1)
+        break;
+      }
+      
+      case BarrierStrategy::IPOPT:
+      {
+        // IPOPT-style barrier update
+        double scaled_inf_du = computeScaledDualInfeasibility(context);
+        double error_k = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
+        
+        // IPOPT uses: μ_new = max(ε_tol/10, min(κ_μ * μ, μ^θ_μ))
+        double kappa_epsilon = 10.0; // IPOPT default
+        
+        if (error_k <= kappa_epsilon * mu_)
         {
-          reduction_factor = barrier_opts.mu_update_factor * 0.3;
+          double new_mu_linear = barrier_opts.mu_update_factor * mu_;
+          double new_mu_superlinear = std::pow(mu_, barrier_opts.mu_update_power);
+          mu_ = std::max(options.tolerance / 10.0,
+                         std::min(new_mu_linear, new_mu_superlinear));
+          resetFilter(context);
+          if (options.debug)
+          {
+            std::cout << "[MSIPDDP Barrier] IPOPT update: error = " 
+                      << std::scientific << std::setprecision(2) << error_k 
+                      << " ≤ " << kappa_epsilon << " * μ = " << kappa_epsilon * mu_
+                      << " → μ = " << mu_ << std::endl;
+          }
         }
-        // Moderate reduction if we're moderately satisfying KKT conditions
-        else if (kkt_progress_ratio < 0.5)
+        break;
+      }
+      
+      case BarrierStrategy::ADAPTIVE:
+      default:
+      {
+        // Current adaptive strategy (default)
+        double scaled_inf_du = computeScaledDualInfeasibility(context);
+        double termination_metric = std::max({scaled_inf_du, context.inf_pr_, context.inf_comp_});
+
+        // Adaptive barrier parameter update strategy
+        double barrier_update_threshold;
+        
+        // If mu is already small, use a more relaxed threshold
+        if (mu_ < 1e-5)
         {
-          reduction_factor = barrier_opts.mu_update_factor * 0.6;
+          // For small mu, update if we've made any reasonable progress
+          barrier_update_threshold = std::max(termination_metric * 10.0, mu_ * 100.0);
         }
-        // Standard reduction otherwise
-      }
+        else
+        {
+          // Standard threshold for larger mu values
+          barrier_update_threshold = std::max(barrier_opts.mu_update_factor * mu_, mu_ * 2.0);
+        }
 
-      // Update barrier parameter with bounds
-      double new_mu_linear = reduction_factor * mu_;
-      double new_mu_superlinear = std::pow(mu_, barrier_opts.mu_update_power);
+        // Also consider updating if forward pass succeeded but with very small cost change NOTE: Hand tuning
+        bool slow_progress = forward_pass_success && context.alpha_pr_ > 0 &&
+                            (termination_metric < 1e-3);  // Only when reasonably feasible
 
-      // Choose the more aggressive reduction when progress is slow
-      if (slow_progress && mu_ > options.tolerance)
-      {
-        mu_ = std::min(new_mu_linear, new_mu_superlinear);
-      }
-      else
-      {
-        mu_ = std::max(options.tolerance / 100.0,
-                       std::min(new_mu_linear, new_mu_superlinear));
-      }
+        if (termination_metric <= barrier_update_threshold || slow_progress)
+        {
+          // Adaptive barrier reduction strategy
+          double reduction_factor = barrier_opts.mu_update_factor;
 
-      // Reset filter when barrier parameter changes
-      resetFilter(context);
+          if (mu_ > 1e-12)
+          {
+            double kkt_progress_ratio = termination_metric / mu_;
 
-      if (options.debug)
-      {
-        std::cout << "[MSIPDDP Barrier] Termination metric: " << std::scientific << std::setprecision(2)
-                  << termination_metric << " (scaled inf_du: " << scaled_inf_du
-                  << ", inf_pr: " << context.inf_pr_ << ", inf_comp: " << context.inf_comp_
-                  << ") → μ: " << mu_ << std::endl;
+            // Very aggressive reduction for good KKT satisfaction
+            if (kkt_progress_ratio < 0.01)
+            {
+              reduction_factor = barrier_opts.mu_update_factor * 0.1;
+            }
+            // Aggressive reduction if we're significantly satisfying KKT conditions
+            else if (kkt_progress_ratio < 0.1)
+            {
+              reduction_factor = barrier_opts.mu_update_factor * 0.3;
+            }
+            // Moderate reduction if we're moderately satisfying KKT conditions
+            else if (kkt_progress_ratio < 0.5)
+            {
+              reduction_factor = barrier_opts.mu_update_factor * 0.6;
+            }
+            // Standard reduction otherwise
+          }
+
+          // Update barrier parameter with bounds
+          double new_mu_linear = reduction_factor * mu_;
+          double new_mu_superlinear = std::pow(mu_, barrier_opts.mu_update_power);
+
+          // Choose the more aggressive reduction when progress is slow
+          if (slow_progress && mu_ > options.tolerance)
+          {
+            mu_ = std::min(new_mu_linear, new_mu_superlinear);
+          }
+          else
+          {
+            mu_ = std::max(options.tolerance / 100.0,
+                           std::min(new_mu_linear, new_mu_superlinear));
+          }
+
+          // Reset filter when barrier parameter changes
+          resetFilter(context);
+
+          if (options.debug)
+          {
+            std::cout << "[MSIPDDP Barrier] Adaptive update: termination metric = " 
+                      << std::scientific << std::setprecision(2) << termination_metric 
+                      << " → μ = " << mu_ << std::endl;
+          }
+        }
+        break;
       }
     }
   }
