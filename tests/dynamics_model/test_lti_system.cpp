@@ -21,6 +21,7 @@
 #include "gtest/gtest.h"
 #include <unsupported/Eigen/MatrixFunctions>
 #include "dynamics_model/lti_system.hpp"
+#include <filesystem>
 
 namespace fs = std::filesystem;
 using namespace cddp;
