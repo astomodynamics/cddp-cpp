@@ -134,6 +134,9 @@ endif()
 if (CDDP_CPP_CASADI AND CDDP_CPP_SNOPT)
     add_executable(quadrotor_benchmark quadrotor_benchmark.cpp)
     target_link_libraries(quadrotor_benchmark cddp)
+    
+    add_executable(quadrotor_parallel_comparison quadrotor_parallel_comparison.cpp)
+    target_link_libraries(quadrotor_parallel_comparison cddp)
 
     add_executable(unicycle_benchmark unicycle_benchmark.cpp)
     target_link_libraries(unicycle_benchmark cddp)
