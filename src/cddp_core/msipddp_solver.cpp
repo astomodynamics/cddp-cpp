@@ -1858,8 +1858,9 @@ namespace cddp
     {
       for (int t = 0; t < horizon; ++t)
       {
-        const Eigen::VectorXd &delta_x = workspace_.delta_x_vectors[t];
-        workspace_.delta_x_vectors[t] = result.state_trajectory[t] - context.X_[t];
+        // Compute delta_x first before using it
+        Eigen::VectorXd delta_x = result.state_trajectory[t] - context.X_[t];
+        workspace_.delta_x_vectors[t] = delta_x;
         result.control_trajectory[t] =
             context.U_[t] + alpha * k_u_[t] + K_u_[t] * delta_x;
 
@@ -1946,8 +1947,9 @@ namespace cddp
     bool s_trajectory_feasible = true;
     for (int t = 0; t < horizon; ++t)
     {
-      const Eigen::VectorXd &delta_x = workspace_.delta_x_vectors[t];
-      workspace_.delta_x_vectors[t] = result.state_trajectory[t] - context.X_[t];
+      // Compute delta_x first before using it
+      Eigen::VectorXd delta_x = result.state_trajectory[t] - context.X_[t];
+      workspace_.delta_x_vectors[t] = delta_x;
 
       // Update slack variables first
       for (const auto &constraint_pair : constraint_set)
