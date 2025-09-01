@@ -33,7 +33,9 @@ jobs:
       if: runner.os == 'macOS'
       run: |
         # Basic dependencies
-        brew install eigen cmake
+        brew install eigen || true
+        brew uninstall --ignore-dependencies cmake || true
+        brew install cmake
         
         # Dependencies for matplotplusplus
         brew install gnuplot
