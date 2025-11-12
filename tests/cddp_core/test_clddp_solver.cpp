@@ -442,7 +442,7 @@ TEST(CLDDPTest, SolveCar)
     options.num_threads = 1;
     options.verbose = true;
     options.debug = false;
-    options.regularization.initial_value = 1e-7;
+    options.regularization.initial_value = 1e-6;
     options.return_iteration_info = true; // Get detailed iteration history
 
     // Set options
