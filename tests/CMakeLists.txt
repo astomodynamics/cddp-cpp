@@ -131,10 +131,6 @@ add_executable(test_clddp_solver cddp_core/test_clddp_solver.cpp)
 target_link_libraries(test_clddp_solver gtest gmock gtest_main cddp)
 gtest_discover_tests(test_clddp_solver)
 
-add_executable(test_asddp_solver cddp_core/test_asddp_solver.cpp)
-target_link_libraries(test_asddp_solver gtest gmock gtest_main cddp)
-gtest_discover_tests(test_asddp_solver)
-
 add_executable(test_logddp_solver cddp_core/test_logddp_solver.cpp)
 target_link_libraries(test_logddp_solver gtest gmock gtest_main cddp)
 gtest_discover_tests(test_logddp_solver)
@@ -150,8 +146,6 @@ gtest_discover_tests(test_msipddp_solver)
 add_executable(test_alddp_solver cddp_core/test_alddp_solver.cpp)
 target_link_libraries(test_alddp_solver gtest gmock gtest_main cddp)
 gtest_discover_tests(test_alddp_solver)
-
-# add_executable(test_asddp_core cddp_core/test_asddp_core.cpp)
 
 # add_executable(test_logcddp_core cddp_core/test_logcddp_core.cpp)
 # target_link_libraries(test_logcddp_core gtest gmock gtest_main cddp)
@@ -189,23 +183,6 @@ gtest_discover_tests(test_alddp_solver)
 # target_link_libraries(test_matplot gtest gmock gtest_main cddp)
 # gtest_discover_tests(test_matplot)
 
-# Test for torch
-if (CDDP_CPP_TORCH)
-    add_executable(test_torch test_torch.cpp)
-    target_link_libraries(test_torch gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_torch)
-
-    add_executable(test_neural_pendulum dynamics_model/test_neural_pendulum.cpp)
-    target_link_libraries(test_neural_pendulum gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_neural_pendulum)
-endif()
-
-if (CDDP_CPP_SQP AND CDDP_CPP_CASADI)
-    add_executable(test_sqp_core sqp_core/test_sqp_core.cpp)
-    target_link_libraries(test_sqp_core gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_sqp_core)
-endif()
-
 if (CDDP_CPP_CASADI)
     add_executable(test_casadi test_casadi_solver.cpp)
     target_link_libraries(test_casadi gtest gmock gtest_main cddp)
@@ -221,15 +198,3 @@ gtest_discover_tests(test_eigen)
 add_executable(test_autodiff test_autodiff.cpp)
 target_link_libraries(test_autodiff gtest gmock gtest_main cddp)
 gtest_discover_tests(test_autodiff)
-
-# Test for gurobi
-if (CDDP_CPP_GUROBI)
-    add_executable(test_gurobi test_gurobi.cpp)
-    target_link_libraries(test_gurobi gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_gurobi)     
-
-    # Test for qp solver comparison
-    add_executable(test_qp_solvers test_qp_solvers.cpp)
-    target_link_libraries(test_qp_solvers gtest gmock gtest_main cddp)
-    gtest_discover_tests(test_qp_solvers)
-endif()

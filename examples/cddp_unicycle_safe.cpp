@@ -102,7 +102,7 @@ int main() {
     solver_baseline.setInitialTrajectory(X_baseline, U_baseline);
 
     // Solve
-    cddp::CDDPSolution solution_baseline = solver_baseline.solve(cddp::SolverType::ASDDP);
+    cddp::CDDPSolution solution_baseline = solver_baseline.solve(cddp::SolverType::IPDDP);
     auto X_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_baseline.at("state_trajectory")); // size horizon + 1
 
     // -------------------------------------------------------
@@ -132,7 +132,7 @@ int main() {
     solver_ball.setInitialTrajectory(X_ball, U_ball);
 
     // Solve
-    cddp::CDDPSolution solution_ball = solver_ball.solve(cddp::SolverType::ASDDP);
+    cddp::CDDPSolution solution_ball = solver_ball.solve(cddp::SolverType::IPDDP);
     auto X_ball_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("state_trajectory"));  // horizon+1
 
     // -------------------------------------------------------
