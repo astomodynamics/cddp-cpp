@@ -47,17 +47,6 @@ option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
 # CasADi Configuration
 option(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
 
-# SNOPT Configuration
-# If you want to install SNOPT, please follow the instructions at:
-# https://ccom.ucsd.edu/~optimizers/
-option(CDDP_CPP_SNOPT "Whether to use SNOPT solver." OFF)
-option(SNOPT_ROOT "Path to SNOPT installation" "")
-if(APPLE)
-  set(SNOPT_ROOT /usr/local/lib/snopt)  # macOS default path
-else()
-  set(SNOPT_ROOT /home/astomodynamics/.local/lib/snopt)  # Linux default path
-endif()
-
 # ACADOS Configuration
 # For ACADOS installation, see: https://docs.acados.org/
 option(CDDP_CPP_ACADOS "Whether to use ACADOS solver." OFF)
@@ -87,7 +76,7 @@ if (CDDP_CPP_CASADI)
   # Assuming that CasADi is installed in /usr/local/include/casadi by:
   # https://github.com/casadi/casadi/wiki/InstallationLinux 
   # $ echo "export LD_LIBRARY_PATH=/home/<path_to_casadi>/casadi/build/lib:$LD_LIBRARY_PATH" >> ~/.bashrc && source ~/.bashrc
-  # If you use Ipopt or SNOPT, you need to set flags for CasADi installation.
+  # If you use Ipopt, you may need to set flags for CasADi installation.
 
   find_package(casadi REQUIRED)
   set(CASADI_INCLUDE_DIR /usr/local/include/casadi)
@@ -206,46 +195,6 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 if (CDDP_CPP_CASADI)
   target_include_directories(${PROJECT_NAME} PUBLIC ${CASADI_INCLUDE_DIR})
   target_link_libraries(${PROJECT_NAME} ${CASADI_LIBRARIES})
-endif()
-
-
-# SNOPT
-if (CDDP_CPP_SNOPT)
-  if (NOT SNOPT_ROOT)
-    message(FATAL_ERROR "Please set SNOPT_ROOT to your SNOPT installation directory.")
-  endif()
-  
-  # Set SNOPT paths
-  set(SNOPT_INCLUDE_DIRS ${SNOPT_ROOT}/include)
-  set(SNOPT_LIB_DIR ${SNOPT_ROOT}/lib)
-  
-  # Find SNOPT libraries 
-  find_library(SNOPT_LIBRARY NAMES snopt7 snopt snopt7_cpp PATHS ${SNOPT_LIB_DIR})
-  
-  # Find header files
-  find_path(SNOPT_INCLUDE_DIR snopt.h PATHS ${SNOPT_INCLUDE_DIRS})
-  
-  # Set up library list
-  set(SNOPT_LIBRARIES)
-  if(SNOPT_LIBRARY)
-    list(APPEND SNOPT_LIBRARIES ${SNOPT_LIBRARY})
-  endif()
-  
-  if (SNOPT_LIBRARIES AND SNOPT_INCLUDE_DIR)
-    message(STATUS "Found SNOPT libraries: ${SNOPT_LIBRARIES}")
-    message(STATUS "SNOPT include directory: ${SNOPT_INCLUDE_DIR}")
-    
-    include_directories(${SNOPT_INCLUDE_DIR})
-    link_directories(${SNOPT_LIB_DIR})
-    target_link_libraries(${PROJECT_NAME} ${SNOPT_LIBRARIES})
-    
-    # Add preprocessor definition to enable SNOPT in code
-    target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_SNOPT_ENABLED=1)
-    
-    message(STATUS "Successfully linked SNOPT.")
-  else()
-    message(FATAL_ERROR "Could not find SNOPT libraries. Please check SNOPT_ROOT: ${SNOPT_ROOT}")
-  endif()
 endif()
 
 # ACADOS

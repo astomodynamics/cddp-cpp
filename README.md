@@ -201,7 +201,6 @@ This library also uses the following open-source libraries for optional features
 
 * [Ipopt](https://github.com/coin-or/Ipopt) (EPL License)
 * [CasADi](https://web.casadi.org/) (GPL License)
-* [SNOPT](https://ccom.ucsd.edu/~optimizers/) (GPL License)
 
 
 ## Citing
