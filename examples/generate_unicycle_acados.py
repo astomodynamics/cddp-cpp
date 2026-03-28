@@ -142,7 +142,7 @@ def main():
     
     print("\nNext steps:")
     print("1. Review the generated code")
-    print("2. Update unicycle_benchmark.cpp to use the generated solver")
+    print("2. Wire the generated solver into your ACADOS-enabled example")
 
 
 if __name__ == "__main__":

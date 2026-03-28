@@ -77,9 +77,6 @@ target_link_libraries(cddp_unicycle_safe_ipddp_v2 cddp)
 add_executable(cddp_unicycle_safe_ipddp_v3 cddp_unicycle_safe_ipddp_v3.cpp)
 target_link_libraries(cddp_unicycle_safe_ipddp_v3 cddp)
 
-add_executable(cddp_unicycle_safe_comparison cddp_unicycle_safe_comparison.cpp)
-target_link_libraries(cddp_unicycle_safe_comparison cddp)
-
 add_executable(cddp_spacecraft_linear_docking cddp_spacecraft_linear_docking.cpp)
 target_link_libraries(cddp_spacecraft_linear_docking cddp)
 
@@ -123,92 +120,4 @@ if (CDDP_CPP_CASADI)
 
     add_executable(ipopt_spacecrat_linear_fuel ipopt_spacecrat_linear_fuel.cpp)
     target_link_libraries(ipopt_spacecrat_linear_fuel cddp)
-endif()
-
-# SNOPT examples
-if (CDDP_CPP_CASADI AND CDDP_CPP_SNOPT)
-    add_executable(snopt_unicycle snopt_unicycle.cpp)
-    target_link_libraries(snopt_unicycle cddp)
-endif()
-
-if (CDDP_CPP_CASADI AND CDDP_CPP_SNOPT)
-    add_executable(quadrotor_benchmark quadrotor_benchmark.cpp)
-    target_link_libraries(quadrotor_benchmark cddp)
-
-    add_executable(unicycle_benchmark unicycle_benchmark.cpp)
-    target_link_libraries(unicycle_benchmark cddp)
-    
-    # If ACADOS is available, enable it for the benchmark
-    if (CDDP_CPP_ACADOS)
-        target_compile_definitions(unicycle_benchmark PRIVATE CDDP_CPP_ACADOS_ENABLED=1)
-        target_compile_definitions(quadrotor_benchmark PRIVATE CDDP_CPP_ACADOS_ENABLED=1)
-        
-        # Add ACADOS generated sources for unicycle benchmark
-        set(ACADOS_GENERATED_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/c_generated_code)
-        
-        set(ACADOS_UNICYCLE_SOURCES
-            ${ACADOS_GENERATED_SRC_DIR}/acados_solver_unicycle.c
-            ${ACADOS_GENERATED_SRC_DIR}/unicycle_model/unicycle_expl_ode_fun.c
-            ${ACADOS_GENERATED_SRC_DIR}/unicycle_model/unicycle_expl_vde_forw.c
-            ${ACADOS_GENERATED_SRC_DIR}/unicycle_model/unicycle_expl_vde_adj.c
-            ${ACADOS_GENERATED_SRC_DIR}/unicycle_constraints/unicycle_constr_h_fun.c
-            ${ACADOS_GENERATED_SRC_DIR}/unicycle_constraints/unicycle_constr_h_fun_jac_uxt_zt.c
-        )
-        
-        target_sources(unicycle_benchmark PRIVATE ${ACADOS_UNICYCLE_SOURCES})
-        target_include_directories(unicycle_benchmark PRIVATE 
-            ${ACADOS_GENERATED_SRC_DIR}
-            ${ACADOS_GENERATED_SRC_DIR}/unicycle_model
-            ${ACADOS_GENERATED_SRC_DIR}/unicycle_constraints
-        )
-        
-        # Add ACADOS generated sources for quadrotor benchmark
-        set(ACADOS_QUADROTOR_SOURCES
-            ${ACADOS_GENERATED_SRC_DIR}/acados_solver_quadrotor.c
-            ${ACADOS_GENERATED_SRC_DIR}/quadrotor_model/quadrotor_expl_ode_fun.c
-            ${ACADOS_GENERATED_SRC_DIR}/quadrotor_model/quadrotor_expl_vde_forw.c
-            ${ACADOS_GENERATED_SRC_DIR}/quadrotor_model/quadrotor_expl_vde_adj.c
-        )
-        
-        target_sources(quadrotor_benchmark PRIVATE ${ACADOS_QUADROTOR_SOURCES})
-        target_include_directories(quadrotor_benchmark PRIVATE 
-            ${ACADOS_GENERATED_SRC_DIR}
-            ${ACADOS_GENERATED_SRC_DIR}/quadrotor_model
-        )
-    endif()
-endif()
-
-if (CDDP_CPP_CASADI AND CDDP_CPP_SQP)
-    add_executable(sqp_unicycle sqp_unicycle.cpp)
-    target_link_libraries(sqp_unicycle cddp)
-endif()
-
-# Acado examples
-if (CDDP_CPP_ACADO)
-    add_executable(acado_car acado_car.cpp)
-    target_link_libraries(acado_car cddp)
-endif()
-
-# Neural dynamics examples
-if (CDDP_CPP_TORCH)
-    add_executable(prepare_pendulum neural_dynamics/prepare_pendulum.cpp)
-    target_link_libraries(prepare_pendulum cddp)
-
-    # add_executable(prepare_cartpole neural_dynamics/prepare_cartpole.cpp)
-    # target_link_libraries(prepare_cartpole cddp)
-
-    add_executable(train_pendulum neural_dynamics/train_pendulum.cpp)
-    target_link_libraries(train_pendulum cddp)
-
-    # add_executable(train_cartpole neural_dynamics/train_cartpole.cpp)
-    # target_link_libraries(train_cartpole cddp)
-
-    add_executable(run_pendulum neural_dynamics/run_pendulum.cpp)
-    target_link_libraries(run_pendulum cddp)
-
-    # add_executable(run_cartpole neural_dynamics/run_cartpole.cpp)
-    # target_link_libraries(run_cartpole cddp)
-
-    # add_executable(cddp_pendulum_neural _cddp_pendulum_neural.cpp)
-    # target_link_libraries(cddp_pendulum_neural cddp)
 endif()

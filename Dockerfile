@@ -24,18 +24,6 @@ RUN wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86
     apt-get update && \
     apt-get -y install cuda-toolkit-12-4
 
-# Install LibTorch (adjust URL for your desired version)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends unzip && \
-    wget https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip && \
-    unzip libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124.zip -d libtorch && \
-    rm libtorch-cxx11-abi-shared-with-deps-2.5.1+cu124.zip && \
-    rm -rf /var/lib/apt/lists/*
-
-# Set environment variables for LibTorch
-ENV LIBTORCH_DIR=/libtorch/libtorch
-ENV LD_LIBRARY_PATH=$LIBTORCH_DIR/lib:$LD_LIBRARY_PATH
-
 # Create a directory for your project
 WORKDIR /app
 
@@ -50,11 +38,8 @@ RUN rm -rf build && \
     cmake \
             -DCMAKE_BUILD_TYPE=Release \
             -DCDDP_CPP_BUILD_TESTS=ON \
-            -DCDDP_CPP_TORCH=ON \
-            -DCDDP_CPP_TORCH_GPU=ON \
             -DCDDP_CPP_CASADI=OFF \
             -DPython_EXECUTABLE=/usr/bin/python3 \
-            -DLIBTORCH_DIR=/libtorch/libtorch \
             .. && \
     make -j$(nproc) && \
     make test

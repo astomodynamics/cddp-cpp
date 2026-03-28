@@ -241,7 +241,6 @@ int main()
     // Solve Time: 5.441e+05 micro sec
     // Final Cost: 1.90517
     // ========================================
-    // cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::ASDDP);
     // ========================================
     // CDDP Solution
     // ========================================

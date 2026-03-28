@@ -143,7 +143,7 @@ int main() {
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve
-    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::ASDDP);
+    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::CLDDP);
 
     // Extract solution and print result
     auto cost_sequence = std::any_cast<std::vector<double>>(solution.at("cost_trajectory"));

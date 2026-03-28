@@ -15,8 +15,6 @@
 */
 
 #include "cddp_core/cddp_core.hpp"      // For CDDP class declaration
-#include "cddp_core/alddp_solver.hpp"   // For AlddpSolver
-#include "cddp_core/asddp_solver.hpp"   // For ASDDPSolver
 #include "cddp_core/clddp_solver.hpp"   // For CLDDPSolver
 #include "cddp_core/ipddp_solver.hpp"   // For IPDDPSolver
 #include "cddp_core/logddp_solver.hpp"  // For LogDDPSolver
@@ -258,16 +256,12 @@ std::string solverTypeToString(SolverType solver_type) {
   switch (solver_type) {
   case SolverType::CLDDP:
     return "CLDDP";
-  case SolverType::ASDDP:
-    return "ASDDP";
   case SolverType::LogDDP:
     return "LogDDP";
   case SolverType::IPDDP:
     return "IPDDP";
   case SolverType::MSIPDDP:
     return "MSIPDDP";
-  case SolverType::ALDDP:
-    return "ALDDP";
   default:
     return "CLDDP"; // Default fallback
   }
@@ -290,16 +284,12 @@ CDDP::createSolver(const std::string &solver_type) {
   // Fall back to built-in solvers
   if (solver_type == "CLCDDP" || solver_type == "CLDDP") {
     return std::make_unique<CLDDPSolver>();
-  } else if (solver_type == "ASDDP") {
-    return std::make_unique<ASDDPSolver>();
   } else if (solver_type == "LogDDP" || solver_type == "LOGDDP") {
     return std::make_unique<LogDDPSolver>();
   } else if (solver_type == "IPDDP") {
     return std::make_unique<IPDDPSolver>();
   } else if (solver_type == "MSIPDDP") {
     return std::make_unique<MSIPDDPSolver>();
-  } else if (solver_type == "ALDDP") {
-    return std::make_unique<AlddpSolver>();
   }
 
   return nullptr; // Solver not found
@@ -337,7 +327,7 @@ CDDPSolution CDDP::solve(const std::string &solver_type) {
       for (const auto &name : available) {
         std::cout << name << " ";
       }
-      std::cout << "CLDDP ASDDP LogDDP IPDDP MSIPDDP ALDDP" << std::endl;
+      std::cout << "CLDDP LogDDP IPDDP MSIPDDP" << std::endl;
     }
 
     return solution;

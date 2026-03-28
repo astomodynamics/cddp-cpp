@@ -44,11 +44,9 @@ namespace cddp {
  */
 enum class SolverType {
   CLDDP,   ///< Control-Limited Differential Dynamic Programming
-  ASDDP,   ///< Active Set Differential Dynamic Programming
   LogDDP,  ///< Log-Barrier Differential Dynamic Programming
   IPDDP,   ///< Interior Point Differential Dynamic Programming
-  MSIPDDP, ///< Multi-Shooting Interior Point Differential Dynamic Programming
-  ALDDP    ///< Augmented Lagrangian Differential Dynamic Programming
+  MSIPDDP  ///< Multi-Shooting Interior Point Differential Dynamic Programming
 };
 
 /**
@@ -309,7 +307,7 @@ public:
    * @brief Solves the optimal control problem using the specified algorithm
    * (string version for backward compatibility).
    * @param solver_type A string identifying the solver algorithm to use (e.g.,
-   * "CLDDP", "ASDDP", "LOGDDP", "IPDDP", "MSIPDDP").
+   * "CLDDP", "LOGDDP", "IPDDP", "MSIPDDP").
    * @return CDDPSolution A map containing the solution details.
    */
   CDDPSolution solve(const std::string &solver_type);

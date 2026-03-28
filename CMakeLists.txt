@@ -44,36 +44,8 @@ endif()
 # Options
 option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
 
-# SQP Configuration
-option(CDDP_CPP_SQP "Whether to use SQP solver" OFF)
-
 # CasADi Configuration
 option(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
-
-# Acado Configuration 
-option(CDDP_CPP_ACADO "Whether to use Acado" OFF)
-
-# Gurobi Configuration
-# If you want to install Gurobi, please follow the instructions at:
-# https://support.gurobi.com/hc/en-us/articles/4534161999889-How-do-I-install-Gurobi-Optimizer 
-option(CDDP_CPP_GUROBI "Whether to use Gurobi solver." OFF)
-option(GUROBI_ROOT "Path to Gurobi installation" "") 
-if(APPLE)
-  set(GUROBI_ROOT /Library/gurobi1201/macos_universal2)  # macOS default path
-else()
-  set(GUROBI_ROOT /usr/local/lib/gurobi1201/linux64)  # Linux default path
-endif()
-
-# SNOPT Configuration
-# If you want to install SNOPT, please follow the instructions at:
-# https://ccom.ucsd.edu/~optimizers/
-option(CDDP_CPP_SNOPT "Whether to use SNOPT solver." OFF)
-option(SNOPT_ROOT "Path to SNOPT installation" "")
-if(APPLE)
-  set(SNOPT_ROOT /usr/local/lib/snopt)  # macOS default path
-else()
-  set(SNOPT_ROOT /home/astomodynamics/.local/lib/snopt)  # Linux default path
-endif()
 
 # ACADOS Configuration
 # For ACADOS installation, see: https://docs.acados.org/
@@ -84,14 +56,6 @@ if(APPLE)
 else()
   set(ACADOS_ROOT /home/astomodynamics/acados)  # Linux default path
 endif()
-
-# LibTorch Configuration
-# If you want to install LibTorch, please follow the instructions at:
-# https://pytorch.org/
-# $ sudo cp -r libtorch /usr/local/lib/
-option(CDDP_CPP_TORCH "Whether to use LibTorch" OFF)
-option(CDDP_CPP_TORCH_GPU "Whether to use GPU support in LibTorch" OFF)
-set(LIBTORCH_DIR /usr/local/lib/libtorch CACHE PATH "Path to local LibTorch installation") # FIXME: Change this to your local LibTorch installation directory
 
 # Find packages
 find_package(Eigen3 QUIET) 
@@ -112,7 +76,7 @@ if (CDDP_CPP_CASADI)
   # Assuming that CasADi is installed in /usr/local/include/casadi by:
   # https://github.com/casadi/casadi/wiki/InstallationLinux 
   # $ echo "export LD_LIBRARY_PATH=/home/<path_to_casadi>/casadi/build/lib:$LD_LIBRARY_PATH" >> ~/.bashrc && source ~/.bashrc
-  # If you use Ipopt or SNOPT, you need to set flags for CasADi installation.
+  # If you use Ipopt, you may need to set flags for CasADi installation.
 
   find_package(casadi REQUIRED)
   set(CASADI_INCLUDE_DIR /usr/local/include/casadi)
@@ -123,15 +87,6 @@ if (CDDP_CPP_CASADI)
   else()
     message(STATUS "Found CasADi: ${CASADI_LIBRARIES}")
   endif()
-endif()
-
-if (CDDP_CPP_ACADO)
-  # Assuming that Acado is installed by: https://acado.github.io/install_linux.html
-  set(ACADO_DIR $ENV{HOME}/github/ACADOtoolkit) # FIXME: Change this to your local Acado installation directory
-  
-  # Include ACADO header files
-  include_directories(${ACADO_DIR})
-  include_directories(${ACADO_DIR}/acado)
 endif()
 
 # Enable FetchContent for downloading dependencies
@@ -170,131 +125,6 @@ if (CDDP_CPP_BUILD_TESTS)
   include(GoogleTest)
 endif()
 
-# LibTorch
-if (CDDP_CPP_TORCH)
-  # Function to download and extract LibTorch
-  function(download_libtorch cuda_support download_dir)
-    if(APPLE)
-      # macOS has no CUDA support in PyTorch's pre-built binaries
-      set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-macos-2.5.1.zip")
-    else()
-      if(cuda_support) 
-        set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cu124/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcu124.zip")
-      else()
-        set(LIBTORCH_URL "https://download.pytorch.org/libtorch/cpu/libtorch-cxx11-abi-shared-with-deps-2.5.1%2Bcpu.zip")
-      endif()
-    endif()
-
-    set(DOWNLOAD_PATH "${download_dir}/libtorch-shared-with-deps-latest.zip")
-
-    message(STATUS "Downloading LibTorch from ${LIBTORCH_URL}")
-    file(DOWNLOAD "${LIBTORCH_URL}" "${DOWNLOAD_PATH}"
-        SHOW_PROGRESS
-        STATUS DOWNLOAD_STATUS
-    )
-
-    list(GET DOWNLOAD_STATUS 0 STATUS_CODE)
-    list(GET DOWNLOAD_STATUS 1 ERROR_MESSAGE)
-
-    if(NOT STATUS_CODE EQUAL 0)
-        message(FATAL_ERROR "Failed to download LibTorch: ${ERROR_MESSAGE}")
-    endif()
-
-    message(STATUS "Extracting LibTorch...")
-    execute_process(
-        COMMAND ${CMAKE_COMMAND} -E tar xf "${DOWNLOAD_PATH}"
-        WORKING_DIRECTORY "${download_dir}"
-        RESULT_VARIABLE EXTRACT_RESULT
-    )
-
-    if(NOT EXTRACT_RESULT EQUAL 0)
-        message(FATAL_ERROR "Failed to extract LibTorch")
-    endif()
-
-    file(REMOVE "${DOWNLOAD_PATH}")
-  endfunction()
-
-  # Try to find LibTorch in the following priority order:
-  # 0. Default locations
-  # 1. Local LibTorch directory (if specified)
-  # 2. Previously installed LibTorch under build directory
-  # 3. Download and install new copy
-  find_package(Torch QUIET) # Try finding in default locations first
-  
-  # Priority 0: Check default locations
-  if (TORCH_FOUND)
-    message(STATUS "Found LibTorch in default locations")
-    set(TORCH_FOUND TRUE)
-  endif()
-
-  # Priority 1: Check local LibTorch directory
-  if(NOT TORCH_FOUND AND LIBTORCH_DIR)
-      if(EXISTS "${LIBTORCH_DIR}/share/cmake/Torch/TorchConfig.cmake")
-          find_package(Torch REQUIRED PATHS "${LIBTORCH_DIR}" NO_DEFAULT_PATH)
-          set(TORCH_FOUND TRUE)
-          message(STATUS "Found LibTorch in local directory: ${LIBTORCH_DIR}")
-      else()
-          message(WARNING "Specified LIBTORCH_DIR does not contain a valid LibTorch installation")
-      endif()
-  endif()
-  
-  # Priority 2: Check previously installed LibTorch under build directory
-  if(NOT TORCH_FOUND)
-      set(BUILD_LIBTORCH_DIR "${CMAKE_BINARY_DIR}/libtorch")
-      if(EXISTS "${BUILD_LIBTORCH_DIR}/share/cmake/Torch/TorchConfig.cmake")
-          find_package(Torch REQUIRED PATHS "${BUILD_LIBTORCH_DIR}" NO_DEFAULT_PATH)
-          set(TORCH_FOUND TRUE)
-          message(STATUS "Found LibTorch in build directory: ${BUILD_LIBTORCH_DIR}")
-      endif()
-  endif()
-  
-  # Priority 3: Download and install new copy
-  if(NOT TORCH_FOUND)
-      message(STATUS "LibTorch not found in preferred locations. Downloading fresh copy...")
-      download_libtorch(${CDDP_CPP_TORCH_GPU} "${CMAKE_BINARY_DIR}")
-      find_package(Torch REQUIRED PATHS "${CMAKE_BINARY_DIR}/libtorch" NO_DEFAULT_PATH)
-      message(STATUS "Successfully downloaded and installed LibTorch to: ${CMAKE_BINARY_DIR}/libtorch")
-  endif()
-
-  # Set compilation flags for CUDA if GPU support is enabled
-  if(CDDP_CPP_TORCH_GPU)
-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${TORCH_CXX_FLAGS}")
-  endif()
- 
-  # Export LibTorch variables for other parts of the build
-  set(TORCH_INSTALL_PREFIX ${Torch_DIR}/../../../ CACHE PATH "LibTorch installation directory")
-endif()
-
-# OSQP-CPP for ASDDP
-FetchContent_Declare(
-  osqp-cpp
-  GIT_REPOSITORY https://github.com/astomodynamics/osqp-cpp.git
-  GIT_TAG master
-  CMAKE_ARGS 
-    -DCMAKE_POLICY_DEFAULT_CMP0048=NEW 
-    -DCMAKE_POLICY_DEFAULT_CMP0069=NEW
-    -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-)
-
-# Custom processing before making osqp-cpp available
-if(NOT osqp-cpp_POPULATED)
-  FetchContent_Populate(osqp-cpp)
-  
-  # Add this to the top of the OSQP CMakeLists.txt
-  file(WRITE ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt.new 
-    "cmake_minimum_required(VERSION 3.5)\n\n")
-  
-  # Append the original content
-  file(READ ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt osqp_content)
-  file(APPEND ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt.new "${osqp_content}")
-  
-  # Replace the original file
-  file(RENAME ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt.new ${osqp-cpp_SOURCE_DIR}/CMakeLists.txt)
-  
-  # Add the subdirectory
-  add_subdirectory(${osqp-cpp_SOURCE_DIR} ${osqp-cpp_BINARY_DIR})
-endif()
-
 # Include directories
 include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -310,16 +140,10 @@ set(cddp_core_srcs
   src/cddp_core/qp_solver.cpp
   src/cddp_core/cddp_core.cpp
   src/cddp_core/clddp_solver.cpp
-  src/cddp_core/asddp_solver.cpp
   src/cddp_core/logddp_solver.cpp
   src/cddp_core/ipddp_solver.cpp
   src/cddp_core/msipddp_solver.cpp
-  src/cddp_core/alddp_solver.cpp
 )
-
-if (CDDP_CPP_TORCH)
-  list(APPEND cddp_core_srcs src/cddp_core/neural_dynamical_system.cpp)
-endif()
 
 set(dynamics_model_srcs
   src/dynamics_model/pendulum.cpp
@@ -356,106 +180,20 @@ target_link_libraries(${PROJECT_NAME}
   $<IF:$<BOOL:${Eigen3_FOUND}>,Eigen3::Eigen,>
   matplot
   autodiff
-  osqp-cpp
 ) 
 
 if(NOT Eigen3_FOUND)
   target_include_directories(${PROJECT_NAME} PUBLIC ${EIGEN3_INCLUDE_DIRS})
 endif()
 
-if (CDDP_CPP_TORCH)
-target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_TORCH_ENABLED=1)
-  target_link_libraries(${PROJECT_NAME} ${TORCH_LIBRARIES})
-endif()
-
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/cddp-cpp>
-  $<INSTALL_INTERFACE:include> 
-  ${TORCH_INCLUDE_DIRS}
+  $<INSTALL_INTERFACE:include>
 )
-
-# Ensure proper CUDA support if enabled
-if(TORCH_FOUND AND CDDP_CPP_TORCH_GPU)
-  set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_ARCHITECTURES native)
-endif()
-
-if (CDDP_CPP_SQP AND CDDP_CPP_CASADI)
-  # add sqp solver to cddp
-  target_sources(${PROJECT_NAME} PRIVATE src/sqp_core/sqp_core.cpp)
-endif()
 
 if (CDDP_CPP_CASADI)
   target_include_directories(${PROJECT_NAME} PUBLIC ${CASADI_INCLUDE_DIR})
   target_link_libraries(${PROJECT_NAME} ${CASADI_LIBRARIES})
-endif()
-
-if (CDDP_CPP_ACADO)
-  target_link_libraries(${PROJECT_NAME} ${ACADO_DIR}/build/lib/libacado_toolkit_s.so)
-endif()
-
-# Gurobi 
-if (CDDP_CPP_GUROBI)
-  if (NOT GUROBI_ROOT)
-    message(FATAL_ERROR "Please set GUROBI_ROOT.")
-  endif()
-  set(GUROBI_INCLUDE_DIRS ${GUROBI_ROOT}/include) # Set the path to the Gurobi include directory
-  set(GUROBI_LIBRARIES ${GUROBI_ROOT}/lib/libgurobi_c++.a) # Set the path to the Gurobi library
-  find_library(GUROBI_LIBRARY gurobi_c++ PATHS ${GUROBI_ROOT}/lib)
-  find_path(GUROBI_INCLUDE_DIR gurobi_c++.h PATHS ${GUROBI_ROOT}/include)
-  link_directories(${GUROBI_ROOT}/lib) 
-
-  if (GUROBI_LIBRARIES AND GUROBI_INCLUDE_DIR)
-    message(STATUS "Found Gurobi: ${GUROBI_LIBRARIES} ${GUROBI_LIBRARY}")
-    message(STATUS "Gurobi include directory: ${GUROBI_INCLUDE_DIR}")
-    
-    include_directories(${GUROBI_INCLUDE_DIR})
-    target_link_libraries(${PROJECT_NAME} ${GUROBI_LIBRARIES} gurobi_c++ 
-    # Platform-specific Gurobi library
-    $<IF:$<BOOL:APPLE>,gurobi120,gurobi120>) # Adjust version as needed
-    message(STATUS "Successfully linked Gurobi version 120.") 
-  else()
-    message(FATAL_ERROR "Could not find Gurobi. Please set GUROBI_ROOT.")
-  endif()
-endif()
-
-
-# SNOPT
-if (CDDP_CPP_SNOPT)
-  if (NOT SNOPT_ROOT)
-    message(FATAL_ERROR "Please set SNOPT_ROOT to your SNOPT installation directory.")
-  endif()
-  
-  # Set SNOPT paths
-  set(SNOPT_INCLUDE_DIRS ${SNOPT_ROOT}/include)
-  set(SNOPT_LIB_DIR ${SNOPT_ROOT}/lib)
-  
-  # Find SNOPT libraries 
-  find_library(SNOPT_LIBRARY NAMES snopt7 snopt snopt7_cpp PATHS ${SNOPT_LIB_DIR})
-  
-  # Find header files
-  find_path(SNOPT_INCLUDE_DIR snopt.h PATHS ${SNOPT_INCLUDE_DIRS})
-  
-  # Set up library list
-  set(SNOPT_LIBRARIES)
-  if(SNOPT_LIBRARY)
-    list(APPEND SNOPT_LIBRARIES ${SNOPT_LIBRARY})
-  endif()
-  
-  if (SNOPT_LIBRARIES AND SNOPT_INCLUDE_DIR)
-    message(STATUS "Found SNOPT libraries: ${SNOPT_LIBRARIES}")
-    message(STATUS "SNOPT include directory: ${SNOPT_INCLUDE_DIR}")
-    
-    include_directories(${SNOPT_INCLUDE_DIR})
-    link_directories(${SNOPT_LIB_DIR})
-    target_link_libraries(${PROJECT_NAME} ${SNOPT_LIBRARIES})
-    
-    # Add preprocessor definition to enable SNOPT in code
-    target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_SNOPT_ENABLED=1)
-    
-    message(STATUS "Successfully linked SNOPT.")
-  else()
-    message(FATAL_ERROR "Could not find SNOPT libraries. Please check SNOPT_ROOT: ${SNOPT_ROOT}")
-  endif()
 endif()
 
 # ACADOS
@@ -524,7 +262,6 @@ add_subdirectory(examples)
 # Cmake compile commmand:
 # $ mkdir build
 # $ cd build
-# $ cmake -DCDDP_CPP_BUILD_TESTS=ON -DCDDP_CPP_TORCH=ON -DCDDP_CPP_TORCH_GPU=ON -DLIBTORCH_DIR=/usr/local/lib/libtorch -DCDDP_CPP_SQP=ON -DCDDP_CPP_GUROBI=ON -DGUROBI_ROOT=/usr/local/lib/gurobi1201/linux64 -DCDDP_CPP_CASADI=ON -DCDDP_CPP_ACADO=ON ..
+# $ cmake -DCDDP_CPP_BUILD_TESTS=ON -DCDDP_CPP_CASADI=ON ..
 # $ make -j4
 # $ make test
-

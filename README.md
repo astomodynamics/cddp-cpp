@@ -194,19 +194,13 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 
 This library uses the following open-source libraries as core dependencies:
 
-* [OSQP](https://osqp.org/) (Apache License 2.0)
-* [osqp-cpp](https://github.com/google/osqp-cpp) (Apache License 2.0)
 * [matplotplusplus](https://github.com/alandefreitas/matplotplusplus) (MIT License)
-* [libtorch](https://github.com/pytorch/pytorch) (BSD 3-Clause License)
 * [autodiff](https://github.com/autodiff/autodiff) (MIT License)
 
 This library also uses the following open-source libraries for optional features:
 
 * [Ipopt](https://github.com/coin-or/Ipopt) (EPL License)
 * [CasADi](https://web.casadi.org/) (GPL License)
-* [Acado](https://www.acado.org/) (GPL License)
-* [Gurobi](https://www.gurobi.com/) (GPL License)
-* [SNOPT](https://ccom.ucsd.edu/~optimizers/) (GPL License)
 
 
 ## Citing

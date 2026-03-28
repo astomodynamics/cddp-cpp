@@ -29,18 +29,12 @@
 #include "cddp_core/options.hpp"
 #include "cddp_core/cddp_core.hpp"
 #include "cddp_core/clddp_solver.hpp"
-#include "cddp_core/asddp_solver.hpp"
 #include "cddp_core/logddp_solver.hpp"
 #include "cddp_core/ipddp_solver.hpp"
 #include "cddp_core/msipddp_solver.hpp"
-#include "cddp_core/alddp_solver.hpp"
 #include "cddp_core/helper.hpp"
 #include "cddp_core/boxqp.hpp"
 #include "cddp_core/qp_solver.hpp"
-
-#ifdef CDDP_CPP_TORCH_ENABLED
-#include "cddp_core/neural_dynamical_system.hpp"
-#endif
 
 // Models
 #include "dynamics_model/pendulum.hpp"
