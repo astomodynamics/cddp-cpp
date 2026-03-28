@@ -15,7 +15,6 @@
 */
 
 #include "cddp_core/cddp_core.hpp"      // For CDDP class declaration
-#include "cddp_core/alddp_solver.hpp"   // For AlddpSolver
 #include "cddp_core/clddp_solver.hpp"   // For CLDDPSolver
 #include "cddp_core/ipddp_solver.hpp"   // For IPDDPSolver
 #include "cddp_core/logddp_solver.hpp"  // For LogDDPSolver
@@ -263,8 +262,6 @@ std::string solverTypeToString(SolverType solver_type) {
     return "IPDDP";
   case SolverType::MSIPDDP:
     return "MSIPDDP";
-  case SolverType::ALDDP:
-    return "ALDDP";
   default:
     return "CLDDP"; // Default fallback
   }
@@ -293,8 +290,6 @@ CDDP::createSolver(const std::string &solver_type) {
     return std::make_unique<IPDDPSolver>();
   } else if (solver_type == "MSIPDDP") {
     return std::make_unique<MSIPDDPSolver>();
-  } else if (solver_type == "ALDDP") {
-    return std::make_unique<AlddpSolver>();
   }
 
   return nullptr; // Solver not found
@@ -332,7 +327,7 @@ CDDPSolution CDDP::solve(const std::string &solver_type) {
       for (const auto &name : available) {
         std::cout << name << " ";
       }
-      std::cout << "CLDDP LogDDP IPDDP MSIPDDP ALDDP" << std::endl;
+      std::cout << "CLDDP LogDDP IPDDP MSIPDDP" << std::endl;
     }
 
     return solution;

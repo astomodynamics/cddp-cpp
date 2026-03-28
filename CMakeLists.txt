@@ -143,7 +143,6 @@ set(cddp_core_srcs
   src/cddp_core/logddp_solver.cpp
   src/cddp_core/ipddp_solver.cpp
   src/cddp_core/msipddp_solver.cpp
-  src/cddp_core/alddp_solver.cpp
 )
 
 set(dynamics_model_srcs
