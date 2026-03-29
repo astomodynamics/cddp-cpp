@@ -73,8 +73,8 @@ int main() {
     double max_torque = 50.0;
     Eigen::VectorXd control_lower_bound = -max_torque * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_upper_bound =  max_torque * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addPathConstraint("ControlBoxConstraint", 
-        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+    cddp_solver.addPathConstraint("ControlConstraint", 
+        std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
 
     // Initialize trajectories: here we use linear interpolation between initial and goal state
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));

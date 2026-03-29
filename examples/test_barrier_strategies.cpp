@@ -72,7 +72,7 @@ int main()
             u_upper << 1.0, 2.0;  // max linear vel, max angular vel
             
             cddp_solver.addPathConstraint("ControlConstraint",
-                std::make_unique<cddp::ControlConstraint>(u_upper));
+                std::make_unique<cddp::ControlConstraint>(-u_upper, u_upper));
             
             // State bounds (keep robot in a region)
             Eigen::VectorXd x_lower(state_dim), x_upper_state(state_dim);

@@ -109,8 +109,8 @@ int main() {
     Eigen::VectorXd control_lower_bound = -0.6 * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_upper_bound = 0.6 * Eigen::VectorXd::Ones(control_dim);
 
-    cddp_solver.addPathConstraint("ControlBoxConstraint", 
-        std::make_unique<cddp::ControlBoxConstraint>(
+    cddp_solver.addPathConstraint("ControlConstraint", 
+        std::make_unique<cddp::ControlConstraint>(
             control_lower_bound, control_upper_bound));
 
     // Initialize trajectories

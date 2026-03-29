@@ -94,8 +94,8 @@ int main() {
         options
     );
     
-    cddp_solver.addPathConstraint("ControlBoxConstraint",
-        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+    cddp_solver.addPathConstraint("ControlConstraint",
+        std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
     
     // Set initial trajectory for the solver
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));

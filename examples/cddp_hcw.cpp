@@ -113,8 +113,8 @@ int main() {
     umin << -1.0, -1.0, -1.0;
     umax <<  1.0,  1.0,  1.0;
 
-    cddp_solver.addPathConstraint("ControlBoxConstraint",
-        std::make_unique<cddp::ControlBoxConstraint>(umin, umax));
+    cddp_solver.addPathConstraint("ControlConstraint",
+        std::make_unique<cddp::ControlConstraint>(umin, umax));
 
     // Initialize the trajectory (X,U) with something nontrivial
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(STATE_DIM));

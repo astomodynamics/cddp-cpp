@@ -55,9 +55,9 @@ int main()
     control_lower_bound << -10.0, -M_PI / 5;
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 10.0, M_PI / 5;
-    cddp_solver.addPathConstraint("ControlBoxConstraint",
-                                  std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-    auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    cddp_solver.addPathConstraint("ControlConstraint",
+                                  std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
+    auto constraint = cddp_solver.getConstraint<cddp::ControlConstraint>("ControlConstraint");
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
     std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
     cddp_solver.setInitialTrajectory(X, U);

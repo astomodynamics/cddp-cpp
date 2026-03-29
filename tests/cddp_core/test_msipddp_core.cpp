@@ -91,7 +91,7 @@ TEST(MSIPDDPTest, Solve) {
     
     
     // Add the constraint to the solver
-    cddp_solver.addConstraint(std::string("ControlConstraint"), std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    cddp_solver.addConstraint(std::string("ControlConstraint"), std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
     auto constraint = cddp_solver.getConstraint<cddp::ControlConstraint>("ControlConstraint");
 
     // Set options
@@ -269,7 +269,7 @@ BoxQP:
   BoxQP Verbose: No
 ========================================
 
-ControlBoxConstraint is set
+ControlConstraint is set
  Iter        Cost        Lagr      Grad      Step      RegS      RegC        Mu      Viol
 -----------------------------------------------------------------------------------------
     0   2.123e+02   2.123e+02  1.00e+10     1.000  0.00e+00  1.00e-06  1.00e-06  0.00e+00

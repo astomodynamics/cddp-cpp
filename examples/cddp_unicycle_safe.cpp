@@ -93,8 +93,8 @@ int main() {
     );
 
     // Set constraints
-    solver_baseline.addPathConstraint("ControlBoxConstraint",
-        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+    solver_baseline.addPathConstraint("ControlConstraint",
+        std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
 
     // Simple initial guess: states = initial_state, controls = zeros
     std::vector<Eigen::VectorXd> X_baseline(horizon + 1, initial_state);
@@ -117,8 +117,8 @@ int main() {
         std::make_unique<cddp::QuadraticObjective>(Q, R, Qf, goal_state, empty_reference_states, timestep),
         options
     );
-    solver_ball.addPathConstraint("ControlBoxConstraint",
-        std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
+    solver_ball.addPathConstraint("ControlConstraint",
+        std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
 
     // Add the BallConstraint
     double radius = 0.4;

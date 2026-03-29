@@ -220,7 +220,7 @@ int main()
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
     // cddp_solver.addConstraint("ControlConstraint",
-    //                            std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+    //                            std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
 
     // Initial trajectory: allocate state and control trajectories
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));

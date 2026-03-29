@@ -218,13 +218,13 @@ int main() {
     control_upper_bound << 1.5, 0.4;   
     cddp_solver.addPathConstraint("ControlConstraint", 
                                  std::make_unique<cddp::ControlConstraint>(
-                                     control_upper_bound, control_lower_bound));
+                                     control_lower_bound, control_upper_bound));
 
     // State constraints 
     Eigen::VectorXd state_upper_bound(2);
     state_upper_bound << 2.0, max_steering_angle; 
     cddp_solver.addPathConstraint("StateConstraint",
-                                 std::make_unique<cddp::StateConstraint>(state_upper_bound));
+                                 std::make_unique<cddp::StateConstraint>(-state_upper_bound, state_upper_bound));
 
     // Initialize trajectory for back-in parking maneuver
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));

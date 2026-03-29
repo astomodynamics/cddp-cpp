@@ -200,8 +200,8 @@ int main() {
         u_lower << u_min, u_min, u_min;
         u_upper << u_max, u_max, u_max;
         cddp_solver.addPathConstraint(
-            "ControlBoxConstraint",
-            std::make_unique<cddp::ControlBoxConstraint>(u_lower, u_upper)
+            "ControlConstraint",
+            std::make_unique<cddp::ControlConstraint>(u_lower, u_upper)
         );
 
         // ---------------------------------------------------------------------

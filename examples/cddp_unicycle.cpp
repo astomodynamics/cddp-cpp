@@ -70,8 +70,8 @@ int main() {
     control_upper_bound << 1.0, M_PI;
     
     // Add the constraint to the solver
-    cddp_solver.addPathConstraint(std::string("ControlBoxConstraint"), std::make_unique<cddp::ControlBoxConstraint>(control_lower_bound, control_upper_bound));
-    auto constraint = cddp_solver.getConstraint<cddp::ControlBoxConstraint>("ControlBoxConstraint");
+    cddp_solver.addPathConstraint(std::string("ControlConstraint"), std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
+    auto constraint = cddp_solver.getConstraint<cddp::ControlConstraint>("ControlConstraint");
 
     // Set initial trajectory
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));

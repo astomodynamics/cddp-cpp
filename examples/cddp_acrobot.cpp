@@ -88,7 +88,7 @@ int main() {
     
     // Add control constraint
     cddp_solver.addPathConstraint("ControlConstraint", 
-        std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+        std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
     
     // Initial trajectory
     std::vector<Eigen::VectorXd> X_init(horizon + 1, Eigen::VectorXd::Zero(state_dim));

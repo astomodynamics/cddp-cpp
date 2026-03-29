@@ -187,7 +187,7 @@ int main() {
     control_lower_bound << -0.5, -2.0;  // [steering_angle, acceleration]
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 0.5, 2.0;
-    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
 
     // Initialize the trajectory with zero controls
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
