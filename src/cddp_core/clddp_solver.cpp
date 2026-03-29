@@ -203,6 +203,15 @@ bool CLDDPSolver::backwardPass(CDDP &context) {
   return true;
 }
 
+bool CLDDPSolver::checkEarlyConvergence(CDDP &context, int /*iter*/,
+                                        std::string &reason) {
+  if (context.inf_du_ < context.getOptions().tolerance) {
+    reason = "OptimalSolutionFound";
+    return true;
+  }
+  return false;
+}
+
 ForwardPassResult CLDDPSolver::forwardPass(CDDP &context, double alpha_pr) {
   ForwardPassResult result;
   result.success = false;

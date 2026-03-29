@@ -23,32 +23,6 @@
 
 namespace cddp {
 
-// === IterationHistory ===
-
-void CDDPSolverBase::IterationHistory::reserve(size_t n) {
-  objective.reserve(n);
-  merit_function.reserve(n);
-  step_length_primal.reserve(n);
-  step_length_dual.reserve(n);
-  dual_infeasibility.reserve(n);
-  primal_infeasibility.reserve(n);
-  complementary_infeasibility.reserve(n);
-  barrier_mu.reserve(n);
-  regularization.reserve(n);
-}
-
-void CDDPSolverBase::IterationHistory::clear() {
-  objective.clear();
-  merit_function.clear();
-  step_length_primal.clear();
-  step_length_dual.clear();
-  dual_infeasibility.clear();
-  primal_infeasibility.clear();
-  complementary_infeasibility.clear();
-  barrier_mu.clear();
-  regularization.clear();
-}
-
 // === Template method: solve() ===
 
 CDDPSolution CDDPSolverBase::solve(CDDP &context) {
@@ -134,30 +108,38 @@ CDDPSolution CDDPSolverBase::solve(CDDP &context) {
     if (!backward_ok)
       break;
 
-    // Forward pass with line search
-    ForwardPassResult best_result = performForwardPass(context);
-
-    if (best_result.success) {
-      dJ = context.cost_ - best_result.cost;
-      dL = context.merit_function_ - best_result.merit_function;
-
-      applyForwardPassResult(context, best_result);
-
+    // Early convergence check (e.g., CLDDP checks inf_du after backward pass)
+    if (checkEarlyConvergence(context, iter, termination_reason)) {
+      converged = true;
       if (options.return_iteration_info) {
         recordIterationHistory(context);
       }
+      if (options.verbose) {
+        printIteration(iter, context);
+      }
+      break;
+    }
 
+    // Forward pass with line search
+    ForwardPassResult best_result = performForwardPass(context);
+    bool fp_success = best_result.success;
+
+    if (fp_success) {
+      dJ = context.cost_ - best_result.cost;
+      dL = context.merit_function_ - best_result.merit_function;
+      applyForwardPassResult(context, best_result);
+      if (options.return_iteration_info) {
+        recordIterationHistory(context);
+      }
       context.decreaseRegularization();
+
+      // Check convergence (only meaningful after successful forward pass)
+      converged = checkConvergence(context, dJ, dL, iter, termination_reason);
     } else {
-      // Handle failure (default: increase regularization; MSIPDDP: try filter
-      // restoration first)
       bool should_break = handleForwardPassFailure(context, termination_reason);
       if (should_break)
         break;
     }
-
-    // Check convergence
-    converged = checkConvergence(context, dJ, dL, iter, termination_reason);
 
     if (options.verbose) {
       printIteration(iter, context);
@@ -166,8 +148,7 @@ CDDPSolution CDDPSolverBase::solve(CDDP &context) {
     if (converged)
       break;
 
-    // Post-iteration update (barrier parameter update, etc.)
-    postIterationUpdate(context, best_result.success);
+    postIterationUpdate(context, fp_success);
   }
 
   // Compute final timing
@@ -187,18 +168,9 @@ CDDPSolution CDDPSolverBase::solve(CDDP &context) {
   solution.feedback_gains = K_u_;
   solution.final_regularization = context.regularization_;
 
-  // Add iteration history if requested
+  // Move iteration history into solution (same type — no field-by-field copy)
   if (options.return_iteration_info) {
-    solution.history.objective = history_.objective;
-    solution.history.merit_function = history_.merit_function;
-    solution.history.step_length_primal = history_.step_length_primal;
-    solution.history.step_length_dual = history_.step_length_dual;
-    solution.history.dual_infeasibility = history_.dual_infeasibility;
-    solution.history.primal_infeasibility = history_.primal_infeasibility;
-    solution.history.complementary_infeasibility =
-        history_.complementary_infeasibility;
-    solution.history.barrier_mu = history_.barrier_mu;
-    solution.history.regularization = history_.regularization;
+    solution.history = std::move(history_);
   }
 
   // Solver-specific solution fields
@@ -245,6 +217,9 @@ void CDDPSolverBase::recordIterationHistory(const CDDP &context) {
   history_.dual_infeasibility.push_back(context.inf_du_);
   history_.primal_infeasibility.push_back(context.inf_pr_);
   history_.complementary_infeasibility.push_back(context.inf_comp_);
+  // Note: barrier_mu is NOT pushed here. IP solvers override recordIterationHistory
+  // to push their actual mu_ value. Non-IP solvers (CLDDP) don't use barrier_mu,
+  // so it stays empty for them. Consumers must check vector sizes.
   history_.regularization.push_back(context.regularization_);
 }
 
@@ -289,6 +264,8 @@ ForwardPassResult CDDPSolverBase::performForwardPass(CDDP &context) {
                      [this, &context, alpha]() { return forwardPass(context, alpha); }));
     }
 
+    int failed_count = 0;
+    std::string last_error;
     for (auto &future : futures) {
       try {
         if (future.valid()) {
@@ -299,12 +276,20 @@ ForwardPassResult CDDPSolverBase::performForwardPass(CDDP &context) {
           }
         }
       } catch (const std::exception &e) {
+        ++failed_count;
+        last_error = e.what();
         if (options.verbose) {
           std::cerr << getSolverName()
                     << ": Forward pass thread failed: " << e.what()
                     << std::endl;
         }
       }
+    }
+    if (failed_count > 0 &&
+        failed_count == static_cast<int>(futures.size())) {
+      std::cerr << getSolverName()
+                << ": ALL forward pass threads failed. Last error: "
+                << last_error << std::endl;
     }
   }
 

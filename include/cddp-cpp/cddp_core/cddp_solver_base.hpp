@@ -68,6 +68,17 @@ protected:
   virtual bool backwardPass(CDDP &context) = 0;
 
   /**
+   * @brief Optional early convergence check after backward pass, before
+   * forward pass. Override to check dual infeasibility without running
+   * an unnecessary forward pass (e.g., CLDDP checks inf_du here).
+   * @return True if converged.
+   */
+  virtual bool checkEarlyConvergence(CDDP &context, int iter,
+                                     std::string &reason) {
+    return false;
+  }
+
+  /**
    * @brief Perform a single forward pass trial with given step size.
    */
   virtual ForwardPassResult forwardPass(CDDP &context, double alpha) = 0;
@@ -157,21 +168,8 @@ protected:
    */
   void computeCost(CDDP &context);
 
-  // === History tracking ===
-  struct IterationHistory {
-    std::vector<double> objective;
-    std::vector<double> merit_function;
-    std::vector<double> step_length_primal;
-    std::vector<double> step_length_dual;
-    std::vector<double> dual_infeasibility;
-    std::vector<double> primal_infeasibility;
-    std::vector<double> complementary_infeasibility;
-    std::vector<double> barrier_mu;
-    std::vector<double> regularization;
-
-    void reserve(size_t n);
-    void clear();
-  } history_;
+  // History tracking (reuses CDDPSolution::History to avoid type duplication)
+  CDDPSolution::History history_;
 };
 
 } // namespace cddp

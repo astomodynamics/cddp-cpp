@@ -37,6 +37,8 @@ public:
 
 protected:
   bool backwardPass(CDDP &context) override;
+  bool checkEarlyConvergence(CDDP &context, int iter,
+                             std::string &reason) override;
   ForwardPassResult forwardPass(CDDP &context, double alpha) override;
   bool checkConvergence(CDDP &context, double dJ, double dL, int iter,
                         std::string &reason) override;

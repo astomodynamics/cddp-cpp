@@ -85,6 +85,21 @@ struct CDDPSolution {
     std::vector<double> complementary_infeasibility;
     std::vector<double> barrier_mu;
     std::vector<double> regularization;
+
+    void reserve(size_t n) {
+      objective.reserve(n); merit_function.reserve(n);
+      step_length_primal.reserve(n); step_length_dual.reserve(n);
+      dual_infeasibility.reserve(n); primal_infeasibility.reserve(n);
+      complementary_infeasibility.reserve(n); barrier_mu.reserve(n);
+      regularization.reserve(n);
+    }
+    void clear() {
+      objective.clear(); merit_function.clear();
+      step_length_primal.clear(); step_length_dual.clear();
+      dual_infeasibility.clear(); primal_infeasibility.clear();
+      complementary_infeasibility.clear(); barrier_mu.clear();
+      regularization.clear();
+    }
   } history;
 };
 

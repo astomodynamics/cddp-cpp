@@ -210,9 +210,9 @@ namespace cddp
       {
         Eigen::MatrixXd jac = Eigen::MatrixXd::Zero(dim_, control.size());
         jac.topLeftCorner(control.size(), control.size()) =
-            -Eigen::MatrixXd::Identity(control.size(), control.size());
+            -Eigen::MatrixXd::Identity(control.size(), control.size()) * scale_factor_;
         jac.bottomRightCorner(control.size(), control.size()) =
-            Eigen::MatrixXd::Identity(control.size(), control.size());
+            Eigen::MatrixXd::Identity(control.size(), control.size()) * scale_factor_;
         return jac;
       }
     }
@@ -229,7 +229,7 @@ namespace cddp
                             const Eigen::VectorXd &control,
                             int index = 0) const override
     {
-      return computeViolationFromValue(evaluate(state, control, index) - ip_upper_bound_);
+      return computeViolationFromValue(evaluate(state, control, index));
     }
 
     double computeViolationFromValue(const Eigen::VectorXd &g) const override
