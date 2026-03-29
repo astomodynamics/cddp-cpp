@@ -594,6 +594,23 @@ namespace cddp
       return std::max(0.0, g(0));
     }
 
+    // Hessians not yet implemented for PoleConstraint (nonlinear — zero is wrong)
+    std::vector<Eigen::MatrixXd>
+    getStateHessian(const Eigen::VectorXd &, const Eigen::VectorXd &,
+                    int = 0) const override {
+      throw std::logic_error("getStateHessian not implemented for PoleConstraint.");
+    }
+    std::vector<Eigen::MatrixXd>
+    getControlHessian(const Eigen::VectorXd &, const Eigen::VectorXd &,
+                      int = 0) const override {
+      throw std::logic_error("getControlHessian not implemented for PoleConstraint.");
+    }
+    std::vector<Eigen::MatrixXd>
+    getCrossHessian(const Eigen::VectorXd &, const Eigen::VectorXd &,
+                    int = 0) const override {
+      throw std::logic_error("getCrossHessian not implemented for PoleConstraint.");
+    }
+
   private:
     Eigen::Vector3d center_; // Center of the cylinder.
     Eigen::Vector3d axis_;   // Unit vector for the cylinder's axis.
@@ -759,6 +776,23 @@ namespace cddp
                                  "empty in computeViolationFromValue.");
       }
       return std::max(0.0, g(0));
+    }
+
+    // Hessians not yet implemented for SecondOrderConeConstraint (nonlinear — zero is wrong)
+    std::vector<Eigen::MatrixXd>
+    getStateHessian(const Eigen::VectorXd &, const Eigen::VectorXd &,
+                    int = 0) const override {
+      throw std::logic_error("getStateHessian not implemented for SecondOrderConeConstraint.");
+    }
+    std::vector<Eigen::MatrixXd>
+    getControlHessian(const Eigen::VectorXd &, const Eigen::VectorXd &,
+                      int = 0) const override {
+      throw std::logic_error("getControlHessian not implemented for SecondOrderConeConstraint.");
+    }
+    std::vector<Eigen::MatrixXd>
+    getCrossHessian(const Eigen::VectorXd &, const Eigen::VectorXd &,
+                    int = 0) const override {
+      throw std::logic_error("getCrossHessian not implemented for SecondOrderConeConstraint.");
     }
 
   private:

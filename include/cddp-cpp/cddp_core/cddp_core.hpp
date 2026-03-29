@@ -17,7 +17,6 @@
 #define CDDP_CDDP_CORE_HPP
 
 #include <Eigen/Dense>
-#include <any> // For std::any (kept for backward compat in printSolutionSummary)
 #include <future>
 #include <iomanip>  // For std::setw
 #include <iostream> // For std::cout, std::cerr
