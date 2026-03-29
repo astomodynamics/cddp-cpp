@@ -313,9 +313,9 @@ bool CLDDPSolver::backwardPass(CDDP &context) {
   const int control_dim = context.getControlDim();
   const int horizon = context.getHorizon();
 
-  // Extract control box constraint
-  auto control_box_constraint =
-      context.getConstraint<ControlBoxConstraint>("ControlBoxConstraint");
+  // Extract control constraint
+  auto control_constraint =
+      context.getConstraint<ControlConstraint>("ControlConstraint");
 
   // Terminal cost and its derivatives
   Eigen::VectorXd V_x =
@@ -380,14 +380,14 @@ bool CLDDPSolver::backwardPass(CDDP &context) {
     }
 
     // Solve for control law
-    if (control_box_constraint == nullptr) {
+    if (control_constraint == nullptr) {
       const Eigen::MatrixXd H = Q_uu_reg.inverse();
       k = -H * Q_u;
       K = -H * Q_ux;
     } else {
       // Solve constrained QP
-      const Eigen::VectorXd lb = control_box_constraint->getLowerBound() - u;
-      const Eigen::VectorXd ub = control_box_constraint->getUpperBound() - u;
+      const Eigen::VectorXd lb = control_constraint->rawLowerBound() - u;
+      const Eigen::VectorXd ub = control_constraint->rawUpperBound() - u;
       const Eigen::VectorXd x0 = k_u_[t];
 
       BoxQPResult qp_result = boxqp_solver_.solve(Q_uu_reg, Q_u, lb, ub, x0);
@@ -525,8 +525,8 @@ ForwardPassResult CLDDPSolver::forwardPass(CDDP &context, double alpha_pr) {
   result.state_trajectory[0] = context.getInitialState();
 
   double J_new = 0.0;
-  auto control_box_constraint =
-      context.getConstraint<ControlBoxConstraint>("ControlBoxConstraint");
+  auto control_constraint =
+      context.getConstraint<ControlConstraint>("ControlConstraint");
 
   // Forward simulation
   for (int t = 0; t < context.getHorizon(); ++t) {
@@ -538,9 +538,9 @@ ForwardPassResult CLDDPSolver::forwardPass(CDDP &context, double alpha_pr) {
     result.control_trajectory[t] = u + alpha_pr * k_u_[t] + K_u_[t] * delta_x;
 
     // Apply control constraints
-    if (control_box_constraint != nullptr) {
+    if (control_constraint != nullptr) {
       result.control_trajectory[t] =
-          control_box_constraint->clamp(result.control_trajectory[t]);
+          control_constraint->clamp(result.control_trajectory[t]);
     }
 
     // Compute running cost

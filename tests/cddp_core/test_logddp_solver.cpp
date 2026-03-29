@@ -88,7 +88,7 @@ TEST(LogDDPTest, SolvePendulum)
     control_upper_bound << 10.0; // Maximum positive torque
 
     cddp_solver.addPathConstraint("ControlConstraint",
-                              std::make_unique<cddp::ControlConstraint>( control_upper_bound));
+                              std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
 
     // Create CDDP Options
     cddp::CDDPOptions options;
@@ -179,7 +179,7 @@ TEST(LogDDPTest, SolvePendulum)
     warm_solver.setDynamicalSystem(std::move(hcw_system_warmstart));
     warm_solver.setObjective(std::move(objective_warmstart));
     warm_solver.addPathConstraint("ControlConstraint",
-                              std::make_unique<cddp::ControlConstraint>( control_upper_bound));
+                              std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
     warm_solver.setOptions(warm_options);
 
     // Use previous solution as warm start
@@ -281,7 +281,7 @@ TEST(LogDDPTest, SolveUnicycle) {
     control_upper_bound << 1.0, M_PI;
     
     // Add the constraint to the solver
-    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
 
     // Set options
     cddp_solver.setOptions(options);
@@ -424,7 +424,7 @@ TEST(LogDDPTest, SolveCar)
     control_upper_bound << 0.5, 2.0;
 
     cddp_solver.addPathConstraint("ControlConstraint",
-                              std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+                              std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
 
     // Create CDDP Options
     cddp::CDDPOptions options;
@@ -507,7 +507,7 @@ TEST(LogDDPTest, SolveCar)
     warm_solver.setDynamicalSystem(std::move(car_system_warmstart));
     warm_solver.setObjective(std::move(objective_warmstart));
     warm_solver.addPathConstraint("ControlConstraint",
-                              std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+                              std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
     warm_solver.setOptions(warm_options);
 
     // Use previous solution as warm start
@@ -695,7 +695,7 @@ TEST(LogDDPTest, SolveQuadrotor)
     double max_force = 4.0;
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
 
     // Initial trajectory guess
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
@@ -790,7 +790,7 @@ TEST(LogDDPTest, SolveQuadrotor)
     warm_solver.setDynamicalSystem(std::move(quadrotor_system_warmstart));
     warm_solver.setObjective(std::move(objective_warmstart));
     warm_solver.addPathConstraint("ControlConstraint",
-                              std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+                              std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
     warm_solver.setOptions(warm_options);
 
     // Use previous solution as warm start

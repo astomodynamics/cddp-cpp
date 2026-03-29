@@ -316,7 +316,7 @@ int main()
     // // Add Control Constraint 
     // Eigen::VectorXd u_upper_accel = Eigen::VectorXd::Constant(control_dim, u_force_max_N);
     // cddp_solver.addPathConstraint("ControlConstraint",
-    //     std::make_unique<cddp::ControlConstraint>(u_upper_accel));
+    //     std::make_unique<cddp::ControlConstraint>(-u_upper_accel, u_upper_accel));
 
     // Solve the Trajectory Optimization Problem
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");

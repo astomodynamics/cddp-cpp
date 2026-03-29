@@ -211,7 +211,7 @@ int main()
     // Add Control Constraint
     Eigen::VectorXd u_upper = Eigen::VectorXd::Constant(3, u_max);
     cddp_solver.addPathConstraint("ControlConstraint",
-        std::make_unique<cddp::ControlConstraint>(u_upper));
+        std::make_unique<cddp::ControlConstraint>(-u_upper, u_upper));
 
     // // Add Thrust Magnitude Constraint
     // cddp_solver.addConstraint("MaxThrustMagnitudeConstraint",

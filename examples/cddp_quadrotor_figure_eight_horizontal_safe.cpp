@@ -228,7 +228,7 @@ int main()
     double max_force = 4.0;
     Eigen::VectorXd control_upper_bound = max_force * Eigen::VectorXd::Ones(control_dim);
     Eigen::VectorXd control_lower_bound = min_force * Eigen::VectorXd::Ones(control_dim);
-    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+    cddp_solver.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
 
     // Initial trajectory guess (use reference trajectory like benchmark)
     double hover_thrust = mass * 9.81 / 4.0;
@@ -252,7 +252,7 @@ int main()
         std::make_unique<cddp::QuadraticObjective>(
             Q, R, Qf, goal_state, figure8_reference_states, timestep),
         options);
-    solver_ball.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+    solver_ball.addPathConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
 
     // Ball constraint
     double ball_radius = 0.5; // 50 cm

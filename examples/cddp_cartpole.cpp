@@ -92,11 +92,11 @@ int main() {
     
     // FIXME: For MSIPDDP 
     cddp_solver.addPathConstraint("ControlConstraint", 
-        std::make_unique<cddp::ControlConstraint>( control_upper_bound));
+        std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
 
     // FIXME: For CLDDP
-    // cddp_solver.addPathConstraint("ControlBoxConstraint", 
-    //     std::make_unique<cddp::ControlBoxConstraint>( control_lower_bound, control_upper_bound));
+    // cddp_solver.addPathConstraint("ControlConstraint", 
+    //     std::make_unique<cddp::ControlConstraint>( control_lower_bound, control_upper_bound));
 
     // Initial trajectory.
     std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));

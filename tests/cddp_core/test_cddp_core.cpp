@@ -375,7 +375,7 @@ TEST_F(CDDPCoreTest, IntegrationWithTrajectoryAndOptions) {
     // Add a constraint
     Eigen::VectorXd control_upper_bound = Eigen::VectorXd::Ones(control_dim) * 2.0;
     cddp_solver.addPathConstraint("TestConstraint", 
-                              std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+                              std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
     
     // Solve
     auto solution = cddp_solver.solve("IntegrationTestSolver");

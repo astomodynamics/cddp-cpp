@@ -161,7 +161,7 @@ int main()
         }
         
         cddp_solver.addPathConstraint("ControlConstraint",
-            std::make_unique<cddp::ControlConstraint>(control_upper_bound, control_lower_bound));
+            std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
         cddp_solver.addPathConstraint("BallConstraint",
             std::make_unique<cddp::BallConstraint>(closest_obstacle(2), closest_obstacle.head(2)));
 

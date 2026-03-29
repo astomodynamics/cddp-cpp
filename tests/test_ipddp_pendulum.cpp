@@ -57,7 +57,7 @@ TEST(IPDDPPendulumTest, Solve) {
     // Set control constraints (upper bound of 0.25 torque)
     Eigen::VectorXd control_upper_bound(control_dim);
     control_upper_bound << 0.25;
-    cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+    cddp_solver.addConstraint("ControlConstraint", std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
 
     // Set solver options
     cddp::CDDPOptions options;

@@ -188,8 +188,8 @@ int main()
         options
     );
 
-    cddp_solver.addPathConstraint("ControlBoxConstraint",
-                              std::make_unique<cddp::ControlBoxConstraint>(
+    cddp_solver.addPathConstraint("ControlConstraint",
+                              std::make_unique<cddp::ControlConstraint>(
                                   control_lower_bound, control_upper_bound));
 
     // Initialize with random controls

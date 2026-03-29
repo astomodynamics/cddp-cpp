@@ -94,7 +94,7 @@ int main() {
 
     // Add constraints
     cddp_solver.addPathConstraint("ControlConstraint",
-        std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+        std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
 
     // First ball constraint
     double radius1 = 0.4;

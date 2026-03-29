@@ -134,36 +134,47 @@ namespace cddp
 
   //------------------------------------------------------------------------------
 
-  class ControlBoxConstraint : public Constraint
+  class ControlConstraint : public Constraint
   {
   public:
-    ControlBoxConstraint(const Eigen::VectorXd &lower_bound,
-                         const Eigen::VectorXd &upper_bound)
-        : Constraint("ControlBoxConstraint"), lower_bound_(lower_bound),
-          upper_bound_(upper_bound) {}
-
-    int getDualDim() const override
+    ControlConstraint(const Eigen::VectorXd &lower_bound,
+                      const Eigen::VectorXd &upper_bound,
+                      double scale_factor = 1.0)
+        : Constraint("ControlConstraint"), lower_bound_(lower_bound),
+          upper_bound_(upper_bound), scale_factor_(scale_factor)
     {
-      return lower_bound_.size() + upper_bound_.size();
+      dim_ = 2 * upper_bound.size();
+      ip_upper_bound_.resize(dim_);
+      ip_upper_bound_.head(upper_bound.size()) = -lower_bound * scale_factor_;
+      ip_upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
     }
 
-    Eigen::VectorXd evaluate(const Eigen::VectorXd &state,
+    int getDualDim() const override { return dim_; }
+
+    Eigen::VectorXd evaluate(const Eigen::VectorXd & /**/,
                              const Eigen::VectorXd &control,
                              int index = 0) const override
     {
-      return control;
+      Eigen::VectorXd g(dim_);
+      g.head(control.size()) = -control;
+      g.tail(control.size()) = control;
+      return g * scale_factor_;
     }
 
-    Eigen::VectorXd getLowerBound() const override { return lower_bound_; }
+    Eigen::VectorXd getLowerBound() const override
+    {
+      return Eigen::VectorXd::Constant(dim_,
+                                       -std::numeric_limits<double>::infinity());
+    }
 
-    Eigen::VectorXd getUpperBound() const override { return upper_bound_; }
+    Eigen::VectorXd getUpperBound() const override { return ip_upper_bound_; }
 
     Eigen::MatrixXd
     getStateJacobian(const Eigen::VectorXd &state,
                      const Eigen::VectorXd &control,
                      int index = 0) const override
     {
-      return Eigen::MatrixXd::Zero(control.size(), control.size());
+      return Eigen::MatrixXd::Zero(dim_, state.size());
     }
 
     Eigen::MatrixXd
@@ -171,8 +182,17 @@ namespace cddp
                        const Eigen::VectorXd &control,
                        int index = 0) const override
     {
-      return Eigen::MatrixXd::Identity(control.size(), control.size());
+      Eigen::MatrixXd jac(dim_, control.size());
+      jac.topLeftCorner(control.size(), control.size()) =
+          -Eigen::MatrixXd::Identity(control.size(), control.size());
+      jac.bottomRightCorner(control.size(), control.size()) =
+          Eigen::MatrixXd::Identity(control.size(), control.size());
+      return jac;
     }
+
+    // Raw bounds for CLDDP / BoxQP solvers
+    const Eigen::VectorXd &rawLowerBound() const { return lower_bound_; }
+    const Eigen::VectorXd &rawUpperBound() const { return upper_bound_; }
 
     Eigen::VectorXd clamp(const Eigen::VectorXd &control) const
     {
@@ -183,75 +203,107 @@ namespace cddp
                             const Eigen::VectorXd &control,
                             int index = 0) const override
     {
-      Eigen::VectorXd g = evaluate(state, control, index);
+      Eigen::VectorXd g = evaluate(state, control, index) - ip_upper_bound_;
       return computeViolationFromValue(g);
     }
 
     double computeViolationFromValue(const Eigen::VectorXd &g) const override
     {
-      // Sum of amounts by which g is above upper_bound or below lower_bound
-      return (g - upper_bound_).cwiseMax(0.0).sum() +
-             (lower_bound_ - g).cwiseMax(0.0).sum();
+      return (g - ip_upper_bound_).cwiseMax(0.0).sum();
     }
 
-    // Hessians for ControlBoxConstraint are zero
+    // Hessians for ControlConstraint are zero
     std::vector<Eigen::MatrixXd>
     getStateHessian(const Eigen::VectorXd &state,
                     const Eigen::VectorXd &control,
                     int index = 0) const override
     {
-      return {Eigen::MatrixXd::Zero(control.size(), control.size())};
+      std::vector<Eigen::MatrixXd> Hxx_list;
+      for (int i = 0; i < dim_; ++i)
+      {
+        Hxx_list.push_back(Eigen::MatrixXd::Zero(state.size(), state.size()));
+      }
+      return Hxx_list;
     }
     std::vector<Eigen::MatrixXd>
     getControlHessian(const Eigen::VectorXd &state,
                       const Eigen::VectorXd &control,
                       int index = 0) const override
     {
-      return {Eigen::MatrixXd::Zero(control.size(), control.size())};
+      std::vector<Eigen::MatrixXd> Huu_list;
+      for (int i = 0; i < dim_; ++i)
+      {
+        Huu_list.push_back(Eigen::MatrixXd::Zero(control.size(), control.size()));
+      }
+      return Huu_list;
     }
     std::vector<Eigen::MatrixXd>
     getCrossHessian(const Eigen::VectorXd &state,
                     const Eigen::VectorXd &control,
                     int index = 0) const override
     {
-      return {Eigen::MatrixXd::Zero(control.size(), control.size())};
+      std::vector<Eigen::MatrixXd> Hux_list;
+      for (int i = 0; i < dim_; ++i)
+      {
+        Hux_list.push_back(Eigen::MatrixXd::Zero(control.size(), state.size()));
+      }
+      return Hux_list;
     }
 
   private:
     Eigen::VectorXd lower_bound_;
     Eigen::VectorXd upper_bound_;
+    Eigen::VectorXd ip_upper_bound_;
+    double scale_factor_;
+    int dim_;
   };
 
-  class StateBoxConstraint : public Constraint
+  class StateConstraint : public Constraint
   {
   public:
-    StateBoxConstraint(const Eigen::VectorXd &lower_bound,
-                       const Eigen::VectorXd &upper_bound)
-        : Constraint("StateBoxConstraint"), lower_bound_(lower_bound),
-          upper_bound_(upper_bound) {}
-
-    int getDualDim() const override
+    StateConstraint(const Eigen::VectorXd &lower_bound,
+                    const Eigen::VectorXd &upper_bound,
+                    double scale_factor = 1.0)
+        : Constraint("StateConstraint"), lower_bound_(lower_bound),
+          upper_bound_(upper_bound), scale_factor_(scale_factor)
     {
-      return lower_bound_.size() + upper_bound_.size();
+      dim_ = 2 * upper_bound.size();
+      ip_upper_bound_.resize(dim_);
+      ip_upper_bound_.head(upper_bound.size()) = -lower_bound * scale_factor_;
+      ip_upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
     }
+
+    int getDualDim() const override { return dim_; }
 
     Eigen::VectorXd evaluate(const Eigen::VectorXd &state,
-                             const Eigen::VectorXd &control,
+                             const Eigen::VectorXd & /**/,
                              int index = 0) const override
     {
-      return state;
+      Eigen::VectorXd g(dim_);
+      g.head(state.size()) = -state;
+      g.tail(state.size()) = state;
+      return g * scale_factor_;
     }
 
-    Eigen::VectorXd getLowerBound() const override { return lower_bound_; }
+    Eigen::VectorXd getLowerBound() const override
+    {
+      return Eigen::VectorXd::Constant(dim_,
+                                       -std::numeric_limits<double>::infinity());
+    }
 
-    Eigen::VectorXd getUpperBound() const override { return upper_bound_; }
+    Eigen::VectorXd getUpperBound() const override { return ip_upper_bound_; }
 
     Eigen::MatrixXd
     getStateJacobian(const Eigen::VectorXd &state,
                      const Eigen::VectorXd &control,
                      int index = 0) const override
     {
-      return Eigen::MatrixXd::Identity(state.size(), state.size());
+      Eigen::MatrixXd jac(dim_, state.size());
+      jac.topLeftCorner(state.size(), state.size()) =
+          -Eigen::MatrixXd::Identity(state.size(), state.size()) * scale_factor_;
+      jac.bottomRightCorner(state.size(), state.size()) =
+          Eigen::MatrixXd::Identity(state.size(), state.size()) * scale_factor_;
+      return jac;
     }
 
     Eigen::MatrixXd
@@ -259,8 +311,12 @@ namespace cddp
                        const Eigen::VectorXd &control,
                        int index = 0) const override
     {
-      return Eigen::MatrixXd::Zero(state.size(), control.size());
+      return Eigen::MatrixXd::Zero(dim_, control.size());
     }
+
+    // Raw bounds for potential CLDDP / BoxQP usage
+    const Eigen::VectorXd &rawLowerBound() const { return lower_bound_; }
+    const Eigen::VectorXd &rawUpperBound() const { return upper_bound_; }
 
     Eigen::VectorXd clamp(const Eigen::VectorXd &state) const
     {
@@ -271,43 +327,59 @@ namespace cddp
                             const Eigen::VectorXd &control,
                             int index = 0) const override
     {
-      Eigen::VectorXd g = evaluate(state, control, index);
+      Eigen::VectorXd g = evaluate(state, control, index) - ip_upper_bound_;
       return computeViolationFromValue(g);
     }
 
     double computeViolationFromValue(const Eigen::VectorXd &g) const override
     {
-      // Same logic as ControlBoxConstraint but for the state
-      return (g - upper_bound_).cwiseMax(0.0).sum() +
-             (lower_bound_ - g).cwiseMax(0.0).sum();
+      return (g - ip_upper_bound_).cwiseMax(0.0).sum();
     }
 
-    // Hessians for StateBoxConstraint are zero
+    // Hessians for StateConstraint are zero
     std::vector<Eigen::MatrixXd>
     getStateHessian(const Eigen::VectorXd &state,
                     const Eigen::VectorXd &control,
                     int index = 0) const override
     {
-      return {Eigen::MatrixXd::Zero(state.size(), state.size())};
+      std::vector<Eigen::MatrixXd> Hxx_list;
+      for (int i = 0; i < dim_; ++i)
+      {
+        Hxx_list.push_back(Eigen::MatrixXd::Zero(state.size(), state.size()));
+      }
+      return Hxx_list;
     }
     std::vector<Eigen::MatrixXd>
     getControlHessian(const Eigen::VectorXd &state,
                       const Eigen::VectorXd &control,
                       int index = 0) const override
     {
-      return {Eigen::MatrixXd::Zero(state.size(), control.size())};
+      std::vector<Eigen::MatrixXd> Huu_list;
+      for (int i = 0; i < dim_; ++i)
+      {
+        Huu_list.push_back(Eigen::MatrixXd::Zero(control.size(), control.size()));
+      }
+      return Huu_list;
     }
     std::vector<Eigen::MatrixXd>
     getCrossHessian(const Eigen::VectorXd &state,
                     const Eigen::VectorXd &control,
                     int index = 0) const override
     {
-      return {Eigen::MatrixXd::Zero(control.size(), state.size())};
+      std::vector<Eigen::MatrixXd> Hux_list;
+      for (int i = 0; i < dim_; ++i)
+      {
+        Hux_list.push_back(Eigen::MatrixXd::Zero(control.size(), state.size()));
+      }
+      return Hux_list;
     }
 
   private:
     Eigen::VectorXd lower_bound_;
     Eigen::VectorXd upper_bound_;
+    Eigen::VectorXd ip_upper_bound_;
+    double scale_factor_;
+    int dim_;
   };
 
   class LinearConstraint : public Constraint
@@ -405,250 +477,6 @@ namespace cddp
   private:
     Eigen::MatrixXd A_;
     Eigen::VectorXd b_;
-    double scale_factor_;
-  };
-
-  class ControlConstraint : public Constraint
-  {
-  public:
-    ControlConstraint(const Eigen::VectorXd &upper_bound,
-                      const Eigen::VectorXd &lower_bound = Eigen::VectorXd(),
-                      double scale_factor = 1.0)
-        : Constraint("ControlConstraint"), scale_factor_(scale_factor)
-    {
-      // Rescale the upper bound for this constraint class
-      upper_bound_.resize(2 * upper_bound.size());
-      if (lower_bound.size() == 0)
-      {
-        upper_bound_.head(upper_bound.size()) = upper_bound * scale_factor_;
-        upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
-      }
-      else
-      {
-        upper_bound_.head(upper_bound.size()) = -lower_bound * scale_factor_;
-        upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
-      }
-      dim_ = 2 * upper_bound.size();
-    }
-
-    int getDualDim() const override { return dim_; }
-
-    Eigen::VectorXd evaluate(const Eigen::VectorXd & /**/,
-                             const Eigen::VectorXd &control,
-                             int index = 0) const override
-    {
-      // return [-control; control];
-      Eigen::VectorXd g(2 * control.size());
-      g.head(control.size()) = -control;
-      g.tail(control.size()) = control;
-      return g * scale_factor_;
-    }
-
-    Eigen::VectorXd getLowerBound() const override
-    {
-      return Eigen::VectorXd::Constant(upper_bound_.size(),
-                                       -std::numeric_limits<double>::infinity());
-    }
-
-    Eigen::VectorXd getUpperBound() const override { return upper_bound_; }
-
-    Eigen::MatrixXd
-    getStateJacobian(const Eigen::VectorXd &state,
-                     const Eigen::VectorXd &control,
-                     int index = 0) const override
-    {
-      return Eigen::MatrixXd::Zero(dim_, state.size());
-    }
-
-    Eigen::MatrixXd
-    getControlJacobian(const Eigen::VectorXd &state,
-                       const Eigen::VectorXd &control,
-                       int index = 0) const override
-    {
-      Eigen::MatrixXd jac(2 * control.size(), control.size());
-      jac.topLeftCorner(control.size(), control.size()) =
-          -Eigen::MatrixXd::Identity(control.size(), control.size());
-      jac.bottomRightCorner(control.size(), control.size()) =
-          Eigen::MatrixXd::Identity(control.size(), control.size());
-      return jac;
-    }
-
-    double computeViolation(const Eigen::VectorXd &state,
-                            const Eigen::VectorXd &control,
-                            int index = 0) const override
-    {
-      Eigen::VectorXd g = evaluate(state, control, index) - upper_bound_;
-      return computeViolationFromValue(g);
-    }
-
-    double computeViolationFromValue(const Eigen::VectorXd &g) const override
-    {
-      return (g - upper_bound_).cwiseMax(0.0).sum();
-    }
-
-    // Hessians for ControlConstraint are zero
-    std::vector<Eigen::MatrixXd>
-    getStateHessian(const Eigen::VectorXd &state,
-                    const Eigen::VectorXd &control,
-                    int index = 0) const override
-    {
-      std::vector<Eigen::MatrixXd> Hxx_list;
-      for (int i = 0; i < dim_; ++i)
-      { // dim_ is 2 * control.size()
-        Hxx_list.push_back(Eigen::MatrixXd::Zero(state.size(), state.size()));
-      }
-      return Hxx_list;
-    }
-    std::vector<Eigen::MatrixXd>
-    getControlHessian(const Eigen::VectorXd &state,
-                      const Eigen::VectorXd &control,
-                      int index = 0) const override
-    {
-      std::vector<Eigen::MatrixXd> Huu_list;
-      for (int i = 0; i < dim_; ++i)
-      {
-        Huu_list.push_back(Eigen::MatrixXd::Zero(control.size(), control.size()));
-      }
-      return Huu_list;
-    }
-    std::vector<Eigen::MatrixXd>
-    getCrossHessian(const Eigen::VectorXd &state,
-                    const Eigen::VectorXd &control,
-                    int index = 0) const override
-    {
-      std::vector<Eigen::MatrixXd> Hux_list;
-      for (int i = 0; i < dim_; ++i)
-      {
-        Hux_list.push_back(Eigen::MatrixXd::Zero(control.size(), state.size()));
-      }
-      return Hux_list;
-    }
-
-  private:
-    int dim_;
-    Eigen::VectorXd upper_bound_;
-    double scale_factor_;
-  };
-
-  class StateConstraint : public Constraint
-  {
-  public:
-    StateConstraint(const Eigen::VectorXd &upper_bound,
-                    const Eigen::VectorXd &lower_bound = Eigen::VectorXd(),
-                    double scale_factor = 1.0)
-        : Constraint("StateConstraint"), scale_factor_(scale_factor)
-    {
-      // Rescale the upper bound for this constraint class
-      upper_bound_.resize(2 * upper_bound.size());
-      if (lower_bound.size() == 0)
-      {
-        upper_bound_.head(upper_bound.size()) = upper_bound * scale_factor_;
-        upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
-      }
-      else
-      {
-        upper_bound_.head(upper_bound.size()) = -lower_bound * scale_factor_;
-        upper_bound_.tail(upper_bound.size()) = upper_bound * scale_factor_;
-      }
-      dim_ = 2 * upper_bound.size();
-    }
-
-    int getDualDim() const override { return dim_; }
-
-    Eigen::VectorXd evaluate(const Eigen::VectorXd &state,
-                             const Eigen::VectorXd & /**/,
-                             int index = 0) const override
-    {
-      // return [-control; control];
-      Eigen::VectorXd g(2 * state.size());
-      g.head(state.size()) = -state;
-      g.tail(state.size()) = state;
-      return g * scale_factor_;
-    }
-
-    Eigen::VectorXd getLowerBound() const override
-    {
-      return Eigen::VectorXd::Constant(upper_bound_.size(),
-                                       -std::numeric_limits<double>::infinity());
-    }
-
-    Eigen::VectorXd getUpperBound() const override { return upper_bound_; }
-
-    Eigen::MatrixXd
-    getStateJacobian(const Eigen::VectorXd &state,
-                     const Eigen::VectorXd &control,
-                     int index = 0) const override
-    {
-      Eigen::MatrixXd jac(2 * state.size(), state.size());
-      jac.topLeftCorner(state.size(), state.size()) =
-          -Eigen::MatrixXd::Identity(state.size(), state.size()) * scale_factor_;
-      jac.bottomRightCorner(state.size(), state.size()) =
-          Eigen::MatrixXd::Identity(state.size(), state.size()) * scale_factor_;
-      return jac;
-    }
-
-    Eigen::MatrixXd
-    getControlJacobian(const Eigen::VectorXd &state,
-                       const Eigen::VectorXd &control,
-                       int index = 0) const override
-    {
-      return Eigen::MatrixXd::Zero(2 * state.size(), control.size());
-    }
-
-    double computeViolation(const Eigen::VectorXd &state,
-                            const Eigen::VectorXd &control,
-                            int index = 0) const override
-    {
-      Eigen::VectorXd g = evaluate(state, control, index) - upper_bound_;
-      return computeViolationFromValue(g);
-    }
-
-    double computeViolationFromValue(const Eigen::VectorXd &g) const override
-    {
-      return (g - upper_bound_).cwiseMax(0.0).sum();
-    }
-
-    // Hessians for ControlConstraint are zero
-    std::vector<Eigen::MatrixXd>
-    getStateHessian(const Eigen::VectorXd &state,
-                    const Eigen::VectorXd &control,
-                    int index = 0) const override
-    {
-      std::vector<Eigen::MatrixXd> Hxx_list;
-      for (int i = 0; i < dim_; ++i)
-      { // dim_ is 2 * control.size()
-        Hxx_list.push_back(Eigen::MatrixXd::Zero(state.size(), state.size()));
-      }
-      return Hxx_list;
-    }
-    std::vector<Eigen::MatrixXd>
-    getControlHessian(const Eigen::VectorXd &state,
-                      const Eigen::VectorXd &control,
-                      int index = 0) const override
-    {
-      std::vector<Eigen::MatrixXd> Huu_list;
-      for (int i = 0; i < dim_; ++i)
-      {
-        Huu_list.push_back(Eigen::MatrixXd::Zero(control.size(), control.size()));
-      }
-      return Huu_list;
-    }
-    std::vector<Eigen::MatrixXd>
-    getCrossHessian(const Eigen::VectorXd &state,
-                    const Eigen::VectorXd &control,
-                    int index = 0) const override
-    {
-      std::vector<Eigen::MatrixXd> Hux_list;
-      for (int i = 0; i < dim_; ++i)
-      {
-        Hux_list.push_back(Eigen::MatrixXd::Zero(control.size(), state.size()));
-      }
-      return Hux_list;
-    }
-
-  private:
-    int dim_;
-    Eigen::VectorXd upper_bound_;
     double scale_factor_;
   };
 

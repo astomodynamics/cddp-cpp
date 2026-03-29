@@ -107,7 +107,7 @@ int main() {
 
     // Add a control constraint
     solver_baseline.addPathConstraint("ControlConstraint",
-        std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+        std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
 
     // Naive initial trajectory
     std::vector<Eigen::VectorXd> X_baseline_init(horizon + 1, initial_state);
@@ -137,7 +137,7 @@ int main() {
 
     // Add constraints
     solver_ball.addPathConstraint("ControlConstraint",
-        std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+        std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
     solver_ball.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
 
@@ -169,7 +169,7 @@ int main() {
 
     // Add constraints
     solver_ball_with_baseline.addPathConstraint("ControlConstraint",
-        std::make_unique<cddp::ControlConstraint>(control_upper_bound));
+        std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
     solver_ball_with_baseline.addPathConstraint("BallConstraint",
         std::make_unique<cddp::BallConstraint>(radius, center));
 

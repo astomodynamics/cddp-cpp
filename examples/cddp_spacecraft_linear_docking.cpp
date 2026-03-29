@@ -150,7 +150,7 @@ int main() {
     // Add Control  Constraint
     Eigen::VectorXd u_upper = Eigen::VectorXd::Constant(3, u_max);
     cddp_solver.addPathConstraint("ControlConstraint",
-        std::make_unique<cddp::ControlConstraint>(u_upper));
+        std::make_unique<cddp::ControlConstraint>(-u_upper, u_upper));
 
     // Add Linear Constraints for X-Y Plane Cone Boundary (|y| <= x * tan(fov) for x >= 0)
     // Constraint 1: -tan(fov)*x + y <= 0
