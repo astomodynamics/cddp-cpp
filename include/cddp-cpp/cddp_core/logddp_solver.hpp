@@ -41,6 +41,8 @@ public:
 protected:
   // === Virtual hook overrides ===
   void preIterationSetup(CDDP &context) override;
+  bool handleBackwardPassRegularizationLimit(
+      CDDP &context, std::string &termination_reason) override;
   bool backwardPass(CDDP &context) override;
   ForwardPassResult forwardPass(CDDP &context, double alpha) override;
   void applyForwardPassResult(CDDP &context,

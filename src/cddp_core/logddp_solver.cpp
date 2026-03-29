@@ -211,6 +211,14 @@ void LogDDPSolver::preIterationSetup(CDDP &context) {
   resetFilter(context);
 }
 
+bool LogDDPSolver::handleBackwardPassRegularizationLimit(
+    CDDP & /*context*/, std::string &termination_reason) {
+  // LogDDP treats regularization exhaustion as converged — the current
+  // barrier-penalized trajectory is typically still usable.
+  termination_reason = "RegularizationLimitReached_Converged";
+  return true; // converged
+}
+
 void LogDDPSolver::applyForwardPassResult(CDDP &context,
                                           const ForwardPassResult &result) {
   // Call base to update X_, U_, cost_, merit_function_, alpha_pr_, alpha_du_

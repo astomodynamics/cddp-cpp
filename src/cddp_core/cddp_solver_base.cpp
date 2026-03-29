@@ -95,7 +95,8 @@ CDDPSolution CDDPSolverBase::solve(CDDP &context) {
       if (!backward_ok) {
         context.increaseRegularization();
         if (context.isRegularizationLimitReached()) {
-          termination_reason = "RegularizationLimitReached_NotConverged";
+          converged = handleBackwardPassRegularizationLimit(
+              context, termination_reason);
           if (options.verbose) {
             std::cerr << getSolverName()
                       << ": Backward pass regularization limit reached"
@@ -193,6 +194,12 @@ void CDDPSolverBase::applyForwardPassResult(CDDP &context,
   context.merit_function_ = result.merit_function;
   context.alpha_pr_ = result.alpha_pr;
   context.alpha_du_ = result.alpha_du;
+}
+
+bool CDDPSolverBase::handleBackwardPassRegularizationLimit(
+    CDDP &context, std::string &termination_reason) {
+  termination_reason = "RegularizationLimitReached_NotConverged";
+  return false; // not converged
 }
 
 bool CDDPSolverBase::handleForwardPassFailure(CDDP &context,

@@ -109,6 +109,17 @@ protected:
   virtual void postIterationUpdate(CDDP &context, bool forward_pass_success) {}
 
   /**
+   * @brief Handle backward pass regularization exhaustion.
+   * Default: sets termination_reason to "NotConverged" and returns false.
+   * Override to treat the current solution as usable (e.g., LogDDP returns
+   * true with "Converged" status since barrier methods may still have a
+   * usable trajectory).
+   * @return True if the solution should be considered converged.
+   */
+  virtual bool handleBackwardPassRegularizationLimit(
+      CDDP &context, std::string &termination_reason);
+
+  /**
    * @brief Handle forward pass failure. Default: increase regularization.
    * Override for filter restoration (MSIPDDP).
    * @return True if the solver should break out of the main loop.
