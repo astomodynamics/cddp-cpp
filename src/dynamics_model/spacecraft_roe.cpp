@@ -179,11 +179,7 @@ namespace cddp
         const Eigen::VectorXd & /*control*/, double time) const
     {
         // For this linear(ish) model, second derivatives wrt state are zero.
-        std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-        for (int i = 0; i < STATE_DIM; ++i)
-        {
-            hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
-        }
+        auto hessians = makeZeroTensor(STATE_DIM, STATE_DIM, STATE_DIM);
         return hessians;
     }
 
@@ -193,11 +189,7 @@ namespace cddp
         const Eigen::VectorXd & /*control*/, double time) const
     {
         // Similarly, second derivatives wrt control are zero for a linear system.
-        std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-        for (int i = 0; i < STATE_DIM; ++i)
-        {
-            hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
-        }
+        auto hessians = makeZeroTensor(STATE_DIM, CONTROL_DIM, CONTROL_DIM);
         return hessians;
     }
 

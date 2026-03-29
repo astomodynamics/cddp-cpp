@@ -131,10 +131,7 @@ std::vector<Eigen::MatrixXd>
 Bicycle::getStateHessian(const Eigen::VectorXd &state,
                          const Eigen::VectorXd &control, double time) const {
 
-  std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-  for (int i = 0; i < STATE_DIM; ++i) {
-    hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
-  }
+  auto hessians = makeZeroTensor(STATE_DIM, STATE_DIM, STATE_DIM);
 
   // Extract state variables
   const double theta = state(STATE_THETA); // heading angle
@@ -162,10 +159,7 @@ std::vector<Eigen::MatrixXd>
 Bicycle::getControlHessian(const Eigen::VectorXd &state,
                            const Eigen::VectorXd &control, double time) const {
 
-  std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-  for (int i = 0; i < STATE_DIM; ++i) {
-    hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
-  }
+  auto hessians = makeZeroTensor(STATE_DIM, CONTROL_DIM, CONTROL_DIM);
 
   // Extract state variables
   const double v = state(STATE_V); // velocity

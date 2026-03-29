@@ -109,10 +109,7 @@ std::vector<Eigen::MatrixXd> DubinsCar::getStateHessian(
     (void)control; // Not used for state Hessian
     
     // Initialize vector of matrices (one matrix per state dimension)
-    std::vector<Eigen::MatrixXd> hessian(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessian[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
-    }
+    auto hessian = makeZeroTensor(STATE_DIM, STATE_DIM, STATE_DIM);
     
     // Extract state components
     const double theta = state(STATE_THETA);
@@ -136,10 +133,7 @@ std::vector<Eigen::MatrixXd> DubinsCar::getControlHessian(
     (void)state;
     (void)control;
     
-    std::vector<Eigen::MatrixXd> hessian(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessian[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
-    }
+    auto hessian = makeZeroTensor(STATE_DIM, CONTROL_DIM, CONTROL_DIM);
     
     
     return hessian;

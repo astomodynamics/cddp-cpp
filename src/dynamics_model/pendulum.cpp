@@ -84,10 +84,7 @@ std::vector<Eigen::MatrixXd> Pendulum::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // Initialize a vector of matrices (one matrix per state dimension)
-    std::vector<Eigen::MatrixXd> hessian(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessian[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
-    }
+    auto hessian = makeZeroTensor(STATE_DIM, STATE_DIM, STATE_DIM);
     
     // Extract state variables
     const double theta = state(STATE_THETA);
@@ -104,10 +101,7 @@ std::vector<Eigen::MatrixXd> Pendulum::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // Initialize a vector of matrices (one matrix per state dimension)
-    std::vector<Eigen::MatrixXd> hessian(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessian[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
-    }
+    auto hessian = makeZeroTensor(STATE_DIM, CONTROL_DIM, CONTROL_DIM);
     
     // For the pendulum, all second derivatives with respect to control are zero
     // No need to set any values as the matrices are already initialized to zero

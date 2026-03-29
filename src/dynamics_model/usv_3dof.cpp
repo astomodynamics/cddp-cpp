@@ -241,10 +241,7 @@ std::vector<Eigen::MatrixXd> Usv3Dof::getControlHessian(
 {
     // Dynamics are linear in control (nu_dot = M_inv * (tau - ...)),
     // so the second derivative d^2f / du^2 is zero.
-    std::vector<Eigen::MatrixXd> hessian(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessian[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
-    }
+    auto hessian = makeZeroTensor(STATE_DIM, CONTROL_DIM, CONTROL_DIM);
     return hessian;
 }
 

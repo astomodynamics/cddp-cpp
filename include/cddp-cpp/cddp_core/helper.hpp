@@ -23,104 +23,11 @@
 namespace cddp
 {
      /**
-      * @brief Compute gradient using central finite differences
-      * @param f Function to differentiate
+      * @brief Compute gradient using finite differences
+      * @param f Scalar function to differentiate
       * @param x Point at which to evaluate gradient
       * @param h Step size for finite differences
-      * @return Gradient vector
-      */
-     template <typename F>
-     Eigen::VectorXd finite_difference_gradient_central(const F &f,
-                                                        const Eigen::VectorXd &x,
-                                                        double h)
-     {
-          const int n = x.size();
-          Eigen::VectorXd grad(n);
-
-          // Compute central differences
-          Eigen::VectorXd x_plus = x;
-          Eigen::VectorXd x_minus = x;
-
-          for (int i = 0; i < n; ++i)
-          {
-               x_plus(i) = x(i) + h;
-               x_minus(i) = x(i) - h;
-
-               grad(i) = (f(x_plus) - f(x_minus)) / (2.0 * h);
-
-               x_plus(i) = x(i);
-               x_minus(i) = x(i);
-          }
-
-          return grad;
-     }
-
-     /**
-      * @brief Compute gradient using forward finite differences
-      * @param f Function to differentiate
-      * @param x Point at which to evaluate gradient
-      * @param h Step size for finite differences
-      * @return Gradient vector
-      */
-     template <typename F>
-     Eigen::VectorXd finite_difference_gradient_forward(const F &f,
-                                                        const Eigen::VectorXd &x,
-                                                        double h)
-     {
-          const int n = x.size();
-          Eigen::VectorXd grad(n);
-
-          // Compute forward differences
-          Eigen::VectorXd x_plus = x;
-
-          for (int i = 0; i < n; ++i)
-          {
-               x_plus(i) = x(i) + h;
-
-               grad(i) = (f(x_plus) - f(x)) / h;
-
-               x_plus(i) = x(i);
-          }
-
-          return grad;
-     }
-
-     /**
-      * @brief Compute gradient using backward finite differences
-      * @param f Function to differentiate
-      * @param x Point at which to evaluate gradient
-      * @param h Step size for finite differences
-      * @return Gradient vector
-      */
-     template <typename F>
-     Eigen::VectorXd finite_difference_gradient_backward(const F &f,
-                                                         const Eigen::VectorXd &x,
-                                                         double h)
-     {
-          const int n = x.size();
-          Eigen::VectorXd grad(n);
-
-          // Compute backward differences
-          Eigen::VectorXd x_minus = x;
-
-          for (int i = 0; i < n; ++i)
-          {
-               x_minus(i) = x(i) - h;
-
-               grad(i) = (f(x) - f(x_minus)) / h;
-
-               x_minus(i) = x(i);
-          }
-
-          return grad;
-     }
-
-     /**
-      * @brief Compute gradient using central finite differences
-      * @param f Function to differentiate
-      * @param x Point at which to evaluate gradient
-      * @param h Step size for finite differences (optional)
-      * @param mode mode for differentiating options: 0 for central, 1 for forward, 2 for backward
+      * @param mode 0 = central, 1 = forward, 2 = backward
       * @return Gradient vector
       */
      template <typename F>
@@ -129,133 +36,60 @@ namespace cddp
                                                 double h = 2e-5,
                                                 int mode = 0)
      {
+          const int n = x.size();
+          Eigen::VectorXd grad(n);
+          Eigen::VectorXd x_perturbed = x;
+
           if (mode == 0)
           {
-               return finite_difference_gradient_central(f, x, h);
+               // Central differences
+               for (int i = 0; i < n; ++i)
+               {
+                    x_perturbed(i) = x(i) + h;
+                    double f_plus = f(x_perturbed);
+                    x_perturbed(i) = x(i) - h;
+                    double f_minus = f(x_perturbed);
+                    grad(i) = (f_plus - f_minus) / (2.0 * h);
+                    x_perturbed(i) = x(i);
+               }
           }
           else if (mode == 1)
           {
-               return finite_difference_gradient_forward(f, x, h);
+               // Forward differences
+               const double f_x = f(x);
+               for (int i = 0; i < n; ++i)
+               {
+                    x_perturbed(i) = x(i) + h;
+                    grad(i) = (f(x_perturbed) - f_x) / h;
+                    x_perturbed(i) = x(i);
+               }
           }
           else if (mode == 2)
           {
-               return finite_difference_gradient_backward(f, x, h);
+               // Backward differences
+               const double f_x = f(x);
+               for (int i = 0; i < n; ++i)
+               {
+                    x_perturbed(i) = x(i) - h;
+                    grad(i) = (f_x - f(x_perturbed)) / h;
+                    x_perturbed(i) = x(i);
+               }
           }
           else
           {
                std::cerr << "Invalid mode value for finite difference gradient" << std::endl;
-               return Eigen::VectorXd::Zero(x.size());
+               return Eigen::VectorXd::Zero(n);
           }
-          return Eigen::VectorXd::Zero(x.size());
+
+          return grad;
      }
 
      /**
-      * @brief Compute Jacobian using central finite differences
-      * @param f Function to differentiate
+      * @brief Compute Jacobian using finite differences
+      * @param f Vector function to differentiate
       * @param x Point at which to evaluate Jacobian
       * @param h Step size for finite differences
-      * @return Jacobian matrix
-      */
-     template <typename F>
-     Eigen::MatrixXd finite_difference_jacobian_central(const F &f,
-                                                        const Eigen::VectorXd &x,
-                                                        double h)
-     {
-          const int m = f(x).size();
-          const int n = x.size();
-          Eigen::MatrixXd jac(m, n);
-
-          // Compute central differences
-          Eigen::VectorXd x_plus = x;
-          Eigen::VectorXd x_minus = x;
-
-          for (int i = 0; i < n; ++i)
-          {
-               x_plus(i) = x(i) + h;
-               x_minus(i) = x(i) - h;
-
-               Eigen::VectorXd f_plus = f(x_plus);
-               Eigen::VectorXd f_minus = f(x_minus);
-
-               jac.col(i) = (f_plus - f_minus) / (2.0 * h);
-
-               x_plus(i) = x(i);
-               x_minus(i) = x(i);
-          }
-
-          return jac;
-     }
-
-     /**
-      * @brief Compute Jacobian using forward finite differences
-      * @param f Function to differentiate
-      * @param x Point at which to evaluate Jacobian
-      * @param h Step size for finite differences
-      * @return Jacobian matrix
-      */
-     template <typename F>
-     Eigen::MatrixXd finite_difference_jacobian_forward(const F &f,
-                                                        const Eigen::VectorXd &x,
-                                                        double h)
-     {
-          const int m = f(x).size();
-          const int n = x.size();
-          Eigen::MatrixXd jac(m, n);
-
-          // Compute forward differences
-          Eigen::VectorXd x_plus = x;
-
-          for (int i = 0; i < n; ++i)
-          {
-               x_plus(i) = x(i) + h;
-
-               Eigen::VectorXd f_plus = f(x_plus);
-               jac.col(i) = (f_plus - f(x)) / h;
-
-               x_plus(i) = x(i);
-          }
-
-          return jac;
-     }
-
-     /**
-      * @brief Compute Jacobian using backward finite differences
-      * @param f Function to differentiate
-      * @param x Point at which to evaluate Jacobian
-      * @param h Step size for finite differences
-      * @return Jacobian matrix
-      */
-     template <typename F>
-     Eigen::MatrixXd finite_difference_jacobian_backward(const F &f,
-                                                         const Eigen::VectorXd &x,
-                                                         double h)
-     {
-          const int m = f(x).size();
-          const int n = x.size();
-          Eigen::MatrixXd jac(m, n);
-
-          // Compute backward differences
-          Eigen::VectorXd x_minus = x;
-
-          for (int i = 0; i < n; ++i)
-          {
-               x_minus(i) = x(i) - h;
-
-               Eigen::VectorXd f_minus = f(x_minus);
-               jac.col(i) = (f(x) - f_minus) / h;
-
-               x_minus(i) = x(i);
-          }
-
-          return jac;
-     }
-
-     /*
-      * @brief Compute Jacobian using central finite differences
-      * @param f Function to differentiate
-      * @param x Point at which to evaluate Jacobian
-      * @param h Step size for finite differences (optional)
-      * @param mode mode for differentiating options: 0 for central, 1 for forward, 2 for backward
+      * @param mode 0 = central, 1 = forward, 2 = backward
       * @return Jacobian matrix
       */
      template <typename F>
@@ -264,130 +98,60 @@ namespace cddp
                                                 double h = 2e-5,
                                                 int mode = 0)
      {
+          const Eigen::VectorXd f_x = f(x);
+          const int m = f_x.size();
+          const int n = x.size();
+          Eigen::MatrixXd jac(m, n);
+          Eigen::VectorXd x_perturbed = x;
+
           if (mode == 0)
           {
-               return finite_difference_jacobian_central(f, x, h);
+               // Central differences
+               for (int i = 0; i < n; ++i)
+               {
+                    x_perturbed(i) = x(i) + h;
+                    Eigen::VectorXd f_plus = f(x_perturbed);
+                    x_perturbed(i) = x(i) - h;
+                    Eigen::VectorXd f_minus = f(x_perturbed);
+                    jac.col(i) = (f_plus - f_minus) / (2.0 * h);
+                    x_perturbed(i) = x(i);
+               }
           }
           else if (mode == 1)
           {
-               return finite_difference_jacobian_forward(f, x, h);
+               // Forward differences
+               for (int i = 0; i < n; ++i)
+               {
+                    x_perturbed(i) = x(i) + h;
+                    jac.col(i) = (f(x_perturbed) - f_x) / h;
+                    x_perturbed(i) = x(i);
+               }
           }
           else if (mode == 2)
           {
-               return finite_difference_jacobian_backward(f, x, h);
+               // Backward differences
+               for (int i = 0; i < n; ++i)
+               {
+                    x_perturbed(i) = x(i) - h;
+                    jac.col(i) = (f_x - f(x_perturbed)) / h;
+                    x_perturbed(i) = x(i);
+               }
           }
           else
           {
                std::cerr << "Invalid mode value for finite difference Jacobian" << std::endl;
-               return Eigen::MatrixXd::Zero(f(x).size(), x.size());
+               return Eigen::MatrixXd::Zero(m, n);
           }
-          return Eigen::MatrixXd::Zero(f(x).size(), x.size());
+
+          return jac;
      }
 
      /**
-      * @brief Compute Hessian using central finite differences
-      * @param f Function to differentiate
+      * @brief Compute Hessian using finite differences
+      * @param f Scalar function to differentiate
       * @param x Point at which to evaluate Hessian
       * @param h Step size for finite differences
-      * @return Hessian matrix
-      */
-     template <typename F>
-     Eigen::MatrixXd finite_difference_hessian_central(const F &f,
-                                                       const Eigen::VectorXd &x,
-                                                       double h)
-     {
-          const int n = x.size();
-          Eigen::MatrixXd hess(n, n);
-
-          // Compute central differences
-          Eigen::VectorXd x_plus = x;
-          Eigen::VectorXd x_minus = x;
-
-          for (int i = 0; i < n; ++i)
-          {
-               x_plus(i) = x(i) + h;
-               x_minus(i) = x(i) - h;
-
-               Eigen::VectorXd grad_plus = finite_difference_gradient(f, x_plus, h);
-               Eigen::VectorXd grad_minus = finite_difference_gradient(f, x_minus, h);
-
-               hess.col(i) = (grad_plus - grad_minus) / (2.0 * h);
-
-               x_plus(i) = x(i);
-               x_minus(i) = x(i);
-          }
-
-          return hess;
-     }
-
-     /**
-      * @brief Compute Hessian using forward finite differences
-      * @param f Function to differentiate
-      * @param x Point at which to evaluate Hessian
-      * @param h Step size for finite differences
-      * @return Hessian matrix
-      */
-     template <typename F>
-     Eigen::MatrixXd finite_difference_hessian_forward(const F &f,
-                                                       const Eigen::VectorXd &x,
-                                                       double h)
-     {
-          const int n = x.size();
-          Eigen::MatrixXd hess(n, n);
-
-          // Compute forward differences
-          Eigen::VectorXd x_plus = x;
-
-          for (int i = 0; i < n; ++i)
-          {
-               x_plus(i) = x(i) + h;
-
-               Eigen::VectorXd grad_plus = finite_difference_gradient(f, x_plus, h);
-               hess.col(i) = (grad_plus - finite_difference_gradient(f, x, h)) / h;
-
-               x_plus(i) = x(i);
-          }
-
-          return hess;
-     }
-
-     /**
-      * @brief Compute Hessian using backward finite differences
-      * @param f Function to differentiate
-      * @param x Point at which to evaluate Hessian
-      * @param h Step size for finite differences
-      * @return Hessian matrix
-      */
-     template <typename F>
-     Eigen::MatrixXd finite_difference_hessian_backward(const F &f,
-                                                        const Eigen::VectorXd &x,
-                                                        double h)
-     {
-          const int n = x.size();
-          Eigen::MatrixXd hess(n, n);
-
-          // Compute backward differences
-          Eigen::VectorXd x_minus = x;
-
-          for (int i = 0; i < n; ++i)
-          {
-               x_minus(i) = x(i) - h;
-
-               Eigen::VectorXd grad_minus = finite_difference_gradient(f, x_minus, h);
-               hess.col(i) = (finite_difference_gradient(f, x, h) - grad_minus) / h;
-
-               x_minus(i) = x(i);
-          }
-
-          return hess;
-     }
-
-     /**
-      * @brief Compute Hessian using central finite differences
-      * @param f Function to differentiate
-      * @param x Point at which to evaluate Hessian
-      * @param h Step size for finite differences (optional)
-      * @param mode mode for differentiating options: 0 for central, 1 for forward, 2 for backward
+      * @param mode 0 = central, 1 = forward, 2 = backward
       * @return Hessian matrix
       */
      template <typename F>
@@ -396,24 +160,52 @@ namespace cddp
                                                double h = 2e-5,
                                                int mode = 0)
      {
+          const int n = x.size();
+          Eigen::MatrixXd hess(n, n);
+          Eigen::VectorXd x_perturbed = x;
+
           if (mode == 0)
           {
-               return finite_difference_hessian_central(f, x, h);
+               // Central differences of gradients
+               for (int i = 0; i < n; ++i)
+               {
+                    x_perturbed(i) = x(i) + h;
+                    Eigen::VectorXd grad_plus = finite_difference_gradient(f, x_perturbed, h);
+                    x_perturbed(i) = x(i) - h;
+                    Eigen::VectorXd grad_minus = finite_difference_gradient(f, x_perturbed, h);
+                    hess.col(i) = (grad_plus - grad_minus) / (2.0 * h);
+                    x_perturbed(i) = x(i);
+               }
           }
           else if (mode == 1)
           {
-               return finite_difference_hessian_forward(f, x, h);
+               // Forward differences of gradients
+               Eigen::VectorXd grad_x = finite_difference_gradient(f, x, h);
+               for (int i = 0; i < n; ++i)
+               {
+                    x_perturbed(i) = x(i) + h;
+                    hess.col(i) = (finite_difference_gradient(f, x_perturbed, h) - grad_x) / h;
+                    x_perturbed(i) = x(i);
+               }
           }
           else if (mode == 2)
           {
-               return finite_difference_hessian_backward(f, x, h);
+               // Backward differences of gradients
+               Eigen::VectorXd grad_x = finite_difference_gradient(f, x, h);
+               for (int i = 0; i < n; ++i)
+               {
+                    x_perturbed(i) = x(i) - h;
+                    hess.col(i) = (grad_x - finite_difference_gradient(f, x_perturbed, h)) / h;
+                    x_perturbed(i) = x(i);
+               }
           }
           else
           {
                std::cerr << "Invalid mode value for finite difference Hessian" << std::endl;
-               return Eigen::MatrixXd::Zero(x.size(), x.size());
+               return Eigen::MatrixXd::Zero(n, n);
           }
-          return Eigen::MatrixXd::Zero(x.size(), x.size());
+
+          return hess;
      }
 
      // Forward declarations for attitude conversion helper functions
