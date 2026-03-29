@@ -151,10 +151,8 @@ int main() {
     const auto& X_sol = solution.state_trajectory;
     const auto& U_sol = solution.control_trajectory;
     const auto& t_sol = solution.time_points;
-    const auto& cost_sequence = solution.history.objective;
     auto iterations = solution.iterations_completed;
     bool converged = (solution.status_message == "OptimalSolutionFound" || solution.status_message == "AcceptableSolutionFound");
-    auto solve_time = static_cast<long long>(solution.solve_time_ms);
 
     // Create directory for plots if it doesn't exist
     const std::string plotDirectory = "../results/tests";
@@ -166,9 +164,9 @@ int main() {
     // Print optimization statistics
     std::cout << "\nOptimization Results:" << std::endl;
     std::cout << "Iterations: " << iterations << std::endl;
-    std::cout << "Final cost: " << cost_sequence.back() << std::endl;
+    std::cout << "Final cost: " << solution.final_objective << std::endl;
     std::cout << "Converged: " << (converged ? "Yes" : "No") << std::endl;
-    std::cout << "Solve time: " << solve_time << " microseconds" << std::endl;
+    std::cout << "Solve time: " << solution.solve_time_ms << " ms" << std::endl;
 
     return 0;
 }

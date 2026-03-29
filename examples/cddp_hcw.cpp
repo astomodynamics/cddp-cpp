@@ -147,14 +147,12 @@ int main() {
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::CLDDP);
 
     // Extract solution and print result
-    const auto& cost_sequence = solution.history.objective;
-    double J_final = cost_sequence.back();
     const auto& X_sol = solution.state_trajectory;
     const auto& U_sol = solution.control_trajectory;
     const auto& t_sol = solution.time_points;
-    
+
     std::cout << "\n[Result] CDDP solved." << std::endl;
-    std::cout << "[Result] Final cost: " << J_final << std::endl;
+    std::cout << "[Result] Final cost: " << solution.final_objective << std::endl;
     std::cout << "[Result] Final state: "
               << X_sol.back().transpose() << std::endl;
 
