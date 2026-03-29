@@ -20,6 +20,7 @@
 #include <string>
 #include <memory>
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 #include <random>
 
@@ -99,30 +100,7 @@ int main() {
     //     std::make_unique<cddp::ControlConstraint>( control_lower_bound, control_upper_bound));
 
     // Initial trajectory.
-    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
-    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
-    // Generate initial trajectory by constant initial state
-    for (int i = 0; i < horizon + 1; ++i) {
-        X[i] = initial_state;
-    }
-    // // Generate initial trajectory by random
-    // for (int i = 0; i < horizon + 1; ++i) {
-    //     std::random_device rd;
-    //     std::mt19937 gen(rd());
-    //     std::uniform_real_distribution<double> dist(-0.025, 0.025);
-    //     X[i] = initial_state;
-    //     X[i](0) += dist(gen);
-    //     X[i](1) += dist(gen);
-    //     X[i](2) += dist(gen);
-    //     X[i](3) += dist(gen);
-    // }
-    // for (int i = 0; i < horizon; ++i) {
-    //     std::random_device rd;
-    //     std::mt19937 gen(rd());
-    //     std::uniform_real_distribution<double> dist(-0.005, 0.005);
-    //     U[i] = Eigen::VectorXd::Zero(control_dim);
-    //     U[i](0) += dist(gen);
-    // }
+    auto [X, U] = cddp::example::makeInitialTrajectory(initial_state, horizon, control_dim);
     cddp_solver.setInitialTrajectory(X, U);
 
     // Solve.
@@ -133,26 +111,19 @@ int main() {
 
     // Create plot directory.
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directory(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Create a directory for frame images.
     (void) std::system("mkdir -p frames");
 
     // Extract solution data.
-    std::vector<double> x_arr, x_dot_arr, theta_arr, theta_dot_arr, force_arr, time_arr, time_arr2;
-    for (size_t i = 0; i < X_sol.size(); ++i) {
-        time_arr.push_back(t_sol[i]);
-        x_arr.push_back(X_sol[i](0));
-        theta_arr.push_back(X_sol[i](1));
-        x_dot_arr.push_back(X_sol[i](2));
-        theta_dot_arr.push_back(X_sol[i](3));
-    }
-    for (size_t i = 0; i < U_sol.size(); ++i) {
-        force_arr.push_back(U_sol[i](0));
-        time_arr2.push_back(t_sol[i]);
-    }
+    auto x_arr = cddp::example::extractComponent(X_sol, 0);
+    auto theta_arr = cddp::example::extractComponent(X_sol, 1);
+    auto x_dot_arr = cddp::example::extractComponent(X_sol, 2);
+    auto theta_dot_arr = cddp::example::extractComponent(X_sol, 3);
+    auto force_arr = cddp::example::extractComponent(U_sol, 0);
+    const auto& time_arr = t_sol;
+    std::vector<double> time_arr2(t_sol.begin(), t_sol.begin() + U_sol.size());
 
     // --- Plot static results (2x2 plots for state trajectories) ---
     auto fig1 = figure();

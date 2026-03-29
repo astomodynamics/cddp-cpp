@@ -24,6 +24,7 @@
 #include <cmath> // For std::sqrt
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "cddp_core/cddp_core.hpp"
 #include "cddp_core/objective.hpp"
 #include "dynamics_model/spacecraft_linear_fuel.hpp"

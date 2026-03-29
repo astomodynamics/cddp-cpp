@@ -21,6 +21,7 @@
 #include <Eigen/Dense>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 
 #include "matplot/matplot.h"
 using namespace matplot;
@@ -320,9 +321,7 @@ int main() {
 
         // Create results directory
         const std::string plotDirectory = "../results/simulations";
-        if (!fs::exists(plotDirectory)) {
-            fs::create_directories(plotDirectory);
-        }
+        cddp::example::ensurePlotDir(plotDirectory);
         std::string figPath = plotDirectory + "/hcw_mpc_cddp_xaxis_trajectories.png";
         save(figPath);
         // show();
@@ -375,10 +374,7 @@ int main() {
         }
         // Create results directory
         const std::string plotDirectory = "../results/simulations";
-        if (!fs::exists(plotDirectory
-        )) {
-            fs::create_directories(plotDirectory);
-        }
+        cddp::example::ensurePlotDir(plotDirectory);
         std::string figPath = plotDirectory + "/hcw_mpc_cddp_controls.png";
         save(figPath);
         // show();

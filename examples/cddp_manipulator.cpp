@@ -22,6 +22,7 @@
 #include <thread>  // for sleep_for
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 
 #include "matplot/matplot.h"
 using namespace matplot;
@@ -161,9 +162,7 @@ int main() {
 
     // Create a directory for plots if it doesn't exist
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
     save(fig1, plotDirectory + "/manipulator_cddp_results.png");
 
     // Create a new figure for animation

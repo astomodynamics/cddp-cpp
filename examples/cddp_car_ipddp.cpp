@@ -21,6 +21,7 @@
 #include <map>
 #include <string>
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 using namespace matplot;
@@ -209,11 +210,8 @@ int main() {
     const auto& t_sol = solution.time_points;
 
     // Prepare trajectory data for plotting
-    std::vector<double> x_hist, y_hist;
-    for (const auto& state : X_sol) {
-        x_hist.push_back(state(0));
-        y_hist.push_back(state(1));
-    }
+    auto x_hist = cddp::example::extractComponent(X_sol, 0);
+    auto y_hist = cddp::example::extractComponent(X_sol, 1);
     // Car dimensions.
     double car_length = 2.1;
     double car_width = 0.9;
@@ -226,10 +224,7 @@ int main() {
 
     // Create directory for saving plots
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory))
-    {
-        fs::create_directory(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Create a directory for frame images.
     (void) std::system("mkdir -p frames");

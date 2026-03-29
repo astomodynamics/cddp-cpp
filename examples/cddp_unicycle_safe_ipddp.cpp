@@ -23,7 +23,8 @@
 #include <thread>
 #include <chrono>
 
-#include "cddp.hpp" 
+#include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 namespace fs = std::filesystem;
@@ -86,9 +87,7 @@ int main() {
 
     // Create a directory for saving plots (if it doesn't exist)
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // --------------------------
     // 2. Solve - NO Ball constraint

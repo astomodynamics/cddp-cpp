@@ -22,6 +22,7 @@
 #include <matplot/matplot.h>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 
 namespace fs = std::filesystem;
 using namespace cddp;

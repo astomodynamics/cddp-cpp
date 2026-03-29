@@ -5,6 +5,7 @@
 #include <thread>
 #include <algorithm>
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 namespace fs = std::filesystem;
@@ -72,31 +73,20 @@ int main()
 
     // Create directory for saving plots
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory))
-    {
-        fs::create_directory(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Create a directory for frame images.
     (void) std::system("mkdir -p frames");
 
     // Extract trajectory data
-    std::vector<double> x_arr, y_arr, theta_arr, v_arr;
-    for (const auto &x : X_sol)
-    {
-        x_arr.push_back(x(0));
-        y_arr.push_back(x(1));
-        theta_arr.push_back(x(2));
-        v_arr.push_back(x(3));
-    }
+    auto x_arr = cddp::example::extractComponent(X_sol, 0);
+    auto y_arr = cddp::example::extractComponent(X_sol, 1);
+    auto theta_arr = cddp::example::extractComponent(X_sol, 2);
+    auto v_arr = cddp::example::extractComponent(X_sol, 3);
 
     // Extract control inputs
-    std::vector<double> acc_arr, steering_arr;
-    for (const auto &u : U_sol)
-    {
-        acc_arr.push_back(u(0));
-        steering_arr.push_back(u(1));
-    }
+    auto acc_arr = cddp::example::extractComponent(U_sol, 0);
+    auto steering_arr = cddp::example::extractComponent(U_sol, 1);
 
     // -----------------------------
     // Plot states and controls

@@ -20,6 +20,7 @@
 #include <cmath>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 using namespace matplot;

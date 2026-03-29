@@ -21,6 +21,7 @@
 #include <map>
 #include <string>
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "dynamics_model/forklift.hpp"
 #include "matplot/matplot.h"
 #include <random>
@@ -251,11 +252,8 @@ int main() {
     const auto& t_sol = solution.time_points;
 
     // Prepare trajectory data for plotting
-    std::vector<double> x_hist, y_hist;
-    for (const auto& state : X_sol) {
-        x_hist.push_back(state(0));
-        y_hist.push_back(state(1));
-    }
+    auto x_hist = cddp::example::extractComponent(X_sol, 0);
+    auto y_hist = cddp::example::extractComponent(X_sol, 1);
     
     // Forklift dimensions 
     double forklift_length = 2.5;  // Overall length
@@ -269,10 +267,7 @@ int main() {
 
     // Create directory for saving plots
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory))
-    {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Animation loop: update plot for each time step and save frame
     for (size_t i = 0; i < X_sol.size(); ++i)

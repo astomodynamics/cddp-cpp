@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <random>
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 
 #include "matplot/matplot.h"
 using namespace matplot;
@@ -157,9 +158,7 @@ int main() {
 
     // Create directory for plots if it doesn't exist
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Plot state trajectories using the matplot API
     plotStateTrajectories(X_sol, plotDirectory);

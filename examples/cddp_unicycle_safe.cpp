@@ -22,6 +22,7 @@
 #include <cstdlib>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 
 // Include matplot
 #include "matplot/matplot.h"
@@ -206,9 +207,7 @@ int main() {
 
     // Create directory for saving (if not existing)
     std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Save figure
     f1->draw();

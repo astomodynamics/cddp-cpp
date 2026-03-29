@@ -26,6 +26,7 @@
 #include <Eigen/Dense>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 using namespace matplot;
@@ -159,9 +160,7 @@ int main() {
 
     // Create plot directory
     const std::string plotDirectory = "../results/tests";
-    if (!std::filesystem::exists(plotDirectory)) {
-        std::filesystem::create_directory(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Extract state data arrays
     std::vector<double> x_arr, y_arr, z_arr, vx_arr, vy_arr, vz_arr, time_arr;

@@ -24,6 +24,7 @@
 #include <chrono>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 namespace fs = std::filesystem;
@@ -279,9 +280,7 @@ int main()
 
     // Save and show plot
     const std::string plotDirectory = "../results/examples";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
     save(plotDirectory + "/unicycle_mpc_cbf.png");
     std::cout << "Saved plot to " << plotDirectory << "/unicycle_mpc_cbf.png" << std::endl;
     show();

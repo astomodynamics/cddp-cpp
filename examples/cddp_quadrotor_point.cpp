@@ -20,6 +20,7 @@
 #include <cmath>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 using namespace matplot;
@@ -208,10 +209,7 @@ int main()
 
     // Create plot directory if it doesn't exist
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory))
-    {
-        fs::create_directory(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
     // Create a directory for frame images.
     (void)std::system("mkdir -p frames");
 

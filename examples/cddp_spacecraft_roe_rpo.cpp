@@ -22,6 +22,7 @@
 #include <matplot/matplot.h>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "dynamics_model/spacecraft_roe.hpp" // Added for SpacecraftROE
 namespace plt = matplot;
 

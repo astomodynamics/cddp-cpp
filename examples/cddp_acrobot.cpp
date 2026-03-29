@@ -22,6 +22,7 @@
 #include <thread>
 #include <numeric>
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "dynamics_model/acrobot.hpp"
 #include "matplot/matplot.h"
 
@@ -111,18 +112,12 @@ int main() {
     
     // Create plot directory
     const std::string plotDirectory = "../results/acrobot";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
     
     // Extract solution data for animation
-    std::vector<double> time_arr, theta1_arr, theta2_arr;
-    
-    for (size_t i = 0; i < X_sol.size(); ++i) {
-        time_arr.push_back(t_sol[i]);
-        theta1_arr.push_back(X_sol[i](0));
-        theta2_arr.push_back(X_sol[i](1));
-    }
+    const auto& time_arr = t_sol;
+    auto theta1_arr = cddp::example::extractComponent(X_sol, 0);
+    auto theta2_arr = cddp::example::extractComponent(X_sol, 1);
     
     // --- Animation ---
     auto fig = figure();

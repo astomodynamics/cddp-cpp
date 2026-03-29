@@ -21,6 +21,7 @@
 #include <chrono>
 #include <thread>
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 using namespace matplot;
@@ -98,11 +99,7 @@ int main() {
         std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
     
     // Set initial trajectory for the solver
-    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
-    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
-    for (int i = 0; i < horizon + 1; ++i) {
-        X[i] = initial_state;
-    }
+    auto [X, U] = cddp::example::makeInitialTrajectory(initial_state, horizon, control_dim);
     cddp_solver.setInitialTrajectory(X, U);
     
     // Solve the optimal control problem
@@ -112,26 +109,16 @@ int main() {
     
     // Create plot directory if it doesn't exist
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
     
     // -------------------- Data Extraction --------------------
-    std::vector<double> theta_arr, theta_dot_arr, torque_arr;
-    for (const auto& x : X_sol) {
-        theta_arr.push_back(x(0));
-        theta_dot_arr.push_back(x(1));
-    }
-    for (const auto& u : U_sol) {
-        torque_arr.push_back(u(0));
-    }
+    auto theta_arr = cddp::example::extractComponent(X_sol, 0);
+    auto theta_dot_arr = cddp::example::extractComponent(X_sol, 1);
+    auto torque_arr = cddp::example::extractComponent(U_sol, 0);
     
     // Build time vectors (state has horizon+1 points; control has horizon points)
-    std::vector<double> time_state, time_control;
-    for (size_t i = 0; i < theta_arr.size(); ++i)
-        time_state.push_back(i * timestep);
-    for (size_t i = 0; i < torque_arr.size(); ++i)
-        time_control.push_back(i * timestep);
+    auto time_state = cddp::example::makeTimeVector(X_sol.size(), timestep);
+    auto time_control = cddp::example::makeTimeVector(U_sol.size(), timestep);
     
     // -------------------- Static Plot --------------------
     auto fig1 = figure(true);
