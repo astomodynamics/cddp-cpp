@@ -17,7 +17,9 @@
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
 #include "cddp-cpp/cddp_core/constraint.hpp"
+#ifdef CDDP_HAS_MATPLOT
 #include <matplot/matplot.h>
+#endif
 #include <sys/stat.h>
 
 TEST(ControlConstraintTest, Evaluate) {
@@ -234,6 +236,7 @@ TEST(LinearConstraintTest, Evaluate) {
 }
 
 // New test case for LinearConstraint visualization
+#ifdef CDDP_HAS_MATPLOT
 TEST(LinearConstraintTest, Visualization) {
     namespace plt = matplot;
 
@@ -314,6 +317,7 @@ TEST(LinearConstraintTest, Visualization) {
     // plt::save(filename);
     // std::cout << "Saved linear constraint visualization to " << filename << std::endl;
 }
+#endif // CDDP_HAS_MATPLOT
 
 // New test suite for SecondOrderConeConstraint
 TEST(SecondOrderConeConstraintTest, Evaluate) {
@@ -394,6 +398,7 @@ TEST(SecondOrderConeConstraintTest, Gradients) {
 }
 
 // New test case for visualization
+#ifdef CDDP_HAS_MATPLOT
 TEST(SecondOrderConeConstraintTest, Visualization) {
     namespace plt = matplot;
 
@@ -527,6 +532,7 @@ TEST(SecondOrderConeConstraintTest, Visualization) {
     // plt::save(filename);
     // std::cout << "Saved cone visualization to " << filename << std::endl;
 }
+#endif // CDDP_HAS_MATPLOT
 
 TEST(BallConstraintTest, Hessians) {
     // Create a ball constraint with a radius of 2.0 and scale_factor 1.0

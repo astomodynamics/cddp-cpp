@@ -12,7 +12,9 @@
 #include <cmath>
 #include <iostream>
 #include <vector>
+#ifdef CDDP_HAS_MATPLOT
 #include <matplot/matplot.h>
+#endif
 
 #include "dynamics_model/spacecraft_roe.hpp"
 #include "dynamics_model/spacecraft_linear.hpp"

@@ -1,5 +1,7 @@
 #include <cmath>
+#ifdef CDDP_HAS_MATPLOT
 #include <matplot/matplot.h>
+#endif
 #include <gtest/gtest.h>
 
 TEST(MatplotTest, BasicPlot) {

@@ -21,3 +21,11 @@ pdf_images/
 
 # Solver output
 solver_snopt.out
+
+# Python / uv
+.venv/
+uv.lock
+*.egg-info/
+__pycache__/
+*.so
+*.pyd

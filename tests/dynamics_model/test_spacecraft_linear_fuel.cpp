@@ -27,8 +27,10 @@
 #include "dynamics_model/spacecraft_linear_fuel.hpp"
 #include "cddp.hpp"
 using namespace cddp;
+#ifdef CDDP_HAS_MATPLOT
 using namespace matplot;
 namespace plt = matplot;
+#endif
 
 TEST(SpacecraftLinearFuelTest, DiscreteDynamics) {
     // Create an SpacecraftLinearFuel instance

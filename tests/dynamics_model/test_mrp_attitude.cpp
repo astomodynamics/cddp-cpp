@@ -24,10 +24,14 @@
 #include "cddp-cpp/dynamics_model/mrp_attitude.hpp"
 #include "cddp-cpp/cddp_core/helper.hpp"
 
+#ifdef CDDP_HAS_MATPLOT
 #include "matplot/matplot.h"
+#endif
 
 using namespace cddp;
+#ifdef CDDP_HAS_MATPLOT
 using namespace matplot;
+#endif
 
 // Helper function for skew-symmetric matrix (double)
 Eigen::Matrix3d skew_double(const Eigen::Vector3d& v) {

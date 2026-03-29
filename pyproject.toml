@@ -1,0 +1,23 @@
+[build-system]
+requires = ["scikit-build-core>=0.8", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "pycddp"
+version = "0.1.0"
+description = "Python bindings for CDDP trajectory optimization"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.22"]
+
+[project.optional-dependencies]
+test = ["pytest>=7.0"]
+viz = ["matplotlib>=3.5"]
+
+[dependency-groups]
+dev = ["pytest>=7.0", "matplotlib>=3.5"]
+
+[tool.scikit-build]
+cmake.args = ["-DCDDP_CPP_BUILD_PYTHON=ON", "-DCDDP_CPP_BUILD_TESTS=OFF", "-DCDDP_CPP_BUILD_EXAMPLES=OFF", "-DCDDP_CPP_ENABLE_PLOTTING=OFF"]
+wheel.packages = ["python/pycddp"]

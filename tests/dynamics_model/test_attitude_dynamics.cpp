@@ -5,7 +5,9 @@
 #include "cddp_core/helper.hpp" // For attitude conversions
 #include <Eigen/Dense>
 #include <vector>
+#ifdef CDDP_HAS_MATPLOT
 #include <matplot/matplot.h> // For plotting
+#endif
 
 namespace cddp
 {
@@ -267,7 +269,9 @@ namespace cddp
             }
 
             // Plotting using matplotplusplus
+#ifdef CDDP_HAS_MATPLOT
             using namespace matplot;
+#endif
 
             // Extract angle components for plotting
             std::vector<double> yaw_mrp, pitch_mrp, roll_mrp;

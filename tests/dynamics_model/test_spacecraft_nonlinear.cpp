@@ -21,7 +21,9 @@
 #include <thread>
 #include <cmath>
 
+#ifdef CDDP_HAS_MATPLOT
 #include <matplot/matplot.h>
+#endif
 
 #include "gmock/gmock.h"
 #include "gtest/gtest.h"
@@ -167,7 +169,9 @@ TEST(SpacecraftNonlinearTest, AlfriendExample4_1_RelativeMotion) {
         FAIL() << "Simulation duration is less than one chief orbital period, cannot check periodicity.";
     }
 
+#ifdef CDDP_HAS_MATPLOT
     namespace plt = matplot;
+#endif
     std::vector<double> time_plot_data;
     std::vector<double> px_plot_data, py_plot_data, pz_plot_data;
 

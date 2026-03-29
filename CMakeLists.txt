@@ -43,6 +43,8 @@ endif()
 
 # Options
 option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
+option(CDDP_CPP_BUILD_EXAMPLES "Whether to build examples." ON)
+option(CDDP_CPP_ENABLE_PLOTTING "Enable matplotplusplus for visualization." ON)
 
 # CasADi Configuration
 option(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
@@ -92,14 +94,16 @@ endif()
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
 
-# Matplotplusplus
-FetchContent_Declare(matplotplusplus
-  GIT_REPOSITORY https://github.com/alandefreitas/matplotplusplus
-  GIT_TAG origin/master) # or whatever tag you want
-FetchContent_GetProperties(matplotplusplus)
-if(NOT matplotplusplus_POPULATED)
-    FetchContent_Populate(matplotplusplus)
-    add_subdirectory(${matplotplusplus_SOURCE_DIR} ${matplotplusplus_BINARY_DIR} EXCLUDE_FROM_ALL)
+# Matplotplusplus (optional)
+if(CDDP_CPP_ENABLE_PLOTTING)
+  FetchContent_Declare(matplotplusplus
+    GIT_REPOSITORY https://github.com/alandefreitas/matplotplusplus
+    GIT_TAG origin/master)
+  FetchContent_GetProperties(matplotplusplus)
+  if(NOT matplotplusplus_POPULATED)
+      FetchContent_Populate(matplotplusplus)
+      add_subdirectory(${matplotplusplus_SOURCE_DIR} ${matplotplusplus_BINARY_DIR} EXCLUDE_FROM_ALL)
+  endif()
 endif()
 
 # autodiff
@@ -172,16 +176,23 @@ set(dynamics_model_srcs
   src/dynamics_model/euler_attitude.cpp
 )
 
-add_library(${PROJECT_NAME} 
+add_library(${PROJECT_NAME}
   ${cddp_core_srcs}
   ${dynamics_model_srcs}
 )
 
-target_link_libraries(${PROJECT_NAME} 
+# Enable position-independent code (required for Python shared library linking)
+set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+target_link_libraries(${PROJECT_NAME}
   $<IF:$<BOOL:${Eigen3_FOUND}>,Eigen3::Eigen,>
-  matplot
   autodiff
-) 
+)
+
+if(CDDP_CPP_ENABLE_PLOTTING)
+  target_link_libraries(${PROJECT_NAME} matplot)
+  target_compile_definitions(${PROJECT_NAME} PUBLIC CDDP_HAS_MATPLOT)
+endif()
 
 if(NOT Eigen3_FOUND)
   target_include_directories(${PROJECT_NAME} PUBLIC ${EIGEN3_INCLUDE_DIRS})
@@ -258,11 +269,53 @@ if (CDDP_CPP_BUILD_TESTS)
 endif()
 
 # Build examples
-add_subdirectory(examples)
+if (CDDP_CPP_BUILD_EXAMPLES)
+  add_subdirectory(examples)
+endif()
 
-# Cmake compile commmand:
-# $ mkdir build
-# $ cd build
-# $ cmake -DCDDP_CPP_BUILD_TESTS=ON -DCDDP_CPP_CASADI=ON ..
-# $ make -j4
-# $ make test
+# Python bindings (optional)
+option(CDDP_CPP_BUILD_PYTHON "Build Python bindings" OFF)
+if(CDDP_CPP_BUILD_PYTHON)
+  add_subdirectory(python)
+endif()
+
+# Install targets
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+
+install(TARGETS ${PROJECT_NAME}
+  EXPORT cddpTargets
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(DIRECTORY include/cddp-cpp/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cddp-cpp
+  FILES_MATCHING PATTERN "*.hpp"
+)
+
+install(EXPORT cddpTargets
+  FILE cddpTargets.cmake
+  NAMESPACE cddp::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cddp
+)
+
+configure_package_config_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/cddpConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/cddpConfig.cmake
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cddp
+)
+
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/cddpConfigVersion.cmake
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/cddpConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cddpConfigVersion.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cddp
+)

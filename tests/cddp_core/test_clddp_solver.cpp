@@ -16,7 +16,9 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
+#ifdef CDDP_HAS_MATPLOT
 #include <matplot/matplot.h>
+#endif
 #include <sys/stat.h>
 #include <random>
 #include <cmath>

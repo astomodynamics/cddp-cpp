@@ -24,9 +24,13 @@
 #include "gtest/gtest.h"
 
 #include "cddp.hpp"
+#ifdef CDDP_HAS_MATPLOT
 #include "matplot/matplot.h"
+#endif
 
+#ifdef CDDP_HAS_MATPLOT
 using namespace matplot;
+#endif
 // namespace fs = std::filesystem;
 
 TEST(MSIPDDPTest, Solve) {

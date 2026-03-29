@@ -25,7 +25,9 @@
 #include "gtest/gtest.h"
 
 #include "dynamics_model/spacecraft_linear.hpp"
+#ifdef CDDP_HAS_MATPLOT
 #include "matplot/matplot.h"
+#endif
 
 using namespace cddp;
 
