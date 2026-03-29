@@ -260,16 +260,16 @@ int main()
     solver_ball.addPathConstraint("BallConstraint", std::make_unique<cddp::BallConstraint>(ball_radius, ball_center));
 
     // Initial trajectory guess (extract from solution)
-    auto initial_X = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto initial_U = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    const auto& initial_X = solution.state_trajectory;
+    const auto& initial_U = solution.control_trajectory;
     solver_ball.setInitialTrajectory(initial_X, initial_U);
     
     // Solve the problem (MSIPDDP, IPDDP)
     cddp::CDDPSolution solution_ball = solver_ball.solve("MSIPDDP");
 
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution_ball.at("time_points"));
+    const auto& X_sol = solution_ball.state_trajectory;
+    const auto& U_sol = solution_ball.control_trajectory;
+    const auto& t_sol = solution_ball.time_points;
 
     std::cout << "Final state = " << X_sol.back().transpose() << std::endl;
 

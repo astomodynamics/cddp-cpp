@@ -306,19 +306,13 @@ CDDPSolution CDDP::solve(const std::string &solver_type) {
   if (!solver_) {
     // Solver not found - return error solution
     CDDPSolution solution;
-    solution["solver_name"] = solver_type;
-    solution["status_message"] =
-        std::string("UnknownSolver - No solver registered for '") +
-        solver_type + "'";
-    solution["iterations_completed"] = 0;
-    solution["solve_time_ms"] = 0.0;
-    solution["final_objective"] = 0.0;
-    solution["final_step_length"] = 1.0;
-
-    // Add empty trajectories
-    solution["time_points"] = std::vector<double>();
-    solution["state_trajectory"] = std::vector<Eigen::VectorXd>();
-    solution["control_trajectory"] = std::vector<Eigen::VectorXd>();
+    solution.solver_name = solver_type;
+    solution.status_message =
+        "UnknownSolver - No solver registered for '" + solver_type + "'";
+    solution.iterations_completed = 0;
+    solution.solve_time_ms = 0.0;
+    solution.final_objective = 0.0;
+    solution.final_step_length = 1.0;
 
     if (options_.verbose) {
       std::cout << "Solver type '" << solver_type

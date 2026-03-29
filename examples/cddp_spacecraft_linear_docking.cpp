@@ -127,7 +127,7 @@ int main() {
     // Solve the unconstrained problem (e.g., using IPDDP)
     cddp::CDDPSolution initial_solution = cddp_solver_init.solve("IPDDP");
 
-    auto initial_states = std::any_cast<std::vector<Eigen::VectorXd>>(initial_solution.at("state_trajectory"));
+    const auto& initial_states = initial_solution.state_trajectory;
     if (initial_states.empty()) {
         std::cerr << "Failed to find an initial guess solution. Exiting." << std::endl;
         return 1;
@@ -172,8 +172,8 @@ int main() {
 
     // Initialize trajectory guess
     // Use the solution from the unconstrained solve as the initial guess
-    std::vector<Eigen::VectorXd> X_init = std::any_cast<std::vector<Eigen::VectorXd>>(initial_solution.at("state_trajectory"));
-    std::vector<Eigen::VectorXd> U_init = std::any_cast<std::vector<Eigen::VectorXd>>(initial_solution.at("control_trajectory"));
+    const auto& X_init = initial_solution.state_trajectory;
+    const auto& U_init = initial_solution.control_trajectory;
 
     // Assign the initial trajectory guess to the solver
     cddp_solver.setInitialTrajectory(X_init, U_init);
@@ -185,7 +185,7 @@ int main() {
     // =========================================================================
     // 3) Visualize the Trajectory
     // =========================================================================
-    auto solution_states = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+    const auto& solution_states = solution.state_trajectory;
     if (!solution_states.empty()) {
         namespace plt = matplot;
 

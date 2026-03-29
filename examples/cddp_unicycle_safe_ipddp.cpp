@@ -116,9 +116,9 @@ int main() {
 
     // Solve
     cddp::CDDPSolution solution_baseline = solver_baseline.solve(cddp::SolverType::MSIPDDP);
-    auto X_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_baseline.at("state_trajectory"));   // horizon+1
-    auto U_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_baseline.at("control_trajectory")); // horizon
-    auto T_baseline_sol = std::any_cast<std::vector<double>>(solution_baseline.at("time_points"));    // horizon+1
+    const auto& X_baseline_sol = solution_baseline.state_trajectory;   // horizon+1
+    const auto& U_baseline_sol = solution_baseline.control_trajectory; // horizon
+    const auto& T_baseline_sol = solution_baseline.time_points;    // horizon+1
 
     // --------------------------
     // 3. Solve - WITH Ball constraint (naive init)
@@ -148,9 +148,9 @@ int main() {
 
     // Solve
     cddp::CDDPSolution solution_ball = solver_ball.solve(cddp::SolverType::MSIPDDP);
-    auto X_ball_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("state_trajectory"));
-    auto U_ball_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("control_trajectory"));
-    auto T_ball_sol = std::any_cast<std::vector<double>>(solution_ball.at("time_points"));
+    const auto& X_ball_sol = solution_ball.state_trajectory;
+    const auto& U_ball_sol = solution_ball.control_trajectory;
+    const auto& T_ball_sol = solution_ball.time_points;
 
     // --------------------------
     // 4. Solve - WITH Ball constraint (baseline init)
@@ -178,9 +178,9 @@ int main() {
 
     // Solve
     cddp::CDDPSolution solution_ball_with_baseline = solver_ball_with_baseline.solve(cddp::SolverType::IPDDP);
-    auto X_ball_with_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball_with_baseline.at("state_trajectory"));
-    auto U_ball_with_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball_with_baseline.at("control_trajectory"));
-    auto T_ball_with_baseline_sol = std::any_cast<std::vector<double>>(solution_ball_with_baseline.at("time_points"));
+    const auto& X_ball_with_baseline_sol = solution_ball_with_baseline.state_trajectory;
+    const auto& U_ball_with_baseline_sol = solution_ball_with_baseline.control_trajectory;
+    const auto& T_ball_with_baseline_sol = solution_ball_with_baseline.time_points;
 
     // --------------------------
     // 5. Convert solutions to std::vectors for plotting

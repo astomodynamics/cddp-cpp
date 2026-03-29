@@ -330,10 +330,10 @@ namespace cddp
   void IPDDPSolver::populateSolverSpecificSolution(CDDPSolution &solution,
                                                     const CDDP &context)
   {
-    solution["final_barrier_parameter_mu"] = mu_;
-    solution["final_primal_infeasibility"] = context.inf_pr_;
-    solution["final_dual_infeasibility"] = context.inf_du_;
-    solution["final_complementary_infeasibility"] = context.inf_comp_;
+    solution.final_barrier_mu = mu_;
+    solution.final_primal_infeasibility = context.inf_pr_;
+    solution.final_dual_infeasibility = context.inf_du_;
+    solution.final_complementary_infeasibility = context.inf_comp_;
   }
 
   void IPDDPSolver::printIteration(int iter, const CDDP &context) const
@@ -1452,19 +1452,12 @@ namespace cddp
     std::cout << "           IPDDP Solution Summary\n";
     std::cout << "========================================\n";
 
-    auto iterations = std::any_cast<int>(solution.at("iterations_completed"));
-    auto solve_time = std::any_cast<double>(solution.at("solve_time_ms"));
-    auto final_cost = std::any_cast<double>(solution.at("final_objective"));
-    auto status = std::any_cast<std::string>(solution.at("status_message"));
-    auto final_mu =
-        std::any_cast<double>(solution.at("final_barrier_parameter_mu"));
-
-    std::cout << "Status: " << status << "\n";
-    std::cout << "Iterations: " << iterations << "\n";
-    std::cout << "Solve Time: " << std::setprecision(2) << solve_time << " ms\n";
-    std::cout << "Final Cost: " << std::setprecision(6) << final_cost << "\n";
+    std::cout << "Status: " << solution.status_message << "\n";
+    std::cout << "Iterations: " << solution.iterations_completed << "\n";
+    std::cout << "Solve Time: " << std::setprecision(2) << solution.solve_time_ms << " ms\n";
+    std::cout << "Final Cost: " << std::setprecision(6) << solution.final_objective << "\n";
     std::cout << "Final Barrier μ: " << std::setprecision(2) << std::scientific
-              << final_mu << "\n";
+              << solution.final_barrier_mu << "\n";
     std::cout << "========================================\n\n";
   }
 

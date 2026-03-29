@@ -118,8 +118,8 @@ int main() {
 
     // Solve
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP);
-    X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory")); 
-    U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    X_sol = solution.state_trajectory; 
+    U_sol = solution.control_trajectory;
 
     // -------------------------------------------------
     // 3. Prepare Data for Plotting

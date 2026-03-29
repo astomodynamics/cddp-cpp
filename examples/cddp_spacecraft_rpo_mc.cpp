@@ -231,9 +231,9 @@ int main()
         // Solve the Trajectory Optimization Problem
         cddp::CDDPSolution solution = cddp_solver.solve("MSIPDDP");
 
-        auto state_trajectory = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-        auto control_trajectory = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-        bool converged = std::any_cast<bool>(solution.at("converged"));
+        const auto& state_trajectory = solution.state_trajectory;
+        const auto& control_trajectory = solution.control_trajectory;
+        bool converged = (solution.status_message == "OptimalSolutionFound" || solution.status_message == "AcceptableSolutionFound");
         
         if (!state_trajectory.empty() && !control_trajectory.empty() && converged)
         {

@@ -241,8 +241,8 @@ int main()
     cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
     // Extract the solution
-    std::vector<Eigen::VectorXd> X_solution = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    std::vector<Eigen::VectorXd> U_solution = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    const auto& X_solution = solution.state_trajectory;
+    const auto& U_solution = solution.control_trajectory;
 
     if (!X_solution.empty() && !U_solution.empty())
     {

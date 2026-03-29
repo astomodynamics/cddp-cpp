@@ -147,13 +147,13 @@ int main() {
     // Alternatively: cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::LogDDP);
 
     // Extract solution trajectories
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
-    auto cost_sequence = std::any_cast<std::vector<double>>(solution.at("cost_trajectory"));
-    auto iterations = std::any_cast<int>(solution.at("iterations"));
-    auto converged = std::any_cast<bool>(solution.at("converged"));
-    auto solve_time = std::any_cast<long long>(solution.at("solve_time"));
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
+    const auto& t_sol = solution.time_points;
+    const auto& cost_sequence = solution.history.objective;
+    auto iterations = solution.iterations_completed;
+    bool converged = (solution.status_message == "OptimalSolutionFound" || solution.status_message == "AcceptableSolutionFound");
+    auto solve_time = static_cast<long long>(solution.solve_time_ms);
 
     // Create directory for plots if it doesn't exist
     const std::string plotDirectory = "../results/tests";

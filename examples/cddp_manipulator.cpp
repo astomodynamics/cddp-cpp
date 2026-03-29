@@ -89,9 +89,9 @@ int main() {
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::CLDDP);
 
     // -------------------- Extract Trajectories for Static Plots --------------------
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
+    const auto& t_sol = solution.time_points;
     
     std::vector<double> time;     // for state trajectories
     std::vector<double> time_ctrl; // for control trajectories

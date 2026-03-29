@@ -1,0 +1,50 @@
+{
+  "tools": {
+    "bash": {
+      "disabled_commands": [
+        "sudo",
+        "su",
+        "passwd",
+        "usermod",
+        "groupmod",
+        "adduser",
+        "useradd",
+        "deluser",
+        "userdel",
+        "chown",
+        "chmod",
+        "mount",
+        "umount",
+        "systemctl",
+        "service",
+        "apt",
+        "apt-get",
+        "dpkg",
+        "snap",
+        "pip install --system",
+        "npm install -g"
+      ]
+    }
+  },
+  "security": {
+    "restrict_privileged_operations": true,
+    "sandbox_mode": true,
+    "allowed_patterns": [
+      "sudo chown .*github/cddp-cpp.*",
+      "sudo mkdir -p .*github/cddp-cpp.*",
+      "sudo chmod .*github/cddp-cpp.*",
+      "pip install --user .*",
+      "pip install --target .*",
+      "pip install --prefix .*",
+      "pip3 install --user .*",
+      "pip3 install --target .*",
+      "pip3 install --prefix .*",
+      "apt search .*",
+      "apt show .*",
+      "apt list .*",
+      "apt-get update",
+      "npm install .*",
+      "docker exec .*"
+    ]
+  }
+}

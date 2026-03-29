@@ -172,14 +172,14 @@ int main()
         cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
 
         // Extract and apply the first control
-        auto status = std::any_cast<std::string>(solution.at("status_message"));
+        const auto& status = solution.status_message;
         if (status != "OptimalSolutionFound" && status != "AcceptableSolutionFound")
         {
             std::cerr << "Warning: Solver did not converge at step " << k << ". Status: " << status << std::endl;
             // Handle non-convergence, e.g., by applying zero control or previous control
         }
 
-        auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+        const auto& U_sol = solution.control_trajectory;
         Eigen::VectorXd control_to_apply = U_sol[0];
         
         // Propagate system dynamics
@@ -192,7 +192,7 @@ int main()
         time_history.push_back(current_time);
 
         // Warm start for the next iteration: shift the solution
-        auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
+        const auto& X_sol = solution.state_trajectory;
         for(int i = 0; i < mpc_horizon -1; ++i)
         {
             X_guess[i] = X_sol[i+1];

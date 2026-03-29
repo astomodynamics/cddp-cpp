@@ -82,9 +82,9 @@ int main() {
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::CLDDP);
 
     // Extract solution
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory")); // size: horizon + 1
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory")); // size: horizon
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points")); // size: horizon + 1
+    const auto& X_sol = solution.state_trajectory; // size: horizon + 1
+    const auto& U_sol = solution.control_trajectory; // size: horizon
+    const auto& t_sol = solution.time_points; // size: horizon + 1
 
     // Create directory for saving plot (if it doesn't exist)
     const std::string plotDirectory = "../results/tests";

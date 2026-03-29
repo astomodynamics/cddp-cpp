@@ -278,9 +278,9 @@ void LogDDPSolver::recordIterationHistory(const CDDP &context) {
 
 void LogDDPSolver::populateSolverSpecificSolution(CDDPSolution &solution,
                                                   const CDDP &context) {
-  solution["final_barrier_parameter_mu"] = mu_;
-  solution["final_primal_infeasibility"] = constraint_violation_;
-  solution["final_dual_infeasibility"] = context.inf_du_;
+  solution.final_barrier_mu = mu_;
+  solution.final_primal_infeasibility = constraint_violation_;
+  solution.final_dual_infeasibility = context.inf_du_;
 }
 
 void LogDDPSolver::printIteration(int iter, const CDDP &context) const {

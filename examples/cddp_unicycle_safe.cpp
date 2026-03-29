@@ -103,7 +103,7 @@ int main() {
 
     // Solve
     cddp::CDDPSolution solution_baseline = solver_baseline.solve(cddp::SolverType::IPDDP);
-    auto X_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_baseline.at("state_trajectory")); // size horizon + 1
+    const auto& X_baseline_sol = solution_baseline.state_trajectory; // size horizon + 1
 
     // -------------------------------------------------------
     // 3. Solve with BallConstraint
@@ -133,7 +133,7 @@ int main() {
 
     // Solve
     cddp::CDDPSolution solution_ball = solver_ball.solve(cddp::SolverType::IPDDP);
-    auto X_ball_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("state_trajectory"));  // horizon+1
+    const auto& X_ball_sol = solution_ball.state_trajectory;  // horizon+1
 
     // -------------------------------------------------------
     // 4. Prepare Data for Plotting

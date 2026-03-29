@@ -146,11 +146,11 @@ int main() {
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::CLDDP);
 
     // Extract solution and print result
-    auto cost_sequence = std::any_cast<std::vector<double>>(solution.at("cost_trajectory"));
+    const auto& cost_sequence = solution.history.objective;
     double J_final = cost_sequence.back();
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
+    const auto& t_sol = solution.time_points;
     
     std::cout << "\n[Result] CDDP solved." << std::endl;
     std::cout << "[Result] Final cost: " << J_final << std::endl;

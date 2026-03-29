@@ -123,10 +123,10 @@ TEST(LogDDPTest, SolvePendulum)
     cddp::CDDPSolution solution = cddp_solver.solve("LogDDP");
 
     // Check convergence
-    auto status_message = std::any_cast<std::string>(solution.at("status_message"));
-    auto iterations_completed = std::any_cast<int>(solution.at("iterations_completed"));
-    auto solve_time_ms = std::any_cast<double>(solution.at("solve_time_ms"));
-    auto final_objective = std::any_cast<double>(solution.at("final_objective"));
+    const auto& status_message = solution.status_message;
+    auto iterations_completed = solution.iterations_completed;
+    auto solve_time_ms = solution.solve_time_ms;
+    auto final_objective = solution.final_objective;
 
     std::cout << "\n=== Convergence Analysis ===" << std::endl;
     std::cout << "Status: " << status_message << std::endl;
@@ -136,9 +136,9 @@ TEST(LogDDPTest, SolvePendulum)
     std::cout << "Final cost: " << final_objective << std::endl;
 
     // Extract trajectories
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
+    const auto& t_sol = solution.time_points;
 
     // Print final state
     Eigen::VectorXd final_state = X_sol.back();
@@ -192,10 +192,10 @@ TEST(LogDDPTest, SolvePendulum)
     auto warm_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
     // Extract warm start results
-    auto warm_status = std::any_cast<std::string>(warm_solution.at("status_message"));
-    auto warm_iterations = std::any_cast<int>(warm_solution.at("iterations_completed"));
-    auto warm_solve_time = std::any_cast<double>(warm_solution.at("solve_time_ms"));
-    auto warm_final_cost = std::any_cast<double>(warm_solution.at("final_objective"));
+    const auto& warm_status = warm_solution.status_message;
+    auto warm_iterations = warm_solution.iterations_completed;
+    auto warm_solve_time = warm_solution.solve_time_ms;
+    auto warm_final_cost = warm_solution.final_objective;
 
     std::cout << "Warm start status: " << warm_status << std::endl;
     std::cout << "Warm start iterations: " << warm_iterations << std::endl;
@@ -295,13 +295,13 @@ TEST(LogDDPTest, SolveUnicycle) {
     cddp::CDDPSolution solution = cddp_solver.solve("LogDDP");
     // cddp::CDDPSolution solution = cddp_solver.solveLogDDP();
 
-    auto status = std::any_cast<std::string>(solution.at("status_message"));
+    const auto& status = solution.status_message;
     ASSERT_TRUE(status == "OptimalSolutionFound" || status == "AcceptableSolutionFound");
 
     // Extract solution
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory")); // size: horizon + 1
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory")); // size: horizon
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points")); // size: horizon + 1
+    const auto& X_sol = solution.state_trajectory; // size: horizon + 1
+    const auto& U_sol = solution.control_trajectory; // size: horizon
+    const auto& t_sol = solution.time_points; // size: horizon + 1
 }
 
 namespace cddp
@@ -455,10 +455,10 @@ TEST(LogDDPTest, SolveCar)
     cddp::CDDPSolution solution = cddp_solver.solve("LogDDP");
 
     // Check convergence
-    auto status_message = std::any_cast<std::string>(solution.at("status_message"));
-    auto iterations_completed = std::any_cast<int>(solution.at("iterations_completed"));
-    auto solve_time_ms = std::any_cast<double>(solution.at("solve_time_ms"));
-    auto final_objective = std::any_cast<double>(solution.at("final_objective"));
+    const auto& status_message = solution.status_message;
+    auto iterations_completed = solution.iterations_completed;
+    auto solve_time_ms = solution.solve_time_ms;
+    auto final_objective = solution.final_objective;
 
     std::cout << "\n=== Convergence Analysis ===" << std::endl;
     std::cout << "Status: " << status_message << std::endl;
@@ -469,9 +469,9 @@ TEST(LogDDPTest, SolveCar)
     std::cout << "Final cost: " << final_objective << std::endl;
 
     // Extract trajectories
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
+    const auto& t_sol = solution.time_points;
 
     // Print final state
     Eigen::VectorXd final_state = X_sol.back();
@@ -520,10 +520,10 @@ TEST(LogDDPTest, SolveCar)
     auto warm_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
     // Extract warm start results
-    auto warm_status = std::any_cast<std::string>(warm_solution.at("status_message"));
-    auto warm_iterations = std::any_cast<int>(warm_solution.at("iterations_completed"));
-    auto warm_solve_time = std::any_cast<double>(warm_solution.at("solve_time_ms"));
-    auto warm_final_cost = std::any_cast<double>(warm_solution.at("final_objective"));
+    const auto& warm_status = warm_solution.status_message;
+    auto warm_iterations = warm_solution.iterations_completed;
+    auto warm_solve_time = warm_solution.solve_time_ms;
+    auto warm_final_cost = warm_solution.final_objective;
 
     std::cout << "Warm start status: " << warm_status << std::endl;
     std::cout << "Warm start iterations: " << warm_iterations << std::endl;
@@ -720,10 +720,10 @@ TEST(LogDDPTest, SolveQuadrotor)
     cddp::CDDPSolution solution = cddp_solver.solve("LogDDP");
 
     // Check convergence
-    auto status_message = std::any_cast<std::string>(solution.at("status_message"));
-    auto iterations_completed = std::any_cast<int>(solution.at("iterations_completed"));
-    auto solve_time_ms = std::any_cast<double>(solution.at("solve_time_ms"));
-    auto final_objective = std::any_cast<double>(solution.at("final_objective"));
+    const auto& status_message = solution.status_message;
+    auto iterations_completed = solution.iterations_completed;
+    auto solve_time_ms = solution.solve_time_ms;
+    auto final_objective = solution.final_objective;
 
     std::cout << "\n=== Quadrotor Convergence Analysis ===" << std::endl;
     std::cout << "Status: " << status_message << std::endl;
@@ -733,9 +733,9 @@ TEST(LogDDPTest, SolveQuadrotor)
     std::cout << "Final cost: " << final_objective << std::endl;
 
     // Extract trajectories
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
+    const auto& t_sol = solution.time_points;
 
     // Print final state
     Eigen::VectorXd final_state = X_sol.back();
@@ -803,10 +803,10 @@ TEST(LogDDPTest, SolveQuadrotor)
     auto warm_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
     // Extract warm start results
-    auto warm_status = std::any_cast<std::string>(warm_solution.at("status_message"));
-    auto warm_iterations = std::any_cast<int>(warm_solution.at("iterations_completed"));
-    auto warm_solve_time = std::any_cast<double>(warm_solution.at("solve_time_ms"));
-    auto warm_final_cost = std::any_cast<double>(warm_solution.at("final_objective"));
+    const auto& warm_status = warm_solution.status_message;
+    auto warm_iterations = warm_solution.iterations_completed;
+    auto warm_solve_time = warm_solution.solve_time_ms;
+    auto warm_final_cost = warm_solution.final_objective;
 
     std::cout << "Warm start status: " << warm_status << std::endl;
     std::cout << "Warm start iterations: " << warm_iterations << std::endl;

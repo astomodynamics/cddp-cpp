@@ -107,8 +107,8 @@ int main() {
     
     // Solve the optimal control problem
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP);
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
     
     // Create plot directory if it doesn't exist
     const std::string plotDirectory = "../results/tests";

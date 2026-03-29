@@ -127,8 +127,8 @@ int main() {
 
     // Solve
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP);
-    X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    X_sol = solution.state_trajectory;
+    U_sol = solution.control_trajectory;
 
     // Add this line to check the actual starting state in the solution
     std::cout << "Actual starting state in solution: " << X_sol[0].transpose() << std::endl;

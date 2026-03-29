@@ -64,10 +64,10 @@ CDDPSolution CDDPSolverBase::solve(CDDP &context) {
 
   // Prepare solution
   CDDPSolution solution;
-  solution["solver_name"] = getSolverName();
-  solution["status_message"] = std::string("Running");
-  solution["iterations_completed"] = 0;
-  solution["solve_time_ms"] = 0.0;
+  solution.solver_name = getSolverName();
+  solution.status_message = "Running";
+  solution.iterations_completed = 0;
+  solution.solve_time_ms = 0.0;
 
   // Initialize history
   if (options.return_iteration_info) {
@@ -176,31 +176,29 @@ CDDPSolution CDDPSolverBase::solve(CDDP &context) {
       end_time - start_time);
 
   // Populate common solution fields
-  solution["status_message"] = termination_reason;
-  solution["iterations_completed"] = iter;
-  solution["solve_time_ms"] = static_cast<double>(duration.count());
-  solution["final_objective"] = context.cost_;
-  solution["final_step_length"] = context.alpha_pr_;
-  solution["time_points"] = buildTimePoints(context);
-  solution["state_trajectory"] = context.X_;
-  solution["control_trajectory"] = context.U_;
-  solution["control_feedback_gains_K"] = K_u_;
-  solution["final_regularization"] = context.regularization_;
+  solution.status_message = termination_reason;
+  solution.iterations_completed = iter;
+  solution.solve_time_ms = static_cast<double>(duration.count());
+  solution.final_objective = context.cost_;
+  solution.final_step_length = context.alpha_pr_;
+  solution.time_points = buildTimePoints(context);
+  solution.state_trajectory = context.X_;
+  solution.control_trajectory = context.U_;
+  solution.feedback_gains = K_u_;
+  solution.final_regularization = context.regularization_;
 
   // Add iteration history if requested
   if (options.return_iteration_info) {
-    solution["history_objective"] = history_.objective;
-    solution["history_merit_function"] = history_.merit_function;
-    solution["history_step_length_primal"] = history_.step_length_primal;
-    solution["history_step_length_dual"] = history_.step_length_dual;
-    solution["history_dual_infeasibility"] = history_.dual_infeasibility;
-    solution["history_primal_infeasibility"] = history_.primal_infeasibility;
-    solution["history_complementary_infeasibility"] =
+    solution.history.objective = history_.objective;
+    solution.history.merit_function = history_.merit_function;
+    solution.history.step_length_primal = history_.step_length_primal;
+    solution.history.step_length_dual = history_.step_length_dual;
+    solution.history.dual_infeasibility = history_.dual_infeasibility;
+    solution.history.primal_infeasibility = history_.primal_infeasibility;
+    solution.history.complementary_infeasibility =
         history_.complementary_infeasibility;
-    solution["history_barrier_mu"] = history_.barrier_mu;
-    std::map<std::string, std::vector<double>> history_regularization_map;
-    history_regularization_map["control"] = history_.regularization;
-    solution["history_regularization"] = history_regularization_map;
+    solution.history.barrier_mu = history_.barrier_mu;
+    solution.history.regularization = history_.regularization;
   }
 
   // Solver-specific solution fields
@@ -255,15 +253,10 @@ void CDDPSolverBase::printSolutionSummary(const CDDPSolution &solution) const {
   std::cout << "       " << getSolverName() << " Solution Summary\n";
   std::cout << "========================================\n";
 
-  auto iterations = std::any_cast<int>(solution.at("iterations_completed"));
-  auto solve_time = std::any_cast<double>(solution.at("solve_time_ms"));
-  auto final_cost = std::any_cast<double>(solution.at("final_objective"));
-  auto status = std::any_cast<std::string>(solution.at("status_message"));
-
-  std::cout << "Status: " << status << "\n";
-  std::cout << "Iterations: " << iterations << "\n";
-  std::cout << "Solve Time: " << std::setprecision(2) << solve_time << " ms\n";
-  std::cout << "Final Cost: " << std::setprecision(6) << final_cost << "\n";
+  std::cout << "Status: " << solution.status_message << "\n";
+  std::cout << "Iterations: " << solution.iterations_completed << "\n";
+  std::cout << "Solve Time: " << std::setprecision(2) << solution.solve_time_ms << " ms\n";
+  std::cout << "Final Cost: " << std::setprecision(6) << solution.final_objective << "\n";
   std::cout << "========================================\n\n";
 }
 
