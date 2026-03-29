@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <random>
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 
 #include "matplot/matplot.h"
 using namespace matplot;
@@ -147,19 +148,15 @@ int main() {
     // Alternatively: cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::LogDDP);
 
     // Extract solution trajectories
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
-    auto cost_sequence = std::any_cast<std::vector<double>>(solution.at("cost_trajectory"));
-    auto iterations = std::any_cast<int>(solution.at("iterations"));
-    auto converged = std::any_cast<bool>(solution.at("converged"));
-    auto solve_time = std::any_cast<long long>(solution.at("solve_time"));
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
+    const auto& t_sol = solution.time_points;
+    auto iterations = solution.iterations_completed;
+    bool converged = (solution.status_message == "OptimalSolutionFound" || solution.status_message == "AcceptableSolutionFound");
 
     // Create directory for plots if it doesn't exist
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Plot state trajectories using the matplot API
     plotStateTrajectories(X_sol, plotDirectory);
@@ -167,9 +164,9 @@ int main() {
     // Print optimization statistics
     std::cout << "\nOptimization Results:" << std::endl;
     std::cout << "Iterations: " << iterations << std::endl;
-    std::cout << "Final cost: " << cost_sequence.back() << std::endl;
+    std::cout << "Final cost: " << solution.final_objective << std::endl;
     std::cout << "Converged: " << (converged ? "Yes" : "No") << std::endl;
-    std::cout << "Solve time: " << solve_time << " microseconds" << std::endl;
+    std::cout << "Solve time: " << solution.solve_time_ms << " ms" << std::endl;
 
     return 0;
 }

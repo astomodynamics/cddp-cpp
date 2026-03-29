@@ -18,6 +18,7 @@
 #include <filesystem>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 using namespace matplot;
@@ -82,30 +83,22 @@ int main() {
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::CLDDP);
 
     // Extract solution
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory")); // size: horizon + 1
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory")); // size: horizon
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points")); // size: horizon + 1
+    const auto& X_sol = solution.state_trajectory; // size: horizon + 1
+    const auto& U_sol = solution.control_trajectory; // size: horizon
+    const auto& t_sol = solution.time_points; // size: horizon + 1
 
     // Create directory for saving plot (if it doesn't exist)
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directory(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Plot the solution (x-y plane)
-    std::vector<double> x_arr, y_arr, theta_arr;
-    for (const auto& x : X_sol) {
-        x_arr.push_back(x(0));
-        y_arr.push_back(x(1));
-        theta_arr.push_back(x(2));
-    }
+    auto x_arr = cddp::example::extractComponent(X_sol, 0);
+    auto y_arr = cddp::example::extractComponent(X_sol, 1);
+    auto theta_arr = cddp::example::extractComponent(X_sol, 2);
 
     // Plot the solution (control inputs)
-    std::vector<double> v_arr, omega_arr;
-    for (const auto& u : U_sol) {
-        v_arr.push_back(u(0));
-        omega_arr.push_back(u(1));
-    }
+    auto v_arr = cddp::example::extractComponent(U_sol, 0);
+    auto omega_arr = cddp::example::extractComponent(U_sol, 1);
 
     // -----------------------------
     // Plot states and controls

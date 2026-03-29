@@ -124,10 +124,10 @@ int main()
             cddp::CDDPSolution solution = cddp_solver.solve(solver_name);
             
             // Print results
-            auto status_message = std::any_cast<std::string>(solution.at("status_message"));
-            auto iterations = std::any_cast<int>(solution.at("iterations_completed"));
-            auto solve_time = std::any_cast<double>(solution.at("solve_time_ms"));
-            auto final_cost = std::any_cast<double>(solution.at("final_objective"));
+            const auto& status_message = solution.status_message;
+            auto iterations = solution.iterations_completed;
+            auto solve_time = solution.solve_time_ms;
+            auto final_cost = solution.final_objective;
             
             std::cout << "Status: " << status_message << "\n";
             std::cout << "Iterations: " << iterations << "\n";
@@ -135,12 +135,7 @@ int main()
             std::cout << "Solve time: " << solve_time << " ms\n";
             
             // Extract final barrier parameter
-            try {
-                double final_mu = std::any_cast<double>(solution.at("final_barrier_parameter_mu"));
-                std::cout << "Final barrier μ: " << final_mu << "\n";
-            } catch (const std::exception& e) {
-                std::cout << "Final barrier μ: Not available\n";
-            }
+            std::cout << "Final barrier μ: " << solution.final_barrier_mu << "\n";
         }
     }
     

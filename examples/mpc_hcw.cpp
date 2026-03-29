@@ -21,6 +21,7 @@
 #include <Eigen/Dense>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 
 #include "matplot/matplot.h"
 using namespace matplot;
@@ -260,11 +261,11 @@ int main() {
                 cddp::CDDPSolution sol = cddp_solver.solve();
                 
                 // Extract the *first* control from that horizon
-                auto control_traj = std::any_cast<std::vector<Eigen::VectorXd>>(sol.at("control_trajectory"));
+                const auto& control_traj = sol.control_trajectory;
                 current_u = control_traj[0];
 
-                auto X_sequence = std::any_cast<std::vector<Eigen::VectorXd>>(sol.at("state_trajectory"));
-                auto U_sequence = std::any_cast<std::vector<Eigen::VectorXd>>(sol.at("control_trajectory"));
+                const auto& X_sequence = sol.state_trajectory;
+                const auto& U_sequence = sol.control_trajectory;
 
                 cddp_solver.setInitialTrajectory(X_sequence, U_sequence);
             }
@@ -320,9 +321,7 @@ int main() {
 
         // Create results directory
         const std::string plotDirectory = "../results/simulations";
-        if (!fs::exists(plotDirectory)) {
-            fs::create_directories(plotDirectory);
-        }
+        cddp::example::ensurePlotDir(plotDirectory);
         std::string figPath = plotDirectory + "/hcw_mpc_cddp_xaxis_trajectories.png";
         save(figPath);
         // show();
@@ -375,10 +374,7 @@ int main() {
         }
         // Create results directory
         const std::string plotDirectory = "../results/simulations";
-        if (!fs::exists(plotDirectory
-        )) {
-            fs::create_directories(plotDirectory);
-        }
+        cddp::example::ensurePlotDir(plotDirectory);
         std::string figPath = plotDirectory + "/hcw_mpc_cddp_controls.png";
         save(figPath);
         // show();

@@ -19,6 +19,7 @@
 #include <random>
 #include <cmath>
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 using namespace matplot;
@@ -251,17 +252,13 @@ int main()
     // ========================================
 
     // Extract solution trajectories
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
+    const auto& t_sol = solution.time_points;
 
     // Prepare trajectory data
-    std::vector<double> x_hist, y_hist;
-    for (const auto &x : X_sol)
-    {
-        x_hist.push_back(x(0));
-        y_hist.push_back(x(1));
-    }
+    auto x_hist = cddp::example::extractComponent(X_sol, 0);
+    auto y_hist = cddp::example::extractComponent(X_sol, 1);
 
     // Car dimensions.
     double car_length = 2.1;
@@ -275,10 +272,7 @@ int main()
 
     // Create directory for saving plots
     const std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory))
-    {
-        fs::create_directory(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Create a directory for frame images.
     (void) std::system("mkdir -p frames");

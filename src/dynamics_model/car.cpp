@@ -121,10 +121,7 @@ std::vector<Eigen::MatrixXd> Car::getStateHessian(
     VectorXdual2nd control_dual = control.cast<autodiff::dual2nd>();
     
     // Initialize Hessians
-    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
-    }
+    auto hessians = makeZeroTensor(STATE_DIM, STATE_DIM, STATE_DIM);
 
     // Calculate Hessians using autodiff
     for (int i = 0; i < STATE_DIM; ++i) {
@@ -152,10 +149,7 @@ std::vector<Eigen::MatrixXd> Car::getControlHessian(
     VectorXdual2nd control_dual = control.cast<autodiff::dual2nd>();
     
     // Initialize Hessians
-    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
-    }
+    auto hessians = makeZeroTensor(STATE_DIM, CONTROL_DIM, CONTROL_DIM);
 
     // Calculate Hessians using autodiff
     for (int i = 0; i < STATE_DIM; ++i) {

@@ -125,6 +125,11 @@ public:
   double getTimestep() const { return timestep_; }
   std::string getIntegrationType() const { return integration_type_; }
 
+  // Utility: create a vector of zero matrices (for Hessian tensors)
+  static std::vector<Eigen::MatrixXd> makeZeroTensor(int count, int rows, int cols) {
+    return std::vector<Eigen::MatrixXd>(count, Eigen::MatrixXd::Zero(rows, cols));
+  }
+
 protected:
   int state_dim_;
   int control_dim_;

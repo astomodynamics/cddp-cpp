@@ -22,6 +22,7 @@
 #include <cstdlib>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 
 // Include matplot
 #include "matplot/matplot.h"
@@ -103,7 +104,7 @@ int main() {
 
     // Solve
     cddp::CDDPSolution solution_baseline = solver_baseline.solve(cddp::SolverType::IPDDP);
-    auto X_baseline_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_baseline.at("state_trajectory")); // size horizon + 1
+    const auto& X_baseline_sol = solution_baseline.state_trajectory; // size horizon + 1
 
     // -------------------------------------------------------
     // 3. Solve with BallConstraint
@@ -133,7 +134,7 @@ int main() {
 
     // Solve
     cddp::CDDPSolution solution_ball = solver_ball.solve(cddp::SolverType::IPDDP);
-    auto X_ball_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution_ball.at("state_trajectory"));  // horizon+1
+    const auto& X_ball_sol = solution_ball.state_trajectory;  // horizon+1
 
     // -------------------------------------------------------
     // 4. Prepare Data for Plotting
@@ -206,9 +207,7 @@ int main() {
 
     // Create directory for saving (if not existing)
     std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Save figure
     f1->draw();

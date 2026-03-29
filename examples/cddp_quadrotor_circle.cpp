@@ -20,6 +20,7 @@
 #include <cmath>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 using namespace matplot;
@@ -244,9 +245,9 @@ int main()
 
     // Solve the optimal control problem (LogDDP, IPDDP, MSIPDDP)
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::MSIPDDP);
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
+    const auto& t_sol = solution.time_points;
 
     std::cout << "Final state: " << X_sol.back().transpose() << std::endl;
 

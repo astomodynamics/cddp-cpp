@@ -90,10 +90,7 @@ Eigen::MatrixXd Unicycle::getControlJacobian(
 std::vector<Eigen::MatrixXd> Unicycle::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
-    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
-    }
+    auto hessians = makeZeroTensor(STATE_DIM, STATE_DIM, STATE_DIM);
     
     // Non-zero elements
     // Hessian of x w.r.t. theta twice
@@ -110,10 +107,7 @@ std::vector<Eigen::MatrixXd> Unicycle::getStateHessian(
 std::vector<Eigen::MatrixXd> Unicycle::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
-    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
-    }
+    auto hessians = makeZeroTensor(STATE_DIM, CONTROL_DIM, CONTROL_DIM);
     
     // No non-zero terms in control Hessian for this model
     

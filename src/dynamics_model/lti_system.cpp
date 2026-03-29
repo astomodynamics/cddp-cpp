@@ -95,10 +95,7 @@ std::vector<Eigen::MatrixXd> LTISystem::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // State Hessian is zero for linear system
-    std::vector<Eigen::MatrixXd> hessians(state_dim_);
-    for (int i = 0; i < state_dim_; ++i) {
-        hessians[i] = Eigen::MatrixXd::Zero(state_dim_, state_dim_);
-    }
+    auto hessians = makeZeroTensor(state_dim_, state_dim_, state_dim_);
     return hessians;
 }
 
@@ -106,10 +103,7 @@ std::vector<Eigen::MatrixXd> LTISystem::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // Control Hessian is zero for linear system
-    std::vector<Eigen::MatrixXd> hessians(state_dim_);
-    for (int i = 0; i < state_dim_; ++i) {
-        hessians[i] = Eigen::MatrixXd::Zero(control_dim_, control_dim_);
-    }
+    auto hessians = makeZeroTensor(state_dim_, control_dim_, control_dim_);
     return hessians;
 }
 

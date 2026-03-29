@@ -17,7 +17,6 @@
 #define CDDP_CDDP_CORE_HPP
 
 #include <Eigen/Dense>
-#include <any> // For std::any
 #include <future>
 #include <iomanip>  // For std::setw
 #include <iostream> // For std::cout, std::cerr
@@ -50,76 +49,58 @@ enum class SolverType {
 };
 
 /**
- * @brief Solution data from the CDDP solver, as a map of string keys to
- * `std::any` values.
- *
- * Retrieve values using `std::any_cast<Type>(solution.at("key"))`.
- * Always check `solution.count("key")` before `.at()` to prevent
- * `std::out_of_range`. Handle `std::bad_any_cast` for type mismatches. Optional
- * keys are present only if computed by the specific solver.
- *
- * --- General Information ---
- * - "solver_name":                   std::string (Name of the solver used,
- * e.g., "IPDDP")
- * - "status_message":                std::string (Termination status; possible
- * values:) • "OptimalSolutionFound" - Converged to optimal solution •
- * "AcceptableSolutionFound" - Reached cost tolerance limit •
- * "MaxIterationsReached" - Reached maximum iteration limit •
- * "MaxCpuTimeReached" - Exceeded maximum CPU time limit •
- * "RegularizationLimitReached_Converged" - Reached regularization limit but
- * solution acceptable • "RegularizationLimitReached_NotConverged" - Reached
- * regularization limit, solution not acceptable
- * - "iterations_completed":          int (Number of iterations)
- * - "solve_time_ms":                 double (Total solver time in milliseconds)
- * - "final_objective":               double (Final objective cost J(x,u))
- * - "final_step_length":             double (Final line search step size; use
- * "final_step_length_primal" / "_dual" if distinct)
- *
- * --- Primary Solution Trajectories ---
- * - "time_points":                   std::vector<double> (Time points t_0..t_N)
- * - "state_trajectory":              std::vector<Eigen::VectorXd> (States
- * X_0..X_N)
- * - "control_trajectory":            std::vector<Eigen::VectorXd> (Controls
- * U_0..U_{N-1})
- *
- * --- Iteration History (Optional) ---
- *   (Vectors indexed by iteration number)
- * - "history_objective":             std::vector<double> (Objective J)
- * - "history_merit_function":        std::vector<double> (Merit function value,
- * e.g., for IPMs)
- * - "history_primal_infeasibility":  std::vector<double> (Primal constraint
- * violation norm (inf_pr), including dynamics defects)
- * - "history_dual_infeasibility":    std::vector<double> (Lagrangian gradient
- * norm (inf_du) or other dual infeasibility)
- * - "history_complementary_infeasibility": std::vector<double> (Complementary
- * infeasibility)
- * - "history_barrier_mu":            std::vector<double> (Barrier parameter
- * (mu) for IPMs; user can log10 for "lg(mu)")
- * - "history_regularization":        std::map<std::string, std::vector<double>>
- * (Regularization values; user can log10 for "lg(rg)")
- * - "history_step_length_primal":    std::vector<double> (Primal step length
- * (alpha_pr))
- * - "history_step_length_dual":      std::vector<double> (Dual step length
- * (alpha_du))
- * - "history_linesearch_iterations": std::vector<int> (Line search
- * sub-iterations (ls))
- *
- * --- Final Metrics (at termination, Optional) ---
- * - "final_primal_infeasibility":    double (Total primal constraint violation
- * norm, including dynamics defects)
- * - "final_dual_infeasibility":      double (Lagrangian gradient norm or other
- * dual infeasibility metric)
- *
- * --- Controller Gains (Feedback Policy, Optional) ---
- * - "control_feedback_gains_k":   std::vector<Eigen::MatrixXd> (Feedback gains
- * K_u)
- *
- * --- Solver-Specific Internal Metrics (at termination, Optional) ---
- * - "final_barrier_parameter_mu":    double (Barrier parameter mu for IPMs;
- * smallness implies complementarity)
- * - "final_regularization":   double (Final regularization value)
+ * @brief Solution data from the CDDP solver.
  */
-using CDDPSolution = std::map<std::string, std::any>;
+struct CDDPSolution {
+  // --- General Information ---
+  std::string solver_name;
+  std::string status_message = "Running";
+  int iterations_completed = 0;
+  double solve_time_ms = 0.0;
+  double final_objective = 0.0;
+  double final_step_length = 0.0;
+  double final_regularization = 0.0;
+
+  // --- Primary Solution ---
+  std::vector<double> time_points;
+  std::vector<Eigen::VectorXd> state_trajectory;
+  std::vector<Eigen::VectorXd> control_trajectory;
+  std::vector<Eigen::MatrixXd> feedback_gains;
+
+  // --- Final Metrics (IP solvers) ---
+  double final_primal_infeasibility = 0.0;
+  double final_dual_infeasibility = 0.0;
+  double final_complementary_infeasibility = 0.0;
+  double final_barrier_mu = 0.0;
+
+  // --- Iteration History (populated if return_iteration_info) ---
+  struct History {
+    std::vector<double> objective;
+    std::vector<double> merit_function;
+    std::vector<double> step_length_primal;
+    std::vector<double> step_length_dual;
+    std::vector<double> dual_infeasibility;
+    std::vector<double> primal_infeasibility;
+    std::vector<double> complementary_infeasibility;
+    std::vector<double> barrier_mu;
+    std::vector<double> regularization;
+
+    void reserve(size_t n) {
+      objective.reserve(n); merit_function.reserve(n);
+      step_length_primal.reserve(n); step_length_dual.reserve(n);
+      dual_infeasibility.reserve(n); primal_infeasibility.reserve(n);
+      complementary_infeasibility.reserve(n); barrier_mu.reserve(n);
+      regularization.reserve(n);
+    }
+    void clear() {
+      objective.clear(); merit_function.clear();
+      step_length_primal.clear(); step_length_dual.clear();
+      dual_infeasibility.clear(); primal_infeasibility.clear();
+      complementary_infeasibility.clear(); barrier_mu.clear();
+      regularization.clear();
+    }
+  } history;
+};
 
 struct ForwardPassResult {
   // Core trajectories always computed in a forward pass

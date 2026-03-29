@@ -73,10 +73,7 @@ std::vector<Eigen::MatrixXd> Manipulator::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // For the simplified model, return zero Hessian
-    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessians[i] = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
-    }
+    auto hessians = makeZeroTensor(STATE_DIM, STATE_DIM, STATE_DIM);
     return hessians;
 }
 
@@ -84,10 +81,7 @@ std::vector<Eigen::MatrixXd> Manipulator::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
     // For the simplified model, return zero Hessian
-    std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
-    for (int i = 0; i < STATE_DIM; ++i) {
-        hessians[i] = Eigen::MatrixXd::Zero(CONTROL_DIM, CONTROL_DIM);
-    }
+    auto hessians = makeZeroTensor(STATE_DIM, CONTROL_DIM, CONTROL_DIM);
     return hessians;
 }
 

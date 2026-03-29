@@ -133,25 +133,14 @@ void LogDDPSolver::initialize(CDDP &context) {
     }
   }
 
-  // Resize linearized dynamics storage
+  // Resize dynamics storage
   F_.resize(horizon);
-  F_x_.resize(horizon);
-  F_u_.resize(horizon);
-  F_xx_.resize(horizon);
-  F_uu_.resize(horizon);
-  F_ux_.resize(horizon);
-
   for (int t = 0; t < horizon; ++t) {
     F_[t] = Eigen::VectorXd::Zero(state_dim);
   }
 
-  k_u_.resize(horizon);
-  K_u_.resize(horizon);
-
-  for (int t = 0; t < horizon; ++t) {
-    k_u_[t] = Eigen::VectorXd::Zero(control_dim);
-    K_u_[t] = Eigen::MatrixXd::Zero(control_dim, state_dim);
-  }
+  // Use base class helper for gains
+  initializeGains(horizon, control_dim, state_dim);
 
   G_.clear();
 
@@ -215,267 +204,116 @@ void LogDDPSolver::initialize(CDDP &context) {
 
 std::string LogDDPSolver::getSolverName() const { return "LogDDP"; }
 
-CDDPSolution LogDDPSolver::solve(CDDP &context) {
+// === Hook implementations ===
+
+void LogDDPSolver::preIterationSetup(CDDP &context) {
+  evaluateTrajectory(context);
+  resetFilter(context);
+}
+
+bool LogDDPSolver::handleBackwardPassRegularizationLimit(
+    CDDP & /*context*/, std::string &termination_reason) {
+  // LogDDP treats regularization exhaustion as converged — the current
+  // barrier-penalized trajectory is typically still usable.
+  termination_reason = "RegularizationLimitReached_Converged";
+  return true; // converged
+}
+
+void LogDDPSolver::applyForwardPassResult(CDDP &context,
+                                          const ForwardPassResult &result) {
+  // Call base to update X_, U_, cost_, merit_function_, alpha_pr_, alpha_du_
+  CDDPSolverBase::applyForwardPassResult(context, result);
+
+  // Also update LogDDP-specific state
+  if (result.dynamics_trajectory) {
+    F_ = *result.dynamics_trajectory;
+  }
+  constraint_violation_ = result.constraint_violation;
+}
+
+bool LogDDPSolver::checkConvergence(CDDP &context, double dJ, double dL,
+                                    int /*iter*/, std::string &reason) {
   const CDDPOptions &options = context.getOptions();
 
-  // Print solver header if requested
-  if (options.print_solver_header) {
-    context.printSolverInfo();
-  }
-
-  // Print solver options if requested
-  if (options.print_solver_options) {
-    context.printOptions(options);
-  }
-
-  // Prepare solution map with old-style structure for compatibility
-  CDDPSolution solution;
-  solution["solver_name"] = getSolverName();
-  solution["status_message"] = std::string("Running");
-  solution["iterations_completed"] = 0;
-  solution["solve_time_ms"] = 0.0;
-
-  // Initialize history vectors only if requested
-  std::vector<double> history_objective;
-  std::vector<double> history_lagrangian;
-  std::vector<double> history_step_length_primal;
-  std::vector<double> history_dual_infeasibility;
-  std::vector<double> history_primal_infeasibility;
-  std::vector<double> history_barrier_mu;
-
-  if (options.return_iteration_info) {
-    const size_t expected_size =
-        static_cast<size_t>(options.max_iterations + 1);
-    history_objective.reserve(expected_size);
-    history_lagrangian.reserve(expected_size);
-    history_step_length_primal.reserve(expected_size);
-    history_dual_infeasibility.reserve(expected_size);
-    history_primal_infeasibility.reserve(expected_size);
-    history_barrier_mu.reserve(expected_size);
-  }
-
-  // Initialize trajectories and gaps
-  evaluateTrajectory(context); // context.cost_ is computed inside this function
-  if (options.return_iteration_info) {
-    history_objective.push_back(context.cost_);
-  }
-
-  // Reset LogDDP filter
-  resetFilter(context); // L_ and constraint_violation_ are computed inside this
-                        // function
-  if (options.return_iteration_info) {
-    history_lagrangian.push_back(context.merit_function_);
-    history_dual_infeasibility.push_back(context.inf_du_);
-    history_primal_infeasibility.push_back(constraint_violation_);
-    history_barrier_mu.push_back(mu_);
-  }
-
-  if (options.verbose) {
-    printIteration(0, context.cost_, context.merit_function_, context.inf_du_,
-                   context.regularization_, context.alpha_pr_, mu_,
-                   constraint_violation_);
-  }
-
-  // Start timer
-  auto start_time = std::chrono::high_resolution_clock::now();
-  int iter = 0;
-  bool converged = false;
-  std::string termination_reason = "MaxIterationsReached";
-  double dJ = 0.0;
-  double dL = 0.0;
-
-  // Main loop of LogDDP
-  while (iter < options.max_iterations) {
-    ++iter;
-
-    // Check maximum CPU time
-    if (options.max_cpu_time > 0) {
-      auto current_time = std::chrono::high_resolution_clock::now();
-      auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-          current_time - start_time);
-      if (duration.count() > options.max_cpu_time * 1000) {
-        termination_reason = "MaxCpuTimeReached";
-        if (options.verbose) {
-          std::cerr
-              << "LogDDP: Maximum CPU time reached. Returning current solution"
-              << std::endl;
-        }
-        break;
-      }
+  double termination_metric = std::max(context.inf_du_, context.inf_pr_);
+  if (termination_metric <= options.tolerance) {
+    if (options.debug) {
+      std::cout << "LogDDP: Converged due to optimality gap and constraint "
+                   "violation."
+                << std::endl;
     }
-
-    // 1. Backward pass: Solve Riccati recursion to compute optimal control law
-    bool backward_pass_success = false;
-    while (!backward_pass_success) {
-      backward_pass_success = backwardPass(context);
-
-      if (!backward_pass_success) {
-        if (options.debug) {
-          std::cerr << "LogDDP: Backward pass failed" << std::endl;
-        }
-
-        context.increaseRegularization();
-
-        if (context.isRegularizationLimitReached()) {
-          if (options.verbose) {
-            std::cerr << "LogDDP: Backward pass regularization limit reached!"
-                      << std::endl;
-          }
-          converged = true;
-          termination_reason = "RegularizationLimitReached_Converged";
-          break;
-        }
-        continue;
-      }
-    }
-
-    if (converged) {
-      break;
-    }
-
-    // 2. Forward pass
-    ForwardPassResult best_result = performForwardPass(context);
-
-    bool forward_pass_success = best_result.success;
-
-    // Update solution if a feasible forward pass was found
-    if (forward_pass_success) {
-      if (options.debug) {
-        std::cout << "[LogDDP: Forward pass] " << std::endl;
-        std::cout << "    cost: " << best_result.cost << std::endl;
-        std::cout << "    logcost: " << best_result.merit_function << std::endl;
-        std::cout << "    alpha: " << best_result.alpha_pr << std::endl;
-        std::cout << "    rf_err: " << best_result.constraint_violation
-                  << std::endl;
-      }
-
-      context.X_ = best_result.state_trajectory;
-      context.U_ = best_result.control_trajectory;
-      if (best_result.dynamics_trajectory)
-        F_ = *best_result.dynamics_trajectory;
-
-      dJ = context.cost_ - best_result.cost;
-      context.cost_ = best_result.cost;
-      dL = context.merit_function_ - best_result.merit_function;
-      context.merit_function_ = best_result.merit_function;
-      context.alpha_pr_ = best_result.alpha_pr;
-      constraint_violation_ = best_result.constraint_violation;
-
-      if (options.return_iteration_info) {
-        history_objective.push_back(context.cost_);
-        history_lagrangian.push_back(context.merit_function_);
-        history_step_length_primal.push_back(context.alpha_pr_);
-        history_dual_infeasibility.push_back(context.inf_du_);
-        history_primal_infeasibility.push_back(constraint_violation_);
-        history_barrier_mu.push_back(mu_);
-      }
-
-      context.decreaseRegularization();
-    } else {
-      context.increaseRegularization();
-
-      if (context.isRegularizationLimitReached()) {
-        if (options.debug) {
-          std::cerr << "LogDDP: Forward Pass regularization limit reached"
-                    << std::endl;
-        }
-        converged = false;
-        termination_reason = "RegularizationLimitReached_NotConverged";
-        break;
-      }
-    }
-
-    // Print iteration information
-    if (options.verbose) {
-      printIteration(iter, context.cost_, context.merit_function_,
-                     context.inf_du_, context.regularization_,
-                     context.alpha_pr_, mu_, constraint_violation_);
-    }
-
-    // Check termination
-    double termination_metric = std::max(context.inf_du_, context.inf_pr_);
-    if (termination_metric <= options.tolerance) {
-      if (options.debug) {
-        std::cout << "LogDDP: Converged due to optimality gap and constraint "
-                     "violation."
-                  << std::endl;
-      }
-      converged = true;
-      termination_reason = "OptimalSolutionFound";
-      break;
-    }
-
-    if (std::abs(dJ) < options.acceptable_tolerance &&
-        std::abs(dL) < options.acceptable_tolerance) {
-      if (options.debug) {
-        std::cout
-            << "LogDDP: Converged due to small change in cost and Lagrangian."
-            << std::endl;
-      }
-      converged = true;
-      termination_reason = "AcceptableSolutionFound";
-      break;
-    }
-
-    // Barrier update logic
-    if (forward_pass_success) {
-      mu_ = std::max(options.log_barrier.barrier.mu_min_value,
-                     mu_ * options.log_barrier.barrier.mu_update_factor);
-    } else {
-      mu_ = std::min(options.log_barrier.barrier.mu_initial, mu_ * 5.0);
-    }
-    relaxed_log_barrier_->setBarrierCoeff(mu_);
-    relaxed_log_barrier_->setRelaxationDelta(relaxation_delta_);
-    resetFilter(context);
+    reason = "OptimalSolutionFound";
+    return true;
   }
 
-  auto end_time = std::chrono::high_resolution_clock::now();
-  auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-      end_time - start_time);
-
-  // Populate final solution
-  solution["status_message"] = termination_reason;
-  solution["iterations_completed"] = iter;
-  solution["solve_time_ms"] = static_cast<double>(duration.count());
-  solution["final_objective"] = context.cost_;
-  solution["final_step_length"] = context.alpha_pr_;
-
-  // Add trajectories
-  std::vector<double> time_points;
-  time_points.reserve(static_cast<size_t>(context.getHorizon() + 1));
-  for (int t = 0; t <= context.getHorizon(); ++t) {
-    time_points.push_back(t * context.getTimestep());
-  }
-  solution["time_points"] = time_points;
-  solution["state_trajectory"] = context.X_;
-  solution["control_trajectory"] = context.U_;
-
-  // Add iteration history if requested
-  if (options.return_iteration_info) {
-    solution["history_objective"] = history_objective;
-    solution["history_merit_function"] = history_lagrangian;
-    solution["history_step_length_primal"] = history_step_length_primal;
-    solution["history_dual_infeasibility"] = history_dual_infeasibility;
-    solution["history_primal_infeasibility"] = history_primal_infeasibility;
-    solution["history_barrier_mu"] = history_barrier_mu;
+  if (std::abs(dJ) < options.acceptable_tolerance &&
+      std::abs(dL) < options.acceptable_tolerance) {
+    if (options.debug) {
+      std::cout
+          << "LogDDP: Converged due to small change in cost and Lagrangian."
+          << std::endl;
+    }
+    reason = "AcceptableSolutionFound";
+    return true;
   }
 
-  // Add control gains
-  solution["control_feedback_gains_K"] = K_u_;
-
-  // Final metrics
-  solution["final_regularization"] = context.regularization_;
-  solution["final_barrier_parameter_mu"] = mu_;
-  solution["final_primal_infeasibility"] = constraint_violation_;
-  solution["final_dual_infeasibility"] = context.inf_du_;
-
-  if (options.verbose) {
-    printSolutionSummary(solution);
-  }
-
-
-  return solution;
+  return false;
 }
+
+void LogDDPSolver::postIterationUpdate(CDDP &context,
+                                       bool forward_pass_success) {
+  const CDDPOptions &options = context.getOptions();
+
+  // Barrier update logic
+  if (forward_pass_success) {
+    mu_ = std::max(options.log_barrier.barrier.mu_min_value,
+                   mu_ * options.log_barrier.barrier.mu_update_factor);
+  } else {
+    mu_ = std::min(options.log_barrier.barrier.mu_initial, mu_ * 5.0);
+  }
+  relaxed_log_barrier_->setBarrierCoeff(mu_);
+  relaxed_log_barrier_->setRelaxationDelta(relaxation_delta_);
+  resetFilter(context);
+}
+
+void LogDDPSolver::recordIterationHistory(const CDDP &context) {
+  // Call base to record common metrics
+  CDDPSolverBase::recordIterationHistory(context);
+
+  // Add LogDDP-specific metrics
+  history_.barrier_mu.push_back(mu_);
+}
+
+void LogDDPSolver::populateSolverSpecificSolution(CDDPSolution &solution,
+                                                  const CDDP &context) {
+  solution.final_barrier_mu = mu_;
+  solution.final_primal_infeasibility = constraint_violation_;
+  solution.final_dual_infeasibility = context.inf_du_;
+}
+
+void LogDDPSolver::printIteration(int iter, const CDDP &context) const {
+  if (iter == 0) {
+    std::cout << std::setw(4) << "iter" << " " << std::setw(12) << "objective"
+              << " " << std::setw(12) << "lagrangian" << " " << std::setw(10)
+              << "opt_gap" << " " << std::setw(8) << "lg(rg)" << " "
+              << std::setw(8) << "alpha" << " " << std::setw(8) << "lg(mu)"
+              << " " << std::setw(10) << "cv_viol" << std::endl;
+  }
+
+  std::cout << std::setw(4) << iter << " " << std::setw(12) << std::scientific
+            << std::setprecision(4) << context.cost_ << " " << std::setw(12)
+            << std::scientific << std::setprecision(4) << context.merit_function_
+            << " " << std::setw(10) << std::scientific << std::setprecision(2)
+            << context.inf_du_ << " " << std::setw(8) << std::fixed
+            << std::setprecision(1) << std::log10(context.regularization_)
+            << " " << std::setw(8) << std::fixed << std::setprecision(4)
+            << context.alpha_pr_ << " " << std::setw(8) << std::fixed
+            << std::setprecision(1) << std::log10(mu_) << " " << std::setw(10)
+            << std::scientific << std::setprecision(2) << constraint_violation_
+            << std::endl;
+}
+
+// === Private helper methods ===
 
 void LogDDPSolver::evaluateTrajectory(CDDP &context) {
   const int horizon = context.getHorizon();
@@ -535,11 +373,24 @@ void LogDDPSolver::resetFilter(CDDP &context) {
   context.inf_pr_ = constraint_violation_;
 }
 
-void LogDDPSolver::precomputeDynamicsDerivatives(CDDP &context) {
+// === Backward pass ===
+
+bool LogDDPSolver::backwardPass(CDDP &context) {
   const CDDPOptions &options = context.getOptions();
-  const int horizon = context.getHorizon();
   const int state_dim = context.getStateDim();
+  const int control_dim = context.getControlDim();
+  const int horizon = context.getHorizon();
   const double timestep = context.getTimestep();
+  const auto &constraint_set = context.getConstraintSet();
+
+  // Pre-compute dynamics jacobians and hessians for all time steps
+  // Note: LogDDP needs continuous-time Jacobians for the backward pass
+  // because it handles defect terms (d = F[t] - X[t+1]) which require
+  // the A = dt*Fx + I, B = dt*Fu formulation. We compute these inline
+  // since the base precomputeDynamicsDerivatives stores discrete-time versions.
+  const int MIN_HORIZON_FOR_PARALLEL = 20;
+  const bool use_parallel =
+      options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;
 
   // Resize storage
   F_x_.resize(horizon);
@@ -548,24 +399,16 @@ void LogDDPSolver::precomputeDynamicsDerivatives(CDDP &context) {
   F_uu_.resize(horizon);
   F_ux_.resize(horizon);
 
-  // Threshold for when parallelization is worth it
-  const int MIN_HORIZON_FOR_PARALLEL = 20;
-  const bool use_parallel =
-      options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;
-
   if (!use_parallel) {
-    // Single-threaded computation - always efficient for small horizons
     for (int t = 0; t < horizon; ++t) {
       const Eigen::VectorXd &x = context.X_[t];
       const Eigen::VectorXd &u = context.U_[t];
 
-      // Compute jacobians
       const auto [Fx, Fu] =
           context.getSystem().getJacobians(x, u, t * timestep);
       F_x_[t] = Fx;
       F_u_[t] = Fu;
 
-      // Compute hessians if not using iLQR
       if (!options.use_ilqr) {
         const auto hessians =
             context.getSystem().getHessians(x, u, t * timestep);
@@ -573,14 +416,12 @@ void LogDDPSolver::precomputeDynamicsDerivatives(CDDP &context) {
         F_uu_[t] = std::get<1>(hessians);
         F_ux_[t] = std::get<2>(hessians);
       } else {
-        // Initialize empty hessians for iLQR
         F_xx_[t] = std::vector<Eigen::MatrixXd>();
         F_uu_[t] = std::vector<Eigen::MatrixXd>();
         F_ux_[t] = std::vector<Eigen::MatrixXd>();
       }
     }
   } else {
-    // Chunked parallel computation - much more efficient
     const int num_threads =
         std::min(options.num_threads,
                  static_cast<int>(std::thread::hardware_concurrency()));
@@ -600,18 +441,15 @@ void LogDDPSolver::precomputeDynamicsDerivatives(CDDP &context) {
       futures.push_back(
           std::async(std::launch::async, [this, &context, &options, start_t,
                                           end_t, timestep]() {
-            // Process a chunk of time steps
             for (int t = start_t; t < end_t; ++t) {
               const Eigen::VectorXd &x = context.X_[t];
               const Eigen::VectorXd &u = context.U_[t];
 
-              // Compute jacobians
               const auto [Fx, Fu] =
                   context.getSystem().getJacobians(x, u, t * timestep);
               F_x_[t] = Fx;
               F_u_[t] = Fu;
 
-              // Compute hessians if not using iLQR
               if (!options.use_ilqr) {
                 const auto hessians =
                     context.getSystem().getHessians(x, u, t * timestep);
@@ -619,7 +457,6 @@ void LogDDPSolver::precomputeDynamicsDerivatives(CDDP &context) {
                 F_uu_[t] = std::get<1>(hessians);
                 F_ux_[t] = std::get<2>(hessians);
               } else {
-                // Initialize empty hessians for iLQR
                 F_xx_[t] = std::vector<Eigen::MatrixXd>();
                 F_uu_[t] = std::vector<Eigen::MatrixXd>();
                 F_ux_[t] = std::vector<Eigen::MatrixXd>();
@@ -628,7 +465,6 @@ void LogDDPSolver::precomputeDynamicsDerivatives(CDDP &context) {
           }));
     }
 
-    // Wait for all computations to complete
     for (auto &future : futures) {
       try {
         if (future.valid()) {
@@ -651,18 +487,6 @@ void LogDDPSolver::precomputeDynamicsDerivatives(CDDP &context) {
               << (use_parallel ? "parallel" : "sequential") << " computation"
               << std::endl;
   }
-}
-
-bool LogDDPSolver::backwardPass(CDDP &context) {
-  const CDDPOptions &options = context.getOptions();
-  const int state_dim = context.getStateDim();
-  const int control_dim = context.getControlDim();
-  const int horizon = context.getHorizon();
-  const double timestep = context.getTimestep();
-  const auto &constraint_set = context.getConstraintSet();
-
-  // Pre-compute dynamics jacobians and hessians for all time steps
-  precomputeDynamicsDerivatives(context);
 
   // Terminal cost and derivatives (V_x, V_xx at t=N)
   Eigen::VectorXd V_x =
@@ -681,7 +505,7 @@ bool LogDDPSolver::backwardPass(CDDP &context) {
     const Eigen::VectorXd &f = F_[t];
     const Eigen::VectorXd &d = f - context.X_[t + 1]; // Defect
 
-    // Use pre-computed dynamics Jacobians
+    // Use pre-computed continuous-time dynamics Jacobians
     const Eigen::MatrixXd &Fx = F_x_[t];
     const Eigen::MatrixXd &Fu = F_u_[t];
     const Eigen::MatrixXd &A =
@@ -701,7 +525,6 @@ bool LogDDPSolver::backwardPass(CDDP &context) {
 
     // Add state hessian term if not using iLQR
     if (!options.use_ilqr) {
-      // Use pre-computed hessians
       const auto &Fxx = F_xx_[t];
       const auto &Fuu = F_uu_[t];
       const auto &Fux = F_ux_[t];
@@ -788,55 +611,7 @@ bool LogDDPSolver::backwardPass(CDDP &context) {
   return true;
 }
 
-ForwardPassResult LogDDPSolver::performForwardPass(CDDP &context) {
-  const CDDPOptions &options = context.getOptions();
-  ForwardPassResult best_result;
-  best_result.cost = std::numeric_limits<double>::infinity();
-  best_result.merit_function = std::numeric_limits<double>::infinity();
-  best_result.success = false;
-
-  if (!options.enable_parallel) {
-    // Single-threaded execution with early termination
-    for (double alpha_pr : context.alphas_) {
-      ForwardPassResult result = forwardPass(context, alpha_pr);
-
-      if (result.success) {
-        best_result = result;
-        break; // Early termination on first success
-      }
-    }
-  } else {
-    // Multi-threaded execution
-    std::vector<std::future<ForwardPassResult>> futures;
-    futures.reserve(context.alphas_.size());
-
-    for (double alpha_pr : context.alphas_) {
-      futures.push_back(
-          std::async(std::launch::async, [this, &context, alpha_pr]() {
-            return forwardPass(context, alpha_pr);
-          }));
-    }
-
-    for (auto &future : futures) {
-      try {
-        if (future.valid()) {
-          ForwardPassResult result = future.get();
-          if (result.success &&
-              result.merit_function < best_result.merit_function) {
-            best_result = result;
-          }
-        }
-      } catch (const std::exception &e) {
-        if (options.verbose) {
-          std::cerr << "LogDDP: Forward pass thread failed: " << e.what()
-                    << std::endl;
-        }
-      }
-    }
-  }
-
-  return best_result;
-}
+// === Forward pass ===
 
 ForwardPassResult LogDDPSolver::forwardPass(CDDP &context, double alpha) {
   const CDDPOptions &options = context.getOptions();
@@ -995,59 +770,6 @@ ForwardPassResult LogDDPSolver::forwardPass(CDDP &context, double alpha) {
   }
 
   return result;
-}
-
-void LogDDPSolver::updateBarrierParameters(CDDP &context,
-                                           bool forward_pass_success,
-                                           double termination_metric) {
-  // This method is called from solve() with the specific barrier update logic
-  // from original The actual logic is implemented directly in solve() to match
-  // the original
-}
-
-void LogDDPSolver::printIteration(int iter, double cost, double lagrangian,
-                                  double opt_gap, double regularization,
-                                  double alpha, double mu,
-                                  double constraint_violation) const {
-  if (iter == 0) {
-    std::cout << std::setw(4) << "iter" << " " << std::setw(12) << "objective"
-              << " " << std::setw(12) << "lagrangian" << " " << std::setw(10)
-              << "opt_gap" << " " << std::setw(8) << "lg(rg)" << " "
-              << std::setw(8) << "alpha" << " " << std::setw(8) << "lg(mu)"
-              << " " << std::setw(10) << "cv_viol" << std::endl;
-  }
-
-  std::cout << std::setw(4) << iter << " " << std::setw(12) << std::scientific
-            << std::setprecision(4) << cost << " " << std::setw(12)
-            << std::scientific << std::setprecision(4) << lagrangian << " "
-            << std::setw(10) << std::scientific << std::setprecision(2)
-            << opt_gap << " " << std::setw(8) << std::fixed
-            << std::setprecision(1) << std::log10(regularization) << " "
-            << std::setw(8) << std::fixed << std::setprecision(4) << alpha
-            << " " << std::setw(8) << std::fixed << std::setprecision(1)
-            << std::log10(mu) << " " << std::setw(10) << std::scientific
-            << std::setprecision(2) << constraint_violation << std::endl;
-}
-
-void LogDDPSolver::printSolutionSummary(const CDDPSolution &solution) const {
-  std::cout << "\n========================================\n";
-  std::cout << "           LogDDP Solution Summary\n";
-  std::cout << "========================================\n";
-
-  auto iterations = std::any_cast<int>(solution.at("iterations_completed"));
-  auto solve_time = std::any_cast<double>(solution.at("solve_time_ms"));
-  auto final_cost = std::any_cast<double>(solution.at("final_objective"));
-  auto status = std::any_cast<std::string>(solution.at("status_message"));
-  auto final_mu =
-      std::any_cast<double>(solution.at("final_barrier_parameter_mu"));
-
-  std::cout << "Status: " << status << "\n";
-  std::cout << "Iterations: " << iterations << "\n";
-  std::cout << "Solve Time: " << std::setprecision(2) << solve_time << " ms\n";
-  std::cout << "Final Cost: " << std::setprecision(6) << final_cost << "\n";
-  std::cout << "Final Barrier μ: " << std::setprecision(2) << std::scientific
-            << final_mu << "\n";
-  std::cout << "========================================\n\n";
 }
 
 } // namespace cddp

@@ -45,35 +45,28 @@ public:
         solve_called_ = true;
         
         CDDPSolution solution;
-        solution["solver_name"] = getSolverName();
-        solution["status_message"] = std::string("OptimalSolutionFound");
-        solution["iterations_completed"] = 5;
-        solution["solve_time_ms"] = 100.0;
-        solution["final_objective"] = 1.23;
-        solution["final_step_length"] = 1.0;
-        
+        solution.solver_name = getSolverName();
+        solution.status_message = "OptimalSolutionFound";
+        solution.iterations_completed = 5;
+        solution.solve_time_ms = 100.0;
+        solution.final_objective = 1.23;
+        solution.final_step_length = 1.0;
+
         // Create simple trajectories that match the actual format
-        std::vector<double> time_points;
-        time_points.reserve(static_cast<size_t>(context.getHorizon() + 1));
+        solution.time_points.reserve(static_cast<size_t>(context.getHorizon() + 1));
         for (int t = 0; t <= context.getHorizon(); ++t) {
-            time_points.push_back(t * context.getTimestep());
+            solution.time_points.push_back(t * context.getTimestep());
         }
-        
-        std::vector<Eigen::VectorXd> state_trajectory;
-        std::vector<Eigen::VectorXd> control_trajectory;
-        state_trajectory.reserve(static_cast<size_t>(context.getHorizon() + 1));
-        control_trajectory.reserve(static_cast<size_t>(context.getHorizon()));
-        
+
+        solution.state_trajectory.reserve(static_cast<size_t>(context.getHorizon() + 1));
+        solution.control_trajectory.reserve(static_cast<size_t>(context.getHorizon()));
+
         for (int k = 0; k <= context.getHorizon(); ++k) {
-            state_trajectory.push_back(Eigen::VectorXd::Zero(context.getStateDim()));
+            solution.state_trajectory.push_back(Eigen::VectorXd::Zero(context.getStateDim()));
         }
         for (int k = 0; k < context.getHorizon(); ++k) {
-            control_trajectory.push_back(Eigen::VectorXd::Zero(context.getControlDim()));
+            solution.control_trajectory.push_back(Eigen::VectorXd::Zero(context.getControlDim()));
         }
-        
-        solution["time_points"] = time_points;
-        solution["state_trajectory"] = state_trajectory;
-        solution["control_trajectory"] = control_trajectory;
         
         return solution;
     }
@@ -102,17 +95,12 @@ public:
     
     CDDPSolution solve(CDDP &context) override {
         CDDPSolution solution;
-        solution["solver_name"] = getSolverName();
-        solution["status_message"] = std::string("MaxIterationsReached");
-        solution["iterations_completed"] = 10;
-        solution["solve_time_ms"] = 200.0;
-        solution["final_objective"] = 4.56;
-        solution["final_step_length"] = 0.5;
-        
-        // Empty trajectories for simplicity
-        solution["time_points"] = std::vector<double>();
-        solution["state_trajectory"] = std::vector<Eigen::VectorXd>();
-        solution["control_trajectory"] = std::vector<Eigen::VectorXd>();
+        solution.solver_name = getSolverName();
+        solution.status_message = "MaxIterationsReached";
+        solution.iterations_completed = 10;
+        solution.solve_time_ms = 200.0;
+        solution.final_objective = 4.56;
+        solution.final_step_length = 0.5;
         
         return solution;
     }
@@ -231,17 +219,10 @@ TEST_F(CDDPCoreTest, UseRegisteredExternalSolver) {
     auto solution = cddp_solver.solve("MockExternalSolver");
     
     // Verify the solution came from our mock solver
-    ASSERT_TRUE(solution.count("solver_name"));
-    EXPECT_EQ(std::any_cast<std::string>(solution["solver_name"]), "MockExternalSolver");
-    
-    ASSERT_TRUE(solution.count("status_message"));
-    EXPECT_EQ(std::any_cast<std::string>(solution["status_message"]), "OptimalSolutionFound");
-    
-    ASSERT_TRUE(solution.count("iterations_completed"));
-    EXPECT_EQ(std::any_cast<int>(solution["iterations_completed"]), 5);
-    
-    ASSERT_TRUE(solution.count("final_objective"));
-    EXPECT_DOUBLE_EQ(std::any_cast<double>(solution["final_objective"]), 1.23);
+    EXPECT_EQ(solution.solver_name, "MockExternalSolver");
+    EXPECT_EQ(solution.status_message, "OptimalSolutionFound");
+    EXPECT_EQ(solution.iterations_completed, 5);
+    EXPECT_DOUBLE_EQ(solution.final_objective, 1.23);
 }
 
 // Test built-in solver still works
@@ -260,13 +241,9 @@ TEST_F(CDDPCoreTest, BuiltInSolverStillWorks) {
     auto solution = cddp_solver.solve("CLDDP");
     
     // Verify we get a valid solution (might not converge in 5 iterations, but should run)
-    ASSERT_TRUE(solution.count("solver_name"));
-    EXPECT_EQ(std::any_cast<std::string>(solution["solver_name"]), "CLDDP");
-    
-    ASSERT_TRUE(solution.count("status_message"));
+    EXPECT_EQ(solution.solver_name, "CLDDP");
     // Should have a valid status message
-    std::string status = std::any_cast<std::string>(solution["status_message"]);
-    EXPECT_FALSE(status.empty());
+    EXPECT_FALSE(solution.status_message.empty());
 }
 
 // Test error handling for unknown solver
@@ -285,16 +262,10 @@ TEST_F(CDDPCoreTest, UnknownSolverErrorHandling) {
     auto solution = cddp_solver.solve("NonExistentSolver");
     
     // Verify we get an appropriate error response
-    ASSERT_TRUE(solution.count("solver_name"));
-    EXPECT_EQ(std::any_cast<std::string>(solution["solver_name"]), "NonExistentSolver");
-    
-    ASSERT_TRUE(solution.count("status_message"));
-    std::string status = std::any_cast<std::string>(solution["status_message"]);
-    EXPECT_THAT(status, ::testing::HasSubstr("UnknownSolver"));
-    EXPECT_THAT(status, ::testing::HasSubstr("NonExistentSolver"));
-    
-    ASSERT_TRUE(solution.count("iterations_completed"));
-    EXPECT_EQ(std::any_cast<int>(solution["iterations_completed"]), 0);
+    EXPECT_EQ(solution.solver_name, "NonExistentSolver");
+    EXPECT_THAT(solution.status_message, ::testing::HasSubstr("UnknownSolver"));
+    EXPECT_THAT(solution.status_message, ::testing::HasSubstr("NonExistentSolver"));
+    EXPECT_EQ(solution.iterations_completed, 0);
 }
 
 // Test solver precedence (external over built-in)
@@ -316,11 +287,8 @@ TEST_F(CDDPCoreTest, SolverPrecedence) {
     auto solution = cddp_solver.solve("CLDDP");
     
     // Verify we got the external solver (MockExternalSolver), not built-in CLDDP
-    ASSERT_TRUE(solution.count("solver_name"));
-    EXPECT_EQ(std::any_cast<std::string>(solution["solver_name"]), "MockExternalSolver");
-    
-    ASSERT_TRUE(solution.count("final_objective"));
-    EXPECT_DOUBLE_EQ(std::any_cast<double>(solution["final_objective"]), 1.23); // Mock solver value
+    EXPECT_EQ(solution.solver_name, "MockExternalSolver");
+    EXPECT_DOUBLE_EQ(solution.final_objective, 1.23); // Mock solver value
 }
 
 // Test enum-based solve still works
@@ -339,11 +307,9 @@ TEST_F(CDDPCoreTest, EnumBasedSolveStillWorks) {
     auto solution = cddp_solver.solve(cddp::SolverType::CLDDP);
     
     // Verify we get a valid solution
-    ASSERT_TRUE(solution.count("solver_name"));
     // Note: If we registered "CLDDP" above, this might be "MockExternalSolver"
     // But the enum interface should still work
-    std::string solver_name = std::any_cast<std::string>(solution["solver_name"]);
-    EXPECT_FALSE(solver_name.empty());
+    EXPECT_FALSE(solution.solver_name.empty());
 }
 
 // Test integration with trajectory and options
@@ -381,18 +347,8 @@ TEST_F(CDDPCoreTest, IntegrationWithTrajectoryAndOptions) {
     auto solution = cddp_solver.solve("IntegrationTestSolver");
     
     // Verify solution structure is correct
-    ASSERT_TRUE(solution.count("solver_name"));
-    EXPECT_EQ(std::any_cast<std::string>(solution["solver_name"]), "MockExternalSolver");
-    
-    ASSERT_TRUE(solution.count("time_points"));
-    auto time_points = std::any_cast<std::vector<double>>(solution["time_points"]);
-    EXPECT_EQ(time_points.size(), horizon + 1);
-    
-    ASSERT_TRUE(solution.count("state_trajectory"));
-    auto state_traj = std::any_cast<std::vector<Eigen::VectorXd>>(solution["state_trajectory"]);
-    EXPECT_EQ(state_traj.size(), horizon + 1);
-    
-    ASSERT_TRUE(solution.count("control_trajectory"));
-    auto control_traj = std::any_cast<std::vector<Eigen::VectorXd>>(solution["control_trajectory"]);
-    EXPECT_EQ(control_traj.size(), horizon);
+    EXPECT_EQ(solution.solver_name, "MockExternalSolver");
+    EXPECT_EQ(solution.time_points.size(), horizon + 1);
+    EXPECT_EQ(solution.state_trajectory.size(), horizon + 1);
+    EXPECT_EQ(solution.control_trajectory.size(), horizon);
 } 

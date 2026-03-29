@@ -26,6 +26,7 @@
 #include <Eigen/Dense>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 #include "matplot/matplot.h"
 
 using namespace matplot;
@@ -146,22 +147,18 @@ int main() {
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::CLDDP);
 
     // Extract solution and print result
-    auto cost_sequence = std::any_cast<std::vector<double>>(solution.at("cost_trajectory"));
-    double J_final = cost_sequence.back();
-    auto X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    auto U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
-    auto t_sol = std::any_cast<std::vector<double>>(solution.at("time_points"));
-    
+    const auto& X_sol = solution.state_trajectory;
+    const auto& U_sol = solution.control_trajectory;
+    const auto& t_sol = solution.time_points;
+
     std::cout << "\n[Result] CDDP solved." << std::endl;
-    std::cout << "[Result] Final cost: " << J_final << std::endl;
+    std::cout << "[Result] Final cost: " << solution.final_objective << std::endl;
     std::cout << "[Result] Final state: "
               << X_sol.back().transpose() << std::endl;
 
     // Create plot directory
     const std::string plotDirectory = "../results/tests";
-    if (!std::filesystem::exists(plotDirectory)) {
-        std::filesystem::create_directory(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     // Extract state data arrays
     std::vector<double> x_arr, y_arr, z_arr, vx_arr, vy_arr, vz_arr, time_arr;

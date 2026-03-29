@@ -17,7 +17,7 @@
 #ifndef CDDP_IPDDP_SOLVER_HPP
 #define CDDP_IPDDP_SOLVER_HPP
 
-#include "cddp_core/cddp_core.hpp"
+#include "cddp_core/cddp_solver_base.hpp"
 #include <Eigen/Dense>
 #include <map>
 #include <string>
@@ -29,44 +29,33 @@ namespace cddp
     /**
      * @brief Interior Point Differential Dynamic Programming (IPDDP) solver.
      *
-     * Implements ISolverAlgorithm interface for inequality constrained problems
-     * using primal-dual interior point method with logarithmic barrier.
+     * Inherits from CDDPSolverBase and overrides virtual hooks
+     * for primal-dual interior point method with logarithmic barrier.
      */
-    class IPDDPSolver : public ISolverAlgorithm
+    class IPDDPSolver : public CDDPSolverBase
     {
     public:
-        /**
-         * @brief Default constructor.
-         */
         IPDDPSolver();
 
-        /**
-         * @brief Initialize solver with CDDP context.
-         * @param context CDDP instance with problem data and options.
-         */
         void initialize(CDDP &context) override;
-
-        /**
-         * @brief Execute IPDDP algorithm.
-         * @param context CDDP instance with problem data and options.
-         * @return Solution containing trajectories and statistics.
-         */
-        CDDPSolution solve(CDDP &context) override;
-
-        /**
-         * @brief Get solver name.
-         * @return "IPDDP"
-         */
         std::string getSolverName() const override;
 
-    private:
-        // Dynamics derivatives
-        std::vector<Eigen::MatrixXd> F_x_;               ///< State jacobians
-        std::vector<Eigen::MatrixXd> F_u_;               ///< Control jacobians
-        std::vector<std::vector<Eigen::MatrixXd>> F_xx_; ///< State hessians
-        std::vector<std::vector<Eigen::MatrixXd>> F_uu_; ///< Control hessians
-        std::vector<std::vector<Eigen::MatrixXd>> F_ux_; ///< Mixed hessians
+    protected:
+        // === CDDPSolverBase virtual hook overrides ===
+        void preIterationSetup(CDDP &context) override;
+        bool backwardPass(CDDP &context) override;
+        ForwardPassResult forwardPass(CDDP &context, double alpha) override;
+        void applyForwardPassResult(CDDP &context, const ForwardPassResult &result) override;
+        bool checkConvergence(CDDP &context, double dJ, double dL, int iter,
+                              std::string &reason) override;
+        void postIterationUpdate(CDDP &context, bool forward_pass_success) override;
+        void recordIterationHistory(const CDDP &context) override;
+        void populateSolverSpecificSolution(CDDPSolution &solution,
+                                            const CDDP &context) override;
+        void printIteration(int iter, const CDDP &context) const override;
+        void printSolutionSummary(const CDDPSolution &solution) const override;
 
+    private:
         // Constraint derivatives
         std::map<std::string, std::vector<Eigen::MatrixXd>> G_x_; ///< State gradients
         std::map<std::string, std::vector<Eigen::MatrixXd>> G_u_; ///< Control gradients
@@ -76,11 +65,6 @@ namespace cddp
             G_uu_; ///< Constraint control hessians
         std::map<std::string, std::vector<Eigen::MatrixXd>>
             G_ux_; ///< Constraint mixed hessians
-
-        // Control law
-        std::vector<Eigen::VectorXd> k_u_; ///< Feedforward gains
-        std::vector<Eigen::MatrixXd> K_u_; ///< Feedback gains
-        Eigen::Vector2d dV_;               ///< Expected value change
 
         // Interior point variables
         std::map<std::string, std::vector<Eigen::VectorXd>> G_; ///< Constraint values
@@ -100,151 +84,53 @@ namespace cddp
         // Pre-allocated workspace for performance optimization
         struct Workspace {
             // Backward pass workspace
-            std::vector<Eigen::MatrixXd> A_matrices;     ///< A = I + dt*F_x
-            std::vector<Eigen::MatrixXd> B_matrices;     ///< B = dt*F_u
-            std::vector<Eigen::MatrixXd> Q_xx_matrices;  ///< Q_xx workspace
-            std::vector<Eigen::MatrixXd> Q_ux_matrices;  ///< Q_ux workspace
-            std::vector<Eigen::MatrixXd> Q_uu_matrices;  ///< Q_uu workspace
-            std::vector<Eigen::VectorXd> Q_x_vectors;    ///< Q_x workspace
-            std::vector<Eigen::VectorXd> Q_u_vectors;    ///< Q_u workspace
-            
+            std::vector<Eigen::MatrixXd> A_matrices;
+            std::vector<Eigen::MatrixXd> B_matrices;
+            std::vector<Eigen::MatrixXd> Q_xx_matrices;
+            std::vector<Eigen::MatrixXd> Q_ux_matrices;
+            std::vector<Eigen::MatrixXd> Q_uu_matrices;
+            std::vector<Eigen::VectorXd> Q_x_vectors;
+            std::vector<Eigen::VectorXd> Q_u_vectors;
+
             // LDLT solver cache
-            std::vector<Eigen::LDLT<Eigen::MatrixXd>> ldlt_solvers; ///< Cached LDLT factorizations
-            std::vector<bool> ldlt_valid;                            ///< Validity flags for LDLT cache
-            
+            std::vector<Eigen::LDLT<Eigen::MatrixXd>> ldlt_solvers;
+            std::vector<bool> ldlt_valid;
+
             // Constraint workspace
-            Eigen::VectorXd y_combined;      ///< Combined dual variables
-            Eigen::VectorXd s_combined;      ///< Combined slack variables
-            Eigen::VectorXd g_combined;      ///< Combined constraint values
-            Eigen::MatrixXd Q_yu_combined;   ///< Combined Q_yu matrix
-            Eigen::MatrixXd Q_yx_combined;   ///< Combined Q_yx matrix
-            Eigen::MatrixXd YSinv;           ///< Y * S^{-1} matrix
-            Eigen::MatrixXd bigRHS;          ///< RHS matrix for solving
-            
+            Eigen::VectorXd y_combined;
+            Eigen::VectorXd s_combined;
+            Eigen::VectorXd g_combined;
+            Eigen::MatrixXd Q_yu_combined;
+            Eigen::MatrixXd Q_yx_combined;
+            Eigen::MatrixXd YSinv;
+            Eigen::MatrixXd bigRHS;
+
             // Forward pass workspace
-            std::vector<Eigen::VectorXd> delta_x_vectors; ///< State deviation vectors
-            
+            std::vector<Eigen::VectorXd> delta_x_vectors;
+
             bool initialized = false;
         } workspace_;
 
-        /**
-         * @brief Precompute dynamics derivatives in parallel.
-         */
+        // === Private helper methods ===
         void precomputeDynamicsDerivatives(CDDP &context);
-
-        /**
-         * @brief Precompute constraint gradients in parallel.
-         */
         void precomputeConstraintGradients(CDDP &context);
-
-        /**
-         * @brief Evaluate trajectory cost and constraints.
-         */
         void evaluateTrajectory(CDDP &context);
-
-        /**
-         * @brief Evaluate trajectory for warm start.
-         */
         void evaluateTrajectoryWarmStart(CDDP &context);
-
-        /**
-         * @brief Initialize dual/slack variables for warm start.
-         */
         void initializeDualSlackVariablesWarmStart(CDDP &context);
-
-        /**
-         * @brief Initialize dual/slack variables for cold start.
-         */
         void initializeDualSlackVariables(CDDP &context);
-
-        /**
-         * @brief Reset barrier parameters and filter.
-         */
         void resetBarrierFilter(CDDP &context);
-
-        /**
-         * @brief Reset filter for line search.
-         */
         void resetFilter(CDDP &context);
-
-        /**
-         * @brief Perform backward pass (primal-dual Riccati).
-         * @return True if successful.
-         */
-        bool backwardPass(CDDP &context);
-
-        /**
-         * @brief Perform forward pass with line search.
-         * @return Best result.
-         */
-        ForwardPassResult performForwardPass(CDDP &context);
-
-        /**
-         * @brief Single forward pass with given step size.
-         * @param alpha Step size.
-         * @return Forward pass result.
-         */
-        ForwardPassResult forwardPass(CDDP &context, double alpha);
-
-        /**
-         * @brief Update barrier parameter.
-         */
         void updateBarrierParameters(CDDP &context, bool forward_pass_success);
-
-        /**
-         * @brief Get total dual dimension.
-         */
         int getTotalDualDim(const CDDP &context) const;
-
-        /**
-         * @brief Update iteration history if tracking enabled.
-         */
-        void updateIterationHistory(
-            const CDDPOptions &options, const CDDP &context,
-            std::vector<double> &history_objective, std::vector<double> &history_merit_function,
-            std::vector<double> &history_step_length_primal, std::vector<double> &history_step_length_dual,
-            std::vector<double> &history_dual_infeasibility, std::vector<double> &history_primal_infeasibility,
-            std::vector<double> &history_complementary_infeasibility, std::vector<double> &history_barrier_mu,
-            double alpha_du) const;
-
-        /**
-         * @brief Check convergence criteria.
-         * @return True if converged.
-         */
-        bool checkConvergence(const CDDPOptions &options, const CDDP &context,
-                              double dJ, int iter, std::string &termination_reason) const;
-
-
-
-        /**
-         * @brief Initialize constraint storage containers.
-         */
         void initializeConstraintStorage(CDDP &context);
-
-        /**
-         * @brief Compute maximum constraint violation.
-         */
         double computeMaxConstraintViolation(const CDDP &context) const;
-
-        /**
-         * @brief Compute IPOPT-style scaled dual infeasibility.
-         * @param context CDDP context with dual/slack variables.
-         * @return Scaled dual infeasibility metric.
-         */
         double computeScaledDualInfeasibility(const CDDP &context) const;
 
-        /**
-         * @brief Print iteration info (IPOPT style).
-         */
-        void printIteration(int iter, double objective, double inf_pr, double inf_du,
-                            double inf_comp, double mu, double step_norm, double regularization,
-                            double alpha_du, double alpha_pr) const;
-
-        /**
-         * @brief Print solution summary.
-         */
-        void printSolutionSummary(const CDDPSolution &solution) const;
-        
+        // Legacy print helper (used by printIteration override)
+        void printIterationLegacy(int iter, double objective, double inf_pr,
+                                  double inf_du, double inf_comp, double mu,
+                                  double step_norm, double regularization,
+                                  double alpha_du, double alpha_pr) const;
     };
 
 } // namespace cddp

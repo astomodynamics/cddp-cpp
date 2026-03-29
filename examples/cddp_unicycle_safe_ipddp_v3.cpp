@@ -22,6 +22,7 @@
 #include <cstdlib>
 
 #include "cddp.hpp"
+#include "cddp_example_utils.hpp"
 
 // Include matplot
 #include "matplot/matplot.h"
@@ -118,17 +119,13 @@ int main() {
         std::make_unique<cddp::LinearConstraint>(A, b));
 
     // Initial trajectory guess
-    std::vector<Eigen::VectorXd> X_sol(horizon + 1, Eigen::VectorXd::Zero(state_dim));
-    std::vector<Eigen::VectorXd> U_sol(horizon, Eigen::VectorXd::Zero(control_dim));
-    for (int i = 0; i < horizon + 1; ++i) {
-        X_sol[i] = initial_state;
-    }
+    auto [X_sol, U_sol] = cddp::example::makeInitialTrajectory(initial_state, horizon, control_dim);
     cddp_solver.setInitialTrajectory(X_sol, U_sol);
 
     // Solve
     cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP);
-    X_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("state_trajectory"));
-    U_sol = std::any_cast<std::vector<Eigen::VectorXd>>(solution.at("control_trajectory"));
+    X_sol = solution.state_trajectory;
+    U_sol = solution.control_trajectory;
 
     // Add this line to check the actual starting state in the solution
     std::cout << "Actual starting state in solution: " << X_sol[0].transpose() << std::endl;
@@ -211,9 +208,7 @@ int main() {
     // 5. Save Plot
     // -------------------------------------------------
     std::string plotDirectory = "../results/tests";
-    if (!fs::exists(plotDirectory)) {
-        fs::create_directories(plotDirectory);
-    }
+    cddp::example::ensurePlotDir(plotDirectory);
 
     f1->draw();
     f1->save(plotDirectory + "/trajectory_comparison_ipddp_v3_linear_matplot.png");

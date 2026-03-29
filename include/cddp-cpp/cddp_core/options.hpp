@@ -105,94 +105,63 @@ namespace cddp
     };
 
     /**
-     * @brief Options for the relaxed log-barrier method.
-     * This struct will be instantiated within each solver's specific options if it
-     * uses a relaxed log-barrier method.
+     * @brief Common options for interior-point solvers (dual/slack initialization + barrier).
      */
-    struct LogBarrierOptions
+    struct InteriorPointOptions
     {
-        bool use_relaxed_log_barrier_penalty =
-            false; ///< Use relaxed log-barrier method (if applicable to the solver).
-        double relaxed_log_barrier_delta =
-            1e-10; ///< Relaxation delta for relaxed log-barrier (if applicable).
+        double dual_var_init_scale = 1e-1;  ///< Initial scale for dual variables.
+        double slack_var_init_scale = 1e-2; ///< Initial scale for slack variables.
+        SolverSpecificBarrierOptions barrier; ///< Barrier method parameters.
+    };
 
-        // Multi-shooting specific
+    /**
+     * @brief Common options for multi-shooting solvers.
+     */
+    struct MultiShootingOptions
+    {
         int segment_length =
             5; ///< Number of shooting intervals before a gap-closing constraint.
         std::string rollout_type =
             "nonlinear"; ///< Rollout type: "nonlinear", "hybrid".
         bool use_controlled_rollout =
-            true; ///< Use controlled rollout (propagates x_{k+1} = f(x_k, u_k) during
-                  ///< initial rollout).
+            false; ///< Use controlled rollout during initial rollout.
+        double costate_var_init_scale =
+            1e-6; ///< Initial scale for costate variables.
+    };
 
+    /**
+     * @brief Options for the relaxed log-barrier method.
+     */
+    struct LogBarrierOptions : MultiShootingOptions
+    {
+        LogBarrierOptions() { use_controlled_rollout = true; }
+
+        bool use_relaxed_log_barrier_penalty =
+            false; ///< Use relaxed log-barrier method.
+        double relaxed_log_barrier_delta =
+            1e-10; ///< Relaxation delta for relaxed log-barrier.
         SolverSpecificBarrierOptions
             barrier; ///< Barrier method parameters for relaxed log-barrier.
     };
 
     /**
-     * @brief Comprehensive options specifically for the IPDDP (Interior-Point
-     * Differential Dynamic Programming) algorithm. Includes its own instances of
-     * barrier and filter parameters.
+     * @brief Options for the IPDDP solver.
      */
-    struct IPDDPAlgorithmOptions
-    {
-        // Initialization scales for duals/slacks
-        double dual_var_init_scale = 1e-1;  ///< Initial scale for dual variables.
-        double slack_var_init_scale = 1e-2; ///< Initial scale for slack variables.
-
-
-        SolverSpecificBarrierOptions
-            barrier; ///< Barrier method parameters for IPDDP.
-    };
+    struct IPDDPAlgorithmOptions : InteriorPointOptions {};
 
     /**
-     * @brief Comprehensive options specifically for the MSIPDDP (Multi-Shooting
-     * Interior-Point Differential Dynamic Programming) algorithm. Includes its own
-     * instances of barrier and filter parameters, plus multi-shooting specifics.
+     * @brief Options for the MSIPDDP solver (interior-point + multi-shooting).
      */
-    struct MSIPDDPAlgorithmOptions
-    {
-        // Initialization scales
-        double dual_var_init_scale = 1e-1;  ///< Initial scale for dual variables.
-        double slack_var_init_scale = 1e-2; ///< Initial scale for slack variables.
-        double costate_var_init_scale =
-            1e-6; ///< Initial scale for costate variables.
-
-        // Multi-shooting specific
-        int segment_length =
-            5; ///< Number of shooting intervals before a gap-closing constraint.
-        std::string rollout_type =
-            "nonlinear"; ///< Rollout type: "nonlinear", "hybrid".
-        bool use_controlled_rollout =
-            false; ///< Use controlled rollout (propagates x_{k+1} = f(x_k, u_k)
-                   ///< during initial rollout).
-
-        SolverSpecificBarrierOptions
-            barrier; ///< Barrier method parameters for MSIPDDP..
-    };
+    struct MSIPDDPAlgorithmOptions : InteriorPointOptions, MultiShootingOptions {};
 
     /**
-     * @brief Options specifically for TC-MSIPDDP algorithm. (Placeholder)
+     * @brief Options for the TC-MSIPDDP solver (terminal-constrained multi-shooting).
      */
-    struct TCMSIPDDPAlgorithmOptions
+    struct TCMSIPDDPAlgorithmOptions : InteriorPointOptions, MultiShootingOptions
     {
-        // Initialization scales
-        double dual_var_init_scale = 1e-1;    ///< Initial scale for dual variables
-        double slack_var_init_scale = 1e-2;   ///< Initial scale for slack variables
-        double costate_var_init_scale = 1e-6; ///< Initial scale for costate variables
-
-        // Terminal constraint specific
-        double terminal_dual_init_scale = 1e-1;      ///< Initial scale for terminal dual variables
-        double terminal_slack_init_scale = 1e-2;     ///< Initial scale for terminal slack variables
-        double terminal_constraint_tolerance = 1e-6; ///< Tolerance for terminal constraint satisfaction
-
-        // Multi-shooting specific
-        int segment_length = 5;                 ///< Number of shooting intervals
-        std::string rollout_type = "nonlinear"; ///< Rollout type: "nonlinear", "hybrid"
-        bool use_controlled_rollout = false;    ///< Use controlled rollout
-
-        // Barrier and filter options
-        SolverSpecificBarrierOptions barrier; ///< Barrier method parameters
+        double terminal_dual_init_scale = 1e-1;      ///< Initial scale for terminal dual variables.
+        double terminal_slack_init_scale = 1e-2;     ///< Initial scale for terminal slack variables.
+        double terminal_constraint_tolerance = 1e-6; ///< Tolerance for terminal constraint satisfaction.
     };
 
     /**

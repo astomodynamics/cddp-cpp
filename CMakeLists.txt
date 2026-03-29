@@ -139,6 +139,7 @@ set(cddp_core_srcs
   src/cddp_core/boxqp.cpp
   src/cddp_core/qp_solver.cpp
   src/cddp_core/cddp_core.cpp
+  src/cddp_core/cddp_solver_base.cpp
   src/cddp_core/clddp_solver.cpp
   src/cddp_core/logddp_solver.cpp
   src/cddp_core/ipddp_solver.cpp
