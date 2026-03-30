@@ -33,6 +33,17 @@ class PyDynamicalSystem : public cddp::DynamicalSystem {
 public:
     using cddp::DynamicalSystem::DynamicalSystem;
 
+    cddp::VectorXdual2nd
+    getContinuousDynamicsAutodiff(const cddp::VectorXdual2nd &state,
+                                  const cddp::VectorXdual2nd &control,
+                                  double time) const override {
+        throw std::runtime_error(
+            "Python-defined DynamicalSystem objects do not support "
+            "getContinuousDynamicsAutodiff. Override get_state_jacobian, "
+            "get_control_jacobian, and any needed Hessian methods in Python, "
+            "or use a built-in C++ dynamics model.");
+    }
+
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd &state,
                                           const Eigen::VectorXd &control,
                                           double time) const override {

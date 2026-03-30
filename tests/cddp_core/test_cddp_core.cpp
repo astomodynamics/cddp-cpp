@@ -148,6 +148,61 @@ protected:
     void printIteration(int iter, const CDDP &context) const override {}
 };
 
+class ThrowingJacobianSystem : public DynamicalSystem {
+public:
+    explicit ThrowingJacobianSystem(double timestep)
+        : DynamicalSystem(2, 1, timestep, "euler") {}
+
+    Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd &state,
+                                          const Eigen::VectorXd &control,
+                                          double time) const override {
+        return Eigen::VectorXd::Zero(2);
+    }
+
+    std::tuple<Eigen::MatrixXd, Eigen::MatrixXd>
+    getJacobians(const Eigen::VectorXd &state, const Eigen::VectorXd &control,
+                 double time) const override {
+        if (time >= getTimestep()) {
+            throw std::runtime_error("jacobian failure");
+        }
+        return {Eigen::MatrixXd::Identity(2, 2), Eigen::MatrixXd::Zero(2, 1)};
+    }
+};
+
+class ThrowingPrecomputeSolver : public CDDPSolverBase {
+public:
+    void initialize(CDDP &context) override {}
+
+    void runPrecomputeDynamicsDerivatives(CDDP &context, int min_horizon_for_parallel) {
+        precomputeDynamicsDerivatives(context, min_horizon_for_parallel);
+    }
+
+    std::string getSolverName() const override {
+        return "ThrowingPrecomputeSolver";
+    }
+
+protected:
+    bool backwardPass(CDDP &context) override {
+        return true;
+    }
+
+    ForwardPassResult forwardPass(CDDP &context, double alpha) override {
+        ForwardPassResult result;
+        result.alpha_pr = alpha;
+        result.cost = 0.0;
+        result.merit_function = 0.0;
+        result.success = true;
+        return result;
+    }
+
+    bool checkConvergence(CDDP &context, double dJ, double dL, int iter,
+                          std::string &reason) override {
+        return false;
+    }
+
+    void printIteration(int iter, const CDDP &context) const override {}
+};
+
 // Factory functions for the mock solvers
 std::unique_ptr<ISolverAlgorithm> createMockExternalSolver() {
     return std::make_unique<MockExternalSolver>();
@@ -327,6 +382,31 @@ TEST_F(CDDPCoreTest, ParallelForwardPassKeepsSuccessfulAlphaWhenAnotherThrows) {
     EXPECT_TRUE(result.success);
     EXPECT_DOUBLE_EQ(result.alpha_pr, 0.5);
     EXPECT_DOUBLE_EQ(result.merit_function, 0.5);
+}
+
+TEST_F(CDDPCoreTest, ParallelPrecomputeDynamicsDerivativesPropagatesExceptions) {
+    cddp::CDDPOptions parallel_options = options;
+    parallel_options.enable_parallel = true;
+
+    Eigen::VectorXd local_initial_state = Eigen::VectorXd::Zero(2);
+    Eigen::VectorXd local_goal_state = Eigen::VectorXd::Zero(2);
+
+    cddp::CDDP cddp_solver(
+        local_initial_state, local_goal_state, 4, timestep,
+        std::make_unique<cddp::ThrowingJacobianSystem>(timestep),
+        std::make_unique<cddp::QuadraticObjective>(
+            Eigen::MatrixXd::Identity(2, 2), Eigen::MatrixXd::Identity(1, 1),
+            Eigen::MatrixXd::Identity(2, 2), local_goal_state,
+            std::vector<Eigen::VectorXd>(), timestep),
+        parallel_options);
+
+    cddp_solver.X_.assign(5, Eigen::VectorXd::Zero(2));
+    cddp_solver.U_.assign(4, Eigen::VectorXd::Zero(1));
+
+    cddp::ThrowingPrecomputeSolver solver;
+    EXPECT_THROW(
+        solver.runPrecomputeDynamicsDerivatives(cddp_solver, 1),
+        std::runtime_error);
 }
 
 // Test solver precedence (external over built-in)

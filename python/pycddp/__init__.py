@@ -1,6 +1,14 @@
-"""pycddp - Python bindings for CDDP trajectory optimization."""
+"""Python bindings for Constrained Differential Dynamic Programming.
 
-from pycddp._pycddp_core import (
+Main entry points:
+- `CDDP` for solver setup and execution
+- `DynamicalSystem` for system models
+- `Objective` for cost functions
+- `Constraint` for path and terminal constraints
+"""
+
+try:
+    from pycddp._pycddp_core import (
     # Enums
     SolverType,
     BarrierStrategy,
@@ -66,7 +74,15 @@ from pycddp._pycddp_core import (
     ThrustMagnitudeConstraint,
     MaxThrustMagnitudeConstraint,
 
-)
+    )
+except ImportError as exc:
+    raise ImportError(
+        "Failed to import the native pycddp extension '_pycddp_core'. "
+        "This usually means the extension was built for a different Python "
+        "version or a required native runtime library is missing. Reinstall "
+        "pycddp with the active interpreter and verify your C++ runtime "
+        "dependencies."
+    ) from exc
 
 from pycddp._version import __version__
 

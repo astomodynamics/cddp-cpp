@@ -25,9 +25,6 @@
 #include "gtest/gtest.h"
 
 #include "dynamics_model/spacecraft_linear.hpp"
-#ifdef CDDP_HAS_MATPLOT
-#include "matplot/matplot.h"
-#endif
 
 using namespace cddp;
 
@@ -143,70 +140,6 @@ TEST(HCWTest, RelativeTrajectory) {
         state = hcw.getDiscreteDynamics(state, control, 0.0);
     }
 
-    // // Plot the trajectory
-    // namespace plt = matplot;    
-    // std::vector<double> t_states_plot(num_steps + 1);
-    // for(int i = 0; i <= num_steps; ++i) t_states_plot[i] = i * timestep;
-
-
-    // // X-Y plane trajectory 
-    // plt::figure();
-    // plt::plot(y_pos_plot, x_pos_plot)->line_width(2).display_name("Trajectory");
-    // plt::hold(true);
-    // if (!x_pos_plot.empty() && !y_pos_plot.empty()){ 
-    //      plt::scatter(std::vector<double>{y_pos_plot.front()}, std::vector<double>{x_pos_plot.front()})
-    //         ->marker_color("g").marker_style("o").marker_size(10).display_name("Start");
-    //      plt::scatter(std::vector<double>{y_pos_plot.back()}, std::vector<double>{x_pos_plot.back()})
-    //         ->marker_color("r").marker_style("x").marker_size(10).display_name("End");
-    // }
-    // plt::hold(false);
-    // plt::xlabel("y (m) [In-track]");
-    // plt::ylabel("x (m) [Radial]");
-    // plt::legend();
-    // plt::title("HCW X-Y Plane Trajectory");
-    // plt::axis(plt::equal);
-    // plt::gca()->x_axis().reverse(true); 
-
-    // // 3D Trajectory
-    // plt::figure();
-    // plt::plot3(x_pos_plot, y_pos_plot, z_pos_plot, "-o")->line_width(2).marker_size(4).display_name("Trajectory");
-    // plt::hold(true);
-    // if (!x_pos_plot.empty()){ 
-    //      plt::scatter3(std::vector<double>{x_pos_plot.front()}, std::vector<double>{y_pos_plot.front()}, std::vector<double>{z_pos_plot.front()})
-    //         ->marker_color("g").marker_style("o").marker_size(10).display_name("Start");
-    //      plt::scatter3(std::vector<double>{x_pos_plot.back()}, std::vector<double>{y_pos_plot.back()}, std::vector<double>{z_pos_plot.back()})
-    //         ->marker_color("r").marker_style("x").marker_size(10).display_name("End");
-    // }
-    // plt::hold(false);
-    // plt::xlabel("x (m) [Radial]");
-    // plt::ylabel("y (m) [In-track]");
-    // plt::zlabel("z (m) [Cross-track]");
-    // plt::legend();
-    // plt::title("3D HCW Trajectory");
-    // plt::axis(plt::equal); 
-
-    // plt::show(); // Show all plots
-}
-
-// Helper function to create spacecraft marker coordinates
-std::vector<std::vector<double>> createSpacecraftMarker(
-    const Eigen::Vector3d& position,
-    double size = 1.0) {
-    
-    std::vector<std::vector<double>> marker(3, std::vector<double>());
-    
-    // Simple cube-like spacecraft shape
-    std::vector<double> dx = {-1, 1, 1, -1, -1, -1, 1, 1, -1};
-    std::vector<double> dy = {-1, -1, 1, 1, -1, -1, -1, 1, 1};
-    std::vector<double> dz = {-1, -1, -1, -1, -1, 1, 1, 1, 1};
-    
-    for (size_t i = 0; i < dx.size(); ++i) {
-        marker[0].push_back(position.x() + size * dx[i]);
-        marker[1].push_back(position.y() + size * dy[i]);
-        marker[2].push_back(position.z() + size * dz[i]);
-    }
-    
-    return marker;
 }
 
 int main(int argc, char **argv) {

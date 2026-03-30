@@ -42,6 +42,14 @@ class ExplodingDoubleIntegrator(DoubleIntegrator):
         )
 
 
+class MinimalDoubleIntegrator(pycddp.DynamicalSystem):
+    def __init__(self, dt):
+        super().__init__(2, 1, dt, "euler")
+
+    def get_continuous_dynamics(self, state, control, time=0.0):
+        return np.array([state[1], control[0]])
+
+
 def test_custom_dynamics_continuous():
     sys = DoubleIntegrator(0.1)
     assert sys.state_dim == 2
@@ -126,3 +134,27 @@ def test_parallel_python_callback_exceptions_surface_to_python():
 
     with pytest.raises(RuntimeError, match="boom from Python dynamics"):
         solver.solve(pycddp.SolverType.LogDDP)
+
+
+def test_python_dynamics_autodiff_path_raises_clear_error():
+    dt = 0.1
+    horizon = 8
+
+    opts = pycddp.CDDPOptions()
+    opts.max_iterations = 2
+    opts.verbose = False
+    opts.print_solver_header = False
+
+    solver = pycddp.CDDP(np.array([1.0, 0.0]), np.zeros(2), horizon, dt, opts)
+    solver.set_dynamical_system(MinimalDoubleIntegrator(dt))
+    solver.set_objective(
+        pycddp.QuadraticObjective(
+            np.eye(2), 0.1 * np.eye(1), 10.0 * np.eye(2), np.zeros(2), [], dt
+        )
+    )
+    solver.add_constraint(
+        "ctrl", pycddp.ControlConstraint(np.array([-5.0]), np.array([5.0]))
+    )
+
+    with pytest.raises(RuntimeError, match="do not support getContinuousDynamicsAutodiff"):
+        solver.solve(pycddp.SolverType.CLDDP)

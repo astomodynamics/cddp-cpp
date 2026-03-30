@@ -16,9 +16,6 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
-#ifdef CDDP_HAS_MATPLOT
-#include <matplot/matplot.h>
-#endif
 #include <sys/stat.h>
 #include <random>
 #include <cmath>
@@ -824,4 +821,3 @@ TEST(MSIPDDPTest, SolveQuadrotor)
         << "Warm start should also converge";
     EXPECT_LE(warm_iterations, iterations_completed + 20) << "Warm start should not take significantly more iterations";
 }
-

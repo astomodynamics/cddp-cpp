@@ -357,12 +357,29 @@ void CDDPSolverBase::precomputeDynamicsDerivatives(
   if (use_parallel) {
     std::vector<std::future<void>> futures;
     futures.reserve(horizon);
+    std::exception_ptr first_exception;
     for (int t = 0; t < horizon; ++t) {
       futures.push_back(
           std::async(std::launch::async, compute_derivatives, t));
     }
     for (auto &f : futures) {
-      f.get();
+      try {
+        if (f.valid()) {
+          f.get();
+        }
+      } catch (const std::exception &e) {
+        if (!first_exception) {
+          first_exception = std::current_exception();
+        }
+        if (options.verbose) {
+          std::cerr << getSolverName()
+                    << ": Dynamics derivatives computation thread failed: "
+                    << e.what() << std::endl;
+        }
+      }
+    }
+    if (first_exception) {
+      std::rethrow_exception(first_exception);
     }
   } else {
     for (int t = 0; t < horizon; ++t) {

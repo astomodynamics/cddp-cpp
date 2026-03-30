@@ -82,11 +82,11 @@ void validateInitialTrajectory(cddp::CDDP &solver,
     }
 }
 
-// These wrappers let the C++ solver take ownership of Python-defined callbacks
-// without adopting the Python object's raw allocation. The py::object keeps the
+// These wrappers let the C++ solver hold Python-defined solver objects without
+// adopting the Python object's raw allocation. The py::object keeps the
 // original Python instance alive, the raw pointer only forwards virtual calls,
-// and each callback reacquires the GIL because solver work may run on worker
-// threads when parallel execution is enabled.
+// and each forwarded method reacquires the GIL because solver work may run on
+// worker threads when parallel execution is enabled.
 class PythonBackedDynamicalSystem : public cddp::DynamicalSystem {
 public:
     PythonBackedDynamicalSystem(py::object owner, cddp::DynamicalSystem *wrapped)
@@ -424,8 +424,9 @@ void bind_solver(py::module_ &m) {
                          std::move(system), wrapped));
              },
              py::arg("system"),
-             "Transfer ownership of a Python dynamics model to the solver. "
-             "Do not reuse the Python object after this call.")
+             "The solver keeps a Python reference that keeps this dynamics "
+             "object alive. Mutating or sharing the object after this call "
+             "may produce unexpected behavior.")
         .def("set_objective",
              [](cddp::CDDP &self, py::object objective) {
                  auto *wrapped = objective.cast<cddp::Objective *>();
@@ -433,8 +434,9 @@ void bind_solver(py::module_ &m) {
                      std::move(objective), wrapped));
              },
              py::arg("objective"),
-             "Transfer ownership of a Python objective to the solver. Do not "
-             "reuse the Python object after this call.")
+             "The solver keeps a Python reference that keeps this objective "
+             "alive. Mutating or sharing the object after this call may "
+             "produce unexpected behavior.")
         .def("add_constraint",
              [](cddp::CDDP &self, const std::string &name, py::object constraint) {
                  auto *wrapped = constraint.cast<cddp::Constraint *>();
@@ -443,8 +445,9 @@ void bind_solver(py::module_ &m) {
                                             std::move(constraint), wrapped));
              },
              py::arg("name"), py::arg("constraint"),
-             "Transfer ownership of a Python path constraint to the solver. "
-             "Do not reuse the Python object after this call.")
+             "The solver keeps a Python reference that keeps this path "
+             "constraint alive. Mutating or sharing the object after this "
+             "call may produce unexpected behavior.")
         .def("add_terminal_constraint",
              [](cddp::CDDP &self, const std::string &name, py::object constraint) {
                  auto *wrapped = constraint.cast<cddp::Constraint *>();
@@ -453,8 +456,9 @@ void bind_solver(py::module_ &m) {
                                std::move(constraint), wrapped));
              },
              py::arg("name"), py::arg("constraint"),
-             "Transfer ownership of a Python terminal constraint to the "
-             "solver. Do not reuse the Python object after this call.")
+             "The solver keeps a Python reference that keeps this terminal "
+             "constraint alive. Mutating or sharing the object after this "
+             "call may produce unexpected behavior.")
         .def("remove_constraint", &cddp::CDDP::removePathConstraint,
              py::arg("name"))
         .def("remove_terminal_constraint",

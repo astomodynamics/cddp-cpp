@@ -24,14 +24,7 @@
 #include "cddp-cpp/dynamics_model/mrp_attitude.hpp"
 #include "cddp-cpp/cddp_core/helper.hpp"
 
-#ifdef CDDP_HAS_MATPLOT
-#include "matplot/matplot.h"
-#endif
-
 using namespace cddp;
-#ifdef CDDP_HAS_MATPLOT
-using namespace matplot;
-#endif
 
 // Helper function for skew-symmetric matrix (double)
 Eigen::Matrix3d skew_double(const Eigen::Vector3d& v) {
@@ -258,7 +251,6 @@ TEST_F(MrpAttitudeTest, SimulationAndPlotting) {
     // title(ax1, "MRP Components vs Time");
     // xlabel(ax1, "Time [s]");
     // ylabel(ax1, "MRP Value");
-    // matplot::legend(ax1);
     // grid(ax1, on);
     // hold(ax1, off);
 
@@ -271,7 +263,6 @@ TEST_F(MrpAttitudeTest, SimulationAndPlotting) {
     // title(ax2, "Angular Velocity vs Time");
     // xlabel(ax2, "Time [s]");
     // ylabel(ax2, "Angular Velocity [rad/s]");
-    // matplot::legend(ax2);
     // grid(ax2, on);
     // hold(ax2, off);
 
@@ -293,4 +284,4 @@ int main(int argc, char **argv) {
     ::testing::InitGoogleTest(&argc, argv);
     ::testing::InitGoogleMock(&argc, argv);
     return RUN_ALL_TESTS();
-} 
+}
