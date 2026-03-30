@@ -110,6 +110,44 @@ public:
     }
 };
 
+class ThrowingLineSearchSolver : public CDDPSolverBase {
+public:
+    void initialize(CDDP &context) override {}
+
+    ForwardPassResult runPerformForwardPass(CDDP &context) {
+        return performForwardPass(context);
+    }
+
+    std::string getSolverName() const override {
+        return "ThrowingLineSearchSolver";
+    }
+
+protected:
+    bool backwardPass(CDDP &context) override {
+        return true;
+    }
+
+    ForwardPassResult forwardPass(CDDP &context, double alpha) override {
+        if (alpha >= 1.0) {
+            throw std::runtime_error("alpha trial failed");
+        }
+
+        ForwardPassResult result;
+        result.alpha_pr = alpha;
+        result.cost = alpha;
+        result.merit_function = alpha;
+        result.success = (alpha == 0.5);
+        return result;
+    }
+
+    bool checkConvergence(CDDP &context, double dJ, double dL, int iter,
+                          std::string &reason) override {
+        return false;
+    }
+
+    void printIteration(int iter, const CDDP &context) const override {}
+};
+
 // Factory functions for the mock solvers
 std::unique_ptr<ISolverAlgorithm> createMockExternalSolver() {
     return std::make_unique<MockExternalSolver>();
@@ -268,6 +306,29 @@ TEST_F(CDDPCoreTest, UnknownSolverErrorHandling) {
     EXPECT_EQ(solution.iterations_completed, 0);
 }
 
+TEST_F(CDDPCoreTest, ParallelForwardPassKeepsSuccessfulAlphaWhenAnotherThrows) {
+    options.enable_parallel = true;
+
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          std::make_unique<cddp::QuadraticObjective>(
+                              Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              Eigen::MatrixXd::Identity(control_dim, control_dim),
+                              10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              goal_state, std::vector<Eigen::VectorXd>(), timestep),
+                          options);
+
+    cddp_solver.alphas_ = {1.0, 0.5, 0.25};
+
+    cddp::ThrowingLineSearchSolver solver;
+    cddp::ForwardPassResult result;
+
+    EXPECT_NO_THROW(result = solver.runPerformForwardPass(cddp_solver));
+    EXPECT_TRUE(result.success);
+    EXPECT_DOUBLE_EQ(result.alpha_pr, 0.5);
+    EXPECT_DOUBLE_EQ(result.merit_function, 0.5);
+}
+
 // Test solver precedence (external over built-in)
 TEST_F(CDDPCoreTest, SolverPrecedence) {
     // Register a solver with the same name as a built-in solver
@@ -351,4 +412,4 @@ TEST_F(CDDPCoreTest, IntegrationWithTrajectoryAndOptions) {
     EXPECT_EQ(solution.time_points.size(), horizon + 1);
     EXPECT_EQ(solution.state_trajectory.size(), horizon + 1);
     EXPECT_EQ(solution.control_trajectory.size(), horizon);
-} 
+}

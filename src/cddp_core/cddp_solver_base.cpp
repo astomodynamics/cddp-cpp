@@ -303,7 +303,7 @@ ForwardPassResult CDDPSolverBase::performForwardPass(CDDP &context) {
                 << ": ALL forward pass threads failed. Last error: "
                 << last_error << std::endl;
     }
-    if (first_exception) {
+    if (first_exception && !best_result.success) {
       std::rethrow_exception(first_exception);
     }
   }
