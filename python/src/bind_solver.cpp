@@ -42,9 +42,10 @@ void validateInitialTrajectory(cddp::CDDP &solver,
     try {
         state_dim = solver.getStateDim();
         control_dim = solver.getControlDim();
-    } catch (const std::exception &) {
+    } catch (const std::exception &e) {
         throw py::value_error(
-            "set_initial_trajectory requires a dynamical system to be set first.");
+            std::string("set_initial_trajectory failed while querying dimensions "
+                        "(is a dynamical system set?): ") + e.what());
     }
 
     const std::size_t expected_state_count =
@@ -94,6 +95,15 @@ public:
                                 wrapped->getTimestep(),
                                 wrapped->getIntegrationType()),
           owner_(std::move(owner)), wrapped_(wrapped) {}
+
+    ~PythonBackedDynamicalSystem() override {
+        try {
+            if (Py_IsInitialized()) {
+                py::gil_scoped_acquire gil;
+                owner_.release().dec_ref();
+            }
+        } catch (...) {}
+    }
 
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd &state,
                                           const Eigen::VectorXd &control,
@@ -162,6 +172,15 @@ class PythonBackedObjective : public cddp::Objective {
 public:
     PythonBackedObjective(py::object owner, cddp::Objective *wrapped)
         : owner_(std::move(owner)), wrapped_(wrapped) {}
+
+    ~PythonBackedObjective() override {
+        try {
+            if (Py_IsInitialized()) {
+                py::gil_scoped_acquire gil;
+                owner_.release().dec_ref();
+            }
+        } catch (...) {}
+    }
 
     double evaluate(const std::vector<Eigen::VectorXd> &states,
                     const std::vector<Eigen::VectorXd> &controls) const override {
@@ -264,6 +283,15 @@ public:
     PythonBackedConstraint(py::object owner, cddp::Constraint *wrapped)
         : cddp::Constraint(wrapped->getName()), owner_(std::move(owner)),
           wrapped_(wrapped) {}
+
+    ~PythonBackedConstraint() override {
+        try {
+            if (Py_IsInitialized()) {
+                py::gil_scoped_acquire gil;
+                owner_.release().dec_ref();
+            }
+        } catch (...) {}
+    }
 
     int getDualDim() const override {
         py::gil_scoped_acquire gil;

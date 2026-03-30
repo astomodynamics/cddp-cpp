@@ -302,6 +302,11 @@ ForwardPassResult CDDPSolverBase::performForwardPass(CDDP &context) {
       std::cerr << getSolverName()
                 << ": ALL forward pass threads failed. Last error: "
                 << last_error << std::endl;
+    } else if (failed_count > 0 && options.verbose) {
+      std::cerr << getSolverName() << ": " << failed_count << " of "
+                << futures.size()
+                << " forward pass threads failed. Last error: " << last_error
+                << std::endl;
     }
     if (first_exception && !best_result.success) {
       std::rethrow_exception(first_exception);
