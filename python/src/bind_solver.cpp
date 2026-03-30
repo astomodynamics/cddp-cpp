@@ -298,7 +298,6 @@ public:
         return wrapped_->getDualDim();
     }
 
-
     Eigen::VectorXd evaluate(const Eigen::VectorXd &state,
                              const Eigen::VectorXd &control,
                              int index) const override {
