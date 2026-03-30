@@ -185,13 +185,14 @@ add_library(${PROJECT_NAME}
 set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(${PROJECT_NAME}
-  $<IF:$<BOOL:${Eigen3_FOUND}>,Eigen3::Eigen,>
-  autodiff
+  PUBLIC
+    $<IF:$<BOOL:${Eigen3_FOUND}>,Eigen3::Eigen,>
+    autodiff
 )
 
 if(CDDP_CPP_ENABLE_PLOTTING)
-  target_link_libraries(${PROJECT_NAME} matplot)
-  target_compile_definitions(${PROJECT_NAME} PUBLIC CDDP_HAS_MATPLOT)
+  target_link_libraries(${PROJECT_NAME} PUBLIC $<BUILD_INTERFACE:matplot>)
+  target_compile_definitions(${PROJECT_NAME} PUBLIC $<BUILD_INTERFACE:CDDP_HAS_MATPLOT>)
 endif()
 
 if(NOT Eigen3_FOUND)
@@ -205,7 +206,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
 
 if (CDDP_CPP_CASADI)
   target_include_directories(${PROJECT_NAME} PUBLIC ${CASADI_INCLUDE_DIR})
-  target_link_libraries(${PROJECT_NAME} ${CASADI_LIBRARIES})
+  target_link_libraries(${PROJECT_NAME} PRIVATE ${CASADI_LIBRARIES})
 endif()
 
 # ACADOS
@@ -252,7 +253,7 @@ if (CDDP_CPP_ACADOS)
     include_directories(${BLASFEO_INCLUDE_DIR})
     include_directories(${HPIPM_INCLUDE_DIR})
     link_directories(${ACADOS_LIB_DIR})
-    target_link_libraries(${PROJECT_NAME} ${ACADOS_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${ACADOS_LIBRARIES})
     
     # Add preprocessor definition to enable ACADOS in code
     target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_ACADOS_ENABLED=1)

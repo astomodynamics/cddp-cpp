@@ -31,15 +31,12 @@ WORKDIR /app
 COPY . /app
 
 
-# # Configure and build your project
-RUN rm -rf build && \ 
-    mkdir build && \
-    cd build && \
-    cmake \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCDDP_CPP_BUILD_TESTS=ON \
-            -DCDDP_CPP_CASADI=OFF \
-            -DPython_EXECUTABLE=/usr/bin/python3 \
-            .. && \
-    make -j$(nproc) && \
-    make test
+# Configure and build the project
+RUN rm -rf build && \
+    cmake -S . -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCDDP_CPP_BUILD_TESTS=ON \
+        -DCDDP_CPP_BUILD_EXAMPLES=ON \
+        -DCDDP_CPP_CASADI=OFF && \
+    cmake --build build -j$(nproc) && \
+    ctest --test-dir build --output-on-failure
