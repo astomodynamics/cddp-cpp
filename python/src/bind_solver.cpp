@@ -1,3 +1,6 @@
+#include <array>
+#include <sstream>
+
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -8,6 +11,82 @@ namespace py = pybind11;
 
 namespace {
 
+constexpr std::array<const char *, 4> kBuiltinSolverNames = {
+    "CLDDP", "LogDDP", "IPDDP", "MSIPDDP"};
+
+bool isBuiltinSolverName(const std::string &solver_name) {
+    for (const char *name : kBuiltinSolverNames) {
+        if (solver_name == name) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string builtinSolverList() {
+    std::ostringstream stream;
+    for (std::size_t i = 0; i < kBuiltinSolverNames.size(); ++i) {
+        if (i > 0) {
+            stream << ", ";
+        }
+        stream << kBuiltinSolverNames[i];
+    }
+    return stream.str();
+}
+
+void validateInitialTrajectory(cddp::CDDP &solver,
+                               const std::vector<Eigen::VectorXd> &X,
+                               const std::vector<Eigen::VectorXd> &U) {
+    int state_dim = 0;
+    int control_dim = 0;
+    try {
+        state_dim = solver.getStateDim();
+        control_dim = solver.getControlDim();
+    } catch (const std::exception &) {
+        throw py::value_error(
+            "set_initial_trajectory requires a dynamical system to be set first.");
+    }
+
+    const std::size_t expected_state_count =
+        static_cast<std::size_t>(solver.getHorizon() + 1);
+    const std::size_t expected_control_count =
+        static_cast<std::size_t>(solver.getHorizon());
+
+    if (X.size() != expected_state_count || U.size() != expected_control_count) {
+        std::ostringstream stream;
+        stream << "set_initial_trajectory expected X length "
+               << expected_state_count << " and U length "
+               << expected_control_count << ", got X length " << X.size()
+               << " and U length " << U.size() << ".";
+        throw py::value_error(stream.str());
+    }
+
+    for (std::size_t i = 0; i < X.size(); ++i) {
+        if (X[i].size() != state_dim) {
+            std::ostringstream stream;
+            stream << "set_initial_trajectory expected state vector " << i
+                   << " to have dimension " << state_dim << ", got "
+                   << X[i].size() << ".";
+            throw py::value_error(stream.str());
+        }
+    }
+
+    for (std::size_t i = 0; i < U.size(); ++i) {
+        if (U[i].size() != control_dim) {
+            std::ostringstream stream;
+            stream << "set_initial_trajectory expected control vector " << i
+                   << " to have dimension " << control_dim << ", got "
+                   << U[i].size() << ".";
+            throw py::value_error(stream.str());
+        }
+    }
+}
+
+// These wrappers let the C++ solver take ownership of Python-defined callbacks
+// without adopting the Python object's raw allocation. The py::object keeps the
+// original Python instance alive, the raw pointer only forwards virtual calls,
+// and each callback reacquires the GIL because solver work may run on worker
+// threads when parallel execution is enabled.
 class PythonBackedDynamicalSystem : public cddp::DynamicalSystem {
 public:
     PythonBackedDynamicalSystem(py::object owner, cddp::DynamicalSystem *wrapped)
@@ -345,7 +424,8 @@ void bind_solver(py::module_ &m) {
                          std::move(system), wrapped));
              },
              py::arg("system"),
-             "Keep a Python-owned dynamics model alive inside the solver.")
+             "Transfer ownership of a Python dynamics model to the solver. "
+             "Do not reuse the Python object after this call.")
         .def("set_objective",
              [](cddp::CDDP &self, py::object objective) {
                  auto *wrapped = objective.cast<cddp::Objective *>();
@@ -353,7 +433,8 @@ void bind_solver(py::module_ &m) {
                      std::move(objective), wrapped));
              },
              py::arg("objective"),
-             "Keep a Python-owned objective alive inside the solver.")
+             "Transfer ownership of a Python objective to the solver. Do not "
+             "reuse the Python object after this call.")
         .def("add_constraint",
              [](cddp::CDDP &self, const std::string &name, py::object constraint) {
                  auto *wrapped = constraint.cast<cddp::Constraint *>();
@@ -362,7 +443,8 @@ void bind_solver(py::module_ &m) {
                                             std::move(constraint), wrapped));
              },
              py::arg("name"), py::arg("constraint"),
-             "Keep a Python-owned path constraint alive inside the solver.")
+             "Transfer ownership of a Python path constraint to the solver. "
+             "Do not reuse the Python object after this call.")
         .def("add_terminal_constraint",
              [](cddp::CDDP &self, const std::string &name, py::object constraint) {
                  auto *wrapped = constraint.cast<cddp::Constraint *>();
@@ -371,17 +453,33 @@ void bind_solver(py::module_ &m) {
                                std::move(constraint), wrapped));
              },
              py::arg("name"), py::arg("constraint"),
-             "Keep a Python-owned terminal constraint alive inside the solver.")
+             "Transfer ownership of a Python terminal constraint to the "
+             "solver. Do not reuse the Python object after this call.")
         .def("remove_constraint", &cddp::CDDP::removePathConstraint,
              py::arg("name"))
         .def("remove_terminal_constraint",
              &cddp::CDDP::removeTerminalConstraint, py::arg("name"))
-        .def("set_initial_trajectory", &cddp::CDDP::setInitialTrajectory,
+        .def("set_initial_trajectory",
+             [](cddp::CDDP &self, const std::vector<Eigen::VectorXd> &X,
+                const std::vector<Eigen::VectorXd> &U) {
+                 validateInitialTrajectory(self, X, U);
+                 self.setInitialTrajectory(X, U);
+             },
              py::arg("X"), py::arg("U"))
         .def("solve", py::overload_cast<cddp::SolverType>(&cddp::CDDP::solve),
-             py::arg("solver_type") = cddp::SolverType::CLDDP)
+             py::arg("solver_type") = cddp::SolverType::CLDDP,
+             py::call_guard<py::gil_scoped_release>())
         .def("solve_by_name",
-             py::overload_cast<const std::string &>(&cddp::CDDP::solve),
+             [](cddp::CDDP &self, const std::string &solver_type) {
+                 if (!isBuiltinSolverName(solver_type)) {
+                     throw py::value_error(
+                         "Unknown solver '" + solver_type +
+                         "'. Supported solver names: " + builtinSolverList() +
+                         ".");
+                 }
+                 py::gil_scoped_release release;
+                 return self.solve(solver_type);
+             },
              py::arg("solver_type"))
         .def_property_readonly("initial_state", &cddp::CDDP::getInitialState)
         .def_property_readonly("reference_state",

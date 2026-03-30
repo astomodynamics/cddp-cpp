@@ -74,7 +74,7 @@ void bind_options(py::module_& m) {
         .def_readwrite("slack_var_init_scale", &cddp::InteriorPointOptions::slack_var_init_scale)
         .def_readwrite("barrier", &cddp::InteriorPointOptions::barrier);
 
-    // LogBarrierOptions (inherits MultiShootingOptions)
+    // LogBarrierOptions exposed as a flat Python binding; no Python base class.
     py::class_<cddp::LogBarrierOptions>(m, "LogBarrierOptions")
         .def(py::init<>())
         .def_readwrite("segment_length", &cddp::LogBarrierOptions::segment_length)
@@ -85,14 +85,14 @@ void bind_options(py::module_& m) {
         .def_readwrite("relaxed_log_barrier_delta", &cddp::LogBarrierOptions::relaxed_log_barrier_delta)
         .def_readwrite("barrier", &cddp::LogBarrierOptions::barrier);
 
-    // IPDDPAlgorithmOptions (inherits InteriorPointOptions)
+    // IPDDPAlgorithmOptions exposed as a flat Python binding.
     py::class_<cddp::IPDDPAlgorithmOptions>(m, "IPDDPOptions")
         .def(py::init<>())
         .def_readwrite("dual_var_init_scale", &cddp::IPDDPAlgorithmOptions::dual_var_init_scale)
         .def_readwrite("slack_var_init_scale", &cddp::IPDDPAlgorithmOptions::slack_var_init_scale)
         .def_readwrite("barrier", &cddp::IPDDPAlgorithmOptions::barrier);
 
-    // MSIPDDPAlgorithmOptions (inherits InteriorPointOptions + MultiShootingOptions)
+    // MSIPDDPAlgorithmOptions exposed as a flat Python binding.
     py::class_<cddp::MSIPDDPAlgorithmOptions>(m, "MSIPDDPOptions")
         .def(py::init<>())
         .def_readwrite("dual_var_init_scale", &cddp::MSIPDDPAlgorithmOptions::dual_var_init_scale)

@@ -36,6 +36,7 @@ public:
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd &state,
                                           const Eigen::VectorXd &control,
                                           double time) const override {
+        // Map C++ virtual dispatch to the snake_case Python API exported below.
         PYBIND11_OVERRIDE_NAME(Eigen::VectorXd, cddp::DynamicalSystem,
                                "get_continuous_dynamics",
                                getContinuousDynamics, state, control, time);

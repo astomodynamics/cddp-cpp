@@ -1,5 +1,7 @@
 """Test custom dynamics defined in Python via the trampoline."""
 import numpy as np
+import pytest
+import threading
 import pycddp
 
 
@@ -25,6 +27,19 @@ class DoubleIntegrator(pycddp.DynamicalSystem):
 
     def get_cross_hessian(self, state, control, time=0.0):
         return [np.zeros((1, 2)), np.zeros((1, 2))]
+
+
+class ExplodingDoubleIntegrator(DoubleIntegrator):
+    def __init__(self, dt):
+        super().__init__(dt)
+        self._main_thread_id = threading.get_ident()
+
+    def get_discrete_dynamics(self, state, control, time=0.0):
+        if threading.get_ident() != self._main_thread_id:
+            raise RuntimeError("boom from Python dynamics")
+        return state + self.timestep * self.get_continuous_dynamics(
+            state, control, time
+        )
 
 
 def test_custom_dynamics_continuous():
@@ -74,7 +89,40 @@ def test_custom_dynamics_with_solver():
 
     solution = solver.solve(pycddp.SolverType.CLDDP)
 
+    assert solution.solver_name == "CLDDP"
+    assert solution.status_message
     assert solution.iterations_completed >= 0
+    assert len(solution.time_points) == horizon + 1
     assert len(solution.state_trajectory) == horizon + 1
     assert len(solution.control_trajectory) == horizon
+    assert len(solution.feedback_gains) == horizon
+    assert np.isfinite(solution.final_objective)
+    assert np.isfinite(solution.final_step_length)
+    assert np.isfinite(solution.final_regularization)
     assert solution.solve_time_ms >= 0
+
+
+def test_parallel_python_callback_exceptions_surface_to_python():
+    dt = 0.1
+    horizon = 60
+
+    opts = pycddp.CDDPOptions()
+    opts.max_iterations = 2
+    opts.verbose = False
+    opts.print_solver_header = False
+    opts.enable_parallel = True
+    opts.num_threads = 2
+
+    solver = pycddp.CDDP(np.array([1.0, 0.0]), np.zeros(2), horizon, dt, opts)
+    solver.set_dynamical_system(ExplodingDoubleIntegrator(dt))
+    solver.set_objective(
+        pycddp.QuadraticObjective(
+            np.eye(2), 0.1 * np.eye(1), 10.0 * np.eye(2), np.zeros(2), [], dt
+        )
+    )
+    solver.add_constraint(
+        "ctrl", pycddp.ControlConstraint(np.array([-5.0]), np.array([5.0]))
+    )
+
+    with pytest.raises(RuntimeError, match="boom from Python dynamics"):
+        solver.solve(pycddp.SolverType.LogDDP)
