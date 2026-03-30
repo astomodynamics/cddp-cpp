@@ -61,7 +61,7 @@ def test_set_initial_trajectory_requires_dynamical_system():
     X = [np.zeros(2) for _ in range(solver.horizon + 1)]
     U = [np.zeros(1) for _ in range(solver.horizon)]
 
-    with pytest.raises(ValueError, match="requires a dynamical system"):
+    with pytest.raises(ValueError, match="is a dynamical system set"):
         solver.set_initial_trajectory(X, U)
 
 
