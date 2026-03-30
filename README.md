@@ -29,119 +29,15 @@ $$
 $$
 
 ## Examples
-### Unicycle
-
-Simple car-like robot with velocity and steering control:
+The default C++ build currently includes a barrier-strategy comparison example:
 
 ```bash
-./examples/cddp_unicycle // after building
+./examples/test_barrier_strategies
 ```
 
-<img src="results/tests/unicycle.gif" width="300" alt="Unicycle Model CDDP">
-
-### Unicycle with Obstacle Avoidance
-
-Simple car-like robot with velocity and steering control:
-
-```bash
-./examples/cddp_unicycle_safe // after building
-```
-
-<img src="results/tests/unicycle_trajectory_comparison.png" width="300" alt="Unicycle Model CDDP with Obstacle Avoidance">
-
-### Unicycle with Obstacle Avoidance (infeasible initial guess)
-
-```bash
-./examples/cddp_unicycle_safe_ipddp // after building
-```
-
-<img src="results/tests/trajectory_comparison_ipddp.png" width="300" alt="Unicycle Model CDDP with Obstacle Avoidance">
-
-### Bicycle Model
-
-Bicycle model with velocity and steering control:
-
-```bash
-./examples/cddp_bicycle // after building
-```
-
-<img src="results/tests/bicycle.gif" width="300" alt="Bicycle Model CDDP">
-
-### Control-limited Car
-
-Car model with limited velocity and steering control:
-
-```bash
-./examples/cddp_car // after building
-```
-
-<img src="results/tests/car_parking.gif" width="300" alt="Car Model CDDP">
-
-```bash
-./examples/cddp_car_ipddp // after building
-```
-
-<img src="results/tests/car_parking_ipddp.gif" width="300" alt="Car Model CDDP">
-
-### Pendulum
-
-Simple pendulum with torque control:
-
-```bash
-./examples/cddp_pendulum // after building
-```
-
-
-<img src="results/tests/pendulum.gif" width="300" alt="Pendulum CDDP">
-
-### Cartpole
-
-Cartpole with cart control:
-
-```bash
-./examples/cddp_cartpole // after building
-```
-
-<img src="results/tests/cartpole.gif" width="300" alt="Cartpole CDDP">
-<img src="results/tests/cartpole_results.png" width="300" alt="Cartpole CDDP">
-
-
-### Quadrotor
-
-Quadrotor with thrust control:
-
-```bash
-./examples/cddp_quadrotor_point // after building
-```
-
-<img src="results/tests/quadrotor.gif" width="300" alt="Quadrotor CDDP">
-
-```bash
-./examples/cddp_quadrotor_circle // after building
-```
-
-<img src="results/tests/quadrotor_circle.gif" width="300" alt="Quadrotor CDDP">
-
-
-```bash
-./examples/cddp_quadrotor_figure_eight_horizontal // after building
-```
-<img src="results/tests/quadrotor_figure_eight_horizontal.gif" width="300" alt="Quadrotor CDDP">
-
-```bash
-./examples/cddp_quadrotor_figure_eight_vertical // after building
-```
-<img src="results/tests/quadrotor_figure_eight_vertical.gif" width="300" alt="Quadrotor CDDP">
-
-### Manipulator
-
-Manipulator with joint torque control:
-
-```bash
-./examples/cddp_manipulator // after building
-```
-
-<img src="results/tests/manipulator.gif" width="300" alt="Manipulator CDDP">
+Legacy visualization-heavy C++ examples remain in the repository as reference
+material, but they are no longer part of the default build. Python bindings are
+the supported plotting and notebook workflow.
 
 ## Installation
 ### Dependencies
@@ -156,18 +52,6 @@ brew install cmake # For macOS
 sudo apt-get install libeigen3-dev # For Ubuntu
 brew install eigen # For macOS
 ```
-
-* [gnuplot](http://www.gnuplot.info/) (Plotting Library)
-```bash
-sudo apt-get install gnuplot # For Ubuntu
-brew install gnuplot # For macOS
-```
-* [imagemagick](https://imagemagick.org/) (Image Processing Library)
-```bash
-sudo apt-get install imagemagick # For Ubuntu
-brew install imagemagick # For macOS
-```
-
 
 ### Building
 ```bash
@@ -192,7 +76,6 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 
 This library uses the following open-source libraries as core dependencies:
 
-* [matplotplusplus](https://github.com/alandefreitas/matplotplusplus) (MIT License)
 * [autodiff](https://github.com/autodiff/autodiff) (MIT License)
 
 This library also uses the following open-source libraries for optional features:
@@ -221,9 +104,9 @@ If you'd like to contribute:
 If you have ideas for collaboration, want to discuss potential research applications, or have any questions, please feel free to open an issue on GitHub or reach out to the @astomodynamics. We are particularly interested in exploring its use in novel robotic systems and complex motion planning scenarios.
 
 ## TODO
-* add **python binding**
+* improve python binding ergonomics
 * improve parallelization
-* add simulation and its plots
+* add simulation examples and Python visualizations
   * Quadruped robot
   * Manipulator
   * Humanoid

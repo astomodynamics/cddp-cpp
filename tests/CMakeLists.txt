@@ -175,10 +175,6 @@ gtest_discover_tests(test_msipddp_solver)
 # target_link_libraries(test_spacecraft_roe gtest gmock gtest_main cddp)
 # gtest_discover_tests(test_spacecraft_roe)
 
-# add_executable(test_matplot test_matplot.cpp)
-# target_link_libraries(test_matplot gtest gmock gtest_main cddp)
-# gtest_discover_tests(test_matplot)
-
 if (CDDP_CPP_CASADI)
     add_executable(test_casadi test_casadi_solver.cpp)
     target_link_libraries(test_casadi gtest gmock gtest_main cddp)
@@ -194,3 +190,11 @@ gtest_discover_tests(test_eigen)
 add_executable(test_autodiff test_autodiff.cpp)
 target_link_libraries(test_autodiff gtest gmock gtest_main cddp)
 gtest_discover_tests(test_autodiff)
+
+add_test(
+  NAME PackageInstallSmoke
+  COMMAND ${CMAKE_COMMAND}
+    -DCDDP_BINARY_DIR=${CMAKE_BINARY_DIR}
+    -DCDDP_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+    -P ${CMAKE_SOURCE_DIR}/tests/package_smoke_test.cmake
+)

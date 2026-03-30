@@ -1,3 +1,5 @@
+find_package(Python3 COMPONENTS Interpreter Development.Module REQUIRED)
+
 find_package(pybind11 CONFIG QUIET)
 if(NOT pybind11_FOUND)
   message(STATUS "pybind11 not found, fetching...")
@@ -23,4 +25,14 @@ target_include_directories(_pycddp_core PRIVATE
   ${CMAKE_SOURCE_DIR}/include/cddp-cpp
 )
 
-install(TARGETS _pycddp_core DESTINATION pycddp)
+set(PYCDDP_INSTALL_DIR
+  "${CMAKE_INSTALL_LIBDIR}/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages/pycddp"
+)
+
+install(TARGETS _pycddp_core DESTINATION "${PYCDDP_INSTALL_DIR}")
+install(
+  FILES
+    ${CMAKE_CURRENT_SOURCE_DIR}/pycddp/__init__.py
+    ${CMAKE_CURRENT_SOURCE_DIR}/pycddp/_version.py
+  DESTINATION "${PYCDDP_INSTALL_DIR}"
+)

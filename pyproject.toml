@@ -19,5 +19,5 @@ viz = ["matplotlib>=3.5"]
 dev = ["pytest>=7.0", "matplotlib>=3.5"]
 
 [tool.scikit-build]
-cmake.args = ["-DCDDP_CPP_BUILD_PYTHON=ON", "-DCDDP_CPP_BUILD_TESTS=OFF", "-DCDDP_CPP_BUILD_EXAMPLES=OFF", "-DCDDP_CPP_ENABLE_PLOTTING=OFF"]
+cmake.args = ["-DCDDP_CPP_BUILD_PYTHON=ON", "-DCDDP_CPP_BUILD_TESTS=OFF", "-DCDDP_CPP_BUILD_EXAMPLES=OFF"]
 wheel.packages = ["python/pycddp"]

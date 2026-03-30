@@ -6,9 +6,6 @@
 
 namespace py = pybind11;
 
-template <typename T>
-using nodeleter = std::unique_ptr<T, py::nodelete>;
-
 // Trampoline for NonlinearObjective
 class PyNonlinearObjective : public cddp::NonlinearObjective {
 public:
@@ -34,8 +31,7 @@ public:
 };
 
 void bind_objective(py::module_& m) {
-    // Base class - py::nodelete so CDDP can take ownership
-    py::class_<cddp::Objective, nodeleter<cddp::Objective>>(m, "Objective")
+    py::class_<cddp::Objective>(m, "Objective")
         .def("evaluate", &cddp::Objective::evaluate,
              py::arg("states"), py::arg("controls"))
         .def("running_cost", &cddp::Objective::running_cost,
@@ -48,7 +44,7 @@ void bind_objective(py::module_& m) {
         .def("set_reference_states", &cddp::Objective::setReferenceStates,
              py::arg("reference_states"));
 
-    py::class_<cddp::QuadraticObjective, cddp::Objective, nodeleter<cddp::QuadraticObjective>>(m, "QuadraticObjective")
+    py::class_<cddp::QuadraticObjective, cddp::Objective>(m, "QuadraticObjective")
         .def(py::init<const Eigen::MatrixXd&, const Eigen::MatrixXd&,
                        const Eigen::MatrixXd&, const Eigen::VectorXd&,
                        const std::vector<Eigen::VectorXd>&, double>(),
@@ -63,6 +59,6 @@ void bind_objective(py::module_& m) {
         .def("set_R", &cddp::QuadraticObjective::setR, py::arg("R"))
         .def("set_Qf", &cddp::QuadraticObjective::setQf, py::arg("Qf"));
 
-    py::class_<cddp::NonlinearObjective, cddp::Objective, PyNonlinearObjective, nodeleter<cddp::NonlinearObjective>>(m, "NonlinearObjective")
+    py::class_<cddp::NonlinearObjective, cddp::Objective, PyNonlinearObjective>(m, "NonlinearObjective")
         .def(py::init<double>(), py::arg("timestep") = 0.1);
 }

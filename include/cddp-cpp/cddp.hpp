@@ -57,8 +57,4 @@
 #include "dynamics_model/quaternion_attitude.hpp"
 #include "dynamics_model/mrp_attitude.hpp"
 
-#ifdef CDDP_HAS_MATPLOT
-#include "matplot/matplot.h"
-#endif
-
 #endif // CDDP_HPP
