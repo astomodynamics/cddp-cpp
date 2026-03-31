@@ -34,6 +34,8 @@ namespace cddp
     // Constructor
     Constraint(const std::string &name) : name_(name) {}
 
+    virtual ~Constraint() = default;
+
     // Get the name of the constraint
     const std::string &getName() const { return name_; }
 

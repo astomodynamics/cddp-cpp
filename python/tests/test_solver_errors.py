@@ -109,7 +109,7 @@ def test_import_error_message_is_actionable(tmp_path):
     shutil.copy(source_dir / "_version.py", package_dir / "_version.py")
 
     proc = subprocess.run(
-        [sys.executable, "-c", "import pycddp"],
+        [sys.executable, "-s", "-c", "import pycddp"],
         env={"PYTHONPATH": str(tmp_path)},
         capture_output=True,
         text=True,
