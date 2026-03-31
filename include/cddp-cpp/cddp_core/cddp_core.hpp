@@ -45,7 +45,8 @@ enum class SolverType {
   CLDDP,   ///< Control-Limited Differential Dynamic Programming
   LogDDP,  ///< Log-Barrier Differential Dynamic Programming
   IPDDP,   ///< Interior Point Differential Dynamic Programming
-  MSIPDDP  ///< Multi-Shooting Interior Point Differential Dynamic Programming
+  MSIPDDP, ///< Multi-Shooting Interior Point Differential Dynamic Programming
+  ALDDP    ///< Augmented Lagrangian Differential Dynamic Programming
 };
 
 /**

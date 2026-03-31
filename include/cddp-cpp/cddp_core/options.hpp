@@ -165,6 +165,42 @@ namespace cddp
     };
 
     /**
+     * @brief Options for the ALDDP (Augmented Lagrangian DDP) solver.
+     *
+     * ALDDP uses an augmented Lagrangian method to handle general nonlinear
+     * state and control constraints. The solver alternates between an inner
+     * iLQR loop (which minimizes the augmented Lagrangian) and an outer loop
+     * that updates Lagrange multipliers and penalty weights.
+     */
+    struct ALDDPAlgorithmOptions
+    {
+        // Multiplier/penalty initialization
+        double lambda_init = 0.0;       ///< Initial Lagrange multiplier value.
+        double penalty_init = 1.0;      ///< Initial penalty weight.
+        double penalty_max = 1e8;       ///< Maximum penalty weight.
+        double penalty_update_factor = 10.0; ///< Factor to increase penalties.
+
+        // Inner loop control
+        int max_inner_iterations = 50;        ///< Max iLQR iterations per AL outer iteration.
+        double inner_tolerance_init = 1e-2;   ///< Initial inner iLQR convergence tolerance.
+        double inner_tolerance_factor = 0.1;  ///< Factor to tighten inner tolerance.
+        double inner_tolerance_min = 1e-6;    ///< Minimum inner tolerance.
+
+        // Outer loop control
+        int max_outer_iterations = 20;        ///< Max AL outer iterations.
+        double constraint_tolerance = 1e-6;   ///< Constraint satisfaction tolerance.
+
+        // Control constraint handling
+        bool use_boxqp_for_controls = true;   ///< Use BoxQP for control bounds (like CLDDP).
+
+        // Infeasible initialization (ALTRO Eqs. 30-32)
+        double slack_penalty = 1000.0;        ///< R_s weight on slack penalty term.
+
+        // Square-root backward pass (ALTRO Eqs. 19-29)
+        bool use_sqrt_backward_pass = false;  ///< QR-based factorization for numerical robustness.
+    };
+
+    /**
      * @brief Main options structure for the CDDP solver.
      *
      * This structure holds all configurable parameters for the CDDP algorithm and
@@ -210,6 +246,8 @@ namespace cddp
         IPDDPAlgorithmOptions ipddp; ///< Comprehensive options for the IPDDP solver.
         MSIPDDPAlgorithmOptions
             msipddp;                 ///< Comprehensive options for the MSIPDDP solver.
+        ALDDPAlgorithmOptions
+            alddp;                   ///< Comprehensive options for the ALDDP solver.
 
         // Constructor with defaults (relies on member initializers)
         CDDPOptions() = default;

@@ -11,8 +11,8 @@ namespace py = pybind11;
 
 namespace {
 
-constexpr std::array<const char *, 4> kBuiltinSolverNames = {
-    "CLDDP", "LogDDP", "IPDDP", "MSIPDDP"};
+constexpr std::array<const char *, 5> kBuiltinSolverNames = {
+    "CLDDP", "LogDDP", "IPDDP", "MSIPDDP", "ALDDP"};
 
 bool isBuiltinSolverName(const std::string &solver_name) {
     for (const char *name : kBuiltinSolverNames) {
