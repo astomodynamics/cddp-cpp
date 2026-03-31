@@ -25,14 +25,10 @@ target_include_directories(_pycddp_core PRIVATE
   ${CMAKE_SOURCE_DIR}/include/cddp-cpp
 )
 
-set(PYCDDP_INSTALL_DIR
-  "${CMAKE_INSTALL_LIBDIR}/python${Python3_VERSION_MAJOR}.${Python3_VERSION_MINOR}/site-packages/pycddp"
-)
-
-install(TARGETS _pycddp_core DESTINATION "${PYCDDP_INSTALL_DIR}")
+install(TARGETS _pycddp_core DESTINATION pycddp)
 install(
   FILES
     ${CMAKE_CURRENT_SOURCE_DIR}/pycddp/__init__.py
     ${CMAKE_CURRENT_SOURCE_DIR}/pycddp/_version.py
-  DESTINATION "${PYCDDP_INSTALL_DIR}"
+  DESTINATION pycddp
 )
