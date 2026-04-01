@@ -12,11 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-# CMakeLists.txt for the CDDP examples
-#
-# The legacy visualization-heavy C++ examples are kept in the repository as
-# reference material, but they no longer participate in the default build.
-# Python bindings are the supported plotting workflow going forward.
+# Build only the maintained example used in the default C++ configuration.
 
 add_executable(test_barrier_strategies test_barrier_strategies.cpp)
 target_link_libraries(test_barrier_strategies cddp)

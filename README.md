@@ -1,7 +1,7 @@
 # Constrained Differential Dynamic Programming (CDDP) solver in C++
 <img src="docs/assets/cddp_in_cpp.png" width="800" alt="CDDP IN CPP">
 
-**This library is under active development.**  Star the repo :star: to stay updated on its progress and eventual release. I welcome any suggestions as I'm building this library to gain practical C++ experience.
+This repository contains a C++ implementation of constrained differential dynamic programming (CDDP) and related solvers for trajectory optimization and model predictive control.
 
 ## Overview
 This is an optimal control solver library using constrained differential dynamic programming (CDDP) written in C++. This library is particularly useful for mobile robot trajectory optimization and model predictive control (MPC).
@@ -35,9 +35,9 @@ The default C++ build currently includes a barrier-strategy comparison example:
 ./examples/test_barrier_strategies
 ```
 
-Legacy visualization-heavy C++ examples remain in the repository as reference
-material, but they are no longer part of the default build. Python bindings are
-the supported plotting and notebook workflow.
+Several visualization-focused C++ examples remain in the repository, but they
+are not part of the default build. Use the Python bindings for plotting and
+notebook workflows.
 
 ## Installation
 ### Dependencies
@@ -91,17 +91,17 @@ If you use this work in an academic context, please cite this repository.
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Collaboration
-Contributions to this CDDP solver library are welcome! Whether you're interested in fixing bugs, adding new features, improving documentation, or suggesting new example applications, your input is valuable.
+Contributions are welcome.
 
 If you'd like to contribute:
-1.  **Fork the repository.**
-2.  **Create a new branch** for your feature or bug fix: `git checkout -b feature/your-feature-name` or `git checkout -b fix/your-bug-fix`.
-3.  **Make your changes** and ensure they are well-tested.
-4.  **Commit your changes:** `git commit -m 'Add some amazing feature'`.
-5.  **Push to the branch:** `git push origin feature/your-feature-name`.
-6.  **Open a Pull Request** against the `main` (or `master`) branch.
+1.  Fork the repository.
+2.  Create a branch for your change, for example `feature/your-feature-name` or `fix/your-bug-fix`.
+3.  Make the change and add or update tests as needed.
+4.  Commit with a descriptive message.
+5.  Push the branch.
+6.  Open a pull request against `master`.
 
-If you have ideas for collaboration, want to discuss potential research applications, or have any questions, please feel free to open an issue on GitHub or reach out to the @astomodynamics. We are particularly interested in exploring its use in novel robotic systems and complex motion planning scenarios.
+Use GitHub issues for bug reports, questions, or proposed changes.
 
 ## TODO
 * improve python binding ergonomics
