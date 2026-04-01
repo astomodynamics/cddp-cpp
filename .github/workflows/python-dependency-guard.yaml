@@ -1,0 +1,41 @@
+name: Python Dependency Guard
+
+on:
+  pull_request:
+    branches: [ master ]
+    paths:
+      - "pyproject.toml"
+      - "uv.lock"
+      - "security/python-direct-deps-allowlist.txt"
+      - "tools/check_python_dependency_policy.py"
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Enforce dependency policy
+        run: python tools/check_python_dependency_policy.py --base-ref "origin/${{ github.base_ref }}"
+
+  dependency-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Check dependency review
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

@@ -1,0 +1,8 @@
+# New top-level Python dependencies must be added here in the same PR.
+# Keep names normalized to package names, one per line.
+
+matplotlib
+numpy
+pybind11
+pytest
+scikit-build-core
