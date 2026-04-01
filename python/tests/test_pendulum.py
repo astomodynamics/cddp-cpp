@@ -76,3 +76,34 @@ def test_pendulum_logddp():
     assert len(history.objective) == len(history.complementary_infeasibility)
     assert len(history.objective) == len(history.regularization)
     assert len(history.objective) == len(history.barrier_mu)
+
+
+def test_pendulum_parallel_native_callbacks():
+    dt = 0.05
+    horizon = 40
+    x0 = np.array([np.pi, 0.0])
+    xref = np.array([0.0, 0.0])
+
+    Q = np.zeros((2, 2))
+    R = 0.1 * np.eye(1)
+    Qf = 100.0 * np.eye(2)
+
+    opts = pycddp.CDDPOptions()
+    opts.max_iterations = 50
+    opts.verbose = False
+    opts.print_solver_header = False
+    opts.enable_parallel = True
+    opts.num_threads = 2
+
+    solver = pycddp.CDDP(x0, xref, horizon, dt, opts)
+    solver.set_dynamical_system(
+        pycddp.Pendulum(dt, length=0.5, mass=1.0, damping=0.01)
+    )
+    solver.set_objective(pycddp.QuadraticObjective(Q, R, Qf, xref, [], dt))
+    solver.add_constraint(
+        "ctrl", pycddp.ControlConstraint(np.array([-50.0]), np.array([50.0]))
+    )
+
+    solution = solver.solve(pycddp.SolverType.CLDDP)
+
+    _assert_common_solution_fields(solution, horizon, "CLDDP")

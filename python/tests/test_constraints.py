@@ -1,6 +1,7 @@
 """Test constraint construction and evaluation."""
 import numpy as np
 import pycddp
+import pytest
 
 
 class CountingAffineConstraint(pycddp.Constraint):
@@ -111,3 +112,28 @@ def test_custom_python_constraint_with_solver():
     assert counters["evaluate"] > 0
     assert counters["state_jacobian"] > 0
     assert counters["control_jacobian"] > 0
+def test_constraint_base_is_rejected_cleanly():
+    dt = 0.1
+    opts = pycddp.CDDPOptions()
+    opts.max_iterations = 2
+    opts.verbose = False
+    opts.print_solver_header = False
+    opts.enable_parallel = True
+    opts.num_threads = 2
+
+    solver = pycddp.CDDP(np.array([1.0, 0.0]), np.zeros(2), 8, dt, opts)
+    solver.set_dynamical_system(
+        pycddp.LTISystem(
+            np.array([[0.0, 1.0], [0.0, 0.0]]),
+            np.array([[0.0], [1.0]]),
+            dt,
+        )
+    )
+    solver.set_objective(
+        pycddp.QuadraticObjective(
+            np.eye(2), 0.1 * np.eye(1), 10.0 * np.eye(2), np.zeros(2), [], dt
+        )
+    )
+
+    with pytest.raises(TypeError, match="Constraint is an abstract base class"):
+        solver.add_constraint("bad", pycddp.Constraint("bad"))

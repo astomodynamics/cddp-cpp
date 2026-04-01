@@ -25,7 +25,15 @@ def test_solve_by_name_raises_for_unknown_solver():
         solver.solve_by_name("NONEXISTENT")
 
 
-def test_solve_by_name_accepts_builtin_solver():
+@pytest.mark.parametrize(
+    ("solver_name", "expected_solver_name"),
+    [
+        ("CLDDP", "CLDDP"),
+        ("CLCDDP", "CLDDP"),
+        ("LOGDDP", "LogDDP"),
+    ],
+)
+def test_solve_by_name_accepts_core_aliases(solver_name, expected_solver_name):
     dt = 0.05
     horizon = 20
     x0 = np.array([np.pi, 0.0])
@@ -49,9 +57,9 @@ def test_solve_by_name_accepts_builtin_solver():
         "ctrl", pycddp.ControlConstraint(np.array([-50.0]), np.array([50.0]))
     )
 
-    solution = solver.solve_by_name("CLDDP")
+    solution = solver.solve_by_name(solver_name)
 
-    assert solution.solver_name == "CLDDP"
+    assert solution.solver_name == expected_solver_name
     assert solution.status_message
     assert len(solution.state_trajectory) == horizon + 1
 
@@ -63,6 +71,18 @@ def test_set_initial_trajectory_requires_dynamical_system():
 
     with pytest.raises(ValueError, match="is a dynamical system set"):
         solver.set_initial_trajectory(X, U)
+
+
+def test_set_dynamical_system_rejects_abstract_base():
+    solver = _make_solver()
+
+    with pytest.raises(TypeError, match="DynamicalSystem is an abstract base class"):
+        solver.set_dynamical_system(pycddp.DynamicalSystem(2, 1, 0.1))
+
+
+def test_set_objective_rejects_abstract_base():
+    with pytest.raises(TypeError, match="No constructor defined"):
+        pycddp.Objective()
 
 
 def test_set_initial_trajectory_rejects_bad_lengths():
@@ -109,8 +129,17 @@ def test_import_error_message_is_actionable(tmp_path):
     shutil.copy(source_dir / "_version.py", package_dir / "_version.py")
 
     proc = subprocess.run(
-        [sys.executable, "-s", "-c", "import pycddp"],
-        env={"PYTHONPATH": str(tmp_path)},
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-c",
+            (
+                "import sys; "
+                f"sys.path.insert(0, {str(tmp_path)!r}); "
+                "import pycddp"
+            ),
+        ],
         capture_output=True,
         text=True,
         check=False,
