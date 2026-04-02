@@ -1,7 +1,7 @@
 # Constrained Differential Dynamic Programming (CDDP) solver in C++
 <img src="docs/assets/cddp_in_cpp.png" width="800" alt="CDDP IN CPP">
 
-**This library is under active development.**  Star the repo :star: to stay updated on its progress and eventual release. I welcome any suggestions as I'm building this library to gain practical C++ experience.
+This repository contains a C++ implementation of constrained differential dynamic programming (CDDP) and related solvers for trajectory optimization and model predictive control.
 
 ## Overview
 This is an optimal control solver library using constrained differential dynamic programming (CDDP) written in C++. This library is particularly useful for mobile robot trajectory optimization and model predictive control (MPC).
@@ -29,119 +29,15 @@ $$
 $$
 
 ## Examples
-### Unicycle
-
-Simple car-like robot with velocity and steering control:
+The default C++ build currently includes a barrier-strategy comparison example:
 
 ```bash
-./examples/cddp_unicycle // after building
+./examples/test_barrier_strategies
 ```
 
-<img src="results/tests/unicycle.gif" width="300" alt="Unicycle Model CDDP">
-
-### Unicycle with Obstacle Avoidance
-
-Simple car-like robot with velocity and steering control:
-
-```bash
-./examples/cddp_unicycle_safe // after building
-```
-
-<img src="results/tests/unicycle_trajectory_comparison.png" width="300" alt="Unicycle Model CDDP with Obstacle Avoidance">
-
-### Unicycle with Obstacle Avoidance (infeasible initial guess)
-
-```bash
-./examples/cddp_unicycle_safe_ipddp // after building
-```
-
-<img src="results/tests/trajectory_comparison_ipddp.png" width="300" alt="Unicycle Model CDDP with Obstacle Avoidance">
-
-### Bicycle Model
-
-Bicycle model with velocity and steering control:
-
-```bash
-./examples/cddp_bicycle // after building
-```
-
-<img src="results/tests/bicycle.gif" width="300" alt="Bicycle Model CDDP">
-
-### Control-limited Car
-
-Car model with limited velocity and steering control:
-
-```bash
-./examples/cddp_car // after building
-```
-
-<img src="results/tests/car_parking.gif" width="300" alt="Car Model CDDP">
-
-```bash
-./examples/cddp_car_ipddp // after building
-```
-
-<img src="results/tests/car_parking_ipddp.gif" width="300" alt="Car Model CDDP">
-
-### Pendulum
-
-Simple pendulum with torque control:
-
-```bash
-./examples/cddp_pendulum // after building
-```
-
-
-<img src="results/tests/pendulum.gif" width="300" alt="Pendulum CDDP">
-
-### Cartpole
-
-Cartpole with cart control:
-
-```bash
-./examples/cddp_cartpole // after building
-```
-
-<img src="results/tests/cartpole.gif" width="300" alt="Cartpole CDDP">
-<img src="results/tests/cartpole_results.png" width="300" alt="Cartpole CDDP">
-
-
-### Quadrotor
-
-Quadrotor with thrust control:
-
-```bash
-./examples/cddp_quadrotor_point // after building
-```
-
-<img src="results/tests/quadrotor.gif" width="300" alt="Quadrotor CDDP">
-
-```bash
-./examples/cddp_quadrotor_circle // after building
-```
-
-<img src="results/tests/quadrotor_circle.gif" width="300" alt="Quadrotor CDDP">
-
-
-```bash
-./examples/cddp_quadrotor_figure_eight_horizontal // after building
-```
-<img src="results/tests/quadrotor_figure_eight_horizontal.gif" width="300" alt="Quadrotor CDDP">
-
-```bash
-./examples/cddp_quadrotor_figure_eight_vertical // after building
-```
-<img src="results/tests/quadrotor_figure_eight_vertical.gif" width="300" alt="Quadrotor CDDP">
-
-### Manipulator
-
-Manipulator with joint torque control:
-
-```bash
-./examples/cddp_manipulator // after building
-```
-
-<img src="results/tests/manipulator.gif" width="300" alt="Manipulator CDDP">
+Several visualization-focused C++ examples remain in the repository, but they
+are not part of the default build. Use the Python bindings for plotting and
+notebook workflows.
 
 ## Installation
 ### Dependencies
@@ -157,21 +53,9 @@ sudo apt-get install libeigen3-dev # For Ubuntu
 brew install eigen # For macOS
 ```
 
-* [gnuplot](http://www.gnuplot.info/) (Plotting Library)
-```bash
-sudo apt-get install gnuplot # For Ubuntu
-brew install gnuplot # For macOS
-```
-* [imagemagick](https://imagemagick.org/) (Image Processing Library)
-```bash
-sudo apt-get install imagemagick # For Ubuntu
-brew install imagemagick # For macOS
-```
-
-
 ### Building
 ```bash
-git clone -b v0.3.2 https://github.com/astomodynamics/cddp-cpp
+git clone https://github.com/astomodynamics/cddp-cpp
 cd cddp-cpp
 mkdir build && cd build
 cmake ..
@@ -192,7 +76,6 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 
 This library uses the following open-source libraries as core dependencies:
 
-* [matplotplusplus](https://github.com/alandefreitas/matplotplusplus) (MIT License)
 * [autodiff](https://github.com/autodiff/autodiff) (MIT License)
 
 This library also uses the following open-source libraries for optional features:
@@ -208,22 +91,22 @@ If you use this work in an academic context, please cite this repository.
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Collaboration
-Contributions to this CDDP solver library are welcome! Whether you're interested in fixing bugs, adding new features, improving documentation, or suggesting new example applications, your input is valuable.
+Contributions are welcome.
 
 If you'd like to contribute:
-1.  **Fork the repository.**
-2.  **Create a new branch** for your feature or bug fix: `git checkout -b feature/your-feature-name` or `git checkout -b fix/your-bug-fix`.
-3.  **Make your changes** and ensure they are well-tested.
-4.  **Commit your changes:** `git commit -m 'Add some amazing feature'`.
-5.  **Push to the branch:** `git push origin feature/your-feature-name`.
-6.  **Open a Pull Request** against the `main` (or `master`) branch.
+1.  Fork the repository.
+2.  Create a branch for your change, for example `feature/your-feature-name` or `fix/your-bug-fix`.
+3.  Make the change and add or update tests as needed.
+4.  Commit with a descriptive message.
+5.  Push the branch.
+6.  Open a pull request against `master`.
 
-If you have ideas for collaboration, want to discuss potential research applications, or have any questions, please feel free to open an issue on GitHub or reach out to the @astomodynamics. We are particularly interested in exploring its use in novel robotic systems and complex motion planning scenarios.
+Use GitHub issues for bug reports, questions, or proposed changes.
 
 ## TODO
-* add **python binding**
+* improve python binding ergonomics
 * improve parallelization
-* add simulation and its plots
+* add simulation examples and Python visualizations
   * Quadruped robot
   * Manipulator
   * Humanoid

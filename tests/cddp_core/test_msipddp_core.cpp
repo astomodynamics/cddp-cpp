@@ -24,9 +24,6 @@
 #include "gtest/gtest.h"
 
 #include "cddp.hpp"
-#include "matplot/matplot.h"
-
-using namespace matplot;
 // namespace fs = std::filesystem;
 
 TEST(MSIPDDPTest, Solve) {

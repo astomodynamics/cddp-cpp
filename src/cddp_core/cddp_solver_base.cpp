@@ -17,6 +17,7 @@
 #include "cddp_core/cddp_solver_base.hpp"
 #include <chrono>
 #include <cmath>
+#include <exception>
 #include <future>
 #include <iomanip>
 #include <iostream>
@@ -264,6 +265,7 @@ ForwardPassResult CDDPSolverBase::performForwardPass(CDDP &context) {
     // Multi-threaded
     std::vector<std::future<ForwardPassResult>> futures;
     futures.reserve(context.alphas_.size());
+    std::exception_ptr first_exception;
 
     for (double alpha : context.alphas_) {
       futures.push_back(
@@ -285,6 +287,9 @@ ForwardPassResult CDDPSolverBase::performForwardPass(CDDP &context) {
       } catch (const std::exception &e) {
         ++failed_count;
         last_error = e.what();
+        if (!first_exception) {
+          first_exception = std::current_exception();
+        }
         if (options.verbose) {
           std::cerr << getSolverName()
                     << ": Forward pass thread failed: " << e.what()
@@ -297,6 +302,14 @@ ForwardPassResult CDDPSolverBase::performForwardPass(CDDP &context) {
       std::cerr << getSolverName()
                 << ": ALL forward pass threads failed. Last error: "
                 << last_error << std::endl;
+    } else if (failed_count > 0 && options.verbose) {
+      std::cerr << getSolverName() << ": " << failed_count << " of "
+                << futures.size()
+                << " forward pass threads failed. Last error: " << last_error
+                << std::endl;
+    }
+    if (first_exception && !best_result.success) {
+      std::rethrow_exception(first_exception);
     }
   }
 
@@ -349,12 +362,29 @@ void CDDPSolverBase::precomputeDynamicsDerivatives(
   if (use_parallel) {
     std::vector<std::future<void>> futures;
     futures.reserve(horizon);
+    std::exception_ptr first_exception;
     for (int t = 0; t < horizon; ++t) {
       futures.push_back(
           std::async(std::launch::async, compute_derivatives, t));
     }
     for (auto &f : futures) {
-      f.get();
+      try {
+        if (f.valid()) {
+          f.get();
+        }
+      } catch (const std::exception &e) {
+        if (!first_exception) {
+          first_exception = std::current_exception();
+        }
+        if (options.verbose) {
+          std::cerr << getSolverName()
+                    << ": Dynamics derivatives computation thread failed: "
+                    << e.what() << std::endl;
+        }
+      }
+    }
+    if (first_exception) {
+      std::rethrow_exception(first_exception);
     }
   } else {
     for (int t = 0; t < horizon; ++t) {

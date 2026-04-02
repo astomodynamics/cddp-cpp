@@ -25,6 +25,8 @@ project(
   HOMEPAGE_URL  "https://github.com/astomodynamics/cddp-cpp"
 )
 
+include(GNUInstallDirs)
+
 set(CMAKE_CXX_STANDARD 17) # Enforce C++17 as the minimum standard
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Enforce C++17 as the minimum standard
 set(ABSL_PROPAGATE_CXX_STD ON) # Enforce C++17 for absl
@@ -43,6 +45,7 @@ endif()
 
 # Options
 option(CDDP_CPP_BUILD_TESTS "Whether to build tests." ON)
+option(CDDP_CPP_BUILD_EXAMPLES "Whether to build examples." ON)
 
 # CasADi Configuration
 option(CDDP_CPP_CASADI "Whether to use CasADi" OFF)
@@ -92,16 +95,6 @@ endif()
 # Enable FetchContent for downloading dependencies
 include(FetchContent)
 
-# Matplotplusplus
-FetchContent_Declare(matplotplusplus
-  GIT_REPOSITORY https://github.com/alandefreitas/matplotplusplus
-  GIT_TAG origin/master) # or whatever tag you want
-FetchContent_GetProperties(matplotplusplus)
-if(NOT matplotplusplus_POPULATED)
-    FetchContent_Populate(matplotplusplus)
-    add_subdirectory(${matplotplusplus_SOURCE_DIR} ${matplotplusplus_BINARY_DIR} EXCLUDE_FROM_ALL)
-endif()
-
 # autodiff
 set(AUTODIFF_BUILD_TESTS OFF CACHE BOOL "Don't build autodiff tests")
 set(AUTODIFF_BUILD_EXAMPLES OFF CACHE BOOL "Don't build autodiff examples")
@@ -116,6 +109,7 @@ FetchContent_MakeAvailable(autodiff)
 # Googletest
 if (CDDP_CPP_BUILD_TESTS)
   enable_testing()
+  set(INSTALL_GTEST OFF CACHE BOOL "Don't install GTest alongside cddp" FORCE)
   FetchContent_Declare(
     googletest
     GIT_REPOSITORY https://github.com/google/googletest.git
@@ -172,16 +166,19 @@ set(dynamics_model_srcs
   src/dynamics_model/euler_attitude.cpp
 )
 
-add_library(${PROJECT_NAME} 
+add_library(${PROJECT_NAME}
   ${cddp_core_srcs}
   ${dynamics_model_srcs}
 )
 
-target_link_libraries(${PROJECT_NAME} 
-  $<IF:$<BOOL:${Eigen3_FOUND}>,Eigen3::Eigen,>
-  matplot
-  autodiff
-) 
+# Enable position-independent code (required for Python shared library linking)
+set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+target_link_libraries(${PROJECT_NAME}
+  PUBLIC
+    $<IF:$<BOOL:${Eigen3_FOUND}>,Eigen3::Eigen,>
+    autodiff
+)
 
 if(NOT Eigen3_FOUND)
   target_include_directories(${PROJECT_NAME} PUBLIC ${EIGEN3_INCLUDE_DIRS})
@@ -189,12 +186,13 @@ endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/cddp-cpp>
-  $<INSTALL_INTERFACE:include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/cddp-cpp>
 )
 
 if (CDDP_CPP_CASADI)
   target_include_directories(${PROJECT_NAME} PUBLIC ${CASADI_INCLUDE_DIR})
-  target_link_libraries(${PROJECT_NAME} ${CASADI_LIBRARIES})
+  target_link_libraries(${PROJECT_NAME} PRIVATE ${CASADI_LIBRARIES})
 endif()
 
 # ACADOS
@@ -241,7 +239,7 @@ if (CDDP_CPP_ACADOS)
     include_directories(${BLASFEO_INCLUDE_DIR})
     include_directories(${HPIPM_INCLUDE_DIR})
     link_directories(${ACADOS_LIB_DIR})
-    target_link_libraries(${PROJECT_NAME} ${ACADOS_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME} PRIVATE ${ACADOS_LIBRARIES})
     
     # Add preprocessor definition to enable ACADOS in code
     target_compile_definitions(${PROJECT_NAME} PRIVATE CDDP_CPP_ACADOS_ENABLED=1)
@@ -258,11 +256,52 @@ if (CDDP_CPP_BUILD_TESTS)
 endif()
 
 # Build examples
-add_subdirectory(examples)
+if (CDDP_CPP_BUILD_EXAMPLES)
+  add_subdirectory(examples)
+endif()
 
-# Cmake compile commmand:
-# $ mkdir build
-# $ cd build
-# $ cmake -DCDDP_CPP_BUILD_TESTS=ON -DCDDP_CPP_CASADI=ON ..
-# $ make -j4
-# $ make test
+# Python bindings (optional)
+option(CDDP_CPP_BUILD_PYTHON "Build Python bindings" OFF)
+if(CDDP_CPP_BUILD_PYTHON)
+  add_subdirectory(python)
+endif()
+
+# Install targets
+include(CMakePackageConfigHelpers)
+
+install(TARGETS ${PROJECT_NAME}
+  EXPORT cddpTargets
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(DIRECTORY include/cddp-cpp/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/cddp-cpp
+  FILES_MATCHING PATTERN "*.hpp"
+)
+
+install(EXPORT cddpTargets
+  FILE cddpTargets.cmake
+  NAMESPACE cddp::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cddp
+)
+
+configure_package_config_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/cddpConfig.cmake.in
+  ${CMAKE_CURRENT_BINARY_DIR}/cddpConfig.cmake
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cddp
+)
+
+write_basic_package_version_file(
+  ${CMAKE_CURRENT_BINARY_DIR}/cddpConfigVersion.cmake
+  VERSION ${PROJECT_VERSION}
+  COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+  ${CMAKE_CURRENT_BINARY_DIR}/cddpConfig.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/cddpConfigVersion.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/cddp
+)

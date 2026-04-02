@@ -87,19 +87,19 @@ target_link_libraries(test_usv_3dof gtest gmock gtest_main cddp)
 gtest_discover_tests(test_usv_3dof)
 
 add_executable(test_mrp_attitude dynamics_model/test_mrp_attitude.cpp)
-target_link_libraries(test_mrp_attitude gtest gmock gtest_main cddp matplot)
+target_link_libraries(test_mrp_attitude gtest gmock gtest_main cddp)
 gtest_discover_tests(test_mrp_attitude)
 
 # add_executable(test_euler_attitude dynamics_model/test_euler_attitude.cpp)
-# target_link_libraries(test_euler_attitude gtest gmock gtest_main cddp matplot)
+# target_link_libraries(test_euler_attitude gtest gmock gtest_main cddp)
 # gtest_discover_tests(test_euler_attitude)
 
 # add_executable(test_quaternion_attitude dynamics_model/test_quaternion_attitude.cpp)
-# target_link_libraries(test_quaternion_attitude gtest gmock gtest_main cddp matplot)
+# target_link_libraries(test_quaternion_attitude gtest gmock gtest_main cddp)
 # gtest_discover_tests(test_quaternion_attitude)
 
 add_executable(test_attitude_dynamics dynamics_model/test_attitude_dynamics.cpp)
-target_link_libraries(test_attitude_dynamics gtest gmock gtest_main cddp matplot)
+target_link_libraries(test_attitude_dynamics gtest gmock gtest_main cddp)
 gtest_discover_tests(test_attitude_dynamics)
 
 add_executable(test_hessian test_hessian.cpp)
@@ -175,10 +175,6 @@ gtest_discover_tests(test_msipddp_solver)
 # target_link_libraries(test_spacecraft_roe gtest gmock gtest_main cddp)
 # gtest_discover_tests(test_spacecraft_roe)
 
-# add_executable(test_matplot test_matplot.cpp)
-# target_link_libraries(test_matplot gtest gmock gtest_main cddp)
-# gtest_discover_tests(test_matplot)
-
 if (CDDP_CPP_CASADI)
     add_executable(test_casadi test_casadi_solver.cpp)
     target_link_libraries(test_casadi gtest gmock gtest_main cddp)
@@ -194,3 +190,11 @@ gtest_discover_tests(test_eigen)
 add_executable(test_autodiff test_autodiff.cpp)
 target_link_libraries(test_autodiff gtest gmock gtest_main cddp)
 gtest_discover_tests(test_autodiff)
+
+add_test(
+  NAME PackageInstallSmoke
+  COMMAND ${CMAKE_COMMAND}
+    -DCDDP_BINARY_DIR=${CMAKE_BINARY_DIR}
+    -DCDDP_SOURCE_DIR=${CMAKE_SOURCE_DIR}
+    -P ${CMAKE_SOURCE_DIR}/tests/package_smoke_test.cmake
+)

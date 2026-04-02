@@ -16,7 +16,6 @@
 #include <iostream>
 #include <vector>
 #include <chrono>
-#include <matplot/matplot.h>
 #include <sys/stat.h>
 #include <random>
 #include <cmath>
@@ -827,4 +826,3 @@ TEST(CLDDPTest, SolveQuadrotor)
         << "Warm start should also converge";
     EXPECT_LE(warm_iterations, iterations_completed + 20) << "Warm start should not take significantly more iterations";
 }
-

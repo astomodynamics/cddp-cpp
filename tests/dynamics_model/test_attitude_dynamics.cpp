@@ -5,7 +5,6 @@
 #include "cddp_core/helper.hpp" // For attitude conversions
 #include <Eigen/Dense>
 #include <vector>
-#include <matplot/matplot.h> // For plotting
 
 namespace cddp
 {
@@ -211,7 +210,7 @@ namespace cddp
             }
         }
 
-        // --- Trajectory Comparison and Visualization ---
+        // --- Trajectory Comparison ---
         TEST_F(AttitudeDynamicsTest, TrajectoryComparison)
         {
             int num_steps = 500;
@@ -266,202 +265,19 @@ namespace cddp
                 omega_traj_quat_sim[k + 1] = current_state_quat.tail<3>();
             }
 
-            // Plotting using matplotplusplus
-            using namespace matplot;
-
-            // Extract angle components for plotting
-            std::vector<double> yaw_mrp, pitch_mrp, roll_mrp;
-            std::vector<double> yaw_quat_euler, pitch_quat_euler, roll_quat_euler;
-            std::vector<double> yaw_euler, pitch_euler, roll_euler;
-            std::vector<double> omx_mrp, omy_mrp, omz_mrp;
-            std::vector<double> omx_quat_sim, omy_quat_sim, omz_quat_sim;
-            std::vector<double> omx_euler, omy_euler, omz_euler;
-            std::vector<double> qw_mrp, qx_mrp, qy_mrp, qz_mrp;
-            std::vector<double> qw_quat, qx_quat, qy_quat, qz_quat;
-
-            for (const auto &angles : euler_traj_mrp)
-            {
-                yaw_mrp.push_back(angles(0));
-                pitch_mrp.push_back(angles(1));
-                roll_mrp.push_back(angles(2));
-            }
-            for (const auto &angles : euler_traj_euler)
-            {
-                yaw_euler.push_back(angles(0));
-                pitch_euler.push_back(angles(1));
-                roll_euler.push_back(angles(2));
-            }
-            for (const auto &angles : quat_traj_quat)
-            {
-                Eigen::Vector3d euler = cddp::helper::quatToEulerZYX(angles);
-                yaw_quat_euler.push_back(euler(0));
-                pitch_quat_euler.push_back(euler(1));
-                roll_quat_euler.push_back(euler(2));
-            }
-            for (const auto &omega : omega_traj_mrp)
-            {
-                omx_mrp.push_back(omega(0));
-                omy_mrp.push_back(omega(1));
-                omz_mrp.push_back(omega(2));
-            }
-            for (const auto &omega : omega_traj_euler)
-            {
-                omx_euler.push_back(omega(0));
-                omy_euler.push_back(omega(1));
-                omz_euler.push_back(omega(2));
-            }
-            for (const auto &omega : omega_traj_quat_sim)
-            {
-                omx_quat_sim.push_back(omega(0));
-                omy_quat_sim.push_back(omega(1));
-                omz_quat_sim.push_back(omega(2));
-            }
-
-            // Extraction loops for quaternion components
-            for (const auto &quat : quat_traj_mrp)
-            {
-                qw_mrp.push_back(quat(0));
-                qx_mrp.push_back(quat(1));
-                qy_mrp.push_back(quat(2));
-                qz_mrp.push_back(quat(3));
-            }
-            for (const auto &quat : quat_traj_quat)
-            {
-                qw_quat.push_back(quat(0));
-                qx_quat.push_back(quat(1));
-                qy_quat.push_back(quat(2));
-                qz_quat.push_back(quat(3));
-            }
-
-            // figure_handle fig = figure(true);   // Create a new figure window
-            // fig->position({50, 50, 1600, 900}); // Adjusted size for more plots
-
-            // int current_subplot = 0;
-
-            // // Plot Euler Angles
-            // subplot(2, 3, current_subplot++);
-            // plot(t_eval, yaw_mrp, "r--")->line_width(2);
-            // hold(on);
-            // plot(t_eval, yaw_quat_euler, "g-")->line_width(2);
-            // plot(t_eval, yaw_euler, "b:")->line_width(2);
-            // hold(off);
-            // title("Yaw (psi) from Euler");
-            // xlabel("Time (s)");
-            // ylabel("Angle (rad)");
-            // legend({"MRP->E", "Quat->E", "Euler"});
-            // grid(on);
-
-            // subplot(2, 3, current_subplot++);
-            // plot(t_eval, pitch_mrp, "r--")->line_width(2);
-            // hold(on);
-            // plot(t_eval, pitch_quat_euler, "g-")->line_width(2);
-            // plot(t_eval, pitch_euler, "b:")->line_width(2);
-            // hold(off);
-            // title("Pitch (theta) from Euler");
-            // xlabel("Time (s)");
-            // ylabel("Angle (rad)");
-            // legend({"MRP->E", "Quat->E", "Euler"});
-            // grid(on);
-
-            // subplot(2, 3, current_subplot++);
-            // plot(t_eval, roll_mrp, "r--")->line_width(2);
-            // hold(on);
-            // plot(t_eval, roll_quat_euler, "g-")->line_width(2);
-            // plot(t_eval, roll_euler, "b:")->line_width(2);
-            // hold(off);
-            // title("Roll (phi) from Euler");
-            // xlabel("Time (s)");
-            // ylabel("Angle (rad)");
-            // legend({"MRP->E", "Quat->E", "Euler"});
-            // grid(on);
-
-            // // Plot Angular Velocities
-            // subplot(2, 3, current_subplot++);
-            // plot(t_eval, omx_mrp, "r--")->line_width(2);
-            // hold(on);
-            // plot(t_eval, omx_quat_sim, "g-")->line_width(2);
-            // plot(t_eval, omx_euler, "b:")->line_width(2);
-            // hold(off);
-            // title("Omega X");
-            // xlabel("Time (s)");
-            // ylabel("Rate (rad/s)");
-            // legend({"MRP", "Quaternion", "Euler"});
-            // grid(on);
-
-            // subplot(2, 3, current_subplot++);
-            // plot(t_eval, omy_mrp, "r--")->line_width(2);
-            // hold(on);
-            // plot(t_eval, omy_quat_sim, "g-")->line_width(2);
-            // plot(t_eval, omy_euler, "b:")->line_width(2);
-            // hold(off);
-            // title("Omega Y");
-            // xlabel("Time (s)");
-            // ylabel("Rate (rad/s)");
-            // legend({"MRP", "Quaternion", "Euler"});
-            // grid(on);
-
-            // subplot(2, 3, current_subplot++);
-            // plot(t_eval, omz_mrp, "r--")->line_width(2);
-            // hold(on);
-            // plot(t_eval, omz_quat_sim, "g-")->line_width(2);
-            // plot(t_eval, omz_euler, "b:")->line_width(2);
-            // hold(off);
-            // title("Omega Z");
-            // xlabel("Time (s)");
-            // ylabel("Rate (rad/s)");
-            // legend({"MRP", "Quaternion", "Euler"});
-            // grid(on);
-            // // show();
-
-            // figure_handle fig_quat = figure(true);
-            // fig_quat->position({50, 50, 1600, 900});
-            // current_subplot = 0;
-
-            // subplot(2, 3, current_subplot++);
-            // plot(t_eval, qw_mrp, "r--")->line_width(2);
-            // hold(on);
-            // plot(t_eval, qw_quat, "g-")->line_width(2);
-            // hold(off);
-            // title("Quaternion w");
-            // xlabel("Time (s)");
-            // ylabel("Quaternion");
-            // legend({"MRP", "Quaternion"});
-            // grid(on);
-
-            // subplot(2, 3, current_subplot++);
-            // plot(t_eval, qx_mrp, "r--")->line_width(2);
-            // hold(on);
-            // plot(t_eval, qx_quat, "g-")->line_width(2);
-            // hold(off);
-            // title("Quaternion x");
-            // xlabel("Time (s)");
-            // ylabel("Quaternion");
-            // legend({"MRP", "Quaternion"});
-            // grid(on);
-
-            // subplot(2, 3, current_subplot++);
-            // plot(t_eval, qy_mrp, "r--")->line_width(2);
-            // hold(on);
-            // plot(t_eval, qy_quat, "g-")->line_width(2);
-            // hold(off);
-            // title("Quaternion y");
-            // xlabel("Time (s)");
-            // ylabel("Quaternion");
-            // legend({"MRP", "Quaternion"});
-            // grid(on);
-
-            // subplot(2, 3, current_subplot++);
-            // plot(t_eval, qz_mrp, "r--")->line_width(2);
-            // hold(on);
-            // plot(t_eval, qz_quat, "g-")->line_width(2);
-            // hold(off);
-            // title("Quaternion z");
-            // xlabel("Time (s)");
-            // ylabel("Quaternion");
-            // legend({"MRP", "Quaternion"});
-            // grid(on);
-
-            // show(); // Display plot window
+            ASSERT_EQ(t_eval.size(), static_cast<size_t>(num_steps + 1));
+            ASSERT_EQ(euler_traj_mrp.size(), static_cast<size_t>(num_steps + 1));
+            ASSERT_EQ(quat_traj_quat.size(), static_cast<size_t>(num_steps + 1));
+            ASSERT_EQ(quat_traj_mrp.size(), static_cast<size_t>(num_steps + 1));
+            EXPECT_TRUE(current_state_mrp.allFinite());
+            EXPECT_TRUE(current_state_quat.allFinite());
+            EXPECT_TRUE(current_state_euler.allFinite());
+            EXPECT_TRUE(euler_traj_mrp.back().allFinite());
+            EXPECT_TRUE(euler_traj_euler.back().allFinite());
+            EXPECT_TRUE(quat_traj_quat.back().allFinite());
+            EXPECT_TRUE(quat_traj_mrp.back().allFinite());
+            EXPECT_TRUE(omega_traj_mrp.back().isApprox(omega_traj_quat_sim.back(), 1e-6));
+            EXPECT_TRUE(omega_traj_mrp.back().isApprox(omega_traj_euler.back(), 1e-6));
         }
 
     } // namespace tests

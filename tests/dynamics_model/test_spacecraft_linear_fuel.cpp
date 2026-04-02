@@ -27,8 +27,6 @@
 #include "dynamics_model/spacecraft_linear_fuel.hpp"
 #include "cddp.hpp"
 using namespace cddp;
-using namespace matplot;
-namespace plt = matplot;
 
 TEST(SpacecraftLinearFuelTest, DiscreteDynamics) {
     // Create an SpacecraftLinearFuel instance
@@ -125,43 +123,6 @@ TEST(SpacecraftLinearFuelTest, RelativeTrajectory) {
         states[i + 1] = model.getDiscreteDynamics(states[i], control, 0.0);
     }
 
-    // Store trajectory points
-    std::vector<double> x_data, y_data, z_data, vx_data, vy_data, vz_data, mass_data, control_x_data, control_y_data, control_z_data;
-    for (int i = 0; i < num_steps + 1; ++i) {
-        x_data.push_back(states[i](0));
-        y_data.push_back(states[i](1));
-        z_data.push_back(states[i](2));
-        vx_data.push_back(states[i](3));
-        vy_data.push_back(states[i](4));
-        vz_data.push_back(states[i](5));
-        mass_data.push_back(states[i](6));
-    }
-
-    // Plot 3d trajectory
-    // plt::figure();
-    // plt::plot3(x_data, y_data, z_data, "r-");
-    // plt::show(); 
-}
-
-// Helper function to create spacecraft marker coordinates
-std::vector<std::vector<double>> createSpacecraftMarker(
-    const Eigen::Vector3d& position,
-    double size = 1.0) {
-    
-    std::vector<std::vector<double>> marker(3, std::vector<double>());
-    
-    // Simple cube-like spacecraft shape
-    std::vector<double> dx = {-1, 1, 1, -1, -1, -1, 1, 1, -1};
-    std::vector<double> dy = {-1, -1, 1, 1, -1, -1, -1, 1, 1};
-    std::vector<double> dz = {-1, -1, -1, -1, -1, 1, 1, 1, 1};
-    
-    for (size_t i = 0; i < dx.size(); ++i) {
-        marker[0].push_back(position.x() + size * dx[i]);
-        marker[1].push_back(position.y() + size * dy[i]);
-        marker[2].push_back(position.z() + size * dz[i]);
-    }
-    
-    return marker;
 }
 
 int main(int argc, char **argv) {
