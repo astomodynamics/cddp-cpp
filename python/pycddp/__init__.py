@@ -24,6 +24,7 @@ try:
     LogBarrierOptions,
     IPDDPOptions,
     MSIPDDPOptions,
+    ALDDPOptions,
 
     # Core solver
     CDDP,
@@ -50,7 +51,6 @@ try:
     SpacecraftNonlinear,
     DreyfusRocket,
     SpacecraftLanding2D,
-    SpacecraftROE,
     SpacecraftTwobody,
     LTISystem,
     Usv3Dof,

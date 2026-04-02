@@ -1,7 +1,7 @@
 # Constrained Differential Dynamic Programming (CDDP) solver in C++
 <img src="docs/assets/cddp_in_cpp.png" width="800" alt="CDDP IN CPP">
 
-**This library is under active development.**  Star the repo :star: to stay updated on its progress and eventual release. I welcome any suggestions as I'm building this library to gain practical C++ experience.
+This repository contains a C++ implementation of constrained differential dynamic programming (CDDP) and related solvers for trajectory optimization and model predictive control.
 
 ## Overview
 This is an optimal control solver library using constrained differential dynamic programming (CDDP) written in C++. This library is particularly useful for mobile robot trajectory optimization and model predictive control (MPC).
@@ -29,15 +29,57 @@ $$
 $$
 
 ## Examples
-The default C++ build currently includes a barrier-strategy comparison example:
+The maintained example surface is now split:
+
+* a small C++ reference set in `examples/`, built when `CDDP_CPP_BUILD_EXAMPLES=ON`
+* the Python portfolio for plotting, animation, and notebook workflows
+
+The kept C++ examples are:
+
+* `cddp_pendulum.cpp`
+* `cddp_cartpole.cpp`
+* `cddp_unicycle.cpp`
+* `cddp_quadrotor_point.cpp`
+* `cddp_manipulator.cpp`
+
+The wider historical C++ example inventory has been removed to keep the example
+surface focused. The kept C++ examples are intentionally minimal and do not depend on
+visualization libraries.
+
+### Python Portfolio
+The Python bindings now ship with a small animation-focused portfolio built on
+top of the same solver models used by the C++ examples:
 
 ```bash
-./examples/test_barrier_strategies
+source .venv/bin/activate
+python examples/python_portfolio.py --demo all
 ```
 
-Legacy visualization-heavy C++ examples remain in the repository as reference
-material, but they are no longer part of the default build. Python bindings are
-the supported plotting and notebook workflow.
+This generates GIFs under `docs/assets/python_portfolio/` for:
+
+* pendulum swing-up
+* cart-pole swing-up
+* unicycle obstacle avoidance
+* full-lap MPCC racing line tracking
+
+See [docs/python_portfolio.md](docs/python_portfolio.md) for the gallery and
+regeneration command.
+
+Pendulum swing-up:
+<img src="docs/assets/python_portfolio/pendulum_swing_up.gif" width="820" alt="Python pendulum swing-up portfolio demo">
+
+Cart-pole swing-up:
+<img src="docs/assets/python_portfolio/cartpole_swing_up.gif" width="820" alt="Python cart-pole swing-up portfolio demo">
+
+Unicycle obstacle avoidance:
+<img src="docs/assets/python_portfolio/unicycle_obstacle_avoidance.gif" width="820" alt="Python unicycle obstacle avoidance portfolio demo">
+
+MPCC racing line tracking:
+<img src="docs/assets/python_portfolio/mpcc_racing_line.gif" width="820" alt="Python MPCC racing line portfolio demo">
+
+The MPCC portfolio example is a lightweight kinematic contouring-control demo.
+Its vendored track data in `examples/data/` is derived from the
+[`alexliniger/MPCC`](https://github.com/alexliniger/MPCC) project.
 
 ## Installation
 ### Dependencies
@@ -69,8 +111,7 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 ## References
 * Y. Tassa, N. Mansard and E. Todorov, "Control-limited differential dynamic programming," 2014 IEEE International Conference on Robotics and Automation (ICRA), 2014, pp. 1168-1175, doi: <10.1109/ICRA.2014.6907001>.
 * Pavlov, A., Shames, I., and Manzie, C., “Interior Point Differential Dynamic Programming,” IEEE Transactions on Control Systems Technology, Vol. 29, No. 6, 2021, pp. 2720–2727.
-* Yuval Tassa's iLQG/DDP trajectory optimization: <https://www.mathworks.com/matlabcentral/fileexchange/52069-ilqg-ddp-trajectory-optimization>
-* Andrei Pavlov's GitHub repository: <https://github.com/xapavlov/ipddp>
+* Liniger, A., Domahidi, A., and Morari, M., “Optimization-based autonomous racing of 1:43 scale RC cars,” Optimal Control Applications and Methods, 2015. doi: <10.1002/oca.2123>.
 
 ## Third Party Libraries
 
@@ -91,17 +132,15 @@ If you use this work in an academic context, please cite this repository.
 This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## Collaboration
-Contributions to this CDDP solver library are welcome! Whether you're interested in fixing bugs, adding new features, improving documentation, or suggesting new example applications, your input is valuable.
+Contributions are welcome.
 
-If you'd like to contribute:
-1.  **Fork the repository.**
-2.  **Create a new branch** for your feature or bug fix: `git checkout -b feature/your-feature-name` or `git checkout -b fix/your-bug-fix`.
-3.  **Make your changes** and ensure they are well-tested.
-4.  **Commit your changes:** `git commit -m 'Add some amazing feature'`.
-5.  **Push to the branch:** `git push origin feature/your-feature-name`.
-6.  **Open a Pull Request** against the `main` (or `master`) branch.
+Start with:
 
-If you have ideas for collaboration, want to discuss potential research applications, or have any questions, please feel free to open an issue on GitHub or reach out to the @astomodynamics. We are particularly interested in exploring its use in novel robotic systems and complex motion planning scenarios.
+- [CONTRIBUTING.md](CONTRIBUTING.md) for setup, validation, and PR expectations
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards
+- [SECURITY.md](SECURITY.md) for vulnerability reporting guidance
+
+Use GitHub issues for bug reports and feature requests, and open pull requests against `master`.
 
 ## TODO
 * improve python binding ergonomics

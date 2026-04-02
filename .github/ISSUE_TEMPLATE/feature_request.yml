@@ -1,0 +1,36 @@
+name: Feature request
+description: Propose an improvement to the solver, examples, bindings, or docs
+title: "[feature] "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please describe the problem first, then the change you want.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case
+      description: What limitation, missing capability, or workflow pain does this address?
+      placeholder: I am trying to ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+      description: Describe the API, behavior, or workflow you would like to see.
+      placeholder: Add support for ...
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What workarounds or alternative designs have you considered?
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Benchmarks, references, examples, or prior art that help clarify the request.

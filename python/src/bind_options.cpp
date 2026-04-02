@@ -104,7 +104,7 @@ void bind_options(py::module_& m) {
         .def_readwrite("use_controlled_rollout", &cddp::MSIPDDPAlgorithmOptions::use_controlled_rollout)
         .def_readwrite("costate_var_init_scale", &cddp::MSIPDDPAlgorithmOptions::costate_var_init_scale);
 
-    // ALDDPAlgorithmOptions
+    // ALDDPAlgorithmOptions exposed as a flat Python binding.
     py::class_<cddp::ALDDPAlgorithmOptions>(m, "ALDDPOptions")
         .def(py::init<>())
         .def_readwrite("lambda_init", &cddp::ALDDPAlgorithmOptions::lambda_init)

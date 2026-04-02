@@ -158,7 +158,6 @@ set(dynamics_model_srcs
   src/dynamics_model/spacecraft_nonlinear.cpp
   src/dynamics_model/dreyfus_rocket.cpp
   src/dynamics_model/spacecraft_landing2d.cpp
-  src/dynamics_model/spacecraft_roe.cpp
   src/dynamics_model/lti_system.cpp
   src/dynamics_model/spacecraft_twobody.cpp
   src/dynamics_model/usv_3dof.cpp
@@ -187,6 +186,7 @@ endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/cddp-cpp>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/cddp-cpp>
 )
 

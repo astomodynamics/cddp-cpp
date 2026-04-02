@@ -1,5 +1,6 @@
 #include <array>
 #include <sstream>
+#include <string_view>
 
 #include <pybind11/eigen.h>
 #include <pybind11/pybind11.h>
@@ -11,27 +12,96 @@ namespace py = pybind11;
 
 namespace {
 
-constexpr std::array<const char *, 5> kBuiltinSolverNames = {
-    "CLDDP", "LogDDP", "IPDDP", "MSIPDDP", "ALDDP"};
+template <typename Func>
+auto callWrapped(bool requires_gil, Func &&func) -> decltype(func()) {
+    if (requires_gil) {
+        py::gil_scoped_acquire gil;
+        return func();
+    }
+    return func();
+}
 
-bool isBuiltinSolverName(const std::string &solver_name) {
-    for (const char *name : kBuiltinSolverNames) {
-        if (solver_name == name) {
+template <std::size_t N>
+bool isExactCoreType(const py::handle &object,
+                     const std::array<std::string_view, N> &type_names) {
+    const py::type object_type = py::type::of(object);
+    const std::string module = py::str(object_type.attr("__module__"));
+    if (module != "pycddp._pycddp_core") {
+        return false;
+    }
+
+    const std::string name = py::str(object_type.attr("__name__"));
+    for (std::string_view type_name : type_names) {
+        if (name == type_name) {
             return true;
         }
     }
     return false;
 }
 
-std::string builtinSolverList() {
-    std::ostringstream stream;
-    for (std::size_t i = 0; i < kBuiltinSolverNames.size(); ++i) {
-        if (i > 0) {
-            stream << ", ";
-        }
-        stream << kBuiltinSolverNames[i];
-    }
-    return stream.str();
+bool nativeDynamicsCanSkipGil(const py::handle &object) {
+    static constexpr std::array<std::string_view, 23> kNativeDynamicsTypes = {
+        "Pendulum",         "Unicycle",        "Bicycle",
+        "Car",              "CartPole",        "DubinsCar",
+        "Forklift",         "Acrobot",         "Quadrotor",
+        "QuadrotorRate",    "Manipulator",     "HCW",
+        "SpacecraftLinearFuel",                "SpacecraftNonlinear",
+        "DreyfusRocket",    "SpacecraftLanding2D",
+        "SpacecraftTwobody",
+        "LTISystem",        "Usv3Dof",         "EulerAttitude",
+        "QuaternionAttitude",                  "MrpAttitude",
+    };
+    return isExactCoreType(object, kNativeDynamicsTypes);
+}
+
+bool nativeObjectiveCanSkipGil(const py::handle &object) {
+    static constexpr std::array<std::string_view, 1> kNativeObjectiveTypes = {
+        "QuadraticObjective",
+    };
+    return isExactCoreType(object, kNativeObjectiveTypes);
+}
+
+bool nativeConstraintCanSkipGil(const py::handle &object) {
+    static constexpr std::array<std::string_view, 8> kNativeConstraintTypes = {
+        "ControlConstraint",        "StateConstraint",
+        "LinearConstraint",         "BallConstraint",
+        "PoleConstraint",           "SecondOrderConeConstraint",
+        "ThrustMagnitudeConstraint", "MaxThrustMagnitudeConstraint",
+    };
+    return isExactCoreType(object, kNativeConstraintTypes);
+}
+
+bool isExactConstraintBase(const py::handle &object) {
+    static constexpr std::array<std::string_view, 1> kConstraintBaseTypes = {
+        "Constraint",
+    };
+    return isExactCoreType(object, kConstraintBaseTypes);
+}
+
+bool isExactDynamicsBase(const py::handle &object) {
+    static constexpr std::array<std::string_view, 1> kDynamicsBaseTypes = {
+        "DynamicalSystem",
+    };
+    return isExactCoreType(object, kDynamicsBaseTypes);
+}
+
+bool isExactObjectiveBase(const py::handle &object) {
+    static constexpr std::array<std::string_view, 1> kObjectiveBaseTypes = {
+        "Objective",
+    };
+    return isExactCoreType(object, kObjectiveBaseTypes);
+}
+
+bool isKnownSolverName(const std::string &solver_name) {
+    return solver_name == "CLDDP" || solver_name == "CLCDDP" ||
+           solver_name == "LogDDP" || solver_name == "LOGDDP" ||
+           solver_name == "IPDDP" || solver_name == "MSIPDDP" ||
+           solver_name == "ALDDP" ||
+           cddp::CDDP::isSolverRegistered(solver_name);
+}
+
+bool isUnknownSolverStatus(const std::string &status_message) {
+    return status_message.rfind("UnknownSolver", 0) == 0;
 }
 
 void validateInitialTrajectory(cddp::CDDP &solver,
@@ -86,15 +156,17 @@ void validateInitialTrajectory(cddp::CDDP &solver,
 // These wrappers let the C++ solver hold Python-defined solver objects without
 // adopting the Python object's raw allocation. The py::object keeps the
 // original Python instance alive, the raw pointer only forwards virtual calls,
-// and each forwarded method reacquires the GIL because solver work may run on
-// worker threads when parallel execution is enabled.
+// and each forwarded method only reacquires the GIL when the object is truly
+// Python-backed. Native extension types can stay on the fast path.
 class PythonBackedDynamicalSystem : public cddp::DynamicalSystem {
 public:
-    PythonBackedDynamicalSystem(py::object owner, cddp::DynamicalSystem *wrapped)
+    PythonBackedDynamicalSystem(py::object owner, cddp::DynamicalSystem *wrapped,
+                                bool requires_gil)
         : cddp::DynamicalSystem(wrapped->getStateDim(), wrapped->getControlDim(),
                                 wrapped->getTimestep(),
                                 wrapped->getIntegrationType()),
-          owner_(std::move(owner)), wrapped_(wrapped) {}
+          owner_(std::move(owner)), wrapped_(wrapped),
+          requires_gil_(requires_gil) {}
 
     ~PythonBackedDynamicalSystem() override {
         try {
@@ -108,70 +180,81 @@ public:
     Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd &state,
                                           const Eigen::VectorXd &control,
                                           double time) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getContinuousDynamics(state, control, time);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getContinuousDynamics(state, control, time);
+        });
     }
 
     cddp::VectorXdual2nd
     getContinuousDynamicsAutodiff(const cddp::VectorXdual2nd &state,
                                   const cddp::VectorXdual2nd &control,
                                   double time) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getContinuousDynamicsAutodiff(state, control, time);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getContinuousDynamicsAutodiff(state, control, time);
+        });
     }
 
     Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd &state,
                                         const Eigen::VectorXd &control,
                                         double time) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getDiscreteDynamics(state, control, time);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getDiscreteDynamics(state, control, time);
+        });
     }
 
     Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state,
                                      const Eigen::VectorXd &control,
                                      double time) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getStateJacobian(state, control, time);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getStateJacobian(state, control, time);
+        });
     }
 
     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd &state,
                                        const Eigen::VectorXd &control,
                                        double time) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getControlJacobian(state, control, time);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getControlJacobian(state, control, time);
+        });
     }
 
     std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state,
                                                  const Eigen::VectorXd &control,
                                                  double time) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getStateHessian(state, control, time);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getStateHessian(state, control, time);
+        });
     }
 
     std::vector<Eigen::MatrixXd>
     getControlHessian(const Eigen::VectorXd &state,
                       const Eigen::VectorXd &control,
                       double time) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getControlHessian(state, control, time);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getControlHessian(state, control, time);
+        });
     }
 
     std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state,
                                                  const Eigen::VectorXd &control,
                                                  double time) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getCrossHessian(state, control, time);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getCrossHessian(state, control, time);
+        });
     }
 
 private:
     py::object owner_;
     cddp::DynamicalSystem *wrapped_;
+    bool requires_gil_;
 };
 
 class PythonBackedObjective : public cddp::Objective {
 public:
-    PythonBackedObjective(py::object owner, cddp::Objective *wrapped)
-        : owner_(std::move(owner)), wrapped_(wrapped) {}
+    PythonBackedObjective(py::object owner, cddp::Objective *wrapped,
+                          bool requires_gil)
+        : owner_(std::move(owner)), wrapped_(wrapped),
+          requires_gil_(requires_gil) {}
 
     ~PythonBackedObjective() override {
         try {
@@ -184,105 +267,117 @@ public:
 
     double evaluate(const std::vector<Eigen::VectorXd> &states,
                     const std::vector<Eigen::VectorXd> &controls) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->evaluate(states, controls);
+        return callWrapped(requires_gil_,
+                           [&] { return wrapped_->evaluate(states, controls); });
     }
 
     double running_cost(const Eigen::VectorXd &state,
                         const Eigen::VectorXd &control,
                         int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->running_cost(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->running_cost(state, control, index);
+        });
     }
 
     double terminal_cost(const Eigen::VectorXd &final_state) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->terminal_cost(final_state);
+        return callWrapped(requires_gil_,
+                           [&] { return wrapped_->terminal_cost(final_state); });
     }
 
     Eigen::VectorXd
     getRunningCostStateGradient(const Eigen::VectorXd &state,
                                 const Eigen::VectorXd &control,
                                 int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getRunningCostStateGradient(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getRunningCostStateGradient(state, control, index);
+        });
     }
 
     Eigen::VectorXd
     getRunningCostControlGradient(const Eigen::VectorXd &state,
                                   const Eigen::VectorXd &control,
                                   int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getRunningCostControlGradient(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getRunningCostControlGradient(state, control,
+                                                           index);
+        });
     }
 
     Eigen::VectorXd
     getFinalCostGradient(const Eigen::VectorXd &final_state) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getFinalCostGradient(final_state);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getFinalCostGradient(final_state);
+        });
     }
 
     Eigen::MatrixXd
     getRunningCostStateHessian(const Eigen::VectorXd &state,
                                const Eigen::VectorXd &control,
                                int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getRunningCostStateHessian(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getRunningCostStateHessian(state, control, index);
+        });
     }
 
     Eigen::MatrixXd
     getRunningCostControlHessian(const Eigen::VectorXd &state,
                                  const Eigen::VectorXd &control,
                                  int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getRunningCostControlHessian(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getRunningCostControlHessian(state, control,
+                                                          index);
+        });
     }
 
     Eigen::MatrixXd
     getRunningCostCrossHessian(const Eigen::VectorXd &state,
                                const Eigen::VectorXd &control,
                                int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getRunningCostCrossHessian(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getRunningCostCrossHessian(state, control, index);
+        });
     }
 
     Eigen::MatrixXd
     getFinalCostHessian(const Eigen::VectorXd &final_state) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getFinalCostHessian(final_state);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getFinalCostHessian(final_state);
+        });
     }
 
     Eigen::VectorXd getReferenceState() const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getReferenceState();
+        return callWrapped(requires_gil_,
+                           [&] { return wrapped_->getReferenceState(); });
     }
 
     std::vector<Eigen::VectorXd> getReferenceStates() const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getReferenceStates();
+        return callWrapped(requires_gil_,
+                           [&] { return wrapped_->getReferenceStates(); });
     }
 
     void setReferenceState(const Eigen::VectorXd &reference_state) override {
-        py::gil_scoped_acquire gil;
-        wrapped_->setReferenceState(reference_state);
+        callWrapped(requires_gil_,
+                    [&] { wrapped_->setReferenceState(reference_state); });
     }
 
     void setReferenceStates(
         const std::vector<Eigen::VectorXd> &reference_states) override {
-        py::gil_scoped_acquire gil;
-        wrapped_->setReferenceStates(reference_states);
+        callWrapped(requires_gil_,
+                    [&] { wrapped_->setReferenceStates(reference_states); });
     }
 
 private:
     py::object owner_;
     cddp::Objective *wrapped_;
+    bool requires_gil_;
 };
 
 class PythonBackedConstraint : public cddp::Constraint {
 public:
-    PythonBackedConstraint(py::object owner, cddp::Constraint *wrapped)
+    PythonBackedConstraint(py::object owner, cddp::Constraint *wrapped,
+                           bool requires_gil)
         : cddp::Constraint(wrapped->getName()), owner_(std::move(owner)),
-          wrapped_(wrapped) {}
+          wrapped_(wrapped), requires_gil_(requires_gil) {}
 
     ~PythonBackedConstraint() override {
         try {
@@ -294,84 +389,131 @@ public:
     }
 
     int getDualDim() const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getDualDim();
+        return callWrapped(requires_gil_, [&] { return wrapped_->getDualDim(); });
     }
 
     Eigen::VectorXd evaluate(const Eigen::VectorXd &state,
                              const Eigen::VectorXd &control,
                              int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->evaluate(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->evaluate(state, control, index);
+        });
     }
 
     Eigen::VectorXd getLowerBound() const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getLowerBound();
+        return callWrapped(requires_gil_,
+                           [&] { return wrapped_->getLowerBound(); });
     }
 
     Eigen::VectorXd getUpperBound() const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getUpperBound();
+        return callWrapped(requires_gil_,
+                           [&] { return wrapped_->getUpperBound(); });
     }
 
     Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state,
                                      const Eigen::VectorXd &control,
                                      int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getStateJacobian(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getStateJacobian(state, control, index);
+        });
     }
 
     Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd &state,
                                        const Eigen::VectorXd &control,
                                        int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getControlJacobian(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getControlJacobian(state, control, index);
+        });
     }
 
     double computeViolation(const Eigen::VectorXd &state,
                             const Eigen::VectorXd &control,
                             int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->computeViolation(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->computeViolation(state, control, index);
+        });
     }
 
     double computeViolationFromValue(const Eigen::VectorXd &g) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->computeViolationFromValue(g);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->computeViolationFromValue(g);
+        });
     }
 
     Eigen::VectorXd getCenter() const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getCenter();
+        return callWrapped(requires_gil_, [&] { return wrapped_->getCenter(); });
     }
 
     std::vector<Eigen::MatrixXd> getStateHessian(const Eigen::VectorXd &state,
                                                  const Eigen::VectorXd &control,
                                                  int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getStateHessian(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getStateHessian(state, control, index);
+        });
     }
 
     std::vector<Eigen::MatrixXd>
     getControlHessian(const Eigen::VectorXd &state,
                       const Eigen::VectorXd &control,
                       int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getControlHessian(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getControlHessian(state, control, index);
+        });
     }
 
     std::vector<Eigen::MatrixXd> getCrossHessian(const Eigen::VectorXd &state,
                                                  const Eigen::VectorXd &control,
                                                  int index) const override {
-        py::gil_scoped_acquire gil;
-        return wrapped_->getCrossHessian(state, control, index);
+        return callWrapped(requires_gil_, [&] {
+            return wrapped_->getCrossHessian(state, control, index);
+        });
     }
 
 private:
     py::object owner_;
     cddp::Constraint *wrapped_;
+    bool requires_gil_;
 };
+
+std::unique_ptr<cddp::DynamicalSystem> makeOwnedDynamicalSystem(
+    py::object system) {
+    if (isExactDynamicsBase(system)) {
+        throw py::type_error(
+            "pycddp.DynamicalSystem is an abstract base class. "
+            "Pass a concrete built-in model or a Python subclass that "
+            "implements the required methods.");
+    }
+    auto *wrapped = system.cast<cddp::DynamicalSystem *>();
+    const bool requires_gil = !nativeDynamicsCanSkipGil(system);
+    return std::make_unique<PythonBackedDynamicalSystem>(
+        std::move(system), wrapped, requires_gil);
+}
+
+std::unique_ptr<cddp::Objective> makeOwnedObjective(py::object objective) {
+    if (isExactObjectiveBase(objective)) {
+        throw py::type_error(
+            "pycddp.Objective is an abstract base class. "
+            "Pass a concrete built-in objective or a Python subclass that "
+            "implements the required methods.");
+    }
+    auto *wrapped = objective.cast<cddp::Objective *>();
+    const bool requires_gil = !nativeObjectiveCanSkipGil(objective);
+    return std::make_unique<PythonBackedObjective>(
+        std::move(objective), wrapped, requires_gil);
+}
+
+std::unique_ptr<cddp::Constraint> makeOwnedConstraint(py::object constraint) {
+    if (isExactConstraintBase(constraint)) {
+        throw py::type_error(
+            "pycddp.Constraint is an abstract base class. "
+            "Pass a concrete built-in constraint or a Python subclass that "
+            "implements the required methods.");
+    }
+    auto *wrapped = constraint.cast<cddp::Constraint *>();
+    const bool requires_gil = !nativeConstraintCanSkipGil(constraint);
+    return std::make_unique<PythonBackedConstraint>(
+        std::move(constraint), wrapped, requires_gil);
+}
 
 } // namespace
 
@@ -445,10 +587,8 @@ void bind_solver(py::module_ &m) {
         .def("set_options", &cddp::CDDP::setOptions, py::arg("options"))
         .def("set_dynamical_system",
              [](cddp::CDDP &self, py::object system) {
-                 auto *wrapped = system.cast<cddp::DynamicalSystem *>();
-                 self.setDynamicalSystem(
-                     std::make_unique<PythonBackedDynamicalSystem>(
-                         std::move(system), wrapped));
+                 self.setDynamicalSystem(makeOwnedDynamicalSystem(
+                     std::move(system)));
              },
              py::arg("system"),
              "The solver keeps a Python reference that keeps this dynamics "
@@ -456,9 +596,7 @@ void bind_solver(py::module_ &m) {
              "may produce unexpected behavior.")
         .def("set_objective",
              [](cddp::CDDP &self, py::object objective) {
-                 auto *wrapped = objective.cast<cddp::Objective *>();
-                 self.setObjective(std::make_unique<PythonBackedObjective>(
-                     std::move(objective), wrapped));
+                 self.setObjective(makeOwnedObjective(std::move(objective)));
              },
              py::arg("objective"),
              "The solver keeps a Python reference that keeps this objective "
@@ -466,10 +604,9 @@ void bind_solver(py::module_ &m) {
              "produce unexpected behavior.")
         .def("add_constraint",
              [](cddp::CDDP &self, const std::string &name, py::object constraint) {
-                 auto *wrapped = constraint.cast<cddp::Constraint *>();
                  self.addPathConstraint(name,
-                                        std::make_unique<PythonBackedConstraint>(
-                                            std::move(constraint), wrapped));
+                                        makeOwnedConstraint(
+                                            std::move(constraint)));
              },
              py::arg("name"), py::arg("constraint"),
              "The solver keeps a Python reference that keeps this path "
@@ -477,10 +614,8 @@ void bind_solver(py::module_ &m) {
              "call may produce unexpected behavior.")
         .def("add_terminal_constraint",
              [](cddp::CDDP &self, const std::string &name, py::object constraint) {
-                 auto *wrapped = constraint.cast<cddp::Constraint *>();
                  self.addTerminalConstraint(
-                     name, std::make_unique<PythonBackedConstraint>(
-                               std::move(constraint), wrapped));
+                     name, makeOwnedConstraint(std::move(constraint)));
              },
              py::arg("name"), py::arg("constraint"),
              "The solver keeps a Python reference that keeps this terminal "
@@ -502,14 +637,20 @@ void bind_solver(py::module_ &m) {
              py::call_guard<py::gil_scoped_release>())
         .def("solve_by_name",
              [](cddp::CDDP &self, const std::string &solver_type) {
-                 if (!isBuiltinSolverName(solver_type)) {
-                     throw py::value_error(
-                         "Unknown solver '" + solver_type +
-                         "'. Supported solver names: " + builtinSolverList() +
-                         ".");
+                 if (!isKnownSolverName(solver_type)) {
+                     throw py::value_error("Unknown solver '" + solver_type +
+                                           "'.");
                  }
-                 py::gil_scoped_release release;
-                 return self.solve(solver_type);
+                 cddp::CDDPSolution solution;
+                 {
+                     py::gil_scoped_release release;
+                     solution = self.solve(solver_type);
+                 }
+                 if (isUnknownSolverStatus(solution.status_message)) {
+                     throw py::value_error("Unknown solver '" + solver_type +
+                                           "'.");
+                 }
+                 return solution;
              },
              py::arg("solver_type"))
         .def_property_readonly("initial_state", &cddp::CDDP::getInitialState)

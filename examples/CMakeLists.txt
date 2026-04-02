@@ -12,11 +12,17 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-# CMakeLists.txt for the CDDP examples
-#
-# The legacy visualization-heavy C++ examples are kept in the repository as
-# reference material, but they no longer participate in the default build.
-# Python bindings are the supported plotting workflow going forward.
+# Curated native reference examples that are built with
+# `CDDP_CPP_BUILD_EXAMPLES=ON`. These are compile-checked examples of the
+# public C++ API, while the Python portfolio remains the visualization path.
 
-add_executable(test_barrier_strategies test_barrier_strategies.cpp)
-target_link_libraries(test_barrier_strategies cddp)
+function(add_cddp_reference_example target_name source_name)
+  add_executable(${target_name} ${source_name})
+  target_link_libraries(${target_name} PRIVATE cddp)
+endfunction()
+
+add_cddp_reference_example(cddp_pendulum cddp_pendulum.cpp)
+add_cddp_reference_example(cddp_cartpole cddp_cartpole.cpp)
+add_cddp_reference_example(cddp_unicycle cddp_unicycle.cpp)
+add_cddp_reference_example(cddp_quadrotor_point cddp_quadrotor_point.cpp)
+add_cddp_reference_example(cddp_manipulator cddp_manipulator.cpp)
