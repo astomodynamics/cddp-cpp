@@ -1,0 +1,55 @@
+name: Bug report
+description: Report a reproducible defect in the solver, bindings, build, or docs
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem.
+
+        Please include a minimal reproduction and the exact commands you ran.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What happened, and what did you expect to happen instead?
+      placeholder: A concise description of the bug and expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Provide the smallest reproduction you can, including commands and inputs.
+      placeholder: |
+        1. Configure with ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and output
+      description: Paste the relevant error message, stack trace, or failing test output.
+      render: text
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Share the platform and toolchain details relevant to the bug.
+      placeholder: |
+        OS:
+        Compiler:
+        CMake:
+        Python:
+        Build flags:
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Add anything else that might help debug the issue.

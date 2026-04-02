@@ -125,15 +125,13 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ## Collaboration
 Contributions are welcome.
 
-If you'd like to contribute:
-1.  Fork the repository.
-2.  Create a branch for your change, for example `feature/your-feature-name` or `fix/your-bug-fix`.
-3.  Make the change and add or update tests as needed.
-4.  Commit with a descriptive message.
-5.  Push the branch.
-6.  Open a pull request against `master`.
+Start with:
 
-Use GitHub issues for bug reports, questions, or proposed changes.
+- [CONTRIBUTING.md](CONTRIBUTING.md) for setup, validation, and PR expectations
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards
+- [SECURITY.md](SECURITY.md) for vulnerability reporting guidance
+
+Use GitHub issues for bug reports and feature requests, and open pull requests against `master`.
 
 ## TODO
 * improve python binding ergonomics
