@@ -60,6 +60,7 @@ This generates GIFs under `docs/assets/python_portfolio/` for:
 * pendulum swing-up
 * cart-pole swing-up
 * unicycle obstacle avoidance
+* full-lap MPCC racing line tracking
 
 See [docs/python_portfolio.md](docs/python_portfolio.md) for the gallery and
 regeneration command.
@@ -72,6 +73,13 @@ Cart-pole swing-up:
 
 Unicycle obstacle avoidance:
 <img src="docs/assets/python_portfolio/unicycle_obstacle_avoidance.gif" width="820" alt="Python unicycle obstacle avoidance portfolio demo">
+
+MPCC racing line tracking:
+<img src="docs/assets/python_portfolio/mpcc_racing_line.gif" width="820" alt="Python MPCC racing line portfolio demo">
+
+The MPCC portfolio example is a lightweight kinematic contouring-control demo.
+Its vendored track data in `examples/data/` is derived from the
+[`alexliniger/MPCC`](https://github.com/alexliniger/MPCC) project.
 
 ## Installation
 ### Dependencies
@@ -103,6 +111,7 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 ## References
 * Y. Tassa, N. Mansard and E. Todorov, "Control-limited differential dynamic programming," 2014 IEEE International Conference on Robotics and Automation (ICRA), 2014, pp. 1168-1175, doi: <10.1109/ICRA.2014.6907001>.
 * Pavlov, A., Shames, I., and Manzie, C., “Interior Point Differential Dynamic Programming,” IEEE Transactions on Control Systems Technology, Vol. 29, No. 6, 2021, pp. 2720–2727.
+* Liniger, A., Domahidi, A., and Morari, M., “Optimization-based autonomous racing of 1:43 scale RC cars,” Optimal Control Applications and Methods, 2015. doi: <10.1002/oca.2123>.
 
 ## Third Party Libraries
 

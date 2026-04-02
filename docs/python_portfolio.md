@@ -33,3 +33,16 @@ bindings can be used for constrained trajectory visualization without building
 the legacy C++ plotting stack.
 
 <img src="assets/python_portfolio/unicycle_obstacle_avoidance.gif" width="820" alt="Unicycle obstacle avoidance animation">
+
+### MPCC Racing Line
+
+Full-lap receding-horizon contouring control on a compact racing circuit,
+solved from Python with a custom nonlinear objective and a lightweight bicycle
+model.
+
+This is a compact kinematic MPCC-style showcase rather than a full reproduction
+of the autonomous-racing controller in Liniger et al. The bundled track data is
+derived from the [`alexliniger/MPCC`](https://github.com/alexliniger/MPCC)
+reference implementation.
+
+<img src="assets/python_portfolio/mpcc_racing_line.gif" width="820" alt="MPCC racing line animation">

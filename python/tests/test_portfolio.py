@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import matplotlib
+import numpy as np
 
 matplotlib.use("Agg")
 
@@ -18,6 +19,7 @@ def test_portfolio_demos_reach_targets():
     pendulum = portfolio.solve_pendulum_demo()
     cartpole = portfolio.solve_cartpole_demo()
     unicycle = portfolio.solve_unicycle_demo()
+    mpcc = portfolio.solve_mpcc_demo(simulation_steps=10, horizon=12)
 
     assert pendulum.solver_name == "CLDDP"
     assert pendulum.final_error < 1e-3
@@ -30,6 +32,13 @@ def test_portfolio_demos_reach_targets():
     assert unicycle.solver_name == "IPDDP"
     assert unicycle.final_error < 0.02
     assert unicycle.solution.final_primal_infeasibility < 1e-3
+
+    assert mpcc.solver_name.endswith("MPC")
+    assert mpcc.slug == "mpcc_racing_line"
+    assert mpcc.final_error < 0.5
+    assert np.all(np.diff(mpcc.states[:, 3]) >= -1e-9)
+    assert np.max(np.abs(mpcc.metadata["contour_errors"])) < 0.85
+    assert np.mean(mpcc.metadata["solve_times_ms"]) > 0.0
 
 
 def test_portfolio_animation_writes_gif(tmp_path):
