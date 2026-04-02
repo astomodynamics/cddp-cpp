@@ -146,6 +146,18 @@ def _solution_arrays(solution: pycddp.CDDPSolution) -> tuple[np.ndarray, np.ndar
     return states, controls, time_points
 
 
+def _ensure_solution_has_trajectory(
+    solution: pycddp.CDDPSolution,
+    label: str,
+    *,
+    require_controls: bool = True,
+) -> None:
+    if not solution.state_trajectory:
+        raise RuntimeError(f"{label} returned an empty state trajectory.")
+    if require_controls and not solution.control_trajectory:
+        raise RuntimeError(f"{label} returned an empty control trajectory.")
+
+
 def _rollout_system(
     model: pycddp.DynamicalSystem,
     initial_state: np.ndarray,
@@ -462,6 +474,7 @@ def solve_pendulum_demo() -> DemoResult:
     solver.set_initial_trajectory(seed_states, seed_controls)
 
     solution = solver.solve(pycddp.SolverType.CLDDP)
+    _ensure_solution_has_trajectory(solution, "Pendulum portfolio solve")
     return _make_result(
         slug="pendulum_swing_up",
         title="Pendulum Swing-Up",
@@ -506,6 +519,7 @@ def solve_cartpole_demo() -> DemoResult:
     )
 
     solution = solver.solve(pycddp.SolverType.CLDDP)
+    _ensure_solution_has_trajectory(solution, "Cart-pole portfolio solve")
     return _make_result(
         slug="cartpole_swing_up",
         title="Cart-Pole Swing-Up",
@@ -551,6 +565,10 @@ def solve_unicycle_demo() -> DemoResult:
     baseline.add_constraint("control_limits", control_limits)
     baseline.set_initial_trajectory(initial_states, initial_controls)
     baseline_solution = baseline.solve(pycddp.SolverType.CLDDP)
+    _ensure_solution_has_trajectory(
+        baseline_solution,
+        "Unicycle baseline portfolio solve",
+    )
 
     best_solution: pycddp.CDDPSolution | None = None
     best_score: tuple[float, float, float] | None = None
@@ -585,6 +603,8 @@ def solve_unicycle_demo() -> DemoResult:
         )
 
         candidate = solver.solve(pycddp.SolverType.IPDDP)
+        if not candidate.state_trajectory or not candidate.control_trajectory:
+            continue
         candidate_error = float(
             np.linalg.norm(np.asarray(candidate.state_trajectory[-1]) - xref)
         )
@@ -599,7 +619,8 @@ def solve_unicycle_demo() -> DemoResult:
         if candidate.final_primal_infeasibility < 1e-3 and candidate_error < 0.02:
             break
 
-    assert best_solution is not None
+    if best_solution is None:
+        raise RuntimeError("Unicycle portfolio solve did not produce a valid candidate trajectory.")
     return _make_result(
         slug="unicycle_obstacle_avoidance",
         title="Unicycle Obstacle Avoidance",
@@ -713,6 +734,7 @@ def solve_mpcc_demo(simulation_steps: int | None = None, horizon: int = 16) -> D
         solver.set_reference_state(track.reference_state(state[3]))
         solver.set_initial_trajectory(seed_states, seed_controls)
         solution = solver.solve(pycddp.SolverType.CLDDP)
+        _ensure_solution_has_trajectory(solution, "MPCC portfolio solve")
         last_solution = solution
 
         predicted_states, predicted_controls, _ = _solution_arrays(solution)
@@ -827,6 +849,13 @@ def save_animation(
     dpi: int = 110,
     frame_step: int = 2,
 ) -> Path:
+    if fps < 1:
+        raise ValueError(f"fps must be >= 1, got {fps}.")
+    if dpi < 1:
+        raise ValueError(f"dpi must be >= 1, got {dpi}.")
+    if frame_step < 1:
+        raise ValueError(f"frame_step must be >= 1, got {frame_step}.")
+
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
 

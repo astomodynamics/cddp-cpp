@@ -7,6 +7,7 @@ from pathlib import Path
 
 import matplotlib
 import numpy as np
+import pytest
 
 matplotlib.use("Agg")
 
@@ -56,3 +57,13 @@ def test_portfolio_animation_writes_gif(tmp_path):
     assert written == output_path
     assert output_path.exists()
     assert output_path.stat().st_size > 0
+
+
+def test_portfolio_animation_rejects_invalid_settings(tmp_path):
+    result = portfolio.solve_pendulum_demo()
+
+    with pytest.raises(ValueError, match="fps must be >= 1"):
+        portfolio.save_animation(result, tmp_path / "bad.gif", fps=0)
+
+    with pytest.raises(ValueError, match="frame_step must be >= 1"):
+        portfolio.save_animation(result, tmp_path / "bad.gif", frame_step=0)

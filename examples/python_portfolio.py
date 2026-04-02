@@ -6,7 +6,18 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import matplotlib
+
+matplotlib.use("Agg")
+
 import python_portfolio_lib as portfolio
+
+
+def _positive_int(value: str) -> int:
+    parsed = int(value)
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("value must be >= 1")
+    return parsed
 
 
 def parse_args() -> argparse.Namespace:
@@ -25,19 +36,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--fps",
-        type=int,
+        type=_positive_int,
         default=16,
         help="Animation frame rate.",
     )
     parser.add_argument(
         "--dpi",
-        type=int,
+        type=_positive_int,
         default=110,
         help="Output DPI for the generated GIFs.",
     )
     parser.add_argument(
         "--frame-step",
-        type=int,
+        type=_positive_int,
         default=2,
         help="Use every Nth solver state as an animation frame.",
     )
