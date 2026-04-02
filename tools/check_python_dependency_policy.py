@@ -46,6 +46,12 @@ def load_toml(path: Path) -> dict:
         return tomllib.load(fh)
 
 
+def load_optional_toml(path: Path) -> dict | None:
+    if not path.exists():
+        return None
+    return load_toml(path)
+
+
 def load_allowlist(path: Path) -> set[str]:
     allowed: set[str] = set()
     for line in path.read_text().splitlines():
@@ -168,14 +174,20 @@ def main() -> int:
     args = parser.parse_args()
 
     pyproject = load_toml(PYPROJECT_PATH)
-    lock_data = load_toml(LOCK_PATH)
+    lock_data = load_optional_toml(LOCK_PATH)
     allowlist = load_allowlist(ALLOWLIST_PATH)
     base_pyproject = load_base_pyproject(args.base_ref)
     base_lock = load_base_lock(args.base_ref)
 
     errors = []
     errors.extend(validate_dependency_specs(pyproject))
-    errors.extend(validate_lockfile(lock_data))
+    if lock_data is not None:
+        errors.extend(validate_lockfile(lock_data))
+    elif base_lock is not None:
+        errors.append(
+            f"{LOCK_PATH.relative_to(REPO_ROOT)} is missing in the current checkout "
+            "but exists in the base ref"
+        )
 
     current_direct = collect_direct_dependency_names(pyproject)
     base_direct = collect_direct_dependency_names(base_pyproject) if base_pyproject else set()
