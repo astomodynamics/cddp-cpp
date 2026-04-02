@@ -50,7 +50,6 @@ try:
     SpacecraftNonlinear,
     DreyfusRocket,
     SpacecraftLanding2D,
-    SpacecraftROE,
     SpacecraftTwobody,
     LTISystem,
     Usv3Dof,

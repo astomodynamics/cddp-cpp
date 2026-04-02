@@ -171,10 +171,6 @@ gtest_discover_tests(test_msipddp_solver)
 # target_link_libraries(test_ipddp_quadrotor gtest gmock gtest_main cddp)
 # gtest_discover_tests(test_ipddp_quadrotor)
 
-# add_executable(test_spacecraft_roe dynamics_model/test_spacecraft_roe.cpp)
-# target_link_libraries(test_spacecraft_roe gtest gmock gtest_main cddp)
-# gtest_discover_tests(test_spacecraft_roe)
-
 if (CDDP_CPP_CASADI)
     add_executable(test_casadi test_casadi_solver.cpp)
     target_link_libraries(test_casadi gtest gmock gtest_main cddp)

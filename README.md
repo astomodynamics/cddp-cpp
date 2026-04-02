@@ -29,15 +29,22 @@ $$
 $$
 
 ## Examples
-The default C++ build currently includes a barrier-strategy comparison example:
+The maintained example surface is now split:
 
-```bash
-./examples/test_barrier_strategies
-```
+* a small C++ reference set in `examples/`, built when `CDDP_CPP_BUILD_EXAMPLES=ON`
+* the Python portfolio for plotting, animation, and notebook workflows
 
-Several visualization-focused C++ examples remain in the repository, but they
-are not part of the default build. Use the Python bindings for plotting and
-notebook workflows.
+The kept C++ examples are:
+
+* `cddp_pendulum.cpp`
+* `cddp_cartpole.cpp`
+* `cddp_unicycle.cpp`
+* `cddp_quadrotor_point.cpp`
+* `cddp_manipulator.cpp`
+
+The wider historical C++ example inventory has been removed to keep the example
+surface focused. The kept C++ examples are intentionally minimal and do not depend on
+visualization libraries.
 
 ### Python Portfolio
 The Python bindings now ship with a small animation-focused portfolio built on
@@ -96,8 +103,6 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 ## References
 * Y. Tassa, N. Mansard and E. Todorov, "Control-limited differential dynamic programming," 2014 IEEE International Conference on Robotics and Automation (ICRA), 2014, pp. 1168-1175, doi: <10.1109/ICRA.2014.6907001>.
 * Pavlov, A., Shames, I., and Manzie, C., “Interior Point Differential Dynamic Programming,” IEEE Transactions on Control Systems Technology, Vol. 29, No. 6, 2021, pp. 2720–2727.
-* Yuval Tassa's iLQG/DDP trajectory optimization: <https://www.mathworks.com/matlabcentral/fileexchange/52069-ilqg-ddp-trajectory-optimization>
-* Andrei Pavlov's GitHub repository: <https://github.com/xapavlov/ipddp>
 
 ## Third Party Libraries
 
