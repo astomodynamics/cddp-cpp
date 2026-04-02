@@ -1,0 +1,49 @@
+"""Regression tests for the Python portfolio demos."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import matplotlib
+
+matplotlib.use("Agg")
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "examples"))
+
+import python_portfolio_lib as portfolio
+
+
+def test_portfolio_demos_reach_targets():
+    pendulum = portfolio.solve_pendulum_demo()
+    cartpole = portfolio.solve_cartpole_demo()
+    unicycle = portfolio.solve_unicycle_demo()
+
+    assert pendulum.solver_name == "CLDDP"
+    assert pendulum.final_error < 1e-3
+    assert pendulum.states[:, 0].max() > 3.0
+    assert abs(pendulum.controls[:, 0]).max() > 1.0
+
+    assert cartpole.solver_name == "CLDDP"
+    assert cartpole.final_error < 0.05
+
+    assert unicycle.solver_name == "IPDDP"
+    assert unicycle.final_error < 0.02
+    assert unicycle.solution.final_primal_infeasibility < 1e-3
+
+
+def test_portfolio_animation_writes_gif(tmp_path):
+    result = portfolio.solve_pendulum_demo()
+
+    output_path = tmp_path / "pendulum.gif"
+    written = portfolio.save_animation(
+        result,
+        output_path,
+        fps=10,
+        dpi=72,
+        frame_step=6,
+    )
+
+    assert written == output_path
+    assert output_path.exists()
+    assert output_path.stat().st_size > 0

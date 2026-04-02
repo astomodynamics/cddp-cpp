@@ -39,6 +39,33 @@ Several visualization-focused C++ examples remain in the repository, but they
 are not part of the default build. Use the Python bindings for plotting and
 notebook workflows.
 
+### Python Portfolio
+The Python bindings now ship with a small animation-focused portfolio built on
+top of the same solver models used by the C++ examples:
+
+```bash
+source .venv/bin/activate
+python examples/python_portfolio.py --demo all
+```
+
+This generates GIFs under `docs/assets/python_portfolio/` for:
+
+* pendulum swing-up
+* cart-pole swing-up
+* unicycle obstacle avoidance
+
+See [docs/python_portfolio.md](docs/python_portfolio.md) for the gallery and
+regeneration command.
+
+Pendulum swing-up:
+<img src="docs/assets/python_portfolio/pendulum_swing_up.gif" width="820" alt="Python pendulum swing-up portfolio demo">
+
+Cart-pole swing-up:
+<img src="docs/assets/python_portfolio/cartpole_swing_up.gif" width="820" alt="Python cart-pole swing-up portfolio demo">
+
+Unicycle obstacle avoidance:
+<img src="docs/assets/python_portfolio/unicycle_obstacle_avoidance.gif" width="820" alt="Python unicycle obstacle avoidance portfolio demo">
+
 ## Installation
 ### Dependencies
 * [CMake](https://cmake.org/) (Build System)
