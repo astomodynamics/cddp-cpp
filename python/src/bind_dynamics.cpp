@@ -22,7 +22,6 @@
 #include "dynamics_model/spacecraft_linear.hpp"
 #include "dynamics_model/spacecraft_linear_fuel.hpp"
 #include "dynamics_model/spacecraft_nonlinear.hpp"
-#include "dynamics_model/spacecraft_roe.hpp"
 #include "dynamics_model/spacecraft_twobody.hpp"
 #include "dynamics_model/unicycle.hpp"
 #include "dynamics_model/usv_3dof.hpp"
@@ -225,11 +224,6 @@ void bind_dynamics(py::module_ &m) {
              py::arg("width") = 10.0, py::arg("min_thrust") = 880000.0,
              py::arg("max_thrust") = 2210000.0,
              py::arg("max_gimble") = 0.349066);
-
-    py::class_<cddp::SpacecraftROE, cddp::DynamicalSystem>(m, "SpacecraftROE")
-        .def(py::init<double, const std::string &, double, double, double>(),
-             py::arg("timestep"), py::arg("integration_type"), py::arg("a"),
-             py::arg("u0") = 0.0, py::arg("mass_kg") = 1.0);
 
     py::class_<cddp::SpacecraftTwobody, cddp::DynamicalSystem>(
         m, "SpacecraftTwobody")

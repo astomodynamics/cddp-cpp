@@ -47,7 +47,7 @@ bool nativeDynamicsCanSkipGil(const py::handle &object) {
         "QuadrotorRate",    "Manipulator",     "HCW",
         "SpacecraftLinearFuel",                "SpacecraftNonlinear",
         "DreyfusRocket",    "SpacecraftLanding2D",
-        "SpacecraftROE",    "SpacecraftTwobody",
+        "SpacecraftTwobody",
         "LTISystem",        "Usv3Dof",         "EulerAttitude",
         "QuaternionAttitude",                  "MrpAttitude",
     };

@@ -13,231 +13,68 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
+
 #include <iostream>
 #include <vector>
-#include <filesystem>
-#include <cmath>
-#include <string>
-#include <memory>
+
 #include "cddp.hpp"
 #include "cddp_example_utils.hpp"
-#include "matplot/matplot.h"
-#include <random>
-
-using namespace matplot;
-namespace fs = std::filesystem;
 
 int main() {
-    int state_dim = 4;
-    int control_dim = 1;
-    int horizon = 100;
-    double timestep = 0.05;
+    constexpr double kPi = 3.14159265358979323846;
+    constexpr int state_dim = 4;
+    constexpr int control_dim = 1;
+    constexpr int horizon = 100;
+    constexpr double timestep = 0.05;
 
-    // Create a CartPole instance with custom parameters.
-    double cart_mass = 1.0;
-    double pole_mass = 0.2;
-    double pole_length = 0.5;
-    double gravity = 9.81;
-    double damping = 0.0; // TODO: Implement damping term.
-    std::string integration_type = "rk4";
-
-    std::unique_ptr<cddp::DynamicalSystem> system = std::make_unique<cddp::CartPole>(
-        timestep, integration_type, cart_mass, pole_mass, pole_length, gravity, damping);
-
-    // Cost matrices.
-    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
-    Eigen::MatrixXd R = 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim);
-    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
-    Qf(0,0) = 100.0;  // Final cart position cost.
-    Qf(1,1) = 100.0;  // Final cart velocity cost.
-    Qf(2,2) = 100.0;  // Final pole angle cost.
-    Qf(3,3) = 100.0;  // Final pole angular velocity cost.
-
-    // Goal state: cart at origin, pole upright, zero velocities.
-    Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
-    goal_state << 0.0, M_PI, 0.0, 0.0;
-
-    std::vector<Eigen::VectorXd> empty_reference_states;
-    auto objective = std::make_unique<cddp::QuadraticObjective>(
-        Q, R, Qf, goal_state, empty_reference_states, timestep);
-
-    // Initial state (cart at rest, pole hanging down).
     Eigen::VectorXd initial_state(state_dim);
     initial_state << 0.0, 0.0, 0.0, 0.0;
 
-    // Solver options.
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0, kPi, 0.0, 0.0;
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = 0.1 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = 100.0 * Eigen::MatrixXd::Identity(state_dim, state_dim);
+
     cddp::CDDPOptions options;
-    options.max_iterations = 500;
-    options.tolerance = 1e-7;
-    options.acceptable_tolerance = 1e-6;
+    options.max_iterations = 80;
+    options.tolerance = 1e-6;
+    options.acceptable_tolerance = 1e-5;
     options.regularization.initial_value = 1e-5;
-    options.use_ilqr = true;
-    options.enable_parallel = true;
-    options.num_threads = 12;
-    options.debug = false;
-    options.ipddp.barrier.mu_initial = 1e-1;
-    options.msipddp.segment_length = horizon;
-    options.msipddp.rollout_type = "nonlinear";
-    options.ipddp.barrier.mu_update_factor = 0.2;
-    options.ipddp.barrier.mu_update_power = 1.2;
 
-    // Create CDDP solver with new API.
-    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
-                          std::move(system), std::move(objective), options);
+    cddp::CDDP solver(
+        initial_state,
+        goal_state,
+        horizon,
+        timestep,
+        std::make_unique<cddp::CartPole>(
+            timestep, "rk4", 1.0, 0.2, 0.5, 9.81, 0.0),
+        std::make_unique<cddp::QuadraticObjective>(
+            Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>{}, timestep),
+        options);
 
-    // Control constraints.
-    Eigen::VectorXd control_lower_bound(control_dim);
-    control_lower_bound << -5.0;  // Maximum negative force.
-    Eigen::VectorXd control_upper_bound(control_dim);
-    control_upper_bound << 5.0;   // Maximum positive force.
-    
-    // FIXME: For MSIPDDP 
-    cddp_solver.addPathConstraint("ControlConstraint", 
-        std::make_unique<cddp::ControlConstraint>(-control_upper_bound, control_upper_bound));
+    Eigen::VectorXd lower(control_dim);
+    lower << -5.0;
+    Eigen::VectorXd upper(control_dim);
+    upper << 5.0;
+    solver.addPathConstraint("ControlConstraint",
+                             std::make_unique<cddp::ControlConstraint>(lower, upper));
 
-    // FIXME: For CLDDP
-    // cddp_solver.addPathConstraint("ControlConstraint", 
-    //     std::make_unique<cddp::ControlConstraint>( control_lower_bound, control_upper_bound));
+    auto [X, U] =
+        cddp::example::makeInitialTrajectory(initial_state, horizon, control_dim);
+    solver.setInitialTrajectory(X, U);
 
-    // Initial trajectory.
-    auto [X, U] = cddp::example::makeInitialTrajectory(initial_state, horizon, control_dim);
-    cddp_solver.setInitialTrajectory(X, U);
-
-    // Solve.
-    cddp::CDDPSolution solution = cddp_solver.solve(cddp::SolverType::IPDDP);
-    const auto& X_sol = solution.state_trajectory;
-    const auto& U_sol = solution.control_trajectory;
-    const auto& t_sol = solution.time_points;
-
-    // Create plot directory.
-    const std::string plotDirectory = "../results/tests";
-    cddp::example::ensurePlotDir(plotDirectory);
-
-    // Create a directory for frame images.
-    (void) std::system("mkdir -p frames");
-
-    // Extract solution data.
-    auto x_arr = cddp::example::extractComponent(X_sol, 0);
-    auto theta_arr = cddp::example::extractComponent(X_sol, 1);
-    auto x_dot_arr = cddp::example::extractComponent(X_sol, 2);
-    auto theta_dot_arr = cddp::example::extractComponent(X_sol, 3);
-    auto force_arr = cddp::example::extractComponent(U_sol, 0);
-    const auto& time_arr = t_sol;
-    std::vector<double> time_arr2(t_sol.begin(), t_sol.begin() + U_sol.size());
-
-    // --- Plot static results (2x2 plots for state trajectories) ---
-    auto fig1 = figure();
-    fig1->size(1200, 800);
-
-    auto ax1 = subplot(2, 2, 1);
-    title(ax1, "Cart Position");
-    plot(ax1, time_arr, x_arr)->line_style("b-");
-    xlabel(ax1, "Time [s]");
-    ylabel(ax1, "Position [m]");
-    grid(ax1, true);
-
-    auto ax2 = subplot(2, 2, 2);
-    title(ax2, "Cart Velocity");
-    plot(ax2, time_arr, x_dot_arr)->line_style("b-");
-    xlabel(ax2, "Time [s]");
-    ylabel(ax2, "Velocity [m/s]");
-    grid(ax2, true);
-
-    auto ax3 = subplot(2, 2, 3);
-    title(ax3, "Pole Angle");
-    plot(ax3, time_arr, theta_arr)->line_style("b-");
-    xlabel(ax3, "Time [s]");
-    ylabel(ax3, "Angle [rad]");
-    grid(ax3, true);
-
-    auto ax4 = subplot(2, 2, 4);
-    title(ax4, "Pole Angular Velocity");
-    plot(ax4, time_arr, theta_dot_arr)->line_style("b-");
-    xlabel(ax4, "Time [s]");
-    ylabel(ax4, "Angular Velocity [rad/s]");
-    grid(ax4, true);
-
-    fig1->save(plotDirectory + "/cartpole_results.png");
-
-    // --- Plot control inputs ---
-    auto fig2 = figure();
-    fig2->size(800, 600);
-    title("Control Inputs");
-    plot(time_arr2, force_arr)->line_style("b-");
-    xlabel("Time [s]");
-    ylabel("Force [N]");
-    grid(true);
-    fig2->save(plotDirectory + "/cartpole_control_inputs.png");
-
-    // --- Animation ---
-    auto fig3 = figure();
-    auto ax_fig3 = fig3->current_axes();
-    fig3->size(800, 600);
-    title("CartPole Animation");
-    xlabel("x");
-    ylabel("y");
-
-    double cart_width = 0.3;
-    double cart_height = 0.2;
-    double pole_width = 0.05;
-
-    // Loop over the solution states to generate animation frames.
-    for (size_t i = 0; i < X_sol.size(); ++i) {
-        if (i % 5 == 0) {
-            // Clear previous content.
-            cla(ax_fig3);
-            hold(ax_fig3, true);
-
-            // Current state.
-            double x = x_arr[i];
-            double theta = theta_arr[i];
-
-            // Plot the cart as a rectangle centered at (x, 0).
-            std::vector<double> cart_x = { x - cart_width/2, x + cart_width/2,
-                                           x + cart_width/2, x - cart_width/2,
-                                           x - cart_width/2 };
-            std::vector<double> cart_y = { -cart_height/2, -cart_height/2,
-                                           cart_height/2, cart_height/2,
-                                           -cart_height/2 };
-            plot(cart_x, cart_y)->line_style("k-");
-
-            // Plot the pole as a line from the top center of the cart.
-            double pole_end_x = x + pole_length * std::sin(theta);
-            double pole_end_y = cart_height/2 - pole_length * std::cos(theta);
-            std::vector<double> pole_x = { x, pole_end_x };
-            std::vector<double> pole_y = { cart_height/2, pole_end_y };
-            plot(pole_x, pole_y)->line_style("b-");
-
-            // Plot the pole bob as a circle.
-            std::vector<double> circle_x, circle_y;
-            int num_points = 20;
-            for (int j = 0; j <= num_points; ++j) {
-                double t = 2 * M_PI * j / num_points;
-                circle_x.push_back(pole_end_x + pole_width * std::cos(t));
-                circle_y.push_back(pole_end_y + pole_width * std::sin(t));
-            }
-            plot(circle_x, circle_y)->line_style("b-");
-
-            // Set fixed axis limits for stable animation.
-            xlim({-2.0, 2.0});
-            ylim({-1.5, 1.5});
-
-            // Save the frame.
-            std::string filename = plotDirectory + "/frame_" + std::to_string(i) + ".png";
-            fig3->save(filename);
-            std::this_thread::sleep_for(std::chrono::milliseconds(80));
-        }
+    const cddp::CDDPSolution solution = solver.solve(cddp::SolverType::IPDDP);
+    if (solution.state_trajectory.empty()) {
+        std::cerr << "Cart-pole example failed: empty trajectory" << std::endl;
+        return 1;
     }
 
-    // Combine all saved frames into a GIF using ImageMagick's convert tool.
-    std::string command = "convert -delay 30 " + plotDirectory + "/frame_*.png " + plotDirectory + "/cartpole.gif";
-    std::system(command.c_str());
-
-    std::string cleanup_command = "rm " + plotDirectory + "/frame_*.png";
-    std::system(cleanup_command.c_str());
-
-    std::cout << "Animation saved as cartpole.gif" << std::endl;
-
-
+    const Eigen::VectorXd final_error = solution.state_trajectory.back() - goal_state;
+    std::cout << "Cart-pole example completed with status: "
+              << solution.status_message << '\n'
+              << "Final objective: " << solution.final_objective << '\n'
+              << "Final state error norm: " << final_error.norm() << std::endl;
     return 0;
 }

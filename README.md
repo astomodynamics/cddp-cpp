@@ -29,15 +29,57 @@ $$
 $$
 
 ## Examples
-The default C++ build currently includes a barrier-strategy comparison example:
+The maintained example surface is now split:
+
+* a small C++ reference set in `examples/`, built when `CDDP_CPP_BUILD_EXAMPLES=ON`
+* the Python portfolio for plotting, animation, and notebook workflows
+
+The kept C++ examples are:
+
+* `cddp_pendulum.cpp`
+* `cddp_cartpole.cpp`
+* `cddp_unicycle.cpp`
+* `cddp_quadrotor_point.cpp`
+* `cddp_manipulator.cpp`
+
+The wider historical C++ example inventory has been removed to keep the example
+surface focused. The kept C++ examples are intentionally minimal and do not depend on
+visualization libraries.
+
+### Python Portfolio
+The Python bindings now ship with a small animation-focused portfolio built on
+top of the same solver models used by the C++ examples:
 
 ```bash
-./examples/test_barrier_strategies
+source .venv/bin/activate
+python examples/python_portfolio.py --demo all
 ```
 
-Several visualization-focused C++ examples remain in the repository, but they
-are not part of the default build. Use the Python bindings for plotting and
-notebook workflows.
+This generates GIFs under `docs/assets/python_portfolio/` for:
+
+* pendulum swing-up
+* cart-pole swing-up
+* unicycle obstacle avoidance
+* full-lap MPCC racing line tracking
+
+See [docs/python_portfolio.md](docs/python_portfolio.md) for the gallery and
+regeneration command.
+
+Pendulum swing-up:
+<img src="docs/assets/python_portfolio/pendulum_swing_up.gif" width="820" alt="Python pendulum swing-up portfolio demo">
+
+Cart-pole swing-up:
+<img src="docs/assets/python_portfolio/cartpole_swing_up.gif" width="820" alt="Python cart-pole swing-up portfolio demo">
+
+Unicycle obstacle avoidance:
+<img src="docs/assets/python_portfolio/unicycle_obstacle_avoidance.gif" width="820" alt="Python unicycle obstacle avoidance portfolio demo">
+
+MPCC racing line tracking:
+<img src="docs/assets/python_portfolio/mpcc_racing_line.gif" width="820" alt="Python MPCC racing line portfolio demo">
+
+The MPCC portfolio example is a lightweight kinematic contouring-control demo.
+Its vendored track data in `examples/data/` is derived from the
+[`alexliniger/MPCC`](https://github.com/alexliniger/MPCC) project.
 
 ## Installation
 ### Dependencies
@@ -69,8 +111,7 @@ If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Packag
 ## References
 * Y. Tassa, N. Mansard and E. Todorov, "Control-limited differential dynamic programming," 2014 IEEE International Conference on Robotics and Automation (ICRA), 2014, pp. 1168-1175, doi: <10.1109/ICRA.2014.6907001>.
 * Pavlov, A., Shames, I., and Manzie, C., “Interior Point Differential Dynamic Programming,” IEEE Transactions on Control Systems Technology, Vol. 29, No. 6, 2021, pp. 2720–2727.
-* Yuval Tassa's iLQG/DDP trajectory optimization: <https://www.mathworks.com/matlabcentral/fileexchange/52069-ilqg-ddp-trajectory-optimization>
-* Andrei Pavlov's GitHub repository: <https://github.com/xapavlov/ipddp>
+* Liniger, A., Domahidi, A., and Morari, M., “Optimization-based autonomous racing of 1:43 scale RC cars,” Optimal Control Applications and Methods, 2015. doi: <10.1002/oca.2123>.
 
 ## Third Party Libraries
 
@@ -93,15 +134,13 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 ## Collaboration
 Contributions are welcome.
 
-If you'd like to contribute:
-1.  Fork the repository.
-2.  Create a branch for your change, for example `feature/your-feature-name` or `fix/your-bug-fix`.
-3.  Make the change and add or update tests as needed.
-4.  Commit with a descriptive message.
-5.  Push the branch.
-6.  Open a pull request against `master`.
+Start with:
 
-Use GitHub issues for bug reports, questions, or proposed changes.
+- [CONTRIBUTING.md](CONTRIBUTING.md) for setup, validation, and PR expectations
+- [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards
+- [SECURITY.md](SECURITY.md) for vulnerability reporting guidance
+
+Use GitHub issues for bug reports and feature requests, and open pull requests against `master`.
 
 ## TODO
 * improve python binding ergonomics
