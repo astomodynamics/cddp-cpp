@@ -25,6 +25,7 @@ solver_snopt.out
 # Python / uv
 .venv/
 uv.lock
+site/
 *.egg-info/
 __pycache__/
 *.so

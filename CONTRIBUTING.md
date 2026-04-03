@@ -40,6 +40,12 @@ source .venv/bin/activate
 pytest -q python/tests
 ```
 
+### Docs preview
+
+```bash
+uvx --from mkdocs --with mkdocs-material mkdocs serve
+```
+
 ## Pull requests
 
 Before opening a pull request:
@@ -49,6 +55,9 @@ Before opening a pull request:
 3. Run the relevant build and test commands for the area you touched.
 4. Update documentation when user-facing behavior, examples, or public APIs change.
 5. Write a clear commit message and PR description.
+
+Tagged releases publish Python artifacts to PyPI via GitHub Actions. The
+project site deploys from `master` to GitHub Pages.
 
 PRs that include a minimal reproduction, exact validation commands, and a concise explanation of the design tradeoffs are much easier to review.
 
