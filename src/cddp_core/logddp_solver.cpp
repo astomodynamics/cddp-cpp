@@ -194,6 +194,9 @@ void LogDDPSolver::initialize(CDDP &context) {
   if (!relaxed_log_barrier_) {
     relaxed_log_barrier_ =
         std::make_unique<RelaxedLogBarrier>(mu_, relaxation_delta_);
+  } else {
+    relaxed_log_barrier_->setBarrierCoeff(mu_);
+    relaxed_log_barrier_->setRelaxationDelta(relaxation_delta_);
   }
 
   // Evaluate initial trajectory
