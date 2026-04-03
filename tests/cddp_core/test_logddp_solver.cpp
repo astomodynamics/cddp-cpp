@@ -25,6 +25,132 @@
 
 #include "cddp.hpp"
 
+TEST(LogDDPTest, ColdStartRollsOutProvidedControlGuess)
+{
+    int state_dim = 2;
+    int control_dim = 1;
+    int horizon = 4;
+    double timestep = 0.05;
+    double mass = 1.0;
+    double length = 1.0;
+    double damping = 0.0;
+    std::string integration_type = "euler";
+
+    auto system = std::make_unique<cddp::Pendulum>(
+        timestep, length, mass, damping, integration_type);
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
+    std::vector<Eigen::VectorXd> empty_reference_states;
+    auto objective = std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, empty_reference_states, timestep);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << M_PI, 0.2;
+
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
+    cddp_solver.setDynamicalSystem(std::move(system));
+    cddp_solver.setObjective(std::move(objective));
+
+    std::vector<Eigen::VectorXd> X_guess(horizon + 1,
+                                         Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U_guess(horizon,
+                                         Eigen::VectorXd::Zero(control_dim));
+    X_guess[0] = initial_state;
+    for (int t = 0; t < horizon; ++t)
+    {
+        if (t > 0)
+        {
+            X_guess[t] = Eigen::VectorXd::Constant(state_dim, 42.0);
+        }
+        U_guess[t](0) = 0.1 * (t + 1);
+    }
+    X_guess[horizon] = Eigen::VectorXd::Constant(state_dim, 42.0);
+
+    cddp_solver.setInitialTrajectory(X_guess, U_guess);
+
+    cddp::LogDDPSolver solver;
+    solver.initialize(cddp_solver);
+
+    Eigen::VectorXd expected_state = initial_state;
+    EXPECT_TRUE(cddp_solver.X_[0].isApprox(initial_state, 1e-12));
+    for (int t = 0; t < horizon; ++t)
+    {
+        expected_state = cddp_solver.getSystem().getDiscreteDynamics(
+            expected_state, U_guess[t], t * timestep);
+        EXPECT_TRUE(cddp_solver.X_[t + 1].isApprox(expected_state, 1e-12));
+    }
+}
+
+TEST(LogDDPTest, WarmStartRollsOutReusedControlGuess)
+{
+    int state_dim = 2;
+    int control_dim = 1;
+    int horizon = 4;
+    double timestep = 0.05;
+    double mass = 1.0;
+    double length = 1.0;
+    double damping = 0.0;
+    std::string integration_type = "euler";
+
+    auto system = std::make_unique<cddp::Pendulum>(
+        timestep, length, mass, damping, integration_type);
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
+    std::vector<Eigen::VectorXd> empty_reference_states;
+    auto objective = std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, empty_reference_states, timestep);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << M_PI, 0.2;
+
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
+    cddp_solver.setDynamicalSystem(std::move(system));
+    cddp_solver.setObjective(std::move(objective));
+
+    cddp::CDDPOptions options;
+    options.warm_start = false;
+    cddp_solver.setOptions(options);
+
+    std::vector<Eigen::VectorXd> X_guess(horizon + 1,
+                                         Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U_guess(horizon,
+                                         Eigen::VectorXd::Zero(control_dim));
+    X_guess[0] = initial_state;
+    for (int t = 0; t < horizon; ++t)
+    {
+        U_guess[t](0) = 0.1 * (t + 1);
+    }
+    cddp_solver.setInitialTrajectory(X_guess, U_guess);
+
+    cddp::LogDDPSolver solver;
+    solver.initialize(cddp_solver);
+
+    for (int t = 1; t <= horizon; ++t)
+    {
+        cddp_solver.X_[t] = Eigen::VectorXd::Constant(state_dim, 42.0);
+    }
+
+    options.warm_start = true;
+    cddp_solver.setOptions(options);
+    solver.initialize(cddp_solver);
+
+    Eigen::VectorXd expected_state = initial_state;
+    EXPECT_TRUE(cddp_solver.X_[0].isApprox(initial_state, 1e-12));
+    for (int t = 0; t < horizon; ++t)
+    {
+        expected_state = cddp_solver.getSystem().getDiscreteDynamics(
+            expected_state, U_guess[t], t * timestep);
+        EXPECT_TRUE(cddp_solver.X_[t + 1].isApprox(expected_state, 1e-12));
+    }
+    EXPECT_DOUBLE_EQ(cddp_solver.inf_pr_, 0.0);
+}
+
 TEST(LogDDPTest, SolvePendulum)
 {
     int state_dim = 2;
@@ -435,8 +561,6 @@ TEST(LogDDPTest, SolveCar)
     options.verbose = true;
     options.debug = false;
     options.log_barrier.relaxed_log_barrier_delta = 1e-5;
-    options.log_barrier.segment_length = horizon;
-    options.log_barrier.rollout_type = "nonlinear";
     options.log_barrier.barrier.mu_initial = 1e-1;
     options.log_barrier.barrier.mu_update_factor = 0.2;
     options.log_barrier.barrier.mu_update_power = 1.2;
@@ -670,8 +794,6 @@ TEST(LogDDPTest, SolveQuadrotor)
     options.num_threads = 1;
     options.verbose = true;
     options.debug = false;
-    options.log_barrier.segment_length = horizon;
-    options.log_barrier.rollout_type = "nonlinear";
     options.log_barrier.barrier.mu_initial = 1e-1;
     options.log_barrier.relaxed_log_barrier_delta = 1e-5;
     options.log_barrier.barrier.mu_update_factor = 0.2;

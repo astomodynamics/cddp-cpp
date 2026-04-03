@@ -56,9 +56,6 @@ protected:
   void printIteration(int iter, const CDDP &context) const override;
 
 private:
-  // Dynamics storage (forward-simulated trajectory)
-  std::vector<Eigen::VectorXd> F_;
-
   // Constraint values g(x,u) - g_ub
   std::map<std::string, std::vector<Eigen::VectorXd>> G_;
 
@@ -69,9 +66,6 @@ private:
 
   // Filter-based line search
   double constraint_violation_;
-
-  // Multi-shooting parameters
-  int ms_segment_length_;
 
   /**
    * @brief Evaluate trajectory by computing cost, dynamics, and merit function.

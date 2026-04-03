@@ -74,13 +74,9 @@ void bind_options(py::module_& m) {
         .def_readwrite("slack_var_init_scale", &cddp::InteriorPointOptions::slack_var_init_scale)
         .def_readwrite("barrier", &cddp::InteriorPointOptions::barrier);
 
-    // LogBarrierOptions exposed as a flat Python binding; no Python base class.
+    // LogBarrierOptions exposed as a flat Python binding; single-shooting only.
     py::class_<cddp::LogBarrierOptions>(m, "LogBarrierOptions")
         .def(py::init<>())
-        .def_readwrite("segment_length", &cddp::LogBarrierOptions::segment_length)
-        .def_readwrite("rollout_type", &cddp::LogBarrierOptions::rollout_type)
-        .def_readwrite("use_controlled_rollout", &cddp::LogBarrierOptions::use_controlled_rollout)
-        .def_readwrite("costate_var_init_scale", &cddp::LogBarrierOptions::costate_var_init_scale)
         .def_readwrite("use_relaxed_log_barrier_penalty", &cddp::LogBarrierOptions::use_relaxed_log_barrier_penalty)
         .def_readwrite("relaxed_log_barrier_delta", &cddp::LogBarrierOptions::relaxed_log_barrier_delta)
         .def_readwrite("barrier", &cddp::LogBarrierOptions::barrier);

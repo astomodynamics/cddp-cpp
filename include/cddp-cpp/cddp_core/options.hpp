@@ -130,12 +130,10 @@ namespace cddp
     };
 
     /**
-     * @brief Options for the relaxed log-barrier method.
+     * @brief Options for the relaxed log-barrier method (single-shooting).
      */
-    struct LogBarrierOptions : MultiShootingOptions
+    struct LogBarrierOptions
     {
-        LogBarrierOptions() { use_controlled_rollout = true; }
-
         bool use_relaxed_log_barrier_penalty =
             false; ///< Use relaxed log-barrier method.
         double relaxed_log_barrier_delta =
