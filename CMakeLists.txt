@@ -26,6 +26,7 @@ project(
 )
 
 include(GNUInstallDirs)
+include(FetchContent)
 
 set(CMAKE_CXX_STANDARD 17) # Enforce C++17 as the minimum standard
 set(CMAKE_CXX_STANDARD_REQUIRED ON)  # Enforce C++17 as the minimum standard
@@ -91,9 +92,6 @@ if (CDDP_CPP_CASADI)
     message(STATUS "Found CasADi: ${CASADI_LIBRARIES}")
   endif()
 endif()
-
-# Enable FetchContent for downloading dependencies
-include(FetchContent)
 
 # autodiff
 set(AUTODIFF_BUILD_TESTS OFF CACHE BOOL "Don't build autodiff tests")
