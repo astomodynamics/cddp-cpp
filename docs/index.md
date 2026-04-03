@@ -15,6 +15,14 @@ the release workflow for PyPI and GitHub Pages.
 - Python package: importable bindings distributed as `pycddp`
 - Docs site: Markdown content from `docs/`, published to GitHub Pages
 
+## Portfolio highlight
+
+The Python portfolio page is the visual entry point for the bindings and their
+animation-driven demos.
+
+[Open the portfolio gallery](python_portfolio.md){ .md-button .md-button--primary }
+[Read the Python package guide](python.md){ .md-button }
+
 ## Quick start
 
 Install the Python package from PyPI:
