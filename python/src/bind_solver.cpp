@@ -96,6 +96,7 @@ bool isKnownSolverName(const std::string &solver_name) {
     return solver_name == "CLDDP" || solver_name == "CLCDDP" ||
            solver_name == "LogDDP" || solver_name == "LOGDDP" ||
            solver_name == "IPDDP" || solver_name == "MSIPDDP" ||
+           solver_name == "ALDDP" ||
            cddp::CDDP::isSolverRegistered(solver_name);
 }
 

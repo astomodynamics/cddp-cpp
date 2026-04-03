@@ -18,7 +18,8 @@ void bind_options(py::module_& m) {
         .value("CLDDP", cddp::SolverType::CLDDP)
         .value("LogDDP", cddp::SolverType::LogDDP)
         .value("IPDDP", cddp::SolverType::IPDDP)
-        .value("MSIPDDP", cddp::SolverType::MSIPDDP);
+        .value("MSIPDDP", cddp::SolverType::MSIPDDP)
+        .value("ALDDP", cddp::SolverType::ALDDP);
 
     // BoxQPOptions
     py::class_<cddp::BoxQPOptions>(m, "BoxQPOptions")
@@ -103,6 +104,23 @@ void bind_options(py::module_& m) {
         .def_readwrite("use_controlled_rollout", &cddp::MSIPDDPAlgorithmOptions::use_controlled_rollout)
         .def_readwrite("costate_var_init_scale", &cddp::MSIPDDPAlgorithmOptions::costate_var_init_scale);
 
+    // ALDDPAlgorithmOptions exposed as a flat Python binding.
+    py::class_<cddp::ALDDPAlgorithmOptions>(m, "ALDDPOptions")
+        .def(py::init<>())
+        .def_readwrite("lambda_init", &cddp::ALDDPAlgorithmOptions::lambda_init)
+        .def_readwrite("penalty_init", &cddp::ALDDPAlgorithmOptions::penalty_init)
+        .def_readwrite("penalty_max", &cddp::ALDDPAlgorithmOptions::penalty_max)
+        .def_readwrite("penalty_update_factor", &cddp::ALDDPAlgorithmOptions::penalty_update_factor)
+        .def_readwrite("max_inner_iterations", &cddp::ALDDPAlgorithmOptions::max_inner_iterations)
+        .def_readwrite("inner_tolerance_init", &cddp::ALDDPAlgorithmOptions::inner_tolerance_init)
+        .def_readwrite("inner_tolerance_factor", &cddp::ALDDPAlgorithmOptions::inner_tolerance_factor)
+        .def_readwrite("inner_tolerance_min", &cddp::ALDDPAlgorithmOptions::inner_tolerance_min)
+        .def_readwrite("max_outer_iterations", &cddp::ALDDPAlgorithmOptions::max_outer_iterations)
+        .def_readwrite("constraint_tolerance", &cddp::ALDDPAlgorithmOptions::constraint_tolerance)
+        .def_readwrite("use_boxqp_for_controls", &cddp::ALDDPAlgorithmOptions::use_boxqp_for_controls)
+        .def_readwrite("slack_penalty", &cddp::ALDDPAlgorithmOptions::slack_penalty)
+        .def_readwrite("use_sqrt_backward_pass", &cddp::ALDDPAlgorithmOptions::use_sqrt_backward_pass);
+
     // CDDPOptions
     py::class_<cddp::CDDPOptions>(m, "CDDPOptions")
         .def(py::init<>())
@@ -126,5 +144,6 @@ void bind_options(py::module_& m) {
         .def_readwrite("filter", &cddp::CDDPOptions::filter)
         .def_readwrite("log_barrier", &cddp::CDDPOptions::log_barrier)
         .def_readwrite("ipddp", &cddp::CDDPOptions::ipddp)
-        .def_readwrite("msipddp", &cddp::CDDPOptions::msipddp);
+        .def_readwrite("msipddp", &cddp::CDDPOptions::msipddp)
+        .def_readwrite("alddp", &cddp::CDDPOptions::alddp);
 }

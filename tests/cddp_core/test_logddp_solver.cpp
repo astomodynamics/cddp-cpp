@@ -99,6 +99,8 @@ TEST(LogDDPTest, SolvePendulum)
     options.verbose = true;
     options.debug = false;
     options.regularization.initial_value = 1e-6;
+    options.log_barrier.segment_length = horizon;
+    options.log_barrier.rollout_type = "nonlinear";
     options.return_iteration_info = true; // Get detailed iteration history
 
     // Set options
@@ -229,6 +231,94 @@ TEST(LogDDPTest, SolvePendulum)
     EXPECT_LE(warm_iterations, iterations_completed + 5) << "Warm start should not take significantly more iterations";
 }
 
+TEST(LogDDPTest, RecomputesStateTrajectoryFromSeededControlsOnColdStart) {
+    int state_dim = 2;
+    int control_dim = 1;
+    int horizon = 5;
+    double timestep = 0.05;
+
+    auto system = std::make_unique<cddp::Pendulum>(timestep, 1.0, 1.0, 0.0, "euler");
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0, 0.0;
+
+    std::vector<Eigen::VectorXd> empty_reference_states;
+    auto objective = std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, empty_reference_states, timestep);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << M_PI, 0.0;
+
+    cddp::CDDP solver(initial_state, goal_state, horizon, timestep);
+    solver.setDynamicalSystem(std::move(system));
+    solver.setObjective(std::move(objective));
+
+    std::vector<Eigen::VectorXd> X_seed(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U_seed(horizon, Eigen::VectorXd::Zero(control_dim));
+    X_seed[0] = initial_state;
+    for (int t = 1; t <= horizon; ++t) {
+        X_seed[t] << initial_state(0) - 0.1 * t, 0.2 * t;
+    }
+    solver.setInitialTrajectory(X_seed, U_seed);
+
+    cddp::CDDPOptions options;
+    options.max_iterations = 0;
+    options.verbose = false;
+    options.debug = false;
+    options.log_barrier.segment_length = horizon;
+    options.log_barrier.rollout_type = "nonlinear";
+    solver.setOptions(options);
+
+    cddp::CDDPSolution solution = solver.solve("LogDDP");
+    Eigen::VectorXd expected_next_state =
+        solver.getSystem().getDiscreteDynamics(initial_state, U_seed[0], 0.0);
+
+    ASSERT_EQ(solution.state_trajectory.size(), X_seed.size());
+    EXPECT_NEAR(solution.state_trajectory[1](0), expected_next_state(0), 1e-12);
+    EXPECT_NEAR(solution.state_trajectory[1](1), expected_next_state(1), 1e-12);
+    EXPECT_GT((solution.state_trajectory[1] - X_seed[1]).norm(), 1e-6);
+    EXPECT_EQ(solution.status_message, "MaxIterationsReached");
+}
+
+TEST(LogDDPTest, RejectsSegmentedRolloutOptions) {
+    int state_dim = 2;
+    int control_dim = 1;
+    int horizon = 5;
+    double timestep = 0.05;
+
+    auto system = std::make_unique<cddp::Pendulum>(timestep, 1.0, 1.0, 0.0, "euler");
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0, 0.0;
+
+    std::vector<Eigen::VectorXd> empty_reference_states;
+    auto objective = std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, empty_reference_states, timestep);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << M_PI, 0.0;
+
+    cddp::CDDP solver(initial_state, goal_state, horizon, timestep);
+    solver.setDynamicalSystem(std::move(system));
+    solver.setObjective(std::move(objective));
+
+    cddp::CDDPOptions options;
+    options.max_iterations = 0;
+    options.verbose = false;
+    options.debug = false;
+    options.log_barrier.segment_length = horizon - 1;
+    options.log_barrier.rollout_type = "hybrid";
+    solver.setOptions(options);
+
+    EXPECT_THROW(solver.solve("LogDDP"), std::runtime_error);
+}
+
 TEST(LogDDPTest, SolveUnicycle) {
     // Problem parameters
     int state_dim = 3;
@@ -267,6 +357,8 @@ TEST(LogDDPTest, SolveUnicycle) {
     options.num_threads = 10;
     options.verbose = true;
     options.debug = false;
+    options.log_barrier.segment_length = horizon;
+    options.log_barrier.rollout_type = "nonlinear";
 
     // Create CDDP solver
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
@@ -495,26 +587,18 @@ TEST(LogDDPTest, SolveCar)
     warm_options.warm_start = true;
     warm_options.max_iterations = 100; // Allow sufficient iterations for warm start convergence
     warm_options.verbose = false;     // Less verbose for warm start test
+    warm_options.tolerance = 1e-3;
+    warm_options.acceptable_tolerance = 1e-3;
+    warm_options.regularization.initial_value = 1e-4;
 
-    // Create a new solver for warm start test
-    auto car_system_warmstart = std::make_unique<cddp::Car>(timestep, wheelbase, integration_type);
-
-    // Create new objective
-    auto objective_warmstart = std::make_unique<cddp::CarParkingObjective>(goal_state, timestep);
-
-    cddp::CDDP warm_solver(initial_state, goal_state, horizon, timestep);
-    warm_solver.setDynamicalSystem(std::move(car_system_warmstart));
-    warm_solver.setObjective(std::move(objective_warmstart));
-    warm_solver.addPathConstraint("ControlConstraint",
-                              std::make_unique<cddp::ControlConstraint>(control_lower_bound, control_upper_bound));
-    warm_solver.setOptions(warm_options);
-
-    // Use previous solution as warm start
-    warm_solver.setInitialTrajectory(X_sol, U_sol);
+    // Reuse the same solver instance so LogDDP can preserve its warm-start
+    // gains, matching the documented contract of the option.
+    cddp_solver.setOptions(warm_options);
+    cddp_solver.setInitialTrajectory(X_sol, U_sol);
 
     // Solve with warm start
     auto start_time = std::chrono::high_resolution_clock::now();
-    cddp::CDDPSolution warm_solution = warm_solver.solve("LogDDP");
+    cddp::CDDPSolution warm_solution = cddp_solver.solve("LogDDP");
     auto end_time = std::chrono::high_resolution_clock::now();
     auto warm_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 

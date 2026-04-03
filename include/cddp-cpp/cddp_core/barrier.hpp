@@ -59,8 +59,8 @@ public:
    * @return Barrier function value.
    */
   double evaluate(const Constraint &constraint, const Eigen::VectorXd &state,
-                  const Eigen::VectorXd &control) const {
-    Eigen::VectorXd g_val = constraint.evaluate(state, control);
+                  const Eigen::VectorXd &control, int index = 0) const {
+    Eigen::VectorXd g_val = constraint.evaluate(state, control, index);
     Eigen::VectorXd L = constraint.getLowerBound();
     Eigen::VectorXd U = constraint.getUpperBound();
     int constraint_dim = g_val.size();
@@ -99,13 +99,13 @@ public:
    */
   std::tuple<Eigen::VectorXd, Eigen::VectorXd>
   getGradients(const Constraint &constraint, const Eigen::VectorXd &state,
-               const Eigen::VectorXd &control) const {
+               const Eigen::VectorXd &control, int index = 0) const {
 
-    Eigen::VectorXd g_val = constraint.evaluate(state, control);
+    Eigen::VectorXd g_val = constraint.evaluate(state, control, index);
     Eigen::VectorXd L = constraint.getLowerBound();
     Eigen::VectorXd U = constraint.getUpperBound();
-    Eigen::MatrixXd Gx = constraint.getStateJacobian(state, control);
-    Eigen::MatrixXd Gu = constraint.getControlJacobian(state, control);
+    Eigen::MatrixXd Gx = constraint.getStateJacobian(state, control, index);
+    Eigen::MatrixXd Gu = constraint.getControlJacobian(state, control, index);
 
     int state_dim = state.size();
     int control_dim = control.size();
@@ -151,13 +151,13 @@ public:
    */
   std::tuple<Eigen::MatrixXd, Eigen::MatrixXd, Eigen::MatrixXd>
   getHessians(const Constraint &constraint, const Eigen::VectorXd &state,
-              const Eigen::VectorXd &control) const {
+              const Eigen::VectorXd &control, int index = 0) const {
 
-    Eigen::VectorXd g_val = constraint.evaluate(state, control);
+    Eigen::VectorXd g_val = constraint.evaluate(state, control, index);
     Eigen::VectorXd L = constraint.getLowerBound();
     Eigen::VectorXd U = constraint.getUpperBound();
-    Eigen::MatrixXd Gx = constraint.getStateJacobian(state, control);
-    Eigen::MatrixXd Gu = constraint.getControlJacobian(state, control);
+    Eigen::MatrixXd Gx = constraint.getStateJacobian(state, control, index);
+    Eigen::MatrixXd Gu = constraint.getControlJacobian(state, control, index);
 
     int state_dim = state.size();
     int control_dim = control.size();
@@ -171,7 +171,7 @@ public:
         Gux_constraint_vec;
     bool constraint_provides_hessians = true;
     try {
-      auto hess_tuple = constraint.getHessians(state, control);
+      auto hess_tuple = constraint.getHessians(state, control, index);
       Gxx_constraint_vec = std::get<0>(hess_tuple);
       Guu_constraint_vec = std::get<1>(hess_tuple);
       Gux_constraint_vec = std::get<2>(hess_tuple);

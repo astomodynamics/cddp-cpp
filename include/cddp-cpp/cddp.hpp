@@ -32,6 +32,7 @@
 #include "cddp_core/logddp_solver.hpp"
 #include "cddp_core/ipddp_solver.hpp"
 #include "cddp_core/msipddp_solver.hpp"
+#include "cddp_core/alddp_solver.hpp"
 #include "cddp_core/helper.hpp"
 #include "cddp_core/boxqp.hpp"
 #include "cddp_core/qp_solver.hpp"

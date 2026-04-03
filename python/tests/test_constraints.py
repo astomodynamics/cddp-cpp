@@ -112,6 +112,8 @@ def test_custom_python_constraint_with_solver():
     assert counters["evaluate"] > 0
     assert counters["state_jacobian"] > 0
     assert counters["control_jacobian"] > 0
+
+
 def test_constraint_base_is_rejected_cleanly():
     dt = 0.1
     opts = pycddp.CDDPOptions()

@@ -31,6 +31,7 @@ def test_solve_by_name_raises_for_unknown_solver():
         ("CLDDP", "CLDDP"),
         ("CLCDDP", "CLDDP"),
         ("LOGDDP", "LogDDP"),
+        ("ALDDP", "ALDDP"),
     ],
 )
 def test_solve_by_name_accepts_core_aliases(solver_name, expected_solver_name):

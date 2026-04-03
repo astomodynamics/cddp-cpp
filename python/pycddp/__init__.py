@@ -24,6 +24,7 @@ try:
     LogBarrierOptions,
     IPDDPOptions,
     MSIPDDPOptions,
+    ALDDPOptions,
 
     # Core solver
     CDDP,
