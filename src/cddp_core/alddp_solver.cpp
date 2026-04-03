@@ -63,6 +63,11 @@ void ALDDPSolver::initialize(CDDP &context) {
                   << std::endl;
       }
       boxqp_solver_.setOptions(options.box_qp);
+      // The solver state (gains, multipliers, penalties) is reused, but the
+      // current seeded trajectory may have changed since the last solve.
+      // Refresh slack controls so warm starts remain consistent with the
+      // current X/U pair, including dynamically infeasible reseeds.
+      initializeSlackControls(context);
       if (!context.X_.empty() && !context.U_.empty()) {
         computeCost(context);
       }

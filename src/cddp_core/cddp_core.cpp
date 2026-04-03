@@ -269,6 +269,26 @@ std::string solverTypeToString(SolverType solver_type) {
     return "CLDDP"; // Default fallback
   }
 }
+
+std::string canonicalizeSolverType(const std::string &solver_type) {
+  if (solver_type == "CLCDDP" || solver_type == "CLDDP") {
+    return "CLDDP";
+  }
+  if (solver_type == "LogDDP" || solver_type == "LOGDDP") {
+    return "LogDDP";
+  }
+  if (solver_type == "IPDDP") {
+    return "IPDDP";
+  }
+  if (solver_type == "MSIPDDP") {
+    return "MSIPDDP";
+  }
+  if (solver_type == "ALDDP") {
+    return "ALDDP";
+  }
+
+  return solver_type;
+}
 } // namespace
 
 CDDPSolution CDDP::solve(SolverType solver_type) {
@@ -302,25 +322,30 @@ CDDP::createSolver(const std::string &solver_type) {
 
 CDDPSolution CDDP::solve(const std::string &solver_type) {
   // This is where strategy selection and invocation will happen.
+  const std::string canonical_solver_type = canonicalizeSolverType(solver_type);
 
   initializeProblemIfNecessary(); // Ensure X_, U_ are sized etc.
 
-  // Strategy selection and instantiation
-  solver_ = createSolver(solver_type);
+  // Preserve solver state across repeated solves with the same algorithm so
+  // warm-start options can reuse stored gains.
+  if (!solver_ || solver_->getSolverName() != canonical_solver_type) {
+    solver_ = createSolver(canonical_solver_type);
+  }
 
   if (!solver_) {
     // Solver not found - return error solution
     CDDPSolution solution;
-    solution.solver_name = solver_type;
+    solution.solver_name = canonical_solver_type;
     solution.status_message =
-        "UnknownSolver - No solver registered for '" + solver_type + "'";
+        "UnknownSolver - No solver registered for '" + canonical_solver_type +
+        "'";
     solution.iterations_completed = 0;
     solution.solve_time_ms = 0.0;
     solution.final_objective = 0.0;
     solution.final_step_length = 1.0;
 
     if (options_.verbose) {
-      std::cout << "Solver type '" << solver_type
+      std::cout << "Solver type '" << canonical_solver_type
                 << "' not found. Available solvers: ";
       auto available = getRegisteredSolvers();
       for (const auto &name : available) {

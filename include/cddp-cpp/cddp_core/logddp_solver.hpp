@@ -56,12 +56,6 @@ protected:
   void printIteration(int iter, const CDDP &context) const override;
 
 private:
-  // Dynamics storage (forward-simulated trajectory)
-  std::vector<Eigen::VectorXd> F_;
-
-  // Constraint values g(x,u) - g_ub
-  std::map<std::string, std::vector<Eigen::VectorXd>> G_;
-
   // Log-barrier method
   std::unique_ptr<RelaxedLogBarrier> relaxed_log_barrier_;
   double mu_;
@@ -69,9 +63,6 @@ private:
 
   // Filter-based line search
   double constraint_violation_;
-
-  // Multi-shooting parameters
-  int ms_segment_length_;
 
   /**
    * @brief Evaluate trajectory by computing cost, dynamics, and merit function.
@@ -82,6 +73,22 @@ private:
    * @brief Reset/initialize the filter for line search.
    */
   void resetFilter(CDDP &context);
+
+  void augmentRunningCostDerivatives(
+      const CDDP &context, int t, const Eigen::VectorXd &x,
+      const Eigen::VectorXd &u, Eigen::VectorXd &l_x, Eigen::VectorXd &l_u,
+      Eigen::MatrixXd &l_xx, Eigen::MatrixXd &l_uu,
+      Eigen::MatrixXd &l_ux) const;
+
+  void augmentTerminalCostDerivatives(const CDDP &context,
+                                      const Eigen::VectorXd &x_N,
+                                      Eigen::VectorXd &V_x,
+                                      Eigen::MatrixXd &V_xx) const;
+
+  double computeBarrierMerit(const CDDP &context,
+                             const std::vector<Eigen::VectorXd> &X,
+                             const std::vector<Eigen::VectorXd> &U,
+                             double *max_constraint_violation = nullptr) const;
 };
 
 } // namespace cddp

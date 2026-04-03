@@ -597,3 +597,64 @@ TEST(ALDDPTest, ConstraintFreeMatchesCLDDP) {
     EXPECT_LT(ratio, 2.0);
   }
 }
+
+TEST(ALDDPTest, WarmStartRefreshesSlackControlsForReseededTrajectory) {
+  const int state_dim = 4;
+  const int control_dim = 1;
+  const int horizon = 100;
+  const double timestep = 0.02;
+
+  auto system = std::make_unique<cddp::CartPole>(timestep, "rk4");
+
+  Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+  Eigen::MatrixXd R = 0.01 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+  Eigen::MatrixXd Qf = 100.0 * Eigen::MatrixXd::Identity(state_dim, state_dim);
+
+  Eigen::VectorXd goal_state = Eigen::VectorXd::Zero(state_dim);
+  goal_state << 0.0, M_PI, 0.0, 0.0;
+
+  std::vector<Eigen::VectorXd> empty_ref;
+  auto objective = std::make_unique<cddp::QuadraticObjective>(
+      Q, R, Qf, goal_state, empty_ref, timestep);
+
+  Eigen::VectorXd initial_state = Eigen::VectorXd::Zero(state_dim);
+
+  cddp::CDDP solver(initial_state, goal_state, horizon, timestep);
+  solver.setDynamicalSystem(std::move(system));
+  solver.setObjective(std::move(objective));
+
+  Eigen::VectorXd u_lb(control_dim), u_ub(control_dim);
+  u_lb << -20.0;
+  u_ub << 20.0;
+  solver.addPathConstraint("ControlConstraint",
+      std::make_unique<cddp::ControlConstraint>(u_lb, u_ub));
+
+  auto options = makeALDDPOptions();
+  options.verbose = false;
+  options.print_solver_header = false;
+  solver.setOptions(options);
+  solver.setInitialTrajectory(
+      std::vector<Eigen::VectorXd>(horizon + 1, initial_state),
+      std::vector<Eigen::VectorXd>(horizon, Eigen::VectorXd::Zero(control_dim)));
+
+  auto first_solution = solver.solve(cddp::SolverType::ALDDP);
+  ASSERT_FALSE(first_solution.state_trajectory.empty());
+
+  std::vector<Eigen::VectorXd> X_infeasible(horizon + 1);
+  for (int t = 0; t <= horizon; ++t) {
+    double alpha = static_cast<double>(t) / horizon;
+    X_infeasible[t] = (1.0 - alpha) * initial_state + alpha * goal_state;
+  }
+  std::vector<Eigen::VectorXd> U_seed(horizon, Eigen::VectorXd::Zero(control_dim));
+
+  options.warm_start = true;
+  options.max_iterations = 100;
+  solver.setOptions(options);
+  solver.setInitialTrajectory(X_infeasible, U_seed);
+
+  auto reseeded_solution = solver.solve(cddp::SolverType::ALDDP);
+
+  EXPECT_GT(reseeded_solution.iterations_completed, 0);
+  EXPECT_FALSE(reseeded_solution.state_trajectory.empty());
+  EXPECT_TRUE(std::isfinite(reseeded_solution.final_objective));
+}

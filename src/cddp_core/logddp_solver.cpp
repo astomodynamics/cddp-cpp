@@ -16,28 +16,22 @@ limitations under the License.
 
 #include "cddp_core/logddp_solver.hpp"
 #include "cddp_core/cddp_core.hpp"
-#include <chrono>
 #include <cmath>
-#include <execution>
-#include <future>
 #include <iomanip>
 #include <iostream>
+#include <limits>
 
 namespace cddp {
 
 LogDDPSolver::LogDDPSolver()
-    : mu_(1e-1), relaxation_delta_(1e-5), constraint_violation_(1e+7),
-      ms_segment_length_(5) {}
+    : mu_(1e-1), relaxation_delta_(1e-5), constraint_violation_(0.0) {}
 
 void LogDDPSolver::initialize(CDDP &context) {
   const CDDPOptions &options = context.getOptions();
+  const int horizon = context.getHorizon();
+  const int control_dim = context.getControlDim();
+  const int state_dim = context.getStateDim();
 
-  int horizon = context.getHorizon();
-  int control_dim = context.getControlDim();
-  int state_dim = context.getStateDim();
-
-  // Check if reference_state in objective and reference_state in context are
-  // the same
   if ((context.getReferenceState() - context.getObjective().getReferenceState())
           .norm() > 1e-6) {
     std::cerr << "LogDDP: Initial state and goal state in the objective "
@@ -47,19 +41,48 @@ void LogDDPSolver::initialize(CDDP &context) {
         "Initial state and goal state in the objective function do not match");
   }
 
-  // For warm starts, verify that existing state is valid
+  if (options.log_barrier.segment_length != horizon) {
+    throw std::runtime_error(
+        "LogDDP: segment_length must equal horizon in single-shooting mode");
+  }
+  if (options.log_barrier.rollout_type != "nonlinear") {
+    throw std::runtime_error(
+        "LogDDP: rollout_type must be 'nonlinear' in single-shooting mode");
+  }
+
+  auto initialize_line_search = [&]() {
+    context.alphas_.clear();
+    double alpha = options.line_search.initial_step_size;
+    for (int i = 0; i < options.line_search.max_iterations; ++i) {
+      context.alphas_.push_back(alpha);
+      alpha *= options.line_search.step_reduction_factor;
+    }
+    context.alpha_pr_ = options.line_search.initial_step_size;
+    dV_ = Eigen::Vector2d::Zero();
+  };
+
+  auto initialize_barrier = [&]() {
+    mu_ = options.log_barrier.barrier.mu_initial;
+    relaxation_delta_ = options.log_barrier.relaxed_log_barrier_delta;
+    if (!relaxed_log_barrier_) {
+      relaxed_log_barrier_ =
+          std::make_unique<RelaxedLogBarrier>(mu_, relaxation_delta_);
+    } else {
+      relaxed_log_barrier_->setBarrierCoeff(mu_);
+      relaxed_log_barrier_->setRelaxationDelta(relaxation_delta_);
+    }
+  };
+
   if (options.warm_start) {
     bool valid_warm_start =
         (k_u_.size() == static_cast<size_t>(horizon) &&
          K_u_.size() == static_cast<size_t>(horizon) &&
-         F_.size() == static_cast<size_t>(horizon) &&
-         context.X_.size() == static_cast<size_t>(horizon + 1) &&
          context.U_.size() == static_cast<size_t>(horizon));
 
     if (valid_warm_start && !k_u_.empty()) {
       for (int t = 0; t < horizon; ++t) {
         if (k_u_[t].size() != control_dim || K_u_[t].rows() != control_dim ||
-            K_u_[t].cols() != state_dim || F_[t].size() != state_dim) {
+            K_u_[t].cols() != state_dim || context.U_[t].size() != control_dim) {
           valid_warm_start = false;
           break;
         }
@@ -73,138 +96,38 @@ void LogDDPSolver::initialize(CDDP &context) {
         std::cout << "LogDDP: Using warm start with existing control gains"
                   << std::endl;
       }
-
-      // Reset barrier parameters for warm start
-      mu_ = options.log_barrier.barrier.mu_initial;
-      relaxation_delta_ = options.log_barrier.relaxed_log_barrier_delta;
-      if (!relaxed_log_barrier_) {
-        relaxed_log_barrier_ =
-            std::make_unique<RelaxedLogBarrier>(mu_, relaxation_delta_);
-      } else {
-        relaxed_log_barrier_->setBarrierCoeff(mu_);
-        relaxed_log_barrier_->setRelaxationDelta(relaxation_delta_);
-      }
-
-      // Initialize regularization
       context.regularization_ = options.regularization.initial_value;
-
-      // Initialize line search parameters
-      context.alphas_.clear();
-      double alpha = options.line_search.initial_step_size;
-      for (int i = 0; i < options.line_search.max_iterations; ++i) {
-        context.alphas_.push_back(alpha);
-        alpha *= options.line_search.step_reduction_factor;
-      }
-      context.alpha_pr_ = options.line_search.initial_step_size;
-      dV_ = Eigen::Vector2d::Zero();
-
-      constraint_violation_ = std::numeric_limits<double>::infinity();
-      ms_segment_length_ = options.log_barrier.segment_length;
-
-      // Evaluate current trajectory and reset filter
+      initialize_line_search();
+      initialize_barrier();
       evaluateTrajectory(context);
       resetFilter(context);
       return;
-    } else if (options.verbose) {
+    }
+
+    if (options.verbose) {
       std::cout << "LogDDP: Warning - warm start requested but no valid solver "
-                   "state found. "
-                << "Falling back to cold start initialization." << std::endl;
+                   "state found. Falling back to cold start initialization."
+                << std::endl;
     }
   }
 
-  // Cold start: Initialize trajectories with interpolation between initial and
-  // reference states
-  if (context.X_.size() != static_cast<size_t>(horizon + 1) ||
-      context.U_.size() != static_cast<size_t>(horizon)) {
-    context.X_.resize(horizon + 1);
-    context.U_.resize(horizon);
+  initializeGains(horizon, control_dim, state_dim);
 
-    // Create X_ initial guess using initial_state and reference_state by
-    // interpolating between them
-    for (int t = 0; t <= horizon; ++t) {
-      context.X_[t] =
-          context.getInitialState() +
-          t * (context.getReferenceState() - context.getInitialState()) /
-              horizon;
-    }
-
-    for (int t = 0; t < horizon; ++t) {
+  context.U_.resize(horizon);
+  for (int t = 0; t < horizon; ++t) {
+    if (context.U_[t].size() != control_dim) {
       context.U_[t] = Eigen::VectorXd::Zero(control_dim);
     }
   }
 
-  // Resize dynamics storage
-  F_.resize(horizon);
-  for (int t = 0; t < horizon; ++t) {
-    F_[t] = Eigen::VectorXd::Zero(state_dim);
-  }
-
-  // Use base class helper for gains
-  initializeGains(horizon, control_dim, state_dim);
-
-  G_.clear();
-
-  const auto &constraint_set = context.getConstraintSet();
-  for (const auto &constraint_pair : constraint_set) {
-    const std::string &constraint_name = constraint_pair.first;
-    int dual_dim = constraint_pair.second->getDualDim();
-
-    G_[constraint_name].resize(horizon);
-    for (int t = 0; t < horizon; ++t) {
-      G_[constraint_name][t] = Eigen::VectorXd::Zero(dual_dim);
-    }
-  }
-
-  // Initialize cost using objective evaluation
-  context.cost_ = context.getObjective().evaluate(context.X_, context.U_);
-
-  // Initialize line search parameters
-  context.alphas_.clear();
-  double alpha = options.line_search.initial_step_size;
-  for (int i = 0; i < options.line_search.max_iterations; ++i) {
-    context.alphas_.push_back(alpha);
-    alpha *= options.line_search.step_reduction_factor;
-  }
-  context.alpha_pr_ = options.line_search.initial_step_size;
-  dV_ = Eigen::Vector2d::Zero();
-
-  // Initialize regularization
   context.regularization_ = options.regularization.initial_value;
-
-  constraint_violation_ = std::numeric_limits<double>::infinity();
-
-  ms_segment_length_ = options.log_barrier.segment_length;
-
-  // Check if ms_segment_length_ is valid
-  if (ms_segment_length_ < 0) {
-    std::cerr << "LogDDP: ms_segment_length_ must be non-negative" << std::endl;
-    throw std::runtime_error("LogDDP: ms_segment_length_ must be non-negative");
-  }
-
-  const std::string &rollout_type = options.log_barrier.rollout_type;
-  if (rollout_type != "linear" && rollout_type != "nonlinear" &&
-      rollout_type != "hybrid") {
-    std::cerr << "LogDDP: Invalid ms_rollout_type: " << rollout_type
-              << std::endl;
-    throw std::runtime_error("LogDDP: Invalid ms_rollout_type");
-  }
-
-  // Initialize log barrier object
-  mu_ = options.log_barrier.barrier.mu_initial;
-  relaxation_delta_ = options.log_barrier.relaxed_log_barrier_delta;
-  if (!relaxed_log_barrier_) {
-    relaxed_log_barrier_ =
-        std::make_unique<RelaxedLogBarrier>(mu_, relaxation_delta_);
-  }
-
-  // Evaluate initial trajectory
+  initialize_line_search();
+  initialize_barrier();
   evaluateTrajectory(context);
   resetFilter(context);
 }
 
 std::string LogDDPSolver::getSolverName() const { return "LogDDP"; }
-
-// === Hook implementations ===
 
 void LogDDPSolver::preIterationSetup(CDDP &context) {
   evaluateTrajectory(context);
@@ -213,22 +136,15 @@ void LogDDPSolver::preIterationSetup(CDDP &context) {
 
 bool LogDDPSolver::handleBackwardPassRegularizationLimit(
     CDDP & /*context*/, std::string &termination_reason) {
-  // LogDDP treats regularization exhaustion as converged — the current
-  // barrier-penalized trajectory is typically still usable.
   termination_reason = "RegularizationLimitReached_Converged";
-  return true; // converged
+  return true;
 }
 
 void LogDDPSolver::applyForwardPassResult(CDDP &context,
                                           const ForwardPassResult &result) {
-  // Call base to update X_, U_, cost_, merit_function_, alpha_pr_, alpha_du_
   CDDPSolverBase::applyForwardPassResult(context, result);
-
-  // Also update LogDDP-specific state
-  if (result.dynamics_trajectory) {
-    F_ = *result.dynamics_trajectory;
-  }
   constraint_violation_ = result.constraint_violation;
+  context.inf_pr_ = result.constraint_violation;
 }
 
 bool LogDDPSolver::checkConvergence(CDDP &context, double dJ, double dL,
@@ -264,23 +180,20 @@ void LogDDPSolver::postIterationUpdate(CDDP &context,
                                        bool forward_pass_success) {
   const CDDPOptions &options = context.getOptions();
 
-  // Barrier update logic
   if (forward_pass_success) {
     mu_ = std::max(options.log_barrier.barrier.mu_min_value,
                    mu_ * options.log_barrier.barrier.mu_update_factor);
   } else {
     mu_ = std::min(options.log_barrier.barrier.mu_initial, mu_ * 5.0);
   }
+
   relaxed_log_barrier_->setBarrierCoeff(mu_);
   relaxed_log_barrier_->setRelaxationDelta(relaxation_delta_);
   resetFilter(context);
 }
 
 void LogDDPSolver::recordIterationHistory(const CDDP &context) {
-  // Call base to record common metrics
   CDDPSolverBase::recordIterationHistory(context);
-
-  // Add LogDDP-specific metrics
   history_.barrier_mu.push_back(mu_);
 }
 
@@ -302,258 +215,165 @@ void LogDDPSolver::printIteration(int iter, const CDDP &context) const {
 
   std::cout << std::setw(4) << iter << " " << std::setw(12) << std::scientific
             << std::setprecision(4) << context.cost_ << " " << std::setw(12)
-            << std::scientific << std::setprecision(4) << context.merit_function_
-            << " " << std::setw(10) << std::scientific << std::setprecision(2)
-            << context.inf_du_ << " " << std::setw(8) << std::fixed
-            << std::setprecision(1) << std::log10(context.regularization_)
-            << " " << std::setw(8) << std::fixed << std::setprecision(4)
-            << context.alpha_pr_ << " " << std::setw(8) << std::fixed
-            << std::setprecision(1) << std::log10(mu_) << " " << std::setw(10)
-            << std::scientific << std::setprecision(2) << constraint_violation_
-            << std::endl;
+            << std::scientific << std::setprecision(4)
+            << context.merit_function_ << " " << std::setw(10)
+            << std::scientific << std::setprecision(2) << context.inf_du_
+            << " " << std::setw(8) << std::fixed << std::setprecision(1)
+            << std::log10(context.regularization_) << " " << std::setw(8)
+            << std::fixed << std::setprecision(4) << context.alpha_pr_ << " "
+            << std::setw(8) << std::fixed << std::setprecision(1)
+            << std::log10(mu_) << " " << std::setw(10) << std::scientific
+            << std::setprecision(2) << constraint_violation_ << std::endl;
 }
-
-// === Private helper methods ===
 
 void LogDDPSolver::evaluateTrajectory(CDDP &context) {
   const int horizon = context.getHorizon();
-  double cost = 0.0;
 
-  // Rollout dynamics and calculate cost
+  context.X_.resize(horizon + 1);
+  context.X_[0] = context.getInitialState();
+  context.cost_ = 0.0;
+
   for (int t = 0; t < horizon; ++t) {
     const Eigen::VectorXd &x_t = context.X_[t];
     const Eigen::VectorXd &u_t = context.U_[t];
 
-    // Compute stage cost using the guessed state/control
-    cost += context.getObjective().running_cost(x_t, u_t, t);
-
-    // Compute dynamics
-    F_[t] = context.getSystem().getDiscreteDynamics(x_t, u_t,
-                                                    t * context.getTimestep());
+    context.cost_ += context.getObjective().running_cost(x_t, u_t, t);
+    context.X_[t + 1] = context.getSystem().getDiscreteDynamics(
+        x_t, u_t, t * context.getTimestep());
   }
 
-  // Add terminal cost based on the final guessed state
-  cost += context.getObjective().terminal_cost(context.X_.back());
-
-  // Store the initial total cost
-  context.cost_ = cost;
+  context.cost_ += context.getObjective().terminal_cost(context.X_.back());
 }
 
 void LogDDPSolver::resetFilter(CDDP &context) {
-  // Evaluate log-barrier cost (includes path constraints)
-  context.merit_function_ = context.cost_;
-  constraint_violation_ = 0.0;
-  double defect_violation = 0.0;
-
-  const auto &constraint_set = context.getConstraintSet();
-
-  // Calculate path constraint terms and violation
-  for (int t = 0; t < context.getHorizon(); ++t) {
-    for (const auto &constraint_pair : constraint_set) {
-      const std::string &constraint_name = constraint_pair.first;
-      Eigen::VectorXd g_t =
-          constraint_pair.second->evaluate(context.X_[t], context.U_[t]) -
-          constraint_pair.second->getUpperBound();
-      G_[constraint_name][t] = g_t;
-      context.merit_function_ += relaxed_log_barrier_->evaluate(
-          *constraint_pair.second, context.X_[t], context.U_[t]);
-
-      for (int i = 0; i < g_t.size(); ++i) {
-        if (g_t(i) > 0.0) {
-          constraint_violation_ += g_t(i);
-        }
-      }
-    }
-
-    // Add defect violation penalty
-    Eigen::VectorXd d = F_[t] - context.X_[t + 1];
-    defect_violation += d.lpNorm<1>();
-  }
-  constraint_violation_ += defect_violation;
+  context.merit_function_ =
+      computeBarrierMerit(context, context.X_, context.U_, &constraint_violation_);
   context.inf_pr_ = constraint_violation_;
 }
 
-// === Backward pass ===
+void LogDDPSolver::augmentRunningCostDerivatives(
+    const CDDP &context, int t, const Eigen::VectorXd &x,
+    const Eigen::VectorXd &u, Eigen::VectorXd &l_x, Eigen::VectorXd &l_u,
+    Eigen::MatrixXd &l_xx, Eigen::MatrixXd &l_uu,
+    Eigen::MatrixXd &l_ux) const {
+  for (const auto &[name, constraint] : context.getConstraintSet()) {
+    auto [L_x_relaxed, L_u_relaxed] =
+        relaxed_log_barrier_->getGradients(*constraint, x, u, t);
+    l_x += L_x_relaxed;
+    l_u += L_u_relaxed;
+
+    auto [L_xx_relaxed, L_uu_relaxed, L_ux_relaxed] =
+        relaxed_log_barrier_->getHessians(*constraint, x, u, t);
+    l_xx += L_xx_relaxed;
+    l_uu += L_uu_relaxed;
+    l_ux += L_ux_relaxed;
+  }
+}
+
+void LogDDPSolver::augmentTerminalCostDerivatives(const CDDP &context,
+                                                  const Eigen::VectorXd &x_N,
+                                                  Eigen::VectorXd &V_x,
+                                                  Eigen::MatrixXd &V_xx) const {
+  Eigen::VectorXd dummy_u = Eigen::VectorXd::Zero(context.getControlDim());
+  const int horizon = context.getHorizon();
+
+  for (const auto &[name, constraint] : context.getTerminalConstraintSet()) {
+    auto [L_x_relaxed, L_u_relaxed] =
+        relaxed_log_barrier_->getGradients(*constraint, x_N, dummy_u, horizon);
+    (void)L_u_relaxed;
+    V_x += L_x_relaxed;
+
+    auto [L_xx_relaxed, L_uu_relaxed, L_ux_relaxed] =
+        relaxed_log_barrier_->getHessians(*constraint, x_N, dummy_u, horizon);
+    (void)L_uu_relaxed;
+    (void)L_ux_relaxed;
+    V_xx += L_xx_relaxed;
+  }
+}
+
+double LogDDPSolver::computeBarrierMerit(
+    const CDDP &context, const std::vector<Eigen::VectorXd> &X,
+    const std::vector<Eigen::VectorXd> &U, double *max_constraint_violation) const {
+  double merit = 0.0;
+  double max_violation = 0.0;
+
+  for (int t = 0; t < context.getHorizon(); ++t) {
+    merit += context.getObjective().running_cost(X[t], U[t], t);
+
+    for (const auto &[name, constraint] : context.getConstraintSet()) {
+      merit += relaxed_log_barrier_->evaluate(*constraint, X[t], U[t], t);
+      max_violation = std::max(
+          max_violation, constraint->computeViolation(X[t], U[t], t));
+    }
+  }
+
+  merit += context.getObjective().terminal_cost(X.back());
+
+  Eigen::VectorXd dummy_u = Eigen::VectorXd::Zero(context.getControlDim());
+  for (const auto &[name, constraint] : context.getTerminalConstraintSet()) {
+    merit +=
+        relaxed_log_barrier_->evaluate(*constraint, X.back(), dummy_u, context.getHorizon());
+    max_violation = std::max(max_violation, constraint->computeViolation(
+                                                X.back(), dummy_u,
+                                                context.getHorizon()));
+  }
+
+  if (max_constraint_violation != nullptr) {
+    *max_constraint_violation = max_violation;
+  }
+
+  return merit;
+}
 
 bool LogDDPSolver::backwardPass(CDDP &context) {
   const CDDPOptions &options = context.getOptions();
   const int state_dim = context.getStateDim();
   const int control_dim = context.getControlDim();
   const int horizon = context.getHorizon();
-  const double timestep = context.getTimestep();
-  const auto &constraint_set = context.getConstraintSet();
 
-  // Pre-compute dynamics jacobians and hessians for all time steps
-  // Note: LogDDP needs continuous-time Jacobians for the backward pass
-  // because it handles defect terms (d = F[t] - X[t+1]) which require
-  // the A = dt*Fx + I, B = dt*Fu formulation. We compute these inline
-  // since the base precomputeDynamicsDerivatives stores discrete-time versions.
-  const int MIN_HORIZON_FOR_PARALLEL = 20;
-  const bool use_parallel =
-      options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;
+  precomputeDynamicsDerivatives(context, 20);
 
-  // Resize storage
-  F_x_.resize(horizon);
-  F_u_.resize(horizon);
-  F_xx_.resize(horizon);
-  F_uu_.resize(horizon);
-  F_ux_.resize(horizon);
-
-  if (!use_parallel) {
-    for (int t = 0; t < horizon; ++t) {
-      const Eigen::VectorXd &x = context.X_[t];
-      const Eigen::VectorXd &u = context.U_[t];
-
-      const auto [Fx, Fu] =
-          context.getSystem().getJacobians(x, u, t * timestep);
-      F_x_[t] = Fx;
-      F_u_[t] = Fu;
-
-      if (!options.use_ilqr) {
-        const auto hessians =
-            context.getSystem().getHessians(x, u, t * timestep);
-        F_xx_[t] = std::get<0>(hessians);
-        F_uu_[t] = std::get<1>(hessians);
-        F_ux_[t] = std::get<2>(hessians);
-      } else {
-        F_xx_[t] = std::vector<Eigen::MatrixXd>();
-        F_uu_[t] = std::vector<Eigen::MatrixXd>();
-        F_ux_[t] = std::vector<Eigen::MatrixXd>();
-      }
-    }
-  } else {
-    const int num_threads =
-        std::min(options.num_threads,
-                 static_cast<int>(std::thread::hardware_concurrency()));
-    const int chunk_size = std::max(1, horizon / num_threads);
-
-    std::vector<std::future<void>> futures;
-    futures.reserve(num_threads);
-
-    for (int thread_id = 0; thread_id < num_threads; ++thread_id) {
-      int start_t = thread_id * chunk_size;
-      int end_t = (thread_id == num_threads - 1) ? horizon
-                                                 : (thread_id + 1) * chunk_size;
-
-      if (start_t >= horizon)
-        break;
-
-      futures.push_back(
-          std::async(std::launch::async, [this, &context, &options, start_t,
-                                          end_t, timestep]() {
-            for (int t = start_t; t < end_t; ++t) {
-              const Eigen::VectorXd &x = context.X_[t];
-              const Eigen::VectorXd &u = context.U_[t];
-
-              const auto [Fx, Fu] =
-                  context.getSystem().getJacobians(x, u, t * timestep);
-              F_x_[t] = Fx;
-              F_u_[t] = Fu;
-
-              if (!options.use_ilqr) {
-                const auto hessians =
-                    context.getSystem().getHessians(x, u, t * timestep);
-                F_xx_[t] = std::get<0>(hessians);
-                F_uu_[t] = std::get<1>(hessians);
-                F_ux_[t] = std::get<2>(hessians);
-              } else {
-                F_xx_[t] = std::vector<Eigen::MatrixXd>();
-                F_uu_[t] = std::vector<Eigen::MatrixXd>();
-                F_ux_[t] = std::vector<Eigen::MatrixXd>();
-              }
-            }
-          }));
-    }
-
-    for (auto &future : futures) {
-      try {
-        if (future.valid()) {
-          future.get();
-        }
-      } catch (const std::exception &e) {
-        if (options.verbose) {
-          std::cerr
-              << "LogDDP: Dynamics derivatives computation thread failed: "
-              << e.what() << std::endl;
-        }
-        throw;
-      }
-    }
-  }
-
-  if (options.debug) {
-    std::cout << "[LogDDP] Pre-computed dynamics derivatives for " << horizon
-              << " time steps using "
-              << (use_parallel ? "parallel" : "sequential") << " computation"
-              << std::endl;
-  }
-
-  // Terminal cost and derivatives (V_x, V_xx at t=N)
   Eigen::VectorXd V_x =
       context.getObjective().getFinalCostGradient(context.X_.back());
   Eigen::MatrixXd V_xx =
       context.getObjective().getFinalCostHessian(context.X_.back());
-  V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize
+  augmentTerminalCostDerivatives(context, context.X_.back(), V_x, V_xx);
+  V_xx = 0.5 * (V_xx + V_xx.transpose());
 
   dV_ = Eigen::Vector2d::Zero();
   double Qu_err = 0.0;
+  double norm_Vx = V_x.lpNorm<1>();
 
-  // Backward Riccati recursion
   for (int t = horizon - 1; t >= 0; --t) {
     const Eigen::VectorXd &x = context.X_[t];
     const Eigen::VectorXd &u = context.U_[t];
-    const Eigen::VectorXd &f = F_[t];
-    const Eigen::VectorXd &d = f - context.X_[t + 1]; // Defect
+    const Eigen::MatrixXd &A = F_x_[t];
+    const Eigen::MatrixXd &B = F_u_[t];
 
-    // Use pre-computed continuous-time dynamics Jacobians
-    const Eigen::MatrixXd &Fx = F_x_[t];
-    const Eigen::MatrixXd &Fu = F_u_[t];
-    const Eigen::MatrixXd &A =
-        timestep * Fx + Eigen::MatrixXd::Identity(state_dim, state_dim);
-    const Eigen::MatrixXd &B = timestep * Fu;
-
-    // Cost derivatives at (x_t, u_t)
     auto [l_x, l_u] = context.getObjective().getRunningCostGradients(x, u, t);
     auto [l_xx, l_uu, l_ux] =
         context.getObjective().getRunningCostHessians(x, u, t);
+    augmentRunningCostDerivatives(context, t, x, u, l_x, l_u, l_xx, l_uu, l_ux);
 
-    Eigen::VectorXd Q_x = l_x + A.transpose() * (V_x + V_xx * d);
-    Eigen::VectorXd Q_u = l_u + B.transpose() * (V_x + V_xx * d);
+    Eigen::VectorXd Q_x = l_x + A.transpose() * V_x;
+    Eigen::VectorXd Q_u = l_u + B.transpose() * V_x;
     Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
     Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
     Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
 
-    // Add state hessian term if not using iLQR
     if (!options.use_ilqr) {
       const auto &Fxx = F_xx_[t];
       const auto &Fuu = F_uu_[t];
       const auto &Fux = F_ux_[t];
-
       for (int i = 0; i < state_dim; ++i) {
-        Q_xx += timestep * V_x(i) * Fxx[i];
-        Q_ux += timestep * V_x(i) * Fux[i];
-        Q_uu += timestep * V_x(i) * Fuu[i];
+        Q_xx += V_x(i) * Fxx[i];
+        Q_ux += V_x(i) * Fux[i];
+        Q_uu += V_x(i) * Fuu[i];
       }
     }
 
-    // Apply Log-barrier cost gradients and Hessians
-    for (const auto &constraint_pair : constraint_set) {
-      auto [L_x_relaxed, L_u_relaxed] =
-          relaxed_log_barrier_->getGradients(*constraint_pair.second, x, u);
-      Q_x += L_x_relaxed;
-      Q_u += L_u_relaxed;
-
-      auto [L_xx_relaxed, L_uu_relaxed, L_ux_relaxed] =
-          relaxed_log_barrier_->getHessians(*constraint_pair.second, x, u);
-      Q_xx += L_xx_relaxed;
-      Q_uu += L_uu_relaxed;
-      Q_ux += L_ux_relaxed;
-    }
-
-    // Regularization
-    Eigen::MatrixXd Q_uu_reg = Q_uu;
+    Eigen::MatrixXd Q_uu_reg = 0.5 * (Q_uu + Q_uu.transpose());
     Q_uu_reg.diagonal().array() += context.regularization_;
-    Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose()); // symmetrize
 
     Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
     if (ldlt.info() != Eigen::Success) {
@@ -563,45 +383,39 @@ bool LogDDPSolver::backwardPass(CDDP &context) {
       return false;
     }
 
-    Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
-    bigRHS.col(0) = Q_u;
-    Eigen::MatrixXd M = Q_ux;
-    for (int col = 0; col < state_dim; col++) {
-      bigRHS.col(col + 1) = M.col(col);
-    }
+    Eigen::MatrixXd rhs(control_dim, 1 + state_dim);
+    rhs.col(0) = Q_u;
+    rhs.rightCols(state_dim) = Q_ux;
 
-    Eigen::MatrixXd kK = -ldlt.solve(bigRHS);
+    Eigen::MatrixXd gains = -ldlt.solve(rhs);
+    const Eigen::VectorXd k_u = gains.col(0);
+    const Eigen::MatrixXd K_u = gains.rightCols(state_dim);
 
-    // parse out feedforward (ku) and feedback (Ku)
-    Eigen::VectorXd k_u = kK.col(0);
-    Eigen::MatrixXd K_u(control_dim, state_dim);
-    for (int col = 0; col < state_dim; col++) {
-      K_u.col(col) = kK.col(col + 1);
-    }
-
-    // Save gains
     k_u_[t] = k_u;
     K_u_[t] = K_u;
 
-    // Compute value function approximation
-    Eigen::Vector2d dV_step;
-    dV_step << Q_u.dot(k_u), 0.5 * k_u.dot(Q_uu * k_u);
-    dV_ = dV_ + dV_step;
+    dV_(0) += Q_u.dot(k_u);
+    dV_(1) += 0.5 * k_u.dot(Q_uu * k_u);
+
     V_x = Q_x + K_u.transpose() * Q_uu * k_u + Q_ux.transpose() * k_u +
           K_u.transpose() * Q_u;
     V_xx = Q_xx + K_u.transpose() * Q_uu * K_u + Q_ux.transpose() * K_u +
            K_u.transpose() * Q_ux;
-    V_xx = 0.5 * (V_xx + V_xx.transpose()); // Symmetrize Hessian
+    V_xx = 0.5 * (V_xx + V_xx.transpose());
 
-    // Compute optimality gap (Inf-norm) for convergence check
     Qu_err = std::max(Qu_err, Q_u.lpNorm<Eigen::Infinity>());
+    norm_Vx += V_x.lpNorm<1>();
   }
-  context.inf_du_ = Qu_err;
+
+  double scaling_factor = options.termination_scaling_max_factor;
+  scaling_factor = std::max(scaling_factor, norm_Vx / (horizon * state_dim)) /
+                   scaling_factor;
+  context.inf_du_ = Qu_err / scaling_factor;
 
   if (options.debug) {
     std::cout << "[LogDDP Backward Pass]\n"
               << "    Qu_err:  " << std::scientific << std::setprecision(4)
-              << Qu_err << "\n"
+              << context.inf_du_ << "\n"
               << "    rf_err:  " << std::scientific << std::setprecision(4)
               << constraint_violation_ << "\n"
               << "    dV:      " << std::scientific << std::setprecision(4)
@@ -611,11 +425,8 @@ bool LogDDPSolver::backwardPass(CDDP &context) {
   return true;
 }
 
-// === Forward pass ===
-
 ForwardPassResult LogDDPSolver::forwardPass(CDDP &context, double alpha) {
   const CDDPOptions &options = context.getOptions();
-  const auto &constraint_set = context.getConstraintSet();
 
   ForwardPassResult result;
   result.success = false;
@@ -623,120 +434,50 @@ ForwardPassResult LogDDPSolver::forwardPass(CDDP &context, double alpha) {
   result.merit_function = std::numeric_limits<double>::infinity();
   result.alpha_pr = alpha;
 
-  const int horizon = context.getHorizon();
-  const int state_dim = context.getStateDim();
-
-  // Initialize trajectories
   result.state_trajectory = context.X_;
   result.control_trajectory = context.U_;
   result.state_trajectory[0] = context.getInitialState();
 
-  std::vector<Eigen::VectorXd> F_new = F_;
-
   double cost_new = 0.0;
-  double merit_function_new = 0.0;
-  double rp_err = 0.0;
-  double rf_err = 0.0;
 
-  // Rollout loop with multi-shooting logic from original
-  for (int t = 0; t < horizon; ++t) {
-    const Eigen::VectorXd delta_x_t =
-        result.state_trajectory[t] - context.X_[t];
-
-    // Update control
+  for (int t = 0; t < context.getHorizon(); ++t) {
+    const Eigen::VectorXd delta_x_t = result.state_trajectory[t] - context.X_[t];
     result.control_trajectory[t] =
         context.U_[t] + alpha * k_u_[t] + K_u_[t] * delta_x_t;
 
-    // --- Rollout Logic from original ---
-    Eigen::VectorXd dynamics_eval_for_F_new_t;
-
-    // Determine if the *next* step (t+1) starts a new segment boundary
-    bool is_segment_boundary = (ms_segment_length_ > 0) &&
-                               ((t + 1) % ms_segment_length_ == 0) &&
-                               (t + 1 < horizon);
-    bool apply_gap_closing_strategy = is_segment_boundary;
-
-    if (apply_gap_closing_strategy) {
-      if (options.log_barrier.rollout_type == "nonlinear") {
-        F_new[t] = context.getSystem().getDiscreteDynamics(
-            result.state_trajectory[t], result.control_trajectory[t],
-            t * context.getTimestep());
-        result.state_trajectory[t + 1] = context.X_[t + 1] +
-                                         (F_new[t] - F_[t]) +
-                                         alpha * (F_[t] - context.X_[t + 1]);
-      } else if (options.log_barrier.rollout_type == "hybrid") {
-        F_new[t] = context.getSystem().getDiscreteDynamics(
-            result.state_trajectory[t], result.control_trajectory[t],
-            t * context.getTimestep());
-        const auto [Fx, Fu] = context.getSystem().getJacobians(
-            context.X_[t], context.U_[t], t * context.getTimestep());
-        const Eigen::MatrixXd A =
-            Eigen::MatrixXd::Identity(state_dim, state_dim) +
-            context.getTimestep() * Fx;
-        const Eigen::MatrixXd B = context.getTimestep() * Fu;
-        result.state_trajectory[t + 1] =
-            context.X_[t + 1] + (A + B * K_u_[t]) * delta_x_t +
-            alpha * (B * k_u_[t] + F_[t] - context.X_[t + 1]);
-      }
-    } else {
-      result.state_trajectory[t + 1] = context.getSystem().getDiscreteDynamics(
-          result.state_trajectory[t], result.control_trajectory[t],
-          t * context.getTimestep());
-      F_new[t] = result.state_trajectory[t + 1];
+    if (!result.control_trajectory[t].allFinite()) {
+      return result;
     }
 
-    // Robustness check
-    if (!result.state_trajectory[t + 1].allFinite() ||
-        !result.control_trajectory[t].allFinite()) {
+    cost_new += context.getObjective().running_cost(result.state_trajectory[t],
+                                                    result.control_trajectory[t], t);
+    result.state_trajectory[t + 1] = context.getSystem().getDiscreteDynamics(
+        result.state_trajectory[t], result.control_trajectory[t],
+        t * context.getTimestep());
+
+    if (!result.state_trajectory[t + 1].allFinite()) {
       if (options.debug) {
         std::cerr
             << "[LogDDP Forward Pass] NaN/Inf detected during rollout at t="
             << t << " for alpha=" << alpha << std::endl;
       }
-      result.success = false;
       return result;
     }
   }
 
-  // Cost computation and filter line-search from original
-  for (int t = 0; t < horizon; ++t) {
-    cost_new += context.getObjective().running_cost(
-        result.state_trajectory[t], result.control_trajectory[t], t);
+  cost_new += context.getObjective().terminal_cost(result.state_trajectory.back());
 
-    for (const auto &constraint_pair : constraint_set) {
-      const std::string &constraint_name = constraint_pair.first;
-      Eigen::VectorXd g_t =
-          constraint_pair.second->evaluate(result.state_trajectory[t],
-                                           result.control_trajectory[t]) -
-          constraint_pair.second->getUpperBound();
-      merit_function_new += relaxed_log_barrier_->evaluate(
-          *constraint_pair.second, result.state_trajectory[t],
-          result.control_trajectory[t]);
+  double constraint_violation_new = 0.0;
+  double merit_function_new = computeBarrierMerit(
+      context, result.state_trajectory, result.control_trajectory,
+      &constraint_violation_new);
 
-      for (int i = 0; i < g_t.size(); ++i) {
-        if (g_t(i) > 0.0) {
-          rp_err += g_t(i);
-        }
-      }
-    }
-
-    Eigen::VectorXd d = F_new[t] - result.state_trajectory[t + 1];
-    rf_err += d.lpNorm<1>();
-  }
-
-  cost_new +=
-      context.getObjective().terminal_cost(result.state_trajectory.back());
-  merit_function_new += cost_new;
-
-  // Filter-based acceptance using original logic with new options structure
-  double constraint_violation_old = constraint_violation_;
-  double constraint_violation_new = rf_err + rp_err;
-  double merit_function_old = context.merit_function_;
-  bool filter_acceptance = false;
-  double expected_improvement = alpha * dV_(0);
-
+  const double constraint_violation_old = constraint_violation_;
+  const double merit_function_old = context.merit_function_;
+  const double expected_improvement = alpha * dV_(0);
   const auto &filter_opts = options.filter;
 
+  bool filter_acceptance = false;
   if (constraint_violation_new > filter_opts.max_violation_threshold) {
     if (constraint_violation_new <
         (1.0 - filter_opts.violation_acceptance_threshold) *
@@ -745,9 +486,10 @@ ForwardPassResult LogDDPSolver::forwardPass(CDDP &context, double alpha) {
     }
   } else if (std::max(constraint_violation_new, constraint_violation_old) <
                  filter_opts.min_violation_for_armijo_check &&
-             expected_improvement < 0) {
-    if (merit_function_new < merit_function_old + filter_opts.armijo_constant *
-                                                      expected_improvement) {
+             expected_improvement < 0.0) {
+    if (merit_function_new < merit_function_old +
+                                 filter_opts.armijo_constant *
+                                     expected_improvement) {
       filter_acceptance = true;
     }
   } else {
@@ -766,7 +508,6 @@ ForwardPassResult LogDDPSolver::forwardPass(CDDP &context, double alpha) {
     result.cost = cost_new;
     result.merit_function = merit_function_new;
     result.constraint_violation = constraint_violation_new;
-    result.dynamics_trajectory = F_new;
   }
 
   return result;
