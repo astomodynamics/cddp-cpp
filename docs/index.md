@@ -1,0 +1,34 @@
+# CDDP
+
+`cddp-cpp` is a constrained differential dynamic programming solver library with:
+
+- a C++17 core library for trajectory optimization and MPC
+- `pycddp` Python bindings built with `pybind11`
+- a small animation-oriented Python portfolio for demos and regression checks
+
+Use the navigation to get started with installation, local development, and
+the release workflow for PyPI and GitHub Pages.
+
+## Project scope
+
+- C++ library: reusable solver and dynamical-system implementations
+- Python package: importable bindings distributed as `pycddp`
+- Docs site: Markdown content from `docs/`, published to GitHub Pages
+
+## Quick start
+
+Install the Python package from PyPI:
+
+```bash
+pip install pycddp
+```
+
+Or build from source:
+
+```bash
+git clone https://github.com/astomodynamics/cddp-cpp
+cd cddp-cpp
+cmake -S . -B build
+cmake --build build -j4
+ctest --test-dir build --output-on-failure
+```

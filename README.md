@@ -95,7 +95,18 @@ sudo apt-get install libeigen3-dev # For Ubuntu
 brew install eigen # For macOS
 ```
 
-### Building
+### Python package
+Tagged releases publish the Python bindings to PyPI:
+
+```bash
+pip install pycddp
+```
+
+Prebuilt wheels are intended for CPython 3.10-3.13 on Linux, macOS, and
+Windows. If a wheel is not available for your platform yet, install from
+source using the steps below.
+
+### Building from source
 ```bash
 git clone https://github.com/astomodynamics/cddp-cpp
 cd cddp-cpp
@@ -104,6 +115,13 @@ cmake ..
 make -j4
 make test
 ```
+
+### Documentation
+The project site is published through GitHub Pages at:
+
+<https://astomodynamics.github.io/cddp-cpp/>
+
+The Pages workflow builds the Markdown docs from `docs/` using MkDocs.
 
 ## ROS 
 If you want to use this library for ROS2 MPC node, please refer [CDDP MPC Package](https://github.com/astomodynamics/cddp_mpc). You do not need to install this library to use the package. MPC package will automatically install this library as a dependency.

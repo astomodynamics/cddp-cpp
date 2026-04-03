@@ -12,11 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-cmake_minimum_required(VERSION 3.14) 
+cmake_minimum_required(VERSION 3.15)
 # Set policy to support older CMake code
 cmake_policy(SET CMP0048 NEW)
 # Allow policy version minimum flag to be passed to sub-projects
-set(CMAKE_POLICY_VERSION_MINIMUM "3.5" CACHE STRING "Minimum CMake version for policy compatibility")
+set(CMAKE_POLICY_VERSION_MINIMUM "3.15" CACHE STRING "Minimum CMake version for policy compatibility")
 
 project(
   cddp

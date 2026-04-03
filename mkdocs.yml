@@ -1,0 +1,29 @@
+site_name: CDDP
+site_description: Constrained differential dynamic programming in C++ with Python bindings.
+site_url: https://astomodynamics.github.io/cddp-cpp/
+repo_url: https://github.com/astomodynamics/cddp-cpp
+repo_name: astomodynamics/cddp-cpp
+
+theme:
+  name: material
+  features:
+    - navigation.instant
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+nav:
+  - Overview: index.md
+  - Installation: install.md
+  - Python API: python.md
+  - C++ Build: cpp.md
+  - Portfolio: python_portfolio.md
+  - Release Ops: release.md

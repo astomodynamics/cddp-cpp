@@ -7,9 +7,33 @@ name = "pycddp"
 version = "0.1.0"
 description = "Python bindings for CDDP trajectory optimization"
 readme = "README.md"
-license = {text = "Apache-2.0"}
+authors = [{name = "Tomo Sasaki"}]
+license = "Apache-2.0"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
+keywords = ["trajectory-optimization", "model-predictive-control", "differential-dynamic-programming", "optimal-control", "robotics"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "Operating System :: Microsoft :: Windows",
+  "Operating System :: MacOS",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Scientific/Engineering",
+]
 dependencies = ["numpy>=1.22"]
+
+[project.urls]
+Homepage = "https://github.com/astomodynamics/cddp-cpp"
+Repository = "https://github.com/astomodynamics/cddp-cpp"
+Documentation = "https://astomodynamics.github.io/cddp-cpp/"
+Issues = "https://github.com/astomodynamics/cddp-cpp/issues"
 
 [project.optional-dependencies]
 test = ["pytest>=7.0", "matplotlib>=3.5"]
@@ -21,3 +45,7 @@ dev = ["pytest>=7.0", "matplotlib>=3.5"]
 [tool.scikit-build]
 cmake.args = ["-DCDDP_CPP_BUILD_PYTHON=ON", "-DCDDP_CPP_BUILD_TESTS=OFF", "-DCDDP_CPP_BUILD_EXAMPLES=OFF"]
 wheel.packages = ["python/pycddp"]
+
+[tool.cibuildwheel]
+build-verbosity = 1
+test-command = "python -c \"import pycddp; print(pycddp.__version__)\""
