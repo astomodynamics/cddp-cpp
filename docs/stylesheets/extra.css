@@ -1,0 +1,110 @@
+:root {
+  --md-primary-fg-color: #16344f;
+  --md-primary-fg-color--light: #325775;
+  --md-primary-fg-color--dark: #0d2236;
+  --md-accent-fg-color: #c89a3c;
+  --md-accent-fg-color--transparent: rgba(200, 154, 60, 0.14);
+  --site-navy-deep: #10273c;
+  --site-navy-mid: #173954;
+  --site-gold-soft: #c89a3c;
+  --site-gold-pale: #efe1bd;
+  --site-surface: #f6f2e8;
+}
+
+[data-md-color-primary="custom"] {
+  --md-typeset-a-color: var(--site-navy-mid);
+}
+
+.md-header,
+.md-tabs {
+  background: linear-gradient(90deg, var(--site-navy-deep), var(--site-navy-mid));
+}
+
+.md-typeset .md-button--primary {
+  background-color: var(--site-gold-soft);
+  border-color: var(--site-gold-soft);
+  color: #12263a;
+}
+
+.md-typeset .md-button {
+  border-radius: 999px;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  color: var(--site-navy-deep);
+}
+
+.md-main {
+  background:
+    radial-gradient(circle at top right, rgba(200, 154, 60, 0.12), transparent 28rem),
+    linear-gradient(180deg, #fcfbf7 0%, var(--site-surface) 100%);
+}
+
+.portfolio-kicker {
+  color: var(--site-gold-soft);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  margin: 0 0 0.5rem 0;
+  text-transform: uppercase;
+}
+
+.portfolio-hero {
+  align-items: center;
+  background: linear-gradient(135deg, var(--site-navy-deep), var(--site-navy-mid));
+  border: 1px solid rgba(200, 154, 60, 0.25);
+  border-radius: 1.2rem;
+  box-shadow: 0 24px 60px rgba(16, 39, 60, 0.18);
+  color: #f8f3e9;
+  display: grid;
+  gap: 1.5rem;
+  grid-template-columns: 1.45fr 1fr;
+  margin: 0 0 2rem 0;
+  overflow: hidden;
+  padding: 1.5rem;
+}
+
+.portfolio-hero h2,
+.portfolio-hero p {
+  color: inherit;
+}
+
+.portfolio-hero img {
+  border-radius: 1rem;
+  display: block;
+  max-width: 100%;
+}
+
+.portfolio-grid {
+  display: grid;
+  gap: 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin-top: 1.25rem;
+}
+
+.portfolio-card {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(16, 39, 60, 0.08);
+  border-radius: 1rem;
+  box-shadow: 0 14px 36px rgba(16, 39, 60, 0.08);
+  padding: 1rem 1rem 1.15rem 1rem;
+}
+
+.portfolio-card h3 {
+  margin-top: 0;
+}
+
+.portfolio-card img {
+  border-radius: 0.85rem;
+  display: block;
+  margin-top: 0.8rem;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .portfolio-hero {
+    grid-template-columns: 1fr;
+  }
+}
