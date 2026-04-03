@@ -34,7 +34,7 @@ python examples/python_portfolio.py --demo all --output-dir docs/assets/python_p
   <section class="portfolio-card">
     <h3>Pendulum Swing-Up</h3>
     <p>Torque-limited <code>CLDDP</code> solve for a damped pendulum.</p>
-    <img src="assets/python_portfolio/pendulum_swing_up.gif" alt="Pendulum swing-up animation">
+    <img src="../assets/python_portfolio/pendulum_swing_up.gif" alt="Pendulum swing-up animation">
   </section>
 
   <section class="portfolio-card">
@@ -43,9 +43,8 @@ python examples/python_portfolio.py --demo all --output-dir docs/assets/python_p
       Bounded-force <code>CLDDP</code> solve that swings the pole upright and
       settles near the origin.
     </p>
-    <img src="assets/python_portfolio/cartpole_swing_up.gif" alt="Cart-pole swing-up animation">
+    <img src="../assets/python_portfolio/cartpole_swing_up.gif" alt="Cart-pole swing-up animation">
   </section>
-
   <section class="portfolio-card">
     <h3>Unicycle Obstacle Avoidance</h3>
     <p>
@@ -53,7 +52,7 @@ python examples/python_portfolio.py --demo all --output-dir docs/assets/python_p
       the Python bindings can drive constrained trajectory visualization
       directly from Python.
     </p>
-    <img src="assets/python_portfolio/unicycle_obstacle_avoidance.gif" alt="Unicycle obstacle avoidance animation">
+    <img src="../assets/python_portfolio/unicycle_obstacle_avoidance.gif" alt="Unicycle obstacle avoidance animation">
   </section>
 
   <section class="portfolio-card">
@@ -69,6 +68,6 @@ python examples/python_portfolio.py --demo all --output-dir docs/assets/python_p
       <a href="https://github.com/alexliniger/MPCC"><code>alexliniger/MPCC</code></a>
       reference implementation.
     </p>
-    <img src="assets/python_portfolio/mpcc_racing_line.gif" alt="MPCC racing line animation">
+    <img src="../assets/python_portfolio/mpcc_racing_line.gif" alt="MPCC racing line animation">
   </section>
 </div>
