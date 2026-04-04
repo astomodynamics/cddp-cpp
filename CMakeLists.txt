@@ -67,22 +67,32 @@ find_package(Eigen3 3.4 QUIET NO_MODULE)
 # If Eigen3 is not found, fetch it and expose a proper Eigen3::Eigen target
 if(NOT Eigen3_FOUND)
   message(STATUS "Eigen3 not found. Downloading...")
-  # Disable Eigen tests/docs before fetching — Eigen's unsupported/test/
-  # creates a custom target called "autodiff" that collides with the real
-  # autodiff library.
-  set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-  set(EIGEN_BUILD_DOC OFF CACHE BOOL "" FORCE)
-  set(EIGEN_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+  # Fetch Eigen as header-only: SOURCE_SUBDIR points at a path with no
+  # CMakeLists.txt so MakeAvailable downloads the source without running
+  # Eigen's CMake.  This avoids slow configure probes (Fortran, Qt, CUDA)
+  # and a target name collision with the real autodiff library.
   FetchContent_Declare(
     eigen
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
     GIT_TAG 3.4.0
-    EXCLUDE_FROM_ALL
+    SOURCE_SUBDIR _unused
   )
   FetchContent_MakeAvailable(eigen)
 
-  # Point Eigen3_DIR at the build tree so autodiff's find_package(Eigen3)
-  # finds the generated Eigen3Config.cmake
+  add_library(Eigen3::Eigen INTERFACE IMPORTED)
+  set_target_properties(Eigen3::Eigen PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${eigen_SOURCE_DIR}"
+  )
+
+  # Write a minimal Eigen3Config.cmake so autodiff's find_package(Eigen3)
+  # finds it without needing Eigen's full configure step
+  file(WRITE "${eigen_BINARY_DIR}/Eigen3Config.cmake"
+    "set(Eigen3_FOUND TRUE)\n"
+    "if(NOT TARGET Eigen3::Eigen)\n"
+    "  add_library(Eigen3::Eigen INTERFACE IMPORTED)\n"
+    "  set_target_properties(Eigen3::Eigen PROPERTIES INTERFACE_INCLUDE_DIRECTORIES \"${eigen_SOURCE_DIR}\")\n"
+    "endif()\n"
+  )
   set(Eigen3_DIR "${eigen_BINARY_DIR}" CACHE PATH "" FORCE)
 endif()
 
