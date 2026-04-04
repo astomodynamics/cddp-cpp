@@ -15,6 +15,7 @@
 */
 
 #include <iostream>
+#include <limits>
 #include <vector>
 #include <string>
 #include <memory>
@@ -201,6 +202,53 @@ protected:
     }
 
     void printIteration(int iter, const CDDP &context) const override {}
+};
+
+class FixedDualDimConstraint : public Constraint {
+public:
+    explicit FixedDualDimConstraint(int dual_dim, const std::string& name = "FixedDualDimConstraint")
+        : Constraint(name), dual_dim_(dual_dim) {}
+
+    int getDualDim() const override { return dual_dim_; }
+
+    Eigen::VectorXd evaluate(const Eigen::VectorXd& state,
+                             const Eigen::VectorXd& control,
+                             int index = 0) const override {
+        return Eigen::VectorXd::Zero(dual_dim_);
+    }
+
+    Eigen::VectorXd getLowerBound() const override {
+        return Eigen::VectorXd::Constant(dual_dim_, -std::numeric_limits<double>::infinity());
+    }
+
+    Eigen::VectorXd getUpperBound() const override {
+        return Eigen::VectorXd::Zero(dual_dim_);
+    }
+
+    Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd& state,
+                                     const Eigen::VectorXd& control,
+                                     int index = 0) const override {
+        return Eigen::MatrixXd::Zero(dual_dim_, state.size());
+    }
+
+    Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd& state,
+                                       const Eigen::VectorXd& control,
+                                       int index = 0) const override {
+        return Eigen::MatrixXd::Zero(dual_dim_, control.size());
+    }
+
+    double computeViolation(const Eigen::VectorXd& state,
+                            const Eigen::VectorXd& control,
+                            int index = 0) const override {
+        return 0.0;
+    }
+
+    double computeViolationFromValue(const Eigen::VectorXd& g) const override {
+        return 0.0;
+    }
+
+private:
+    int dual_dim_;
 };
 
 // Factory functions for the mock solvers
@@ -492,4 +540,104 @@ TEST_F(CDDPCoreTest, IntegrationWithTrajectoryAndOptions) {
     EXPECT_EQ(solution.time_points.size(), horizon + 1);
     EXPECT_EQ(solution.state_trajectory.size(), horizon + 1);
     EXPECT_EQ(solution.control_trajectory.size(), horizon);
+}
+
+TEST_F(CDDPCoreTest, SetReferenceStatesUpdatesObjectiveTerminalReference) {
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          std::make_unique<cddp::QuadraticObjective>(
+                              Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              Eigen::MatrixXd::Identity(control_dim, control_dim),
+                              10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              goal_state, std::vector<Eigen::VectorXd>(), timestep),
+                          options);
+
+    std::vector<Eigen::VectorXd> reference_states(horizon + 1,
+                                                  Eigen::VectorXd::Zero(state_dim));
+    for (int k = 0; k <= horizon; ++k) {
+        reference_states[k] << 0.1 * k, 0.2 * k, 0.3 * k;
+    }
+
+    cddp_solver.setReferenceStates(reference_states);
+
+    Eigen::VectorXd zero_control = Eigen::VectorXd::Zero(control_dim);
+    EXPECT_TRUE(cddp_solver.getReferenceState().isApprox(reference_states.back()));
+    EXPECT_NEAR(
+        cddp_solver.getObjective().running_cost(reference_states.front(),
+                                               zero_control, 0),
+        0.0, 1e-12);
+    EXPECT_NEAR(
+        cddp_solver.getObjective().terminal_cost(reference_states.back()),
+        0.0, 1e-12);
+}
+
+TEST_F(CDDPCoreTest, SetObjectiveUsesExistingReferenceTrajectoryTerminalState) {
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          nullptr, options);
+
+    std::vector<Eigen::VectorXd> reference_states(horizon + 1,
+                                                  Eigen::VectorXd::Zero(state_dim));
+    for (int k = 0; k < horizon; ++k) {
+        reference_states[k] << 1.0 + 0.1 * k, 0.5 + 0.1 * k, 0.2 + 0.1 * k;
+    }
+    reference_states.back() = Eigen::VectorXd::Zero(state_dim);
+    cddp_solver.setReferenceStates(reference_states);
+
+    cddp_solver.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Eigen::MatrixXd::Identity(state_dim, state_dim),
+        Eigen::MatrixXd::Identity(control_dim, control_dim),
+        10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim), goal_state,
+        std::vector<Eigen::VectorXd>(), timestep));
+
+    Eigen::VectorXd zero_control = Eigen::VectorXd::Zero(control_dim);
+    EXPECT_NEAR(
+        cddp_solver.getObjective().running_cost(reference_states.front(),
+                                               zero_control, 0),
+        0.0, 1e-12);
+    EXPECT_NEAR(
+        cddp_solver.getObjective().terminal_cost(reference_states.back()),
+        0.0, 1e-12);
+}
+
+TEST_F(CDDPCoreTest, ReplacingConstraintsKeepsTotalDualDimensionAccurate) {
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          std::make_unique<cddp::QuadraticObjective>(
+                              Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              Eigen::MatrixXd::Identity(control_dim, control_dim),
+                              10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              goal_state, std::vector<Eigen::VectorXd>(), timestep),
+                          options);
+
+    Eigen::VectorXd control_bound_two_dim = Eigen::VectorXd::Ones(control_dim);
+    cddp_solver.addPathConstraint(
+        "RepeatedPathConstraint",
+        std::make_unique<cddp::ControlConstraint>(-control_bound_two_dim,
+                                                  control_bound_two_dim));
+    EXPECT_EQ(cddp_solver.getTotalDualDim(), 2 * control_dim);
+
+    Eigen::VectorXd control_bound_one_dim = Eigen::VectorXd::Ones(1);
+    cddp_solver.addPathConstraint(
+        "RepeatedPathConstraint",
+        std::make_unique<cddp::ControlConstraint>(-control_bound_one_dim,
+                                                  control_bound_one_dim));
+    EXPECT_EQ(cddp_solver.getTotalDualDim(), 2);
+
+    cddp_solver.addTerminalConstraint(
+        "RepeatedTerminalConstraint",
+        std::make_unique<cddp::FixedDualDimConstraint>(state_dim));
+    EXPECT_EQ(cddp_solver.getTotalDualDim(), 2 + state_dim);
+
+    cddp_solver.addTerminalConstraint(
+        "RepeatedTerminalConstraint",
+        std::make_unique<cddp::FixedDualDimConstraint>(1));
+    EXPECT_EQ(cddp_solver.getTotalDualDim(), 3);
+
+    EXPECT_TRUE(cddp_solver.removePathConstraint("RepeatedPathConstraint"));
+    EXPECT_EQ(cddp_solver.getTotalDualDim(), 1);
+
+    EXPECT_TRUE(
+        cddp_solver.removeTerminalConstraint("RepeatedTerminalConstraint"));
+    EXPECT_EQ(cddp_solver.getTotalDualDim(), 0);
 }
