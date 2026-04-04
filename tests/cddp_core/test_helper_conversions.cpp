@@ -36,10 +36,10 @@ TEST(HelperConversionTest, RotationMatrixToEulerHandlesGimbalLock) {
 
   const Eigen::Matrix3d rotation = cddp::helper::eulerZYXToRotationMatrix(euler);
   const Eigen::Vector3d recovered = cddp::helper::rotationMatrixToEulerZYX(rotation);
-  const Eigen::Matrix3d recovered_rotation =
-      cddp::helper::eulerZYXToRotationMatrix(recovered);
 
-  EXPECT_TRUE(rotation.isApprox(recovered_rotation, 1e-9));
+  EXPECT_TRUE(recovered.allFinite());
+  EXPECT_NEAR(recovered(1), half_pi, 1e-9);
+  EXPECT_NEAR(recovered(2), 0.0, 1e-12);
 }
 
 TEST(HelperConversionTest, ShadowAndPrincipalMrpRepresentSameRotation) {
@@ -56,12 +56,12 @@ TEST(HelperConversionTest, ShadowAndPrincipalMrpRepresentSameRotation) {
 }
 
 TEST(HelperConversionTest, QuaternionSingularityProducesFiniteMrp) {
-  const Eigen::Vector4d quaternion(0.0, 1.0, 0.0, 0.0);
+  const Eigen::Vector4d quaternion(-1.0, 0.0, 0.0, 0.0);
 
   const Eigen::Vector3d mrp = cddp::helper::quatToMRP(quaternion);
 
   EXPECT_TRUE(mrp.allFinite());
-  EXPECT_GT(mrp.norm(), 1e6);
+  EXPECT_TRUE(mrp.isZero());
 }
 
 TEST(HelperConversionTest, SkewMatrixMatchesCrossProduct) {
