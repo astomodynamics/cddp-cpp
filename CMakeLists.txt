@@ -72,22 +72,21 @@ if(NOT Eigen3_FOUND)
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
     GIT_TAG 3.4.0
   )
-  set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-  set(EIGEN_BUILD_DOC OFF CACHE BOOL "" FORCE)
-  set(EIGEN_BUILD_TESTING OFF CACHE BOOL "" FORCE)
-  FetchContent_MakeAvailable(eigen)
-
-  # Point Eigen3_DIR to the build directory where Eigen3Config.cmake is generated
-  # so that downstream find_package(Eigen3) calls (e.g., from autodiff) can find it
-  set(Eigen3_DIR "${eigen_BINARY_DIR}" CACHE PATH "Path to Eigen3Config.cmake" FORCE)
-
-  # Ensure Eigen3::Eigen target exists for direct usage
-  if(NOT TARGET Eigen3::Eigen)
-    add_library(Eigen3::Eigen INTERFACE IMPORTED)
-    set_target_properties(Eigen3::Eigen PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES "${eigen_SOURCE_DIR}"
-    )
+  # Use FetchContent_Populate (not MakeAvailable) to download Eigen without
+  # adding it as a subdirectory.  Eigen is header-only so no build step is
+  # needed, and add_subdirectory pulls in unsupported/test which creates a
+  # custom target called "autodiff" that collides with the real autodiff lib.
+  FetchContent_GetProperties(eigen)
+  if(NOT eigen_POPULATED)
+    FetchContent_Populate(eigen)
   endif()
+
+  # Create the canonical Eigen3::Eigen target for our project and autodiff
+  add_library(Eigen3::Eigen INTERFACE IMPORTED)
+  set_target_properties(Eigen3::Eigen PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${eigen_SOURCE_DIR}"
+  )
+  set(Eigen3_FOUND TRUE CACHE BOOL "" FORCE)
 endif()
 
 if (CDDP_CPP_CASADI)
