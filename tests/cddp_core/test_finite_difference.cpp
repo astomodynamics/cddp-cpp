@@ -21,6 +21,10 @@
 
 namespace {
 
+constexpr int kCentralDifference = 0;
+constexpr int kForwardDifference = 1;
+constexpr int kBackwardDifference = 2;
+
 double quadratic_cost(const Eigen::VectorXd &x) {
   return x(0) * x(0) + 3.0 * x(0) * x(1) + std::sin(x(1));
 }
@@ -55,7 +59,9 @@ TEST(FiniteDifferenceTest, GradientMatchesAnalyticForAllModes) {
   const Eigen::Vector2d x(0.4, -0.2);
   const Eigen::Vector2d grad_expected = expected_gradient(x);
 
-  for (const int mode : std::array<int, 3>{0, 1, 2}) {
+  for (const int mode :
+       std::array<int, 3>{kCentralDifference, kForwardDifference,
+                          kBackwardDifference}) {
     const Eigen::VectorXd grad =
         cddp::finite_difference_gradient(quadratic_cost, x, 1e-6, mode);
     EXPECT_TRUE(grad.isApprox(grad_expected, 1e-4)) << "mode=" << mode;
@@ -66,7 +72,9 @@ TEST(FiniteDifferenceTest, JacobianMatchesAnalyticForAllModes) {
   const Eigen::Vector2d x(-0.3, 0.6);
   const Eigen::Matrix2d jac_expected = expected_jacobian(x);
 
-  for (const int mode : std::array<int, 3>{0, 1, 2}) {
+  for (const int mode :
+       std::array<int, 3>{kCentralDifference, kForwardDifference,
+                          kBackwardDifference}) {
     const Eigen::MatrixXd jac =
         cddp::finite_difference_jacobian(vector_function, x, 1e-6, mode);
     EXPECT_TRUE(jac.isApprox(jac_expected, 1e-4)) << "mode=" << mode;
@@ -77,7 +85,9 @@ TEST(FiniteDifferenceTest, HessianMatchesAnalyticForAllModes) {
   const Eigen::Vector2d x(0.4, -0.2);
   const Eigen::Matrix2d hess_expected = expected_hessian(x);
 
-  for (const int mode : std::array<int, 3>{0, 1, 2}) {
+  for (const int mode :
+       std::array<int, 3>{kCentralDifference, kForwardDifference,
+                          kBackwardDifference}) {
     const Eigen::MatrixXd hess =
         cddp::finite_difference_hessian(quadratic_cost, x, 1e-5, mode);
     EXPECT_TRUE(hess.isApprox(hess_expected, 2e-2)) << "mode=" << mode;

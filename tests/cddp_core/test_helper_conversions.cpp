@@ -31,14 +31,14 @@ TEST(HelperConversionTest, EulerRotationRoundTripIsConsistent) {
 }
 
 TEST(HelperConversionTest, RotationMatrixToEulerHandlesGimbalLock) {
-  const double half_pi = std::acos(-1.0) / 2.0;
-  const Eigen::Vector3d euler(0.5, half_pi, -0.2);
+  constexpr double kHalfPi = 1.5707963267948966;
+  const Eigen::Vector3d euler(0.5, kHalfPi, -0.2);
 
   const Eigen::Matrix3d rotation = cddp::helper::eulerZYXToRotationMatrix(euler);
   const Eigen::Vector3d recovered = cddp::helper::rotationMatrixToEulerZYX(rotation);
 
   EXPECT_TRUE(recovered.allFinite());
-  EXPECT_NEAR(recovered(1), half_pi, 1e-9);
+  EXPECT_NEAR(recovered(1), kHalfPi, 1e-9);
   EXPECT_NEAR(recovered(2), 0.0, 1e-12);
 }
 
