@@ -143,9 +143,49 @@ namespace cddp
     };
 
     /**
-     * @brief Options for the IPDDP solver.
+     * @brief Comprehensive options for the IPDDP (Interior-Point DDP) solver.
      */
-    struct IPDDPAlgorithmOptions : InteriorPointOptions {};
+    struct IPDDPAlgorithmOptions
+    {
+        double dual_var_init_scale = 1e-1;  ///< Initial scale for dual variables.
+        double slack_var_init_scale = 1e-2; ///< Initial scale for slack variables.
+
+        bool make_psd = true;           ///< Project Q_uu to PSD cone before solve.
+        double psd_delta = 1e-6;        ///< Minimum eigenvalue for PSD projection.
+
+        double barrier_tol_mult =
+            0.1; ///< Barrier-scaled inner tolerance multiplier.
+        double barrier_update_dual_weight =
+            0.01; ///< Down-weight inf_du for IPOPT-style barrier updates.
+        double mu_kappa_epsilon =
+            10.0; ///< IPOPT-style KKT trigger multiplier for non-adaptive updates.
+        bool check_state_stationarity =
+            false; ///< Include state-stationarity in inf_du when true.
+        std::string theta_norm =
+            "l1"; ///< Constraint violation norm used by the filter ("l1" or "l2").
+        int max_filter_size =
+            50; ///< Maximum number of active non-dominated filter entries.
+        double theta_0_floor =
+            1.0; ///< Minimum theta_0 value used for filter initialization.
+
+        bool warmstart_repair =
+            false; ///< Repair warm-started slack/dual variables into the strict interior.
+        double warmstart_s_min =
+            1e-4; ///< Minimum slack value for warm-start repair.
+        double warmstart_y_min =
+            1e-4; ///< Minimum dual value for warm-start repair.
+        double warmstart_interior_factor =
+            1.1; ///< Multiplicative safety margin when warm-start values are too close to the boundary.
+        double warmstart_reset_x0_threshold =
+            -1.0; ///< Reset warm-start arrays when |x0 - X[0]| exceeds this threshold (<=0 disables).
+
+        double jacobian_regularization_value =
+            1e-8; ///< Base reduced-system regularization floor for terminal equality LQR.
+        double jacobian_regularization_exponent =
+            0.25; ///< Exponent for mu-dependent reduced-system regularization.
+
+        SolverSpecificBarrierOptions barrier; ///< Barrier method parameters for IPDDP.
+    };
 
     /**
      * @brief Options for the MSIPDDP solver (interior-point + multi-shooting).

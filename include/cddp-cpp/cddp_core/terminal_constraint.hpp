@@ -33,7 +33,8 @@ namespace cddp
 
         Eigen::MatrixXd getControlJacobian(
             const Eigen::VectorXd &/*state*/,
-            const Eigen::VectorXd &control // control.size() gives control_dim
+            const Eigen::VectorXd &control, // control.size() gives control_dim
+            int /*index*/ = 0
         ) const override 
         {
             return Eigen::MatrixXd::Zero(getDualDim(), control.size());
@@ -41,7 +42,8 @@ namespace cddp
 
         std::vector<Eigen::MatrixXd> getControlHessian(
             const Eigen::VectorXd &/*state*/,
-            const Eigen::VectorXd &control
+            const Eigen::VectorXd &control,
+            int /*index*/ = 0
         ) const override
         {
             return {};
@@ -49,7 +51,8 @@ namespace cddp
 
         std::vector<Eigen::MatrixXd> getCrossHessian(
             const Eigen::VectorXd &state,
-            const Eigen::VectorXd &control
+            const Eigen::VectorXd &control,
+            int /*index*/ = 0
         ) const override
         {
             return {};
@@ -70,7 +73,8 @@ namespace cddp
         }
 
         Eigen::VectorXd evaluate(const Eigen::VectorXd &final_state,
-                                 const Eigen::VectorXd &/*control_is_ignored*/) const override
+                                 const Eigen::VectorXd &/*control_is_ignored*/,
+                                 int /*index*/ = 0) const override
         {
             if (final_state.size() != target_state_.size()) {
                 throw std::invalid_argument("TerminalEqualityConstraint: final_state dimension mismatch.");
@@ -95,7 +99,8 @@ namespace cddp
         }
 
         Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &final_state,
-                                         const Eigen::VectorXd &/*control_is_ignored*/) const override
+                                         const Eigen::VectorXd &/*control_is_ignored*/,
+                                         int /*index*/ = 0) const override
         {
             if (final_state.size() != target_state_.size()) {
                 throw std::invalid_argument("TerminalEqualityConstraint: final_state dimension mismatch for Jacobian.");
@@ -109,7 +114,8 @@ namespace cddp
         }
         
         double computeViolation(const Eigen::VectorXd &final_state,
-                                const Eigen::VectorXd &control) const override
+                                const Eigen::VectorXd &control,
+                                int /*index*/ = 0) const override
         {
             Eigen::VectorXd g = evaluate(final_state, control);
             return computeViolationFromValue(g);
@@ -130,7 +136,8 @@ namespace cddp
         // Hessians for g(x_N) = x_N - target are zero
         std::vector<Eigen::MatrixXd> getStateHessian(
             const Eigen::VectorXd &state,
-            const Eigen::VectorXd &/*control_is_ignored*/
+            const Eigen::VectorXd &/*control_is_ignored*/,
+            int /*index*/ = 0
         ) const override
         {
             std::vector<Eigen::MatrixXd> Hxx_list;
@@ -171,7 +178,8 @@ namespace cddp
         }
 
         Eigen::VectorXd evaluate(const Eigen::VectorXd &final_state,
-                                 const Eigen::VectorXd &/*control_is_ignored*/) const override
+                                 const Eigen::VectorXd &/*control_is_ignored*/,
+                                 int /*index*/ = 0) const override
         {
             if (final_state.size() != A_N_.cols()) {
                 throw std::invalid_argument("TerminalInequalityConstraint: final_state dimension and A_N columns mismatch.");
@@ -196,7 +204,8 @@ namespace cddp
         }
 
         Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &final_state,
-                                         const Eigen::VectorXd &/*control_is_ignored*/) const override
+                                         const Eigen::VectorXd &/*control_is_ignored*/,
+                                         int /*index*/ = 0) const override
         {
              if (final_state.size() != A_N_.cols()) {
                 throw std::invalid_argument("TerminalStateInequalityConstraint: final_state dimension for Jacobian and A_N columns mismatch.");
@@ -210,7 +219,8 @@ namespace cddp
         }
 
         double computeViolation(const Eigen::VectorXd &final_state,
-                                const Eigen::VectorXd &control) const override
+                                const Eigen::VectorXd &control,
+                                int /*index*/ = 0) const override
         {
             Eigen::VectorXd g = evaluate(final_state, control);
             return computeViolationFromValue(g);
@@ -231,7 +241,8 @@ namespace cddp
         // Hessians for g(x_N) = A_N * x_N - b_N are zero
         std::vector<Eigen::MatrixXd> getStateHessian(
             const Eigen::VectorXd &state,
-            const Eigen::VectorXd &/*control_is_ignored*/
+            const Eigen::VectorXd &/*control_is_ignored*/,
+            int /*index*/ = 0
         ) const override
         {
             std::vector<Eigen::MatrixXd> Hxx_list;

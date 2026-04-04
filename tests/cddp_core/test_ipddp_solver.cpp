@@ -479,6 +479,7 @@ TEST(IPDDPTest, SolveCar)
         << "Algorithm should converge";
     EXPECT_GT(iterations_completed, 0) << "Should take at least one iteration";
     EXPECT_LT(final_objective, J) << "Final cost should be better than initial cost";
+    EXPECT_LT(final_objective, 1.91) << "Cold-start IPDDP should reach the low-cost parking solution";
 
     // =========================================================================
     // Test warm start capability
@@ -820,4 +821,65 @@ TEST(IPDDPTest, SolveQuadrotor)
     EXPECT_TRUE(warm_status == "OptimalSolutionFound" || warm_status == "AcceptableSolutionFound") 
         << "Warm start should also converge";
     EXPECT_LE(warm_iterations, iterations_completed + 20) << "Warm start should not take significantly more iterations";
+}
+
+TEST(IPDDPTest, SolveWithTerminalInequalityOnly)
+{
+    const int state_dim = 1;
+    const int control_dim = 1;
+    const int horizon = 8;
+    const double timestep = 1.0;
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Identity(state_dim, control_dim);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 0.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 1.0;
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = 1e-2 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = 100.0 * Eigen::MatrixXd::Identity(state_dim, state_dim);
+
+    cddp::CDDPOptions options;
+    options.max_iterations = 60;
+    options.tolerance = 1e-6;
+    options.acceptable_tolerance = 1e-6;
+    options.enable_parallel = false;
+    options.num_threads = 1;
+    options.verbose = false;
+    options.debug = false;
+    options.regularization.initial_value = 1e-6;
+    options.ipddp.barrier.mu_initial = 1e-1;
+
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
+    cddp_solver.setDynamicalSystem(
+        std::make_unique<cddp::LTISystem>(A, B, timestep));
+    cddp_solver.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+    cddp_solver.setOptions(options);
+
+    Eigen::MatrixXd terminal_A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::VectorXd terminal_b = Eigen::VectorXd::Zero(state_dim);
+    cddp_solver.addTerminalConstraint(
+        "TerminalUpperBound",
+        std::make_unique<cddp::TerminalInequalityConstraint>(terminal_A, terminal_b));
+
+    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    X[0] = initial_state;
+    for (int t = 0; t < horizon; ++t)
+    {
+        X[t + 1] = A * X[t] + B * U[t];
+    }
+    cddp_solver.setInitialTrajectory(X, U);
+
+    const cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+
+    EXPECT_TRUE(solution.status_message == "OptimalSolutionFound" ||
+                solution.status_message == "AcceptableSolutionFound");
+    ASSERT_FALSE(solution.state_trajectory.empty());
+    EXPECT_LE(solution.state_trajectory.back()(0), 1e-4);
+    EXPECT_LT(solution.state_trajectory.back()(0), goal_state(0));
 }
