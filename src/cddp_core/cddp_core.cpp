@@ -103,13 +103,14 @@ void CDDP::setReferenceState(const Eigen::VectorXd &reference_state) {
 void CDDP::setReferenceStates(
     const std::vector<Eigen::VectorXd> &reference_states) {
   reference_states_ = reference_states;
-  if (objective_) {
-    objective_->setReferenceStates(reference_states_);
-  }
   if (!reference_states_.empty()) {
-    reference_state_ =
-        reference_states_
-            .back(); // Update single reference state to the final one
+    reference_state_ = reference_states_.back();
+  }
+  if (objective_) {
+    if (!reference_states_.empty()) {
+      objective_->setReferenceState(reference_state_);
+    }
+    objective_->setReferenceStates(reference_states_);
   }
 }
 
@@ -142,12 +143,12 @@ void CDDP::setOptions(const CDDPOptions &options) {
 
 void CDDP::setObjective(std::unique_ptr<Objective> objective) {
   objective_ = std::move(objective);
-  if (objective_ && !reference_state_.isZero() &&
-      reference_state_.size() > 0) { // Check if reference_state is valid
-    objective_->setReferenceState(reference_state_);
-  }
   if (objective_ && !reference_states_.empty()) {
+    objective_->setReferenceState(reference_state_);
     objective_->setReferenceStates(reference_states_);
+  } else if (objective_ && !reference_state_.isZero() &&
+             reference_state_.size() > 0) { // Check if reference_state is valid
+    objective_->setReferenceState(reference_state_);
   }
 }
 
@@ -189,6 +190,10 @@ void CDDP::addPathConstraint(std::string constraint_name,
 
   // Get dual dimension BEFORE moving the constraint
   int dual_dim = constraint->getDualDim();
+  auto existing_constraint = path_constraint_set_.find(constraint_name);
+  if (existing_constraint != path_constraint_set_.end()) {
+    total_dual_dim_ -= existing_constraint->second->getDualDim();
+  }
 
   path_constraint_set_[constraint_name] = std::move(constraint);
 
@@ -224,6 +229,10 @@ void CDDP::addTerminalConstraint(std::string constraint_name,
 
   // Get dual dimension BEFORE moving the constraint
   int dual_dim = constraint->getDualDim();
+  auto existing_constraint = terminal_constraint_set_.find(constraint_name);
+  if (existing_constraint != terminal_constraint_set_.end()) {
+    total_dual_dim_ -= existing_constraint->second->getDualDim();
+  }
 
   terminal_constraint_set_[constraint_name] = std::move(constraint);
 
