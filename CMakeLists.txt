@@ -62,18 +62,29 @@ else()
 endif()
 
 # Find packages
-find_package(Eigen3 QUIET) 
+find_package(Eigen3 3.4 QUIET NO_MODULE)
 
-# If Eigen3 is not found, download it
+# If Eigen3 is not found, fetch it and expose a proper Eigen3::Eigen target
 if(NOT Eigen3_FOUND)
   message(STATUS "Eigen3 not found. Downloading...")
   FetchContent_Declare(
     eigen
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
-    GIT_TAG 3.4.0  # Use a stable version
+    GIT_TAG 3.4.0
   )
   FetchContent_MakeAvailable(eigen)
-  set(EIGEN3_INCLUDE_DIRS ${eigen_SOURCE_DIR})
+
+  # Point Eigen3_DIR to the build directory where Eigen3Config.cmake is generated
+  # so that downstream find_package(Eigen3) calls (e.g., from autodiff) can find it
+  set(Eigen3_DIR "${eigen_BINARY_DIR}" CACHE PATH "Path to Eigen3Config.cmake" FORCE)
+
+  # Ensure Eigen3::Eigen target exists for direct usage
+  if(NOT TARGET Eigen3::Eigen)
+    add_library(Eigen3::Eigen INTERFACE IMPORTED)
+    set_target_properties(Eigen3::Eigen PROPERTIES
+      INTERFACE_INCLUDE_DIRECTORIES "${eigen_SOURCE_DIR}"
+    )
+  endif()
 endif()
 
 if (CDDP_CPP_CASADI)
@@ -173,13 +184,9 @@ set_target_properties(${PROJECT_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 target_link_libraries(${PROJECT_NAME}
   PUBLIC
-    $<IF:$<BOOL:${Eigen3_FOUND}>,Eigen3::Eigen,>
+    Eigen3::Eigen
     autodiff
 )
-
-if(NOT Eigen3_FOUND)
-  target_include_directories(${PROJECT_NAME} PUBLIC ${EIGEN3_INCLUDE_DIRS})
-endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/cddp-cpp>
