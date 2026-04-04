@@ -262,6 +262,8 @@ std::unique_ptr<ISolverAlgorithm> createAnotherMockSolver() {
 
 } // namespace cddp
 
+using cddp::FixedDualDimConstraint;
+
 // Test fixture for CDDP core functionality
 class CDDPCoreTest : public ::testing::Test {
 protected:
@@ -626,12 +628,12 @@ TEST_F(CDDPCoreTest, ReplacingConstraintsKeepsTotalDualDimensionAccurate) {
 
     cddp_solver.addTerminalConstraint(
         "RepeatedTerminalConstraint",
-        std::make_unique<cddp::FixedDualDimConstraint>(state_dim));
+        std::make_unique<FixedDualDimConstraint>(state_dim));
     EXPECT_EQ(cddp_solver.getTotalDualDim(), 2 + state_dim);
 
     cddp_solver.addTerminalConstraint(
         "RepeatedTerminalConstraint",
-        std::make_unique<cddp::FixedDualDimConstraint>(1));
+        std::make_unique<FixedDualDimConstraint>(1));
     EXPECT_EQ(cddp_solver.getTotalDualDim(), 3);
 
     EXPECT_TRUE(cddp_solver.removePathConstraint("RepeatedPathConstraint"));
