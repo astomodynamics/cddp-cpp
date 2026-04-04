@@ -13,57 +13,93 @@
  See the License for the specific language governing permissions and
  limitations under the License.
 */
-#include <iostream>
-#include <vector>
-#include <filesystem>
+#include <array>
 
-#include "gmock/gmock.h"
 #include "gtest/gtest.h"
 
-#include "cddp.hpp"
+#include "cddp-cpp/cddp_core/helper.hpp"
 
-using namespace cddp;
+namespace {
 
-TEST(JacobianTest , Pendulum) {
-    // Parameters
-    double length = 1.0;
-    double mass = 1.0;
-    double damping = 0.0;
+double quadratic_cost(const Eigen::VectorXd &x) {
+  return x(0) * x(0) + 3.0 * x(0) * x(1) + std::sin(x(1));
+}
 
-    // Create a pendulum instance 
-    double timestep = 0.05;
-    std::string integration_type = "euler";
-    cddp::Pendulum pendulum(timestep, length, mass, damping, integration_type);
+Eigen::VectorXd vector_function(const Eigen::VectorXd &x) {
+  Eigen::VectorXd value(2);
+  value << x(0) * x(0) + x(1), x(0) - 2.0 * x(1) * x(1);
+  return value;
+}
 
-    // Initial state and control (use Eigen vectors)
-    Eigen::VectorXd state(2);
-    state << 0.1, 0.0;  // Start at a small angle, zero velocity
-    Eigen::VectorXd control(1);
-    control << 0.0; // No torque initially
-    
-    // Compute the Jacobians
-    Eigen::MatrixXd A = pendulum.getStateJacobian(state, control, 0.0);
-    Eigen::MatrixXd B = pendulum.getControlJacobian(state, control, 0.0);
+Eigen::VectorXd expected_gradient(const Eigen::VectorXd &x) {
+  Eigen::VectorXd grad(2);
+  grad << 2.0 * x(0) + 3.0 * x(1), 3.0 * x(0) + std::cos(x(1));
+  return grad;
+}
 
-    // Check the Jacobians
-    auto f_A = [&](const Eigen::VectorXd& x) {
-        return pendulum.getContinuousDynamics(x, control, 0.0);
-    };
-    auto f_B = [&](const Eigen::VectorXd& u) {
-        return pendulum.getContinuousDynamics(state, u, 0.0);
-    };
-    Eigen::MatrixXd A_expected = finite_difference_jacobian(f_A, state);
-    Eigen::MatrixXd B_expected = finite_difference_jacobian(f_B, control);
+Eigen::MatrixXd expected_jacobian(const Eigen::VectorXd &x) {
+  Eigen::MatrixXd jac(2, 2);
+  jac << 2.0 * x(0), 1.0, 1.0, -4.0 * x(1);
+  return jac;
+}
 
-    // print the Jacobians
-    std::cout << "A = \n" << A << std::endl;
-    std::cout << "B = \n" << B << std::endl;
+Eigen::MatrixXd expected_hessian(const Eigen::VectorXd &x) {
+  Eigen::MatrixXd hess(2, 2);
+  hess << 2.0, 3.0, 3.0, -std::sin(x(1));
+  return hess;
+}
 
-    // Check the Jacobians
-    ASSERT_TRUE(A.isApprox(A_expected, 1e-6));
-    ASSERT_TRUE(B.isApprox(B_expected, 1e-6));
+} // namespace
 
-    // Print the Jacobians
-    std::cout << "A = \n" << A << std::endl;
-    std::cout << "B = \n" << B << std::endl;
+TEST(FiniteDifferenceTest, GradientMatchesAnalyticForAllModes) {
+  const Eigen::Vector2d x(0.4, -0.2);
+  const Eigen::Vector2d grad_expected = expected_gradient(x);
+
+  for (const int mode : std::array<int, 3>{0, 1, 2}) {
+    const Eigen::VectorXd grad =
+        cddp::finite_difference_gradient(quadratic_cost, x, 1e-6, mode);
+    EXPECT_TRUE(grad.isApprox(grad_expected, 1e-4)) << "mode=" << mode;
+  }
+}
+
+TEST(FiniteDifferenceTest, JacobianMatchesAnalyticForAllModes) {
+  const Eigen::Vector2d x(-0.3, 0.6);
+  const Eigen::Matrix2d jac_expected = expected_jacobian(x);
+
+  for (const int mode : std::array<int, 3>{0, 1, 2}) {
+    const Eigen::MatrixXd jac =
+        cddp::finite_difference_jacobian(vector_function, x, 1e-6, mode);
+    EXPECT_TRUE(jac.isApprox(jac_expected, 1e-4)) << "mode=" << mode;
+  }
+}
+
+TEST(FiniteDifferenceTest, HessianMatchesAnalyticForAllModes) {
+  const Eigen::Vector2d x(0.4, -0.2);
+  const Eigen::Matrix2d hess_expected = expected_hessian(x);
+
+  for (const int mode : std::array<int, 3>{0, 1, 2}) {
+    const Eigen::MatrixXd hess =
+        cddp::finite_difference_hessian(quadratic_cost, x, 1e-5, mode);
+    EXPECT_TRUE(hess.isApprox(hess_expected, 2e-2)) << "mode=" << mode;
+  }
+}
+
+TEST(FiniteDifferenceTest, InvalidModeReturnsZeroObjects) {
+  const Eigen::Vector2d x(1.0, -1.0);
+
+  const Eigen::VectorXd grad =
+      cddp::finite_difference_gradient(quadratic_cost, x, 1e-6, 99);
+  const Eigen::MatrixXd jac =
+      cddp::finite_difference_jacobian(vector_function, x, 1e-6, 99);
+  const Eigen::MatrixXd hess =
+      cddp::finite_difference_hessian(quadratic_cost, x, 1e-6, 99);
+
+  EXPECT_EQ(grad.size(), x.size());
+  EXPECT_TRUE(grad.isZero());
+  EXPECT_EQ(jac.rows(), 2);
+  EXPECT_EQ(jac.cols(), x.size());
+  EXPECT_TRUE(jac.isZero());
+  EXPECT_EQ(hess.rows(), x.size());
+  EXPECT_EQ(hess.cols(), x.size());
+  EXPECT_TRUE(hess.isZero());
 }

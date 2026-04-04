@@ -119,6 +119,10 @@ add_executable(test_finite_difference cddp_core/test_finite_difference.cpp)
 target_link_libraries(test_finite_difference gtest gmock gtest_main cddp)
 gtest_discover_tests(test_finite_difference)
 
+add_executable(test_helper_conversions cddp_core/test_helper_conversions.cpp)
+target_link_libraries(test_helper_conversions gtest gmock gtest_main cddp)
+gtest_discover_tests(test_helper_conversions)
+
 add_executable(test_objective cddp_core/test_objective.cpp)
 target_link_libraries(test_objective gtest gmock gtest_main cddp)
 gtest_discover_tests(test_objective)
@@ -126,6 +130,10 @@ gtest_discover_tests(test_objective)
 add_executable(test_constraint cddp_core/test_constraint.cpp)
 target_link_libraries(test_constraint gtest gmock gtest_main cddp)
 gtest_discover_tests(test_constraint)
+
+add_executable(test_terminal_barrier cddp_core/test_terminal_barrier.cpp)
+target_link_libraries(test_terminal_barrier gtest gmock gtest_main cddp)
+gtest_discover_tests(test_terminal_barrier)
 
 add_executable(test_clddp_solver cddp_core/test_clddp_solver.cpp)
 target_link_libraries(test_clddp_solver gtest gmock gtest_main cddp)
