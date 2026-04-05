@@ -35,12 +35,8 @@ Eigen::VectorXd Quadrotor::getContinuousDynamics(
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
 
-    // --- Position Derivative ---
-    // The derivative of the position is the linear velocity.
     state_dot.segment<3>(STATE_X) = state.segment<3>(STATE_VX);
 
-    // --- Quaternion Derivative ---
-    // Extract the quaternion (assumed to be [qw, qx, qy, qz])
     double qw = state(STATE_QW);
     double qx = state(STATE_QX);
     double qy = state(STATE_QY);
@@ -74,20 +70,16 @@ Eigen::VectorXd Quadrotor::getContinuousDynamics(
     state_dot(STATE_QY) =  0.5 * (qw * omega_y - qx * omega_z + qz * omega_x);
     state_dot(STATE_QZ) =  0.5 * (qw * omega_z + qx * omega_y - qy * omega_x);
 
-    // --- Velocity Derivative ---
-    // Extract control variables (motor forces)
     const double f1 = control(CONTROL_F1);
     const double f2 = control(CONTROL_F2);
     const double f3 = control(CONTROL_F3);
     const double f4 = control(CONTROL_F4);
     
-    // Compute total thrust and moments 
     const double thrust = f1 + f2 + f3 + f4;
     const double tau_x = arm_length_ * (f1 - f3);
     const double tau_y = arm_length_ * (f2 - f4);
     const double tau_z = 0.1 * (f1 - f2 + f3 - f4);
 
-    // Compute rotation matrix from the normalized quaternion
     Eigen::Matrix3d R = getRotationMatrix(qw, qx, qy, qz);
 
     // Thrust is applied along the body z-axis. 
@@ -95,7 +87,6 @@ Eigen::VectorXd Quadrotor::getContinuousDynamics(
     Eigen::Vector3d acceleration = (1.0/mass_) * (R * F_thrust) - Eigen::Vector3d(0, 0, gravity_);
     state_dot.segment<3>(STATE_VX) = acceleration;
 
-    // --- Angular Velocity Derivative ---
     Eigen::Vector3d omega(omega_x, omega_y, omega_z);
     Eigen::Vector3d tau(tau_x, tau_y, tau_z);
     Eigen::Vector3d angular_acc = inertia_.inverse() * (tau - omega.cross(inertia_ * omega));
@@ -105,7 +96,6 @@ Eigen::VectorXd Quadrotor::getContinuousDynamics(
 }
 
 Eigen::Matrix3d Quadrotor::getRotationMatrix(double qw, double qx, double qy, double qz) const {
-    // Compute the rotation matrix from a unit quaternion.
     // The quaternion is assumed to be normalized and in the form [qw, qx, qy, qz]
     Eigen::Matrix3d R;
     R(0, 0) = 1 - 2 * (qy * qy + qz * qz);
@@ -126,7 +116,6 @@ Eigen::Matrix3d Quadrotor::getRotationMatrix(double qw, double qx, double qy, do
 Eigen::MatrixXd Quadrotor::getStateJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
 
-    // Use autodiff to compute state Jacobian
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
 
@@ -140,7 +129,6 @@ Eigen::MatrixXd Quadrotor::getStateJacobian(
 Eigen::MatrixXd Quadrotor::getControlJacobian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
-    // Use autodiff to compute control Jacobian
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
 
@@ -154,7 +142,6 @@ Eigen::MatrixXd Quadrotor::getControlJacobian(
 Eigen::Matrix<autodiff::dual2nd, 3, 3> Quadrotor::getRotationMatrixAutodiff(
     const autodiff::dual2nd& qw, const autodiff::dual2nd& qx,
     const autodiff::dual2nd& qy, const autodiff::dual2nd& qz) const {
-    // Compute the rotation matrix from a unit quaternion.
     // The quaternion is assumed to be normalized and in the form [qw, qx, qy, qz]
     Eigen::Matrix<autodiff::dual2nd, 3, 3> R;
     R(0, 0) = 1 - 2 * (qy * qy + qz * qz);
@@ -176,12 +163,8 @@ VectorXdual2nd Quadrotor::getContinuousDynamicsAutodiff(
     const VectorXdual2nd& state, const VectorXdual2nd& control, double time) const {
     VectorXdual2nd state_dot = VectorXdual2nd::Zero(STATE_DIM);
 
-    // --- Position Derivative ---
-    // The derivative of the position is the linear velocity.
     state_dot.segment<3>(STATE_X) = state.segment<3>(STATE_VX);
 
-    // --- Quaternion Derivative ---
-    // Extract the quaternion (assumed to be [qw, qx, qy, qz])
     autodiff::dual2nd qw = state(STATE_QW);
     autodiff::dual2nd qx = state(STATE_QX);
     autodiff::dual2nd qy = state(STATE_QY);
@@ -199,7 +182,6 @@ VectorXdual2nd Quadrotor::getContinuousDynamicsAutodiff(
         qw = 1.0; qx = 0.0; qy = 0.0; qz = 0.0;
     }
 
-    // Extract body angular velocity components
     autodiff::dual2nd omega_x = state(STATE_OMEGA_X);
     autodiff::dual2nd omega_y = state(STATE_OMEGA_Y);
     autodiff::dual2nd omega_z = state(STATE_OMEGA_Z);
@@ -210,20 +192,16 @@ VectorXdual2nd Quadrotor::getContinuousDynamicsAutodiff(
     state_dot(STATE_QY) =  0.5 * (qw * omega_y - qx * omega_z + qz * omega_x);
     state_dot(STATE_QZ) =  0.5 * (qw * omega_z + qx * omega_y - qy * omega_x);
 
-    // --- Velocity Derivative ---
-    // Extract control variables (motor forces)
     const autodiff::dual2nd f1 = control(CONTROL_F1);
     const autodiff::dual2nd f2 = control(CONTROL_F2);
     const autodiff::dual2nd f3 = control(CONTROL_F3);
     const autodiff::dual2nd f4 = control(CONTROL_F4);
     
-    // Compute total thrust and moments 
     const autodiff::dual2nd thrust = f1 + f2 + f3 + f4;
     const autodiff::dual2nd tau_x = arm_length_ * (f1 - f3);
     const autodiff::dual2nd tau_y = arm_length_ * (f2 - f4);
     const autodiff::dual2nd tau_z = 0.1 * (f1 - f2 + f3 - f4);
 
-    // Compute rotation matrix from the normalized quaternion
     Eigen::Matrix<autodiff::dual2nd, 3, 3> R = getRotationMatrixAutodiff(qw, qx, qy, qz);
 
     // Thrust is applied along the body z-axis. 
@@ -232,14 +210,10 @@ VectorXdual2nd Quadrotor::getContinuousDynamicsAutodiff(
     Eigen::Matrix<autodiff::dual2nd, 3, 1> acceleration = (1.0/mass_) * (R * F_thrust) - gravity;
     state_dot.segment<3>(STATE_VX) = acceleration;
 
-    // --- Angular Velocity Derivative ---
     Eigen::Matrix<autodiff::dual2nd, 3, 1> omega(omega_x, omega_y, omega_z);
     Eigen::Matrix<autodiff::dual2nd, 3, 1> tau(tau_x, tau_y, tau_z);
     
-    // Convert inertia matrix to autodiff type
     Eigen::Matrix<autodiff::dual2nd, 3, 3> inertia = inertia_.cast<autodiff::dual2nd>();
-    
-    // Calculate angular acceleration
     Eigen::Matrix<autodiff::dual2nd, 3, 1> angular_acc = inertia.inverse() * (tau - omega.cross(inertia * omega));
     state_dot.segment<3>(STATE_OMEGA_X) = angular_acc;
 
@@ -249,19 +223,15 @@ VectorXdual2nd Quadrotor::getContinuousDynamicsAutodiff(
 // TODO: Implement a more accurate version if needed
 std::vector<Eigen::MatrixXd> Quadrotor::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
-    // We'll use autodiff to compute Hessians
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
     
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     
     for (int i = 0; i < STATE_DIM; ++i) {
-        // Define lambda for the ith component of the dynamics
         auto fi = [&, i, time](const VectorXdual2nd& x_ad) -> autodiff::dual2nd {
             return getContinuousDynamicsAutodiff(x_ad, u, time)(i);
         };
-        
-        // Compute Hessian of ith component w.r.t. state
         hessians[i] = autodiff::hessian(fi, wrt(x), at(x));
     }
     
@@ -271,19 +241,15 @@ std::vector<Eigen::MatrixXd> Quadrotor::getStateHessian(
 // TODO: Implement a more accurate version if needed
 std::vector<Eigen::MatrixXd> Quadrotor::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
-    // We'll use autodiff to compute Hessians
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
     
     std::vector<Eigen::MatrixXd> hessians(STATE_DIM);
     
     for (int i = 0; i < STATE_DIM; ++i) {
-        // Define lambda for the ith component of the dynamics
         auto fi = [&, i, time](const VectorXdual2nd& u_ad) -> autodiff::dual2nd {
             return getContinuousDynamicsAutodiff(x, u_ad, time)(i);
         };
-        
-        // Compute Hessian of ith component w.r.t. control
         hessians[i] = autodiff::hessian(fi, wrt(u), at(u));
     }
     
@@ -292,26 +258,18 @@ std::vector<Eigen::MatrixXd> Quadrotor::getControlHessian(
 
 std::vector<Eigen::MatrixXd> Quadrotor::getCrossHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
-    // For mixed partial derivatives, we need a different approach
-    // We compute derivatives of Jacobian w.r.t. control
     VectorXdual2nd x = state;
     VectorXdual2nd u = control;
     
     std::vector<Eigen::MatrixXd> cross_hessians(STATE_DIM);
     
     for (int i = 0; i < STATE_DIM; ++i) {
-        // Define a function that returns the gradient of the ith component w.r.t. state
         auto gradient_i = [&, i, time](const VectorXdual2nd& u_ad) -> VectorXdual2nd {
-            // Capture the current u_ad in a lambda
             auto fi_x = [&, u_ad, i, time](const VectorXdual2nd& x_ad) -> autodiff::dual2nd {
                 return getContinuousDynamicsAutodiff(x_ad, u_ad, time)(i);
             };
-            
-            // Return the gradient of fi with respect to x at the current x
             return autodiff::gradient(fi_x, wrt(x), at(x));
         };
-        
-        // Compute Jacobian of gradient w.r.t. control (this is the cross Hessian)
         cross_hessians[i] = autodiff::jacobian(gradient_i, wrt(u), at(u));
     }
     
