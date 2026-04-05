@@ -67,24 +67,33 @@ find_package(Eigen3 3.4 QUIET NO_MODULE)
 # If Eigen3 is not found, fetch it and expose a proper Eigen3::Eigen target
 if(NOT Eigen3_FOUND)
   message(STATUS "Eigen3 not found. Downloading...")
+  # Fetch Eigen as header-only: SOURCE_SUBDIR points at a path with no
+  # CMakeLists.txt so MakeAvailable downloads the source without running
+  # Eigen's CMake.  This avoids slow configure probes (Fortran, Qt, CUDA)
+  # and a target name collision with the real autodiff library.
   FetchContent_Declare(
     eigen
     GIT_REPOSITORY https://gitlab.com/libeigen/eigen.git
     GIT_TAG 3.4.0
+    SOURCE_SUBDIR _unused
   )
   FetchContent_MakeAvailable(eigen)
 
-  # Point Eigen3_DIR to the build directory where Eigen3Config.cmake is generated
-  # so that downstream find_package(Eigen3) calls (e.g., from autodiff) can find it
-  set(Eigen3_DIR "${eigen_BINARY_DIR}" CACHE PATH "Path to Eigen3Config.cmake" FORCE)
+  add_library(Eigen3::Eigen INTERFACE IMPORTED)
+  set_target_properties(Eigen3::Eigen PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${eigen_SOURCE_DIR}"
+  )
 
-  # Ensure Eigen3::Eigen target exists for direct usage
-  if(NOT TARGET Eigen3::Eigen)
-    add_library(Eigen3::Eigen INTERFACE IMPORTED)
-    set_target_properties(Eigen3::Eigen PROPERTIES
-      INTERFACE_INCLUDE_DIRECTORIES "${eigen_SOURCE_DIR}"
-    )
-  endif()
+  # Write a minimal Eigen3Config.cmake so autodiff's find_package(Eigen3)
+  # finds it without needing Eigen's full configure step
+  file(WRITE "${eigen_BINARY_DIR}/Eigen3Config.cmake"
+    "set(Eigen3_FOUND TRUE)\n"
+    "if(NOT TARGET Eigen3::Eigen)\n"
+    "  add_library(Eigen3::Eigen INTERFACE IMPORTED)\n"
+    "  set_target_properties(Eigen3::Eigen PROPERTIES INTERFACE_INCLUDE_DIRECTORIES \"${eigen_SOURCE_DIR}\")\n"
+    "endif()\n"
+  )
+  set(Eigen3_DIR "${eigen_BINARY_DIR}" CACHE PATH "" FORCE)
 endif()
 
 if (CDDP_CPP_CASADI)
@@ -187,6 +196,10 @@ target_link_libraries(${PROJECT_NAME}
     Eigen3::Eigen
     autodiff
 )
+
+if(MSVC)
+  target_compile_definitions(${PROJECT_NAME} PUBLIC _USE_MATH_DEFINES)
+endif()
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/cddp-cpp>
