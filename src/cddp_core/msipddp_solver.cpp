@@ -14,6 +14,7 @@
  limitations under the License.
 */
 
+#include "interior_point_utils.hpp"
 #include "cddp_core/msipddp_solver.hpp"
 #include "cddp_core/cddp_core.hpp"
 #include <chrono>
@@ -712,7 +713,6 @@ namespace cddp
     double merit_function = context.cost_;
     double inf_pr = 0.0;
     double filter_constraint_violation = 0.0;
-    double inf_du = 0.0;
     double inf_comp = 0.0;
     double inf_defect = 0.0;
 
@@ -751,7 +751,6 @@ namespace cddp
     {
       inf_pr = 0.0;
       filter_constraint_violation = 0.0;
-      inf_du = 0.0;
       inf_comp = 0.0;
     }
 
@@ -767,26 +766,8 @@ namespace cddp
 
   bool MSIPDDPSolver::acceptFilterEntry(double merit_function, double constraint_violation)
   {
-    FilterPoint candidate(merit_function, constraint_violation);
-
-    for (const auto &filter_point : filter_)
-    {
-      if (filter_point.dominates(candidate))
-      {
-        return false;
-      }
-    }
-
-    filter_.erase(
-        std::remove_if(filter_.begin(), filter_.end(),
-                      [&candidate](const FilterPoint &point) {
-                        return candidate.dominates(point);
-                      }),
-        filter_.end());
-
-    filter_.push_back(candidate);
-
-    return true;
+    return detail::acceptFilterEntry(filter_, merit_function,
+                                     constraint_violation);
   }
 
   bool MSIPDDPSolver::isFilterAcceptable(double merit_function, double constraint_violation,
@@ -798,13 +779,9 @@ namespace cddp
       return true;
     }
 
-    FilterPoint candidate(merit_function, constraint_violation);
-    for (const auto &filter_point : filter_)
-    {
-      if (filter_point.dominates(candidate))
-      {
-        return false;
-      }
+    if (detail::isFilterCandidateDominated(filter_, merit_function,
+                                           constraint_violation)) {
+      return false;
     }
 
     double best_violation = std::numeric_limits<double>::infinity();
@@ -843,15 +820,7 @@ namespace cddp
 
     if (!needs_restoration)
     {
-      for (const auto &point : filter_)
-      {
-        if (std::isnan(point.merit_function) || std::isnan(point.constraint_violation) ||
-            std::isinf(point.merit_function) || std::isinf(point.constraint_violation))
-        {
-          needs_restoration = true;
-          break;
-        }
-      }
+      needs_restoration = detail::filterContainsInvalidValues(filter_);
     }
 
     if (needs_restoration && !filter_.empty())
@@ -861,23 +830,7 @@ namespace cddp
         std::cout << "MSIPDDP: Filter restoration: " << filter_.size() << " -> ";
       }
 
-      auto best_violation = *std::min_element(filter_.begin(), filter_.end(),
-        [](const FilterPoint &a, const FilterPoint &b) {
-          return a.constraint_violation < b.constraint_violation;
-        });
-
-      auto best_merit = *std::min_element(filter_.begin(), filter_.end(),
-        [](const FilterPoint &a, const FilterPoint &b) {
-          return a.merit_function < b.merit_function;
-        });
-
-      filter_.clear();
-      filter_.push_back(best_violation);
-      if (std::abs(best_merit.constraint_violation - best_violation.constraint_violation) > 1e-12 ||
-          std::abs(best_merit.merit_function - best_violation.merit_function) > 1e-12)
-      {
-        filter_.push_back(best_merit);
-      }
+      detail::pruneFilterToBestPoints(filter_);
 
       if (options.debug)
       {
@@ -1771,64 +1724,13 @@ namespace cddp
   }
 
   void MSIPDDPSolver::printIterationLegacy(int iter, double objective, double inf_pr,
-                                     double inf_du, double inf_comp, double mu,
-                                     double step_norm, double regularization,
-                                     double alpha_du, double alpha_pr) const
+                                      double inf_du, double inf_comp, double mu,
+                                      double step_norm, double regularization,
+                                      double alpha_du, double alpha_pr) const
   {
-    if (iter == 0)
-    {
-      std::cout << std::setw(4) << "iter" << " " << std::setw(12) << "objective"
-                << " " << std::setw(9) << "inf_pr" << " " << std::setw(9)
-                << "inf_du" << " " << std::setw(9) << "inf_comp" << " "
-                << std::setw(7) << "lg(mu)" << " " << std::setw(9) << "||d||"
-                << " " << std::setw(7) << "lg(rg)"
-                << " " << std::setw(9) << "alpha_du" << " " << std::setw(9)
-                << "alpha_pr" << std::endl;
-    }
-
-    std::cout << std::setw(4) << iter << " ";
-
-    std::cout << std::setw(12) << std::scientific << std::setprecision(6)
-              << objective << " ";
-
-    std::cout << std::setw(9) << std::scientific << std::setprecision(2) << inf_pr
-              << " ";
-
-    std::cout << std::setw(9) << std::scientific << std::setprecision(2) << inf_du
-              << " ";
-
-    std::cout << std::setw(9) << std::scientific << std::setprecision(2)
-              << inf_comp << " ";
-
-    if (mu > 0.0)
-    {
-      std::cout << std::setw(7) << std::fixed << std::setprecision(1)
-                << std::log10(mu) << " ";
-    }
-    else
-    {
-      std::cout << std::setw(7) << "-inf" << " ";
-    }
-
-    std::cout << std::setw(9) << std::scientific << std::setprecision(2)
-              << step_norm << " ";
-
-    if (regularization > 0.0)
-    {
-      std::cout << std::setw(7) << std::fixed << std::setprecision(1)
-                << std::log10(regularization) << " ";
-    }
-    else
-    {
-      std::cout << std::setw(7) << "-" << " ";
-    }
-
-    std::cout << std::setw(9) << std::fixed << std::setprecision(6) << alpha_du
-              << " ";
-
-    std::cout << std::setw(9) << std::fixed << std::setprecision(6) << alpha_pr;
-
-    std::cout << std::endl;
+    detail::printInteriorPointIteration(iter, objective, inf_pr, inf_du,
+                                        inf_comp, mu, step_norm,
+                                        regularization, alpha_du, alpha_pr);
   }
 
   void MSIPDDPSolver::printSolutionSummary(const CDDPSolution &solution) const
@@ -1977,24 +1879,8 @@ namespace cddp
 
   double MSIPDDPSolver::computeMaxConstraintViolation(const CDDP &context) const
   {
-    const auto &constraint_set = context.getConstraintSet();
-    const int horizon = context.getHorizon();
-    double max_violation = 0.0;
-
-    for (const auto &constraint_pair : constraint_set)
-    {
-      const std::string &constraint_name = constraint_pair.first;
-      auto g_it = G_.find(constraint_name);
-      if (g_it != G_.end())
-      {
-        for (int t = 0; t < horizon; ++t)
-        {
-          const Eigen::VectorXd &g_vec = g_it->second[t];
-          max_violation = std::max(max_violation, g_vec.maxCoeff());
-        }
-      }
-    }
-    return max_violation;
+    (void)context;
+    return detail::computeMaxConstraintViolation(G_);
   }
 
   double MSIPDDPSolver::computeScaledDualInfeasibility(const CDDP &context) const

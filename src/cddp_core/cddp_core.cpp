@@ -14,6 +14,7 @@
  limitations under the License.
 */
 
+#include "cddp_context_utils.hpp"
 #include "cddp_core/cddp_core.hpp"      // For CDDP class declaration
 #include "cddp_core/clddp_solver.hpp"   // For CLDDPSolver
 #include "cddp_core/ipddp_solver.hpp"   // For IPDDPSolver
@@ -24,8 +25,8 @@
 #include <functional>
 #include <iomanip> // For std::setw
 #include <iostream>
-#include <map>
 #include <array>
+#include <map>
 
 namespace cddp {
 
@@ -56,23 +57,7 @@ CDDP::CDDP(const Eigen::VectorXd &initial_state,
           0) { // Check if reference_state is valid before setting
     objective_->setReferenceState(reference_state_);
   }
-  // Basic alpha sequence for line search
-  alphas_.clear();
-  double current_alpha = options_.line_search.initial_step_size;
-  for (int i = 0; i < options_.line_search.max_iterations; ++i) {
-    alphas_.push_back(current_alpha);
-    current_alpha *= options_.line_search.step_reduction_factor;
-    if (current_alpha < options_.line_search.min_step_size &&
-        i < options_.line_search.max_iterations - 1) {
-      alphas_.push_back(
-          options_.line_search.min_step_size); // Ensure min_step_size is tried
-      break;
-    }
-  }
-  if (alphas_
-          .empty()) { // Ensure at least one alpha if max_iterations is 0 or 1
-    alphas_.push_back(options_.line_search.initial_step_size);
-  }
+  alphas_ = detail::buildLineSearchAlphas(options_.line_search);
 }
 // --- Setters ---
 void CDDP::setDynamicalSystem(std::unique_ptr<DynamicalSystem> system) {
@@ -123,21 +108,7 @@ void CDDP::setTimestep(double timestep) { timestep_ = timestep; }
 
 void CDDP::setOptions(const CDDPOptions &options) {
   options_ = options;
-  // Re-initialize alpha sequence if line search options changed
-  alphas_.clear();
-  double current_alpha = options_.line_search.initial_step_size;
-  for (int i = 0; i < options_.line_search.max_iterations; ++i) {
-    alphas_.push_back(current_alpha);
-    current_alpha *= options_.line_search.step_reduction_factor;
-    if (current_alpha < options_.line_search.min_step_size &&
-        i < options_.line_search.max_iterations - 1) {
-      alphas_.push_back(options_.line_search.min_step_size);
-      break;
-    }
-  }
-  if (alphas_.empty()) {
-    alphas_.push_back(options_.line_search.initial_step_size);
-  }
+  alphas_ = detail::buildLineSearchAlphas(options_.line_search);
   alpha_pr_ = options_.line_search.initial_step_size;
 }
 
@@ -184,80 +155,37 @@ int CDDP::getTotalDualDim() const { return total_dual_dim_; }
 
 void CDDP::addPathConstraint(std::string constraint_name,
                              std::unique_ptr<Constraint> constraint) {
-  if (!constraint) {
-    throw std::runtime_error("Cannot add null constraint.");
-  }
-
-  // Get dual dimension BEFORE moving the constraint
-  int dual_dim = constraint->getDualDim();
-  auto existing_constraint = path_constraint_set_.find(constraint_name);
-  if (existing_constraint != path_constraint_set_.end()) {
-    total_dual_dim_ -= existing_constraint->second->getDualDim();
-  }
-
-  path_constraint_set_[constraint_name] = std::move(constraint);
-
-  // Increment total dual dimension
-  total_dual_dim_ += dual_dim;
-
+  detail::addOrReplaceConstraint(path_constraint_set_, std::move(constraint_name),
+                                 std::move(constraint), total_dual_dim_);
   initialized_ = false; // Constraint set changed, need to reinitialize
 }
 
 bool CDDP::removePathConstraint(const std::string &constraint_name) {
-  auto it = path_constraint_set_.find(constraint_name);
-  if (it != path_constraint_set_.end()) {
-    // Decrement total dual dimension
-    total_dual_dim_ -= it->second->getDualDim();
-
-    // Remove the constraint from the set
-    path_constraint_set_.erase(it);
-
-    // Mark as needing reinitialization since constraint set changed
+  const bool removed = detail::removeConstraint(path_constraint_set_,
+                                                constraint_name,
+                                                total_dual_dim_);
+  if (removed) {
     initialized_ = false;
-
-    return true; // Successfully removed
   }
-
-  return false; // Constraint not found
+  return removed;
 }
 
 void CDDP::addTerminalConstraint(std::string constraint_name,
                                  std::unique_ptr<Constraint> constraint) {
-  if (!constraint) {
-    throw std::runtime_error("Cannot add null constraint.");
-  }
-
-  // Get dual dimension BEFORE moving the constraint
-  int dual_dim = constraint->getDualDim();
-  auto existing_constraint = terminal_constraint_set_.find(constraint_name);
-  if (existing_constraint != terminal_constraint_set_.end()) {
-    total_dual_dim_ -= existing_constraint->second->getDualDim();
-  }
-
-  terminal_constraint_set_[constraint_name] = std::move(constraint);
-
-  // Increment total dual dimension
-  total_dual_dim_ += dual_dim;
-
+  detail::addOrReplaceConstraint(terminal_constraint_set_,
+                                 std::move(constraint_name),
+                                 std::move(constraint), total_dual_dim_);
   initialized_ = false; // Constraint set changed, need to reinitialize
 }
 
 bool CDDP::removeTerminalConstraint(const std::string &constraint_name) {
-  auto it = terminal_constraint_set_.find(constraint_name);
-  if (it != terminal_constraint_set_.end()) {
-    // Decrement total dual dimension
-    total_dual_dim_ -= it->second->getDualDim();
-
-    // Remove the constraint from the set
-    terminal_constraint_set_.erase(it);
-
-    // Mark as needing reinitialization since constraint set changed
+  const bool removed = detail::removeConstraint(terminal_constraint_set_,
+                                                constraint_name,
+                                                total_dual_dim_);
+  if (removed) {
     initialized_ = false;
-
-    return true; // Successfully removed
   }
-
-  return false; // Constraint not found
+  return removed;
 }
 
 namespace {
@@ -356,58 +284,14 @@ void CDDP::initializeProblemIfNecessary() {
   int state_dim = system_->getStateDim();
   int control_dim = system_->getControlDim();
 
-  // For warm start: preserve existing trajectories if they have compatible
-  // dimensions
-  bool preserve_trajectories =
-      options_.warm_start && !X_.empty() && !U_.empty() &&
-      static_cast<int>(X_.size()) == horizon_ + 1 &&
-      static_cast<int>(U_.size()) == horizon_ && X_[0].size() == state_dim &&
-      U_[0].size() == control_dim;
-
-  // Initialize state trajectory
-  if (X_.empty() || static_cast<int>(X_.size()) != horizon_ + 1) {
-    if (preserve_trajectories) {
-      // Warm start: resize existing trajectory carefully
-      if (options_.verbose) {
-        std::cout << "CDDP: Warm start detected - preserving existing state "
-                     "trajectory"
-                  << std::endl;
-      }
-      // Keep existing X_ but ensure correct size
-      X_.resize(horizon_ + 1);
-    } else {
-      // Cold start: initialize with zeros
-      X_.clear();
-      X_.resize(horizon_ + 1);
-      for (int k = 0; k <= horizon_; ++k) {
-        X_[k] = Eigen::VectorXd::Zero(state_dim);
-      }
-    }
+  const bool preserve_trajectories = detail::hasCompatibleWarmStartTrajectories(
+      options_, X_, U_, horizon_, state_dim, control_dim);
+  if (!preserve_trajectories) {
+    detail::ensureTrajectoryShape(X_, horizon_ + 1, state_dim);
+    detail::ensureTrajectoryShape(U_, horizon_, control_dim);
   }
 
-  // Ensure initial state is set correctly (always required)
   X_[0] = initial_state_;
-
-  // Initialize control trajectory
-  if (U_.empty() || static_cast<int>(U_.size()) != horizon_) {
-    if (preserve_trajectories) {
-      // Warm start: resize existing trajectory carefully
-      if (options_.verbose) {
-        std::cout << "CDDP: Warm start detected - preserving existing control "
-                     "trajectory"
-                  << std::endl;
-      }
-      // Keep existing U_ but ensure correct size
-      U_.resize(horizon_);
-    } else {
-      // Cold start: initialize with zeros
-      U_.clear();
-      U_.resize(horizon_);
-      for (int k = 0; k < horizon_; ++k) {
-        U_[k] = Eigen::VectorXd::Zero(control_dim);
-      }
-    }
-  }
 
   // Initialize cost and merit function
   cost_ = std::numeric_limits<double>::infinity();
