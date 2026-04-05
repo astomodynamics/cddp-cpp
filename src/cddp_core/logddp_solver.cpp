@@ -368,9 +368,6 @@ bool LogDDPSolver::backwardPass(CDDP &context) {
   const double timestep = context.getTimestep();
   const auto &constraint_set = context.getConstraintSet();
 
-  // Pre-compute dynamics jacobians and hessians for all time steps.
-  // LogDDP needs continuous-time Jacobians for the backward pass, so compute
-  // them inline instead of using the base class's discrete-time derivatives.
   const int MIN_HORIZON_FOR_PARALLEL = 20;
   const bool use_parallel =
       options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;
