@@ -20,7 +20,7 @@ set(CMAKE_POLICY_VERSION_MINIMUM "3.15" CACHE STRING "Minimum CMake version for 
 
 project(
   cddp
-  VERSION 0.1.0
+  VERSION 0.5.1
   DESCRIPTION "CDDP: A C++ library for Trajectory Optimization and MPC"
   HOMEPAGE_URL  "https://github.com/astomodynamics/cddp-cpp"
 )
