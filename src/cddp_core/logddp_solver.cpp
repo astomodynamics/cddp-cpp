@@ -114,7 +114,7 @@ void LogDDPSolver::initialize(CDDP &context) {
 
       // Warm starts may reuse gains with a user-modified state trajectory.
       // Re-roll the nominal state sequence so the linearization point stays
-      // dynamically consistent after defect tracking removal.
+      // dynamically consistent.
       rollOutNominalTrajectory(context);
 
       // Evaluate current trajectory and reset filter
@@ -368,11 +368,6 @@ bool LogDDPSolver::backwardPass(CDDP &context) {
   const double timestep = context.getTimestep();
   const auto &constraint_set = context.getConstraintSet();
 
-  // Pre-compute dynamics jacobians and hessians for all time steps
-  // Note: LogDDP needs continuous-time Jacobians for the backward pass
-  // because it handles defect terms (d = F[t] - X[t+1]) which require
-  // the A = dt*Fx + I, B = dt*Fu formulation. We compute these inline
-  // since the base precomputeDynamicsDerivatives stores discrete-time versions.
   const int MIN_HORIZON_FOR_PARALLEL = 20;
   const bool use_parallel =
       options.enable_parallel && horizon >= MIN_HORIZON_FOR_PARALLEL;

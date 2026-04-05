@@ -31,17 +31,11 @@ Eigen::VectorXd Pendulum::getContinuousDynamics(
     
     Eigen::VectorXd state_dot = Eigen::VectorXd::Zero(STATE_DIM);
     
-    // Extract state variables
     const double theta = state(STATE_THETA);
     const double theta_dot = state(STATE_THETA_DOT);
-    
-    // Extract control variable
     const double torque = control(CONTROL_TORQUE);
-    
-    // Precompute constants
     const double inertia = mass_ * length_ * length_;
 
-    // Pendulum dynamics equations
     state_dot(STATE_THETA) = theta_dot;
     state_dot(STATE_THETA_DOT) = (torque - damping_ * theta_dot + mass_ * gravity_ * length_ * std::sin(theta)) / inertia;
 
@@ -53,16 +47,9 @@ Eigen::MatrixXd Pendulum::getStateJacobian(
     
     Eigen::MatrixXd A = Eigen::MatrixXd::Zero(STATE_DIM, STATE_DIM);
     
-    // Extract state variables
     const double theta = state(STATE_THETA);
-    
-    // Compute partial derivatives with respect to state variables
     A(STATE_THETA, STATE_THETA_DOT) = 1.0;
-    
-    // d(dtheta_dot/dt)/dtheta
     A(STATE_THETA_DOT, STATE_THETA) = (gravity_ / length_) * std::cos(theta);
-    
-    // d(dtheta_dot/dt)/dtheta_dot
     A(STATE_THETA_DOT, STATE_THETA_DOT) = -damping_ / (mass_ * length_ * length_);
     
     return A;
@@ -73,8 +60,6 @@ Eigen::MatrixXd Pendulum::getControlJacobian(
     
     Eigen::MatrixXd B = Eigen::MatrixXd::Zero(STATE_DIM, CONTROL_DIM);
     
-    // Compute partial derivatives with respect to control variable
-    // d(dtheta_dot/dt)/dtorque
     B(STATE_THETA_DOT, CONTROL_TORQUE) = 1.0 / (mass_ * length_ * length_);
     
     return B;
@@ -83,14 +68,8 @@ Eigen::MatrixXd Pendulum::getControlJacobian(
 std::vector<Eigen::MatrixXd> Pendulum::getStateHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
-    // Initialize a vector of matrices (one matrix per state dimension)
     auto hessian = makeZeroTensor(STATE_DIM, STATE_DIM, STATE_DIM);
-    
-    // Extract state variables
     const double theta = state(STATE_THETA);
-    
-    // For the pendulum, only the second derivative of theta_dot with respect to theta is non-zero
-    // d^2(dtheta_dot/dt)/dtheta^2 = -g/l * sin(theta)
     const double inertia = mass_ * length_ * length_;
     hessian[STATE_THETA_DOT](STATE_THETA, STATE_THETA) = -(gravity_ / length_) * std::sin(theta);
     
@@ -100,12 +79,7 @@ std::vector<Eigen::MatrixXd> Pendulum::getStateHessian(
 std::vector<Eigen::MatrixXd> Pendulum::getControlHessian(
     const Eigen::VectorXd& state, const Eigen::VectorXd& control, double time) const {
     
-    // Initialize a vector of matrices (one matrix per state dimension)
     auto hessian = makeZeroTensor(STATE_DIM, CONTROL_DIM, CONTROL_DIM);
-    
-    // For the pendulum, all second derivatives with respect to control are zero
-    // No need to set any values as the matrices are already initialized to zero
-    
     return hessian;
 }
 
