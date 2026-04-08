@@ -276,6 +276,13 @@ namespace cddp
                              std::vector<Eigen::VectorXd> &dX,
                              std::vector<Eigen::VectorXd> &dU)
     {
+      if (A.empty() || B.empty())
+      {
+        const int state_dim = !K.empty() ? K.front().cols() : 0;
+        dX.assign(1, Eigen::VectorXd::Zero(state_dim));
+        dU.clear();
+        return;
+      }
       rolloutLinearPolicy(A, B, d, K, k,
                           Eigen::VectorXd::Zero(A.front().rows()), dX, dU);
     }
