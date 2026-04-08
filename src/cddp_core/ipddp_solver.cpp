@@ -889,6 +889,78 @@ namespace cddp
     k_lambda_.back() = V_x;
     K_lambda_.back() = V_xx;
 
+    if (!has_path_constraints && !has_terminal_ineq && has_terminal_eq)
+    {
+      const Eigen::VectorXd h_T =
+          evaluateTerminalEqualityResidual(context, context.X_.back());
+      const Eigen::MatrixXd H_T =
+          evaluateTerminalEqualityJacobian(context, context.X_.back());
+
+      std::vector<Eigen::MatrixXd> Q(horizon + 1,
+                                     Eigen::MatrixXd::Zero(state_dim, state_dim));
+      std::vector<Eigen::VectorXd> q(horizon + 1,
+                                     Eigen::VectorXd::Zero(state_dim));
+      std::vector<Eigen::MatrixXd> R(horizon,
+                                     Eigen::MatrixXd::Zero(control_dim, control_dim));
+      std::vector<Eigen::VectorXd> r(horizon,
+                                     Eigen::VectorXd::Zero(control_dim));
+      std::vector<Eigen::MatrixXd> M(horizon,
+                                     Eigen::MatrixXd::Zero(state_dim, control_dim));
+      std::vector<Eigen::MatrixXd> A_vec(horizon,
+                                         Eigen::MatrixXd::Zero(state_dim, state_dim));
+      std::vector<Eigen::MatrixXd> B_vec(horizon,
+                                         Eigen::MatrixXd::Zero(state_dim, control_dim));
+      std::vector<Eigen::VectorXd> d_vec(horizon,
+                                         Eigen::VectorXd::Zero(state_dim));
+
+      Q.back() = V_xx;
+      q.back() = context.getObjective().getFinalCostGradient(context.X_.back());
+
+      for (int t = 0; t < horizon; ++t)
+      {
+        auto [l_x, l_u] =
+            context.getObjective().getRunningCostGradients(context.X_[t], context.U_[t], t);
+        auto [l_xx, l_uu, l_ux] =
+            context.getObjective().getRunningCostHessians(context.X_[t], context.U_[t], t);
+
+        Q[t] = 0.5 * (l_xx + l_xx.transpose());
+        q[t] = l_x;
+        R[t] = 0.5 * (l_uu + l_uu.transpose());
+        R[t].diagonal().array() += context.regularization_;
+        r[t] = l_u;
+        M[t] = l_ux.transpose();
+        A_vec[t] = F_x_[t];
+        B_vec[t] = F_u_[t];
+      }
+
+      Eigen::VectorXd lambda_total;
+      Eigen::VectorXd lambda_delta;
+      if (!solveTerminalEqualityLQR(
+              Q, q, R, r, M, A_vec, B_vec, d_vec,
+              Eigen::VectorXd::Zero(state_dim), H_T, -h_T, mu_,
+              options.ipddp.jacobian_regularization_value,
+              options.ipddp.jacobian_regularization_exponent, &Lambda_T_eq_,
+              K_u_, k_u_, K_lambda_, k_lambda_, lambda_total, lambda_delta))
+      {
+        return false;
+      }
+
+      dLambda_T_eq_ = lambda_delta;
+      dV_ = Eigen::Vector2d::Zero();
+      inf_du = lambda_delta.lpNorm<Eigen::Infinity>();
+      for (int t = 0; t < horizon; ++t)
+      {
+        inf_du = std::max(inf_du, k_u_[t].lpNorm<Eigen::Infinity>());
+        step_norm = std::max(step_norm, k_u_[t].lpNorm<Eigen::Infinity>());
+      }
+
+      context.inf_du_ = inf_du;
+      context.step_norm_ = step_norm;
+      context.inf_pr_ = h_T.lpNorm<Eigen::Infinity>();
+      context.inf_comp_ = 0.0;
+      return true;
+    }
+
     if (!has_path_constraints && !has_terminal_ineq && !has_terminal_eq)
     {
       for (int t = horizon - 1; t >= 0; --t)
@@ -1388,7 +1460,7 @@ namespace cddp
     }
 
     bool filter_acceptance = false;
-    if (constraint_set.empty() && !has_terminal_ineq)
+    if (constraint_set.empty() && !has_terminal_ineq && !has_terminal_eq)
     {
       double dJ = context.cost_ - cost_new;
       double expected = -alpha_pr * (dV_(0) + 0.5 * alpha_pr * dV_(1));
@@ -2033,6 +2105,10 @@ namespace cddp
                               has_terminal_eq ? &h_T : nullptr),
                  std::max(context.getOptions().ipddp.theta_0_floor, 1e-8));
     filter_.clear();
+    if (has_terminal_ineq || has_terminal_eq)
+    {
+      acceptFilterEntry(phi_, theta_);
+    }
   }
 
   void IPDDPSolver::resetFilter(CDDP &context) { resetBarrierFilter(context); }
@@ -2136,11 +2212,16 @@ namespace cddp
     if (reset_filter)
     {
       filter_.clear();
+      if (getTerminalEqualityDim(context) > 0 ||
+          !getTerminalInequalityLayout(context).empty())
+      {
+        acceptFilterEntry(phi_, theta_);
+      }
     }
     else
     {
       acceptFilterEntry(phi_, theta_);
-      if (static_cast<int>(filter_.size()) > 5)
+      if (static_cast<int>(filter_.size()) > options.ipddp.max_filter_size)
       {
         detail::pruneFilterToBestPoints(filter_);
       }
@@ -2221,7 +2302,16 @@ namespace cddp
   double IPDDPSolver::computeMaxConstraintViolation(const CDDP &context) const
   {
     (void)context;
-    return detail::computeMaxConstraintViolation(G_);
+    double max_violation = detail::computeMaxConstraintViolation(G_);
+    for (const auto &entry : G_T_)
+    {
+      if (entry.second.size() == 0)
+      {
+        continue;
+      }
+      max_violation = std::max(max_violation, entry.second.maxCoeff());
+    }
+    return max_violation;
   }
 
   double IPDDPSolver::computeScaledDualInfeasibility(const CDDP &context) const

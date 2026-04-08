@@ -150,9 +150,6 @@ namespace cddp
         double dual_var_init_scale = 1e-1;  ///< Initial scale for dual variables.
         double slack_var_init_scale = 1e-2; ///< Initial scale for slack variables.
 
-        bool make_psd = true;           ///< Project Q_uu to PSD cone before solve.
-        double psd_delta = 1e-6;        ///< Minimum eigenvalue for PSD projection.
-
         double barrier_tol_mult =
             0.1; ///< Barrier-scaled inner tolerance multiplier.
         double barrier_update_dual_weight =
@@ -164,7 +161,7 @@ namespace cddp
         std::string theta_norm =
             "l1"; ///< Constraint violation norm used by the filter ("l1" or "l2").
         int max_filter_size =
-            50; ///< Maximum number of active non-dominated filter entries.
+            5; ///< Maximum number of active non-dominated filter entries.
         double theta_0_floor =
             1.0; ///< Minimum theta_0 value used for filter initialization.
 

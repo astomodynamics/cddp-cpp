@@ -883,3 +883,62 @@ TEST(IPDDPTest, SolveWithTerminalInequalityOnly)
     EXPECT_LE(solution.state_trajectory.back()(0), 1e-4);
     EXPECT_LT(solution.state_trajectory.back()(0), goal_state(0));
 }
+
+TEST(IPDDPTest, SolveWithTerminalEqualityOnly)
+{
+    const int state_dim = 1;
+    const int control_dim = 1;
+    const int horizon = 8;
+    const double timestep = 1.0;
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Identity(state_dim, control_dim);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 1.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0;
+
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
+    cddp_solver.setDynamicalSystem(
+        std::make_unique<cddp::LTISystem>(A, B, timestep));
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = 1e-2 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    cddp_solver.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+
+    cddp::CDDPOptions options;
+    options.max_iterations = 100;
+    options.tolerance = 1e-6;
+    options.acceptable_tolerance = 1e-6;
+    options.enable_parallel = false;
+    options.num_threads = 1;
+    options.verbose = false;
+    options.debug = false;
+    options.regularization.initial_value = 1e-6;
+    cddp_solver.setOptions(options);
+
+    cddp_solver.addTerminalConstraint(
+        "TerminalTarget",
+        std::make_unique<cddp::TerminalEqualityConstraint>(goal_state));
+
+    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    X[0] = initial_state;
+    for (int t = 0; t < horizon; ++t)
+    {
+        X[t + 1] = A * X[t] + B * U[t];
+    }
+    cddp_solver.setInitialTrajectory(X, U);
+
+    const cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+
+    EXPECT_TRUE(solution.status_message == "OptimalSolutionFound" ||
+                solution.status_message == "AcceptableSolutionFound");
+    ASSERT_FALSE(solution.state_trajectory.empty());
+    const double terminal_residual =
+        (solution.state_trajectory.back() - goal_state).lpNorm<Eigen::Infinity>();
+    EXPECT_LE(terminal_residual, 1e-4);
+}
