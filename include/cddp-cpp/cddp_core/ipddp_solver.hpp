@@ -25,6 +25,7 @@
 
 namespace cddp
 {
+    class IPDDPSolverTestAccess;
 
     /**
      * @brief Interior Point Differential Dynamic Programming (IPDDP) solver.
@@ -63,6 +64,8 @@ namespace cddp
         void printSolutionSummary(const CDDPSolution &solution) const override;
 
     private:
+        friend class IPDDPSolverTestAccess;
+
         // Constraint derivatives
         std::map<std::string, std::vector<Eigen::MatrixXd>> G_x_; ///< State gradients
         std::map<std::string, std::vector<Eigen::MatrixXd>> G_u_; ///< Control gradients
@@ -117,6 +120,7 @@ namespace cddp
         std::vector<FilterPoint> filter_; ///< Filter for line search
         double phi_ = 0.0;               ///< Current filter merit value
         double theta_ = 0.0;             ///< Current filter violation metric
+        double filter_theta_ = 0.0;      ///< Current unfloored filter violation metric
 
         // === Private helper methods ===
         void precomputeConstraintGradients(CDDP &context);

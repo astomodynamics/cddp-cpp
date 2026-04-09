@@ -242,6 +242,98 @@ namespace cddp
       }
     }
 
+    bool warmstartNeedsReinit(const Eigen::VectorXd &y_current,
+                              const Eigen::VectorXd &s_current,
+                              const Eigen::VectorXd &g_val,
+                              const CDDPOptions &options)
+    {
+      if (y_current.size() != g_val.size() || s_current.size() != g_val.size() ||
+          !y_current.allFinite() || !s_current.allFinite())
+      {
+        return true;
+      }
+
+      for (int i = 0; i < g_val.size(); ++i)
+      {
+        if (y_current(i) <= EPS_DUAL || s_current(i) <= EPS_SLACK)
+        {
+          return true;
+        }
+
+        const double required_slack =
+            std::max(options.ipddp.slack_var_init_scale,
+                     -g_val(i) + kSlackInteriorOffset);
+        if (s_current(i) < 0.1 * required_slack)
+        {
+          return true;
+        }
+      }
+
+      return false;
+    }
+
+    void initializeTerminalWarmstartDualSlack(
+        const CDDP &context,
+        double mu,
+        std::map<std::string, Eigen::VectorXd> &G_T,
+        std::map<std::string, Eigen::VectorXd> &Y_T,
+        std::map<std::string, Eigen::VectorXd> &S_T,
+        std::map<std::string, Eigen::VectorXd> &dY_T,
+        std::map<std::string, Eigen::VectorXd> &dS_T)
+    {
+      const CDDPOptions &options = context.getOptions();
+      const auto layout = getTerminalInequalityLayout(context);
+
+      bool has_existing_dual_slack = true;
+      for (const auto &entry : layout)
+      {
+        auto y_it = Y_T.find(entry.name);
+        auto s_it = S_T.find(entry.name);
+        if (y_it == Y_T.end() || s_it == S_T.end() ||
+            y_it->second.size() != entry.dim || s_it->second.size() != entry.dim)
+        {
+          has_existing_dual_slack = false;
+          break;
+        }
+      }
+
+      for (const auto &entry : layout)
+      {
+        const Eigen::VectorXd &g_val = G_T.at(entry.name);
+        Eigen::VectorXd s_current = Eigen::VectorXd::Zero(entry.dim);
+        Eigen::VectorXd y_current = Eigen::VectorXd::Zero(entry.dim);
+        bool need_reinit = !has_existing_dual_slack;
+
+        if (!need_reinit)
+        {
+          s_current = S_T.at(entry.name);
+          y_current = Y_T.at(entry.name);
+          need_reinit =
+              warmstartNeedsReinit(y_current, s_current, g_val, options);
+        }
+
+        if (need_reinit)
+        {
+          s_current = g_val.unaryExpr([&](double g) {
+            return std::max(options.ipddp.slack_var_init_scale,
+                            -g + kSlackInteriorOffset);
+          });
+          for (int i = 0; i < entry.dim; ++i)
+          {
+            y_current(i) =
+                (mu * options.ipddp.dual_var_init_scale) /
+                std::max(s_current(i), EPS_SLACK);
+          }
+        }
+
+        repairWarmstartInterior(s_current, y_current, options);
+        S_T[entry.name] = s_current;
+        Y_T[entry.name] = y_current;
+        dS_T[entry.name] = Eigen::VectorXd::Zero(entry.dim);
+        dY_T[entry.name] = Eigen::VectorXd::Zero(entry.dim);
+      }
+    }
+
     void rolloutLinearPolicy(const std::vector<Eigen::MatrixXd> &A,
                              const std::vector<Eigen::MatrixXd> &B,
                              const std::vector<Eigen::VectorXd> &d,
@@ -587,9 +679,19 @@ namespace cddp
         Lambda_T_eq_ = Eigen::VectorXd::Zero(getTerminalEqualityDim(context));
         dLambda_T_eq_ = Eigen::VectorXd::Zero(getTerminalEqualityDim(context));
 
+        const auto warmstart_dual = Y_;
+        const auto warmstart_slack = S_;
+        const auto warmstart_terminal_dual = Y_T_;
+        const auto warmstart_terminal_slack = S_T_;
         initializeConstraintStorage(context);
+        Y_ = warmstart_dual;
+        S_ = warmstart_slack;
+        Y_T_ = warmstart_terminal_dual;
+        S_T_ = warmstart_terminal_slack;
         evaluateTrajectoryWarmStart(context);
         initializeDualSlackVariablesWarmStart(context);
+        initializeTerminalWarmstartDualSlack(context, mu_, G_T_, Y_T_, S_T_,
+                                            dY_T_, dS_T_);
         G_ = G_raw_;
         resetFilter(context);
         return;
@@ -614,7 +716,15 @@ namespace cddp
         Lambda_T_eq_ = Eigen::VectorXd::Zero(getTerminalEqualityDim(context));
         dLambda_T_eq_ = Eigen::VectorXd::Zero(getTerminalEqualityDim(context));
 
+        const auto warmstart_dual = Y_;
+        const auto warmstart_slack = S_;
+        const auto warmstart_terminal_dual = Y_T_;
+        const auto warmstart_terminal_slack = S_T_;
         initializeConstraintStorage(context);
+        Y_ = warmstart_dual;
+        S_ = warmstart_slack;
+        Y_T_ = warmstart_terminal_dual;
+        S_T_ = warmstart_terminal_slack;
 
         // Re-rollout trajectory with provided controls
         if (static_cast<int>(context.U_.size()) != horizon)
@@ -660,6 +770,8 @@ namespace cddp
         context.alpha_pr_ = 1.0;
         context.alpha_du_ = 1.0;
         initializeDualSlackVariablesWarmStart(context);
+        initializeTerminalWarmstartDualSlack(context, mu_, G_T_, Y_T_, S_T_,
+                                            dY_T_, dS_T_);
         G_ = G_raw_;
         resetFilter(context);
         context.inf_du_ = 0.0;
@@ -1473,13 +1585,15 @@ namespace cddp
       double expected_improvement = alpha_pr * dV_(0);
       double constraint_violation_old =
           filter_.empty() ? 0.0 : filter_.back().constraint_violation;
+      const double high_violation_reference =
+          filter_.empty() ? filter_theta_ : constraint_violation_old;
       double merit_function_old = context.merit_function_;
 
       if (theta_new > options.filter.max_violation_threshold)
       {
         if (theta_new <
             (1 - options.filter.violation_acceptance_threshold) *
-                constraint_violation_old)
+                high_violation_reference)
         {
           filter_acceptance = true;
         }
@@ -1619,6 +1733,7 @@ namespace cddp
     context.inf_pr_ = result.inf_pr;
     context.inf_comp_ = result.inf_comp;
     phi_ = result.merit_function;
+    filter_theta_ = result.theta;
     theta_ = result.theta;
 
     // Update barrier parameter before convergence check (matching old solve loop timing)
@@ -2019,7 +2134,85 @@ namespace cddp
 
   void IPDDPSolver::initializeDualSlackVariablesWarmStart(CDDP &context)
   {
-    initializeDualSlackVariables(context);
+    const CDDPOptions &options = context.getOptions();
+    const int horizon = context.getHorizon();
+    const auto &constraint_set = context.getConstraintSet();
+
+    bool has_existing_dual_slack = true;
+    for (const auto &constraint_pair : constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      auto y_it = Y_.find(constraint_name);
+      auto s_it = S_.find(constraint_name);
+      if (y_it == Y_.end() || s_it == S_.end() ||
+          y_it->second.size() != static_cast<size_t>(horizon) ||
+          s_it->second.size() != static_cast<size_t>(horizon))
+      {
+        has_existing_dual_slack = false;
+        break;
+      }
+    }
+
+    for (const auto &constraint_pair : constraint_set)
+    {
+      const std::string &constraint_name = constraint_pair.first;
+      const int dual_dim = constraint_pair.second->getDualDim();
+
+      if (!has_existing_dual_slack)
+      {
+        Y_[constraint_name].resize(horizon);
+        S_[constraint_name].resize(horizon);
+      }
+
+      dY_[constraint_name].resize(horizon);
+      dS_[constraint_name].resize(horizon);
+      k_y_[constraint_name].resize(horizon);
+      K_y_[constraint_name].resize(horizon);
+      k_s_[constraint_name].resize(horizon);
+      K_s_[constraint_name].resize(horizon);
+
+      for (int t = 0; t < horizon; ++t)
+      {
+        const Eigen::VectorXd &g_val = G_raw_[constraint_name][t];
+        Eigen::VectorXd s_current = Eigen::VectorXd::Zero(dual_dim);
+        Eigen::VectorXd y_current = Eigen::VectorXd::Zero(dual_dim);
+        bool need_reinit = !has_existing_dual_slack;
+
+        if (!need_reinit)
+        {
+          s_current = S_[constraint_name][t];
+          y_current = Y_[constraint_name][t];
+          need_reinit =
+              warmstartNeedsReinit(y_current, s_current, g_val, options);
+        }
+
+        if (need_reinit)
+        {
+          s_current = g_val.unaryExpr([&](double g) {
+            return std::max(options.ipddp.slack_var_init_scale,
+                            -g + kSlackInteriorOffset);
+          });
+          for (int i = 0; i < dual_dim; ++i)
+          {
+            y_current(i) =
+                (mu_ * options.ipddp.dual_var_init_scale) /
+                std::max(s_current(i), EPS_SLACK);
+          }
+        }
+
+        repairWarmstartInterior(s_current, y_current, options);
+        Y_[constraint_name][t] = y_current;
+        S_[constraint_name][t] = s_current;
+        dY_[constraint_name][t] = Eigen::VectorXd::Zero(dual_dim);
+        dS_[constraint_name][t] = Eigen::VectorXd::Zero(dual_dim);
+        k_y_[constraint_name][t] = Eigen::VectorXd::Zero(dual_dim);
+        K_y_[constraint_name][t] =
+            Eigen::MatrixXd::Zero(dual_dim, context.getStateDim());
+        k_s_[constraint_name][t] = Eigen::VectorXd::Zero(dual_dim);
+        K_s_[constraint_name][t] =
+            Eigen::MatrixXd::Zero(dual_dim, context.getStateDim());
+      }
+    }
   }
 
   void IPDDPSolver::initializeDualSlackVariables(CDDP &context)
@@ -2098,16 +2291,18 @@ namespace cddp
     context.inf_pr_ = inf_pr;
     context.inf_comp_ = inf_comp;
     phi_ = context.merit_function_;
-    theta_ =
+    filter_theta_ =
         std::max(computeTheta(context.getOptions(), G_, S_,
                               has_terminal_ineq ? &G_T_ : nullptr,
                               has_terminal_ineq ? &S_T_ : nullptr,
                               has_terminal_eq ? &h_T : nullptr),
-                 std::max(context.getOptions().ipddp.theta_0_floor, 1e-8));
+                 1e-8);
+    theta_ = std::max(filter_theta_,
+                      std::max(context.getOptions().ipddp.theta_0_floor, 1e-8));
     filter_.clear();
     if (has_terminal_ineq || has_terminal_eq)
     {
-      acceptFilterEntry(phi_, theta_);
+      acceptFilterEntry(phi_, filter_theta_);
     }
   }
 
@@ -2208,6 +2403,19 @@ namespace cddp
       }
     }
 
+    const bool has_terminal_ineq = !getTerminalInequalityLayout(context).empty();
+    const bool has_terminal_eq = getTerminalEqualityDim(context) > 0;
+    Eigen::VectorXd h_T =
+        has_terminal_eq
+            ? evaluateTerminalEqualityResidual(context, context.X_.back())
+            : Eigen::VectorXd::Zero(0);
+    const double filter_theta =
+        std::max(computeTheta(options, G_, S_,
+                              has_terminal_ineq ? &G_T_ : nullptr,
+                              has_terminal_ineq ? &S_T_ : nullptr,
+                              has_terminal_eq ? &h_T : nullptr),
+                 1e-8);
+
     const bool reset_filter = (mu_ < mu_old) && (mu_ > 0.0);
     if (reset_filter)
     {
@@ -2215,24 +2423,17 @@ namespace cddp
       if (getTerminalEqualityDim(context) > 0 ||
           !getTerminalInequalityLayout(context).empty())
       {
-        acceptFilterEntry(phi_, theta_);
+        acceptFilterEntry(phi_, filter_theta);
       }
     }
     else
     {
-      acceptFilterEntry(phi_, theta_);
+      acceptFilterEntry(phi_, filter_theta);
       if (static_cast<int>(filter_.size()) > options.ipddp.max_filter_size)
       {
         detail::pruneFilterToBestPoints(filter_);
       }
     }
-
-    const bool has_terminal_ineq = !getTerminalInequalityLayout(context).empty();
-    const bool has_terminal_eq = getTerminalEqualityDim(context) > 0;
-    Eigen::VectorXd h_T =
-        has_terminal_eq
-            ? evaluateTerminalEqualityResidual(context, context.X_.back())
-            : Eigen::VectorXd::Zero(0);
     const auto [inf_pr, inf_comp] = computePrimalAndComplementarity(
         context, G_, S_, Y_, mu_, has_terminal_ineq ? &G_T_ : nullptr,
         has_terminal_ineq ? &S_T_ : nullptr, has_terminal_ineq ? &Y_T_ : nullptr,
@@ -2244,10 +2445,8 @@ namespace cddp
         has_terminal_eq ? &Lambda_T_eq_ : nullptr,
         has_terminal_eq ? &h_T : nullptr);
     phi_ = context.merit_function_;
-    theta_ = std::max(computeTheta(options, G_, S_,
-                                   has_terminal_ineq ? &G_T_ : nullptr,
-                                   has_terminal_ineq ? &S_T_ : nullptr,
-                                   has_terminal_eq ? &h_T : nullptr),
+    filter_theta_ = filter_theta;
+    theta_ = std::max(filter_theta,
                       std::max(options.ipddp.theta_0_floor, 1e-8));
   }
 
