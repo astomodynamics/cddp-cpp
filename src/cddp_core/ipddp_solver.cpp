@@ -2726,7 +2726,55 @@ namespace cddp
 
   double IPDDPSolver::computeScaledDualInfeasibility(const CDDP &context) const
   {
-    return context.inf_du_;
+    double scaled_dual_infeasibility = context.inf_du_;
+
+    if (!context.getOptions().ipddp.check_state_stationarity)
+    {
+      return scaled_dual_infeasibility;
+    }
+
+    double state_stationarity = 0.0;
+    for (const auto &constraint_pair : G_x_)
+    {
+      const auto y_it = Y_.find(constraint_pair.first);
+      if (y_it == Y_.end())
+      {
+        continue;
+      }
+
+      const auto &G_x_stages = constraint_pair.second;
+      const auto &Y_stages = y_it->second;
+      const std::size_t stage_count =
+          std::min(G_x_stages.size(), Y_stages.size());
+
+      for (std::size_t stage = 0; stage < stage_count; ++stage)
+      {
+        const auto &G_x_stage = G_x_stages[stage];
+        const auto &Y_stage = Y_stages[stage];
+        if (G_x_stage.rows() == 0 || G_x_stage.cols() == 0 ||
+            Y_stage.size() == 0)
+        {
+          continue;
+        }
+        if (G_x_stage.rows() != Y_stage.size())
+        {
+          continue;
+        }
+
+        const Eigen::VectorXd stage_stationarity =
+            G_x_stage.transpose() * Y_stage;
+        if (stage_stationarity.size() == 0)
+        {
+          continue;
+        }
+
+        state_stationarity = std::max(
+            state_stationarity,
+            stage_stationarity.lpNorm<Eigen::Infinity>());
+      }
+    }
+
+    return std::max(scaled_dual_infeasibility, state_stationarity);
   }
 
   double IPDDPSolver::computeTheta(

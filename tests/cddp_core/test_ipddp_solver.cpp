@@ -35,6 +35,12 @@ public:
         return solver.backwardPass(context);
     }
 
+    static double scaledDualInfeasibility(const IPDDPSolver &solver,
+                                          const CDDP &context)
+    {
+        return solver.computeScaledDualInfeasibility(context);
+    }
+
     static const std::vector<FilterPoint> &filter(const IPDDPSolver &solver)
     {
         return solver.filter_;
@@ -1188,8 +1194,9 @@ TEST(IPDDPTest, SolveWithTerminalInequalityOnly)
     EXPECT_TRUE(solution.status_message == "OptimalSolutionFound" ||
                 solution.status_message == "AcceptableSolutionFound");
     ASSERT_FALSE(solution.state_trajectory.empty());
-    EXPECT_LE(solution.state_trajectory.back()(0), 1e-4);
-    EXPECT_LT(solution.state_trajectory.back()(0), goal_state(0));
+    const double terminal_state = solution.state_trajectory.back()(0);
+    EXPECT_LE(terminal_state, 1e-4);
+    EXPECT_NEAR(terminal_state, 0.0, 1e-3);
 }
 
 TEST(IPDDPTest, TracksInitialViolationForPathOnlyProblems)
@@ -1204,6 +1211,69 @@ TEST(IPDDPTest, TracksInitialViolationForPathOnlyProblems)
     const auto &filter = cddp::IPDDPSolverTestAccess::filter(solver);
     EXPECT_TRUE(filter.empty());
     EXPECT_GT(cddp::IPDDPSolverTestAccess::filterTheta(solver), 0.0);
+}
+
+TEST(IPDDPTest, ScaledDualInfeasibilityIncludesStateStationarityWhenEnabled)
+{
+    const int state_dim = 1;
+    const int control_dim = 1;
+    const int horizon = 1;
+    const double timestep = 1.0;
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Identity(state_dim, control_dim);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 1.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0;
+
+    auto make_problem = [&](bool check_state_stationarity) {
+        cddp::CDDPOptions options = makeIpddpRegressionOptions();
+        options.ipddp.check_state_stationarity = check_state_stationarity;
+
+        cddp::CDDP problem(initial_state, goal_state, horizon, timestep);
+        problem.setDynamicalSystem(
+            std::make_unique<cddp::LTISystem>(A, B, timestep));
+
+        Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+        Eigen::MatrixXd R = Eigen::MatrixXd::Zero(control_dim, control_dim);
+        Eigen::MatrixXd Qf = Eigen::MatrixXd::Zero(state_dim, state_dim);
+        problem.setObjective(std::make_unique<cddp::QuadraticObjective>(
+            Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+        problem.setOptions(options);
+
+        Eigen::MatrixXd path_A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+        Eigen::VectorXd path_b(state_dim);
+        path_b << 0.25;
+        problem.addPathConstraint(
+            "PathUpperBound",
+            std::make_unique<cddp::LinearConstraint>(path_A, path_b));
+
+        std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+        std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+        X[0] = initial_state;
+        X[1] = A * X[0] + B * U[0];
+        problem.setInitialTrajectory(X, U);
+        return problem;
+    };
+
+    cddp::CDDP problem_without = make_problem(false);
+    cddp::IPDDPSolver solver_without;
+    solver_without.initialize(problem_without);
+    ASSERT_TRUE(cddp::IPDDPSolverTestAccess::backwardPass(solver_without, problem_without));
+    const double dual_without =
+        cddp::IPDDPSolverTestAccess::scaledDualInfeasibility(solver_without, problem_without);
+
+    cddp::CDDP problem_with = make_problem(true);
+    cddp::IPDDPSolver solver_with;
+    solver_with.initialize(problem_with);
+    ASSERT_TRUE(cddp::IPDDPSolverTestAccess::backwardPass(solver_with, problem_with));
+    const double dual_with =
+        cddp::IPDDPSolverTestAccess::scaledDualInfeasibility(solver_with, problem_with);
+
+    EXPECT_NEAR(dual_without, problem_without.getCurrentDualInfeasibility(), 1e-12);
+    EXPECT_GT(dual_with, dual_without);
 }
 
 TEST(IPDDPTest, WarmStartPreservesPathDualSlackState)
