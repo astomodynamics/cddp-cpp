@@ -243,166 +243,6 @@ def _load_track_csv(
     )
 
 
-class MpccBicycle(pycddp.DynamicalSystem):
-    def __init__(self, timestep: float, wheelbase: float = 0.33) -> None:
-        super().__init__(4, 3, timestep, "euler")
-        self.wheelbase = float(wheelbase)
-
-    def get_continuous_dynamics(
-        self,
-        state: np.ndarray,
-        control: np.ndarray,
-        time: float = 0.0,
-    ) -> np.ndarray:
-        speed, steering_angle, progress_rate = np.asarray(control, dtype=float)
-        heading = float(state[2])
-        beta = float(np.arctan(0.5 * np.tan(steering_angle)))
-        return np.array(
-            [
-                speed * np.cos(heading + beta),
-                speed * np.sin(heading + beta),
-                2.0 * speed * np.sin(beta) / self.wheelbase,
-                progress_rate,
-            ],
-            dtype=float,
-        )
-
-    def get_state_jacobian(
-        self,
-        state: np.ndarray,
-        control: np.ndarray,
-        time: float = 0.0,
-    ) -> np.ndarray:
-        speed = float(control[0])
-        heading = float(state[2])
-        steering_angle = float(control[1])
-        beta = float(np.arctan(0.5 * np.tan(steering_angle)))
-        return np.array(
-            [
-                [0.0, 0.0, -speed * np.sin(heading + beta), 0.0],
-                [0.0, 0.0, speed * np.cos(heading + beta), 0.0],
-                [0.0, 0.0, 0.0, 0.0],
-                [0.0, 0.0, 0.0, 0.0],
-            ],
-            dtype=float,
-        )
-
-    def get_control_jacobian(
-        self,
-        state: np.ndarray,
-        control: np.ndarray,
-        time: float = 0.0,
-    ) -> np.ndarray:
-        heading = float(state[2])
-        speed = float(control[0])
-        steering_angle = float(control[1])
-        tan_delta = np.tan(steering_angle)
-        sec_sq = 1.0 / (np.cos(steering_angle) ** 2)
-        beta = float(np.arctan(0.5 * tan_delta))
-        beta_prime = 0.5 * sec_sq / (1.0 + 0.25 * tan_delta * tan_delta)
-        return np.array(
-            [
-                [np.cos(heading + beta), -speed * np.sin(heading + beta) * beta_prime, 0.0],
-                [np.sin(heading + beta), speed * np.cos(heading + beta) * beta_prime, 0.0],
-                [
-                    2.0 * np.sin(beta) / self.wheelbase,
-                    2.0 * speed * np.cos(beta) * beta_prime / self.wheelbase,
-                    0.0,
-                ],
-                [0.0, 0.0, 1.0],
-            ],
-            dtype=float,
-        )
-
-    def get_state_hessian(
-        self,
-        state: np.ndarray,
-        control: np.ndarray,
-        time: float = 0.0,
-    ) -> list[np.ndarray]:
-        return [np.zeros((4, 4), dtype=float) for _ in range(4)]
-
-    def get_control_hessian(
-        self,
-        state: np.ndarray,
-        control: np.ndarray,
-        time: float = 0.0,
-    ) -> list[np.ndarray]:
-        return [np.zeros((3, 3), dtype=float) for _ in range(4)]
-
-    def get_cross_hessian(
-        self,
-        state: np.ndarray,
-        control: np.ndarray,
-        time: float = 0.0,
-    ) -> list[np.ndarray]:
-        return [np.zeros((3, 4), dtype=float) for _ in range(4)]
-
-
-class ContouringObjective(pycddp.NonlinearObjective):
-    def __init__(self, timestep: float, track: TrackData) -> None:
-        super().__init__(timestep)
-        self.dt = float(timestep)
-        self.track = track
-        self.w_contour = 220.0
-        self.w_lag = 28.0
-        self.w_heading = 8.0
-        self.w_progress = 4.5
-        self.w_sync = 10.0
-        self.w_steer = 0.25
-        self.w_boundary = 320.0
-        self.w_terminal = 6.0
-
-    def tracking_terms(
-        self,
-        state: np.ndarray,
-    ) -> tuple[float, float, float, TrackReference]:
-        ref = self.track.interpolate(float(state[3]))
-        delta_position = np.asarray(state[:2], dtype=float) - np.array([ref.x, ref.y])
-        contour_error = float(ref.normal @ delta_position)
-        lag_error = float(ref.tangent @ delta_position)
-        heading_error = _wrap_angle(float(state[2]) - ref.heading)
-        return contour_error, lag_error, heading_error, ref
-
-    def running_cost(
-        self,
-        state: np.ndarray,
-        control: np.ndarray,
-        index: int,
-    ) -> float:
-        contour_error, lag_error, heading_error, ref = self.tracking_terms(state)
-        speed, steering_angle, progress_rate = np.asarray(control, dtype=float)
-        boundary_error = max(0.0, abs(contour_error) - 0.72 * self.track.width)
-        progress_error = progress_rate - ref.v_ref
-        sync_error = speed - progress_rate
-        return float(
-            self.dt
-            * (
-                self.w_contour * contour_error**2
-                + self.w_lag * lag_error**2
-                + self.w_heading * heading_error**2
-                + self.w_progress * progress_error**2
-                + self.w_sync * sync_error**2
-                + self.w_steer * steering_angle**2
-                + self.w_boundary * boundary_error**2
-                - 1.6 * progress_rate
-            )
-        )
-
-    def terminal_cost(self, final_state: np.ndarray) -> float:
-        contour_error, lag_error, heading_error, _ = self.tracking_terms(final_state)
-        boundary_error = max(0.0, abs(contour_error) - 0.75 * self.track.width)
-        return float(
-            self.w_terminal
-            * (
-                220.0 * contour_error**2
-                + 42.0 * lag_error**2
-                + 18.0 * heading_error**2
-                + 180.0 * boundary_error**2
-            )
-        )
-
-
 def _default_options(max_iterations: int = 120) -> pycddp.CDDPOptions:
     opts = pycddp.CDDPOptions()
     opts.max_iterations = max_iterations
@@ -633,169 +473,61 @@ def solve_unicycle_demo() -> DemoResult:
     )
 
 
-def _reference_seed_controls(track: TrackData, start_progress: float, horizon: int, dt: float, wheelbase: float) -> list[np.ndarray]:
-    controls: list[np.ndarray] = []
-    progress = float(start_progress)
-    for _ in range(horizon):
-        ref = track.interpolate(progress)
-        steering = float(np.clip(np.arctan(wheelbase * ref.curvature), -0.42, 0.42))
-        speed = float(np.clip(ref.v_ref, 1.0, 2.2))
-        progress_rate = float(np.clip(speed + 0.12, 1.0, 2.4))
-        controls.append(np.array([speed, steering, progress_rate], dtype=float))
-        progress = progress + dt * progress_rate
-    return controls
+def solve_mpcc_demo(
+    simulation_steps: int | None = None,
+    horizon: int = 20,
+) -> DemoResult:
+    """Closed-loop IPDDP MPCC on the bundled RC racing track.
 
+    This is a thin wrapper around the IPDDP runner in ``ipddp_mpcc_rc.py``.
+    The kinematic bicycle + 11-residual AIRCoM-style cost lives in that
+    module; this function just drives it to produce a ``DemoResult`` that
+    the existing portfolio animator (``_animate_mpcc``) consumes.
 
-def _rollout_mpcc_seed(
-    model: MpccBicycle,
-    track: TrackData,
-    initial_state: np.ndarray,
-    controls: list[np.ndarray],
-) -> tuple[list[np.ndarray], list[np.ndarray]]:
-    state = np.asarray(initial_state, dtype=float).copy()
-    states = [state.copy()]
-    rolled_controls: list[np.ndarray] = []
-    for control in controls:
-        control_array = np.asarray(control, dtype=float).copy()
-        rolled_controls.append(control_array)
-        state = np.asarray(model.get_discrete_dynamics(state, control_array), dtype=float)
-        states.append(state.copy())
-    return states, rolled_controls
-
-
-def solve_mpcc_demo(simulation_steps: int | None = None, horizon: int = 16) -> DemoResult:
-    dt = 0.10
-    wheelbase = 0.20
-    track = _load_track_csv(_portfolio_track_path())
-    if simulation_steps is None:
-        nominal_progress = max(float(np.mean(track.v_ref)) + 0.15, 1.55)
-        simulation_steps = int(np.ceil(1.08 * track.length / (dt * nominal_progress)))
-    model = MpccBicycle(dt, wheelbase=wheelbase)
-    objective = ContouringObjective(dt, track)
-
-    opts = _default_options(max_iterations=12)
-    opts.use_ilqr = True
-    opts.enable_parallel = False
-    opts.return_iteration_info = False
-    opts.tolerance = 2e-3
-    opts.acceptable_tolerance = 6e-3
-    opts.regularization.initial_value = 1e-5
-    opts.line_search.max_iterations = 9
-
-    start_ref = track.interpolate(0.0)
-    initial_state = np.array(
-        [
-            start_ref.x + 0.28 * track.width * start_ref.normal[0],
-            start_ref.y + 0.28 * track.width * start_ref.normal[1],
-            start_ref.heading - 0.08,
-            0.0,
-        ],
-        dtype=float,
-    )
-
-    solver = pycddp.CDDP(
-        initial_state,
-        track.reference_state(0.0),
-        horizon,
-        dt,
-        opts,
-    )
-    solver.set_dynamical_system(model)
-    solver.set_objective(objective)
-    solver.add_constraint(
-        "control_limits",
-        pycddp.ControlConstraint(
-            np.array([0.8, -0.55, 0.8], dtype=float),
-            np.array([2.4, 0.55, 2.6], dtype=float),
-        ),
-    )
-
-    seed_controls = _reference_seed_controls(track, initial_state[3], horizon, dt, wheelbase)
-    seed_states, seed_controls = _rollout_mpcc_seed(model, track, initial_state, seed_controls)
-
-    state = initial_state.copy()
-    executed_states = [state.copy()]
-    contour_errors: list[float] = []
-    lag_errors: list[float] = []
-    heading_errors: list[float] = []
-    solve_times_ms: list[float] = []
-    executed_controls: list[np.ndarray] = []
-    predicted_paths: list[np.ndarray] = []
-    reference_windows: list[np.ndarray] = []
-    last_solution: pycddp.CDDPSolution | None = None
-
-    for _ in range(simulation_steps):
-        contour_error, lag_error, heading_error, _ = objective.tracking_terms(state)
-        contour_errors.append(contour_error)
-        lag_errors.append(lag_error)
-        heading_errors.append(heading_error)
-
-        solver.set_initial_state(state)
-        solver.set_reference_state(track.reference_state(state[3]))
-        solver.set_initial_trajectory(seed_states, seed_controls)
-        solution = solver.solve(pycddp.SolverType.CLDDP)
-        _ensure_solution_has_trajectory(solution, "MPCC portfolio solve")
-        last_solution = solution
-
-        predicted_states, predicted_controls, _ = _solution_arrays(solution)
-        if predicted_controls.size == 0:
-            raise RuntimeError("MPCC demo produced an empty control trajectory.")
-
-        predicted_paths.append(predicted_states[:, :2].copy())
-        reference_windows.append(
-            np.vstack([track.reference_state(progress)[0:2] for progress in predicted_states[:, 3]])
+    Parameters
+    ----------
+    simulation_steps:
+        Number of closed-loop MPC ticks. If ``None``, runs until the
+        executed ``theta`` crosses ``track.length`` (one full lap).
+    horizon:
+        MPC prediction horizon in stages.
+    """
+    # Lazy import to avoid a circular module load: ``ipddp_mpcc_rc`` imports
+    # ``TrackData`` / ``_load_track_csv`` / ``_wrap_angle`` from this module,
+    # so it must not be a top-level import here.
+    if __package__:
+        from .ipddp_mpcc_rc import (
+            IpddpRcMpccConfig,
+            history_to_demo_result,
+            run_ipddp_mpc,
         )
-        solve_times_ms.append(float(solution.solve_time_ms))
+    else:
+        from ipddp_mpcc_rc import (
+            IpddpRcMpccConfig,
+            history_to_demo_result,
+            run_ipddp_mpc,
+        )
 
-        control = predicted_controls[0].copy()
-        executed_controls.append(control)
-        state = np.asarray(model.get_discrete_dynamics(state, control), dtype=float)
-        state[2] = _wrap_angle(state[2])
-        executed_states.append(state.copy())
+    track = _load_track_csv(_portfolio_track_path())
+    cfg = IpddpRcMpccConfig(horizon=int(horizon), max_iterations=100)
 
-        shifted_controls = [u.copy() for u in predicted_controls[1:]]
-        if shifted_controls:
-            shifted_controls.append(shifted_controls[-1].copy())
-        else:
-            shifted_controls = _reference_seed_controls(track, state[3], horizon, dt, wheelbase)
-        if len(shifted_controls) < horizon:
-            fallback = _reference_seed_controls(track, state[3], horizon - len(shifted_controls), dt, wheelbase)
-            shifted_controls.extend(fallback)
-        seed_states, seed_controls = _rollout_mpcc_seed(model, track, state, shifted_controls[:horizon])
+    if simulation_steps is None:
+        stop_at = float(track.length)
+        max_steps = 500
+    else:
+        if int(simulation_steps) < 1:
+            raise ValueError("simulation_steps must be >= 1")
+        stop_at = None
+        max_steps = int(simulation_steps)
 
-    final_contour, final_lag, final_heading, final_ref = objective.tracking_terms(executed_states[-1])
-    contour_errors.append(final_contour)
-    lag_errors.append(final_lag)
-    heading_errors.append(final_heading)
-
-    if last_solution is None:
-        raise RuntimeError("MPCC demo did not produce any MPC solves.")
-
-    closed_loop_states = np.vstack(executed_states)
-    closed_loop_controls = np.vstack(executed_controls)
-    time_points = np.arange(len(executed_states), dtype=float) * dt
-
-    return _make_result(
-        slug="mpcc_racing_line",
-        title="MPCC Racing Line",
-        target_state=np.array([final_ref.x, final_ref.y, final_ref.heading, final_ref.s], dtype=float),
-        solution=last_solution,
-        states=closed_loop_states,
-        controls=closed_loop_controls,
-        time_points=time_points,
-        solver_name=f"{last_solution.solver_name} MPC",
-        timestep=dt,
-        track=track,
-        track_width=track.width,
-        contour_errors=np.asarray(contour_errors, dtype=float),
-        lag_errors=np.asarray(lag_errors, dtype=float),
-        heading_errors=np.asarray(heading_errors, dtype=float),
-        solve_times_ms=np.asarray(solve_times_ms, dtype=float),
-        predicted_paths=predicted_paths,
-        reference_windows=reference_windows,
-        final_error_override=float(np.hypot(final_contour, final_lag)),
-        subtitle="Full-lap receding-horizon contouring control on a closed circuit",
+    history = run_ipddp_mpc(
+        cfg,
+        track,
+        simulation_steps=max_steps,
+        stop_at_progress=stop_at,
+        show_progress=False,
     )
+    return history_to_demo_result(history, track, cfg)
 
 
 DEMO_BUILDERS: dict[str, Callable[[], DemoResult]] = {
@@ -1267,12 +999,19 @@ def _animate_mpcc(
     closed_centerline = np.vstack([np.column_stack((track.x, track.y)), [track.x[0], track.y[0]]])
     closed_inner = np.vstack([track.inner_boundary, track.inner_boundary[0]])
     closed_outer = np.vstack([track.outer_boundary, track.outer_boundary[0]])
-    ax_map.plot(closed_outer[:, 0], closed_outer[:, 1], color=_GRID, linewidth=1.3)
-    ax_map.plot(closed_inner[:, 0], closed_inner[:, 1], color=_GRID, linewidth=1.3)
-    ax_map.plot(closed_centerline[:, 0], closed_centerline[:, 1], color=_MUTED, linewidth=1.1, linestyle="--")
+    ax_map.plot(closed_outer[:, 0], closed_outer[:, 1], color=_GRID, linewidth=1.3, zorder=1)
+    ax_map.plot(closed_inner[:, 0], closed_inner[:, 1], color=_GRID, linewidth=1.3, zorder=1)
+    ax_map.plot(
+        closed_centerline[:, 0], closed_centerline[:, 1],
+        color=_MUTED, linewidth=1.1, linestyle="--", zorder=1,
+    )
 
     start_ref = track.interpolate(0.0)
-    ax_map.scatter([start_ref.x], [start_ref.y], color=_SUCCESS, s=54, zorder=5)
+    ax_map.scatter(
+        [start_ref.x], [start_ref.y],
+        color=_SUCCESS, s=64, zorder=5,
+        edgecolors="white", linewidths=1.2,
+    )
     ax_map.annotate(
         "start",
         (start_ref.x, start_ref.y),
@@ -1280,21 +1019,46 @@ def _animate_mpcc(
         textcoords="offset points",
         color=_SUCCESS,
         fontsize=9,
+        fontweight="bold",
     )
 
-    reference_preview, = ax_map.plot([], [], color=_SECONDARY, linewidth=2.0, alpha=0.9)
-    prediction_preview, = ax_map.plot([], [], color=_TERTIARY, linewidth=2.0, alpha=0.9)
-    driven_path, = ax_map.plot([], [], color=_ACCENT, linewidth=2.8)
-    vehicle_marker, = ax_map.plot([], [], marker="o", color=_ACCENT, markersize=8)
+    reference_preview, = ax_map.plot(
+        [], [], color=_SECONDARY, linewidth=2.4, alpha=0.95,
+        zorder=3, label="reference",
+    )
+    prediction_preview, = ax_map.plot(
+        [], [], color=_TERTIARY, linewidth=2.4, alpha=0.95,
+        zorder=3, label="prediction",
+    )
+    driven_path, = ax_map.plot(
+        [], [], color=_ACCENT, linewidth=3.0,
+        solid_capstyle="round", zorder=4, label="driven",
+    )
+    vehicle_marker, = ax_map.plot(
+        [], [], marker="o", color=_ACCENT, markersize=10,
+        markeredgecolor="white", markeredgewidth=1.4, zorder=6,
+    )
     heading_arrow = FancyArrowPatch(
         (0.0, 0.0),
         (0.0, 0.0),
         arrowstyle="-|>",
-        mutation_scale=14,
+        mutation_scale=16,
         color=_ACCENT,
-        linewidth=2.2,
+        linewidth=2.4,
+        zorder=6,
     )
     ax_map.add_patch(heading_arrow)
+
+    map_legend = ax_map.legend(
+        loc="upper right",
+        frameon=True,
+        facecolor="#fff7ea",
+        edgecolor=_GRID,
+        fontsize=8,
+        framealpha=0.92,
+    )
+    for text in map_legend.get_texts():
+        text.set_color(_TEXT)
 
     metric_times = time_points
     metric_end = metric_times[-1] if len(metric_times) > 1 else 1.0
@@ -1319,8 +1083,11 @@ def _animate_mpcc(
         text.set_color(_TEXT)
 
     control_times = time_points[:-1]
+    control_start = float(time_points[0]) if len(time_points) > 0 else 0.0
     control_end = control_times[-1] if len(control_times) > 0 else 1.0
-    ax_control.set_xlim(time_points[0], control_end)
+    if np.isclose(control_start, control_end):
+        control_end = control_start + 1.0
+    ax_control.set_xlim(control_start, control_end)
     combined_controls = np.concatenate([controls[:, 0], controls[:, 1], solve_times_ms / 40.0])
     control_min, control_max = _metric_bounds(combined_controls, minimum=0.8)
     ax_control.set_ylim(control_min, control_max)
@@ -1352,14 +1119,21 @@ def _animate_mpcc(
 
     status_text = ax_map.text(
         0.03,
-        0.96,
+        0.985,
         "",
         transform=ax_map.transAxes,
         ha="left",
         va="top",
         fontsize=10,
         color=_TEXT,
-        bbox={"boxstyle": "round,pad=0.35", "facecolor": "#fff7ea", "edgecolor": _GRID},
+        zorder=6,
+        bbox={
+            "boxstyle": "round,pad=0.45",
+            "facecolor": "#fff7ea",
+            "edgecolor": _GRID,
+            "linewidth": 1.0,
+            "alpha": 0.92,
+        },
     )
 
     def update(frame_index: int) -> tuple[Any, ...]:
