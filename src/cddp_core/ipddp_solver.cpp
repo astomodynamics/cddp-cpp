@@ -57,6 +57,16 @@ namespace cddp
       for (const auto &constraint_pair : context.getTerminalConstraintSet())
       {
         if (dynamic_cast<const TerminalEqualityConstraint *>(
+                constraint_pair.second.get()) == nullptr &&
+            dynamic_cast<const TerminalInequalityConstraint *>(
+                constraint_pair.second.get()) == nullptr)
+        {
+          throw std::runtime_error(
+              "IPDDP: terminal constraint '" + constraint_pair.first +
+              "' has unsupported type. Supported terminal constraints are "
+              "TerminalEqualityConstraint and TerminalInequalityConstraint.");
+        }
+        if (dynamic_cast<const TerminalEqualityConstraint *>(
                 constraint_pair.second.get()) == nullptr)
         {
           continue;
@@ -74,6 +84,16 @@ namespace cddp
       std::vector<TerminalInequalityLayoutEntry> layout;
       for (const auto &constraint_pair : context.getTerminalConstraintSet())
       {
+        if (dynamic_cast<const TerminalEqualityConstraint *>(
+                constraint_pair.second.get()) == nullptr &&
+            dynamic_cast<const TerminalInequalityConstraint *>(
+                constraint_pair.second.get()) == nullptr)
+        {
+          throw std::runtime_error(
+              "IPDDP: terminal constraint '" + constraint_pair.first +
+              "' has unsupported type. Supported terminal constraints are "
+              "TerminalEqualityConstraint and TerminalInequalityConstraint.");
+        }
         if (dynamic_cast<const TerminalInequalityConstraint *>(
                 constraint_pair.second.get()) == nullptr)
         {
@@ -332,6 +352,18 @@ namespace cddp
         dS_T[entry.name] = Eigen::VectorXd::Zero(entry.dim);
         dY_T[entry.name] = Eigen::VectorXd::Zero(entry.dim);
       }
+    }
+
+    Eigen::VectorXd initializeTerminalEqualityWarmstartMultipliers(
+        const Eigen::VectorXd &lambda_current,
+        int terminal_equality_dim)
+    {
+      if (lambda_current.size() == terminal_equality_dim &&
+          lambda_current.allFinite())
+      {
+        return lambda_current;
+      }
+      return Eigen::VectorXd::Zero(terminal_equality_dim);
     }
 
     void rolloutLinearPolicy(const std::vector<Eigen::MatrixXd> &A,
@@ -676,8 +708,11 @@ namespace cddp
           dU_.assign(horizon, Eigen::VectorXd::Zero(control_dim));
         }
         dV_ = Eigen::Vector2d::Zero();
-        Lambda_T_eq_ = Eigen::VectorXd::Zero(getTerminalEqualityDim(context));
-        dLambda_T_eq_ = Eigen::VectorXd::Zero(getTerminalEqualityDim(context));
+        const auto warmstart_terminal_eq_dual = Lambda_T_eq_;
+        const int terminal_eq_dim = getTerminalEqualityDim(context);
+        Lambda_T_eq_ = initializeTerminalEqualityWarmstartMultipliers(
+            warmstart_terminal_eq_dual, terminal_eq_dim);
+        dLambda_T_eq_ = Eigen::VectorXd::Zero(terminal_eq_dim);
 
         const auto warmstart_dual = Y_;
         const auto warmstart_slack = S_;
@@ -713,8 +748,11 @@ namespace cddp
         K_lambda_.assign(horizon + 1, Eigen::MatrixXd::Zero(state_dim, state_dim));
         Lambda_.assign(horizon + 1, Eigen::VectorXd::Zero(state_dim));
         dV_ = Eigen::Vector2d::Zero();
-        Lambda_T_eq_ = Eigen::VectorXd::Zero(getTerminalEqualityDim(context));
-        dLambda_T_eq_ = Eigen::VectorXd::Zero(getTerminalEqualityDim(context));
+        const auto warmstart_terminal_eq_dual = Lambda_T_eq_;
+        const int terminal_eq_dim = getTerminalEqualityDim(context);
+        Lambda_T_eq_ = initializeTerminalEqualityWarmstartMultipliers(
+            warmstart_terminal_eq_dual, terminal_eq_dim);
+        dLambda_T_eq_ = Eigen::VectorXd::Zero(terminal_eq_dim);
 
         const auto warmstart_dual = Y_;
         const auto warmstart_slack = S_;
@@ -926,13 +964,23 @@ namespace cddp
     const int state_dim = context.getStateDim();
     const int control_dim = context.getControlDim();
     const int horizon = context.getHorizon();
-    const double timestep = context.getTimestep();
     const auto &constraint_set = context.getConstraintSet();
     const int total_dual_dim = getTotalDualDim(context);
     const bool has_terminal_ineq =
         !getTerminalInequalityLayout(context).empty();
     const bool has_terminal_eq = getTerminalEqualityDim(context) > 0;
     const bool has_path_constraints = !constraint_set.empty();
+
+    struct CondensedPathConstraintModel
+    {
+      Eigen::VectorXd y;
+      Eigen::VectorXd s;
+      Eigen::MatrixXd Q_yx;
+      Eigen::MatrixXd Q_yu;
+      Eigen::MatrixXd YSinv;
+      Eigen::VectorXd primal_residual;
+      Eigen::VectorXd rhat;
+    };
 
     CDDPSolverBase::precomputeDynamicsDerivatives(context);
     precomputeConstraintGradients(context);
@@ -942,7 +990,7 @@ namespace cddp
         context.getObjective().getFinalCostGradient(context.X_.back());
     Eigen::MatrixXd V_xx =
         context.getObjective().getFinalCostHessian(context.X_.back());
-    V_xx = 0.5 * (V_xx + V_xx.transpose());
+    V_xx = symmetrizeMatrix(V_xx);
 
     dV_ = Eigen::Vector2d::Zero();
     double inf_du = 0.0;
@@ -983,13 +1031,13 @@ namespace cddp
       }
     }
 
+    Eigen::VectorXd h_T = Eigen::VectorXd::Zero(getTerminalEqualityDim(context));
+    Eigen::MatrixXd H_T =
+        Eigen::MatrixXd::Zero(getTerminalEqualityDim(context), state_dim);
     if (has_terminal_eq)
     {
-      const Eigen::VectorXd h_T =
-          evaluateTerminalEqualityResidual(context, context.X_.back());
-      const Eigen::MatrixXd H_T =
-          evaluateTerminalEqualityJacobian(context, context.X_.back());
-      V_x.noalias() += H_T.transpose() * Lambda_T_eq_;
+      h_T = evaluateTerminalEqualityResidual(context, context.X_.back());
+      H_T = evaluateTerminalEqualityJacobian(context, context.X_.back());
       inf_pr = std::max(inf_pr, h_T.lpNorm<Eigen::Infinity>());
       dLambda_T_eq_ = -h_T;
     }
@@ -998,89 +1046,15 @@ namespace cddp
       dLambda_T_eq_ = Eigen::VectorXd::Zero(0);
     }
 
-    k_lambda_.back() = V_x;
-    K_lambda_.back() = V_xx;
-
-    if (!has_path_constraints && !has_terminal_ineq && has_terminal_eq)
-    {
-      const Eigen::VectorXd h_T =
-          evaluateTerminalEqualityResidual(context, context.X_.back());
-      const Eigen::MatrixXd H_T =
-          evaluateTerminalEqualityJacobian(context, context.X_.back());
-
-      std::vector<Eigen::MatrixXd> Q(horizon + 1,
-                                     Eigen::MatrixXd::Zero(state_dim, state_dim));
-      std::vector<Eigen::VectorXd> q(horizon + 1,
-                                     Eigen::VectorXd::Zero(state_dim));
-      std::vector<Eigen::MatrixXd> R(horizon,
-                                     Eigen::MatrixXd::Zero(control_dim, control_dim));
-      std::vector<Eigen::VectorXd> r(horizon,
-                                     Eigen::VectorXd::Zero(control_dim));
-      std::vector<Eigen::MatrixXd> M(horizon,
-                                     Eigen::MatrixXd::Zero(state_dim, control_dim));
-      std::vector<Eigen::MatrixXd> A_vec(horizon,
-                                         Eigen::MatrixXd::Zero(state_dim, state_dim));
-      std::vector<Eigen::MatrixXd> B_vec(horizon,
-                                         Eigen::MatrixXd::Zero(state_dim, control_dim));
-      std::vector<Eigen::VectorXd> d_vec(horizon,
-                                         Eigen::VectorXd::Zero(state_dim));
-
-      Q.back() = V_xx;
-      q.back() = context.getObjective().getFinalCostGradient(context.X_.back());
-
-      for (int t = 0; t < horizon; ++t)
-      {
-        auto [l_x, l_u] =
-            context.getObjective().getRunningCostGradients(context.X_[t], context.U_[t], t);
-        auto [l_xx, l_uu, l_ux] =
-            context.getObjective().getRunningCostHessians(context.X_[t], context.U_[t], t);
-
-        Q[t] = 0.5 * (l_xx + l_xx.transpose());
-        q[t] = l_x;
-        R[t] = 0.5 * (l_uu + l_uu.transpose());
-        R[t].diagonal().array() += context.regularization_;
-        r[t] = l_u;
-        M[t] = l_ux.transpose();
-        A_vec[t] = F_x_[t];
-        B_vec[t] = F_u_[t];
-      }
-
-      Eigen::VectorXd lambda_total;
-      Eigen::VectorXd lambda_delta;
-      if (!solveTerminalEqualityLQR(
-              Q, q, R, r, M, A_vec, B_vec, d_vec,
-              Eigen::VectorXd::Zero(state_dim), H_T, -h_T, mu_,
-              options.ipddp.jacobian_regularization_value,
-              options.ipddp.jacobian_regularization_exponent, &Lambda_T_eq_,
-              K_u_, k_u_, K_lambda_, k_lambda_, lambda_total, lambda_delta))
-      {
-        return false;
-      }
-
-      dLambda_T_eq_ = lambda_delta;
-      dV_ = Eigen::Vector2d::Zero();
-      inf_du = lambda_delta.lpNorm<Eigen::Infinity>();
-      for (int t = 0; t < horizon; ++t)
-      {
-        inf_du = std::max(inf_du, k_u_[t].lpNorm<Eigen::Infinity>());
-        step_norm = std::max(step_norm, k_u_[t].lpNorm<Eigen::Infinity>());
-      }
-
-      context.inf_du_ = inf_du;
-      context.step_norm_ = step_norm;
-      context.inf_pr_ = h_T.lpNorm<Eigen::Infinity>();
-      context.inf_comp_ = 0.0;
-      return true;
-    }
-
     if (!has_path_constraints && !has_terminal_ineq && !has_terminal_eq)
     {
+      k_lambda_.back() = V_x;
+      K_lambda_.back() = V_xx;
       for (int t = horizon - 1; t >= 0; --t)
       {
         const Eigen::VectorXd &x = context.X_[t];
         const Eigen::VectorXd &u = context.U_[t];
 
-        // Use pre-computed discrete Jacobians from base class
         const Eigen::MatrixXd &A = F_x_[t];
         const Eigen::MatrixXd &B = F_u_[t];
 
@@ -1108,7 +1082,7 @@ namespace cddp
           }
         }
 
-        Q_uu = 0.5 * (Q_uu + Q_uu.transpose());
+        Q_uu = symmetrizeMatrix(Q_uu);
         Q_uu.diagonal().array() += context.regularization_;
 
         Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu);
@@ -1126,7 +1100,7 @@ namespace cddp
               K_u.transpose() * Q_uu * k_u;
         V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u +
                K_u.transpose() * Q_uu * K_u;
-        V_xx = 0.5 * (V_xx + V_xx.transpose());
+        V_xx = symmetrizeMatrix(V_xx);
         k_lambda_[t] = V_x;
         K_lambda_[t] = V_xx;
 
@@ -1143,210 +1117,232 @@ namespace cddp
       context.inf_comp_ = 0.0;
       return true;
     }
-    else
+
+    if (has_terminal_eq)
     {
-      for (int t = horizon - 1; t >= 0; --t)
+      std::vector<Eigen::MatrixXd> Q(horizon + 1,
+                                     Eigen::MatrixXd::Zero(state_dim, state_dim));
+      std::vector<Eigen::VectorXd> q(horizon + 1,
+                                     Eigen::VectorXd::Zero(state_dim));
+      std::vector<Eigen::MatrixXd> R(horizon,
+                                     Eigen::MatrixXd::Zero(control_dim, control_dim));
+      std::vector<Eigen::VectorXd> r(horizon,
+                                     Eigen::VectorXd::Zero(control_dim));
+      std::vector<Eigen::MatrixXd> M(horizon,
+                                     Eigen::MatrixXd::Zero(state_dim, control_dim));
+      std::vector<Eigen::MatrixXd> A_vec(horizon,
+                                         Eigen::MatrixXd::Zero(state_dim, state_dim));
+      std::vector<Eigen::MatrixXd> B_vec(horizon,
+                                         Eigen::MatrixXd::Zero(state_dim, control_dim));
+      std::vector<Eigen::VectorXd> d_vec(horizon,
+                                         Eigen::VectorXd::Zero(state_dim));
+      std::vector<CondensedPathConstraintModel> path_models(horizon);
+
+      Q.back() = V_xx;
+      q.back() = V_x;
+
+      for (int t = 0; t < horizon; ++t)
       {
         const Eigen::VectorXd &x = context.X_[t];
         const Eigen::VectorXd &u = context.U_[t];
-
-        const Eigen::MatrixXd &A = F_x_[t];
-        const Eigen::MatrixXd &B = F_u_[t];
-
-        Eigen::VectorXd y = Eigen::VectorXd::Zero(total_dual_dim);
-        Eigen::VectorXd s = Eigen::VectorXd::Zero(total_dual_dim);
-        Eigen::VectorXd g = Eigen::VectorXd::Zero(total_dual_dim);
-        Eigen::MatrixXd Q_yx = Eigen::MatrixXd::Zero(total_dual_dim, state_dim);
-        Eigen::MatrixXd Q_yu = Eigen::MatrixXd::Zero(total_dual_dim, control_dim);
-
-        int offset = 0;
-        for (const auto &constraint_pair : constraint_set)
-        {
-          const std::string &constraint_name = constraint_pair.first;
-          int dual_dim = constraint_pair.second->getDualDim();
-
-          y.segment(offset, dual_dim) = Y_[constraint_name][t];
-          s.segment(offset, dual_dim) = S_[constraint_name][t];
-          g.segment(offset, dual_dim) = G_[constraint_name][t];
-          Q_yx.block(offset, 0, dual_dim, state_dim) = G_x_[constraint_name][t];
-          Q_yu.block(offset, 0, dual_dim, control_dim) = G_u_[constraint_name][t];
-
-          offset += dual_dim;
-        }
-
-        auto [l_x, l_u] = context.getObjective().getRunningCostGradients(x, u, t);
+        auto [l_x, l_u] =
+            context.getObjective().getRunningCostGradients(x, u, t);
         auto [l_xx, l_uu, l_ux] =
             context.getObjective().getRunningCostHessians(x, u, t);
 
-        Eigen::VectorXd Q_x = l_x + Q_yx.transpose() * y + A.transpose() * V_x;
-        Eigen::VectorXd Q_u = l_u + Q_yu.transpose() * y + B.transpose() * V_x;
-        Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
-        Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
-        Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
+        Q[t] = symmetrizeMatrix(l_xx);
+        q[t] = l_x;
+        R[t] = symmetrizeMatrix(l_uu);
+        r[t] = l_u;
+        M[t] = l_ux.transpose();
+        A_vec[t] = F_x_[t];
+        B_vec[t] = F_u_[t];
 
         if (!options.use_ilqr)
         {
-          const auto &Fxx = F_xx_[t];
-          const auto &Fuu = F_uu_[t];
-          const auto &Fux = F_ux_[t];
+          const Eigen::VectorXd lambda_next =
+              (Lambda_.size() == static_cast<size_t>(horizon + 1) &&
+               Lambda_[t + 1].size() == state_dim && Lambda_[t + 1].allFinite())
+                  ? Lambda_[t + 1]
+                  : Eigen::VectorXd::Zero(state_dim);
 
+          // Use the current costate iterate as the local value-gradient proxy
+          // when condensing a terminal-equality solve into a single reduced LQR.
           for (int i = 0; i < state_dim; ++i)
           {
-            Q_xx += V_x(i) * Fxx[i];
-            Q_ux += V_x(i) * Fux[i];
-            Q_uu += V_x(i) * Fuu[i];
+            Q[t] += lambda_next(i) * F_xx_[t][i];
+            M[t] += lambda_next(i) * F_ux_[t][i].transpose();
+            R[t] += lambda_next(i) * F_uu_[t][i];
           }
+          Q[t] = symmetrizeMatrix(Q[t]);
+          R[t] = symmetrizeMatrix(R[t]);
         }
 
-        Eigen::MatrixXd YSinv = Eigen::MatrixXd::Zero(total_dual_dim, total_dual_dim);
-        for (int i = 0; i < total_dual_dim; ++i) {
-          const double s_safe =
-              std::max(s(i), std::max(mu_ * 1e-3, EPS_SLACK));
-          YSinv(i, i) = clipPositiveBarrierRatio(y(i), s_safe);
-        }
-
-        Eigen::VectorXd primal_residual = g + s;
-        Eigen::VectorXd complementary_residual = y.cwiseProduct(s).array() - mu_;
-        Eigen::VectorXd rhat = y.cwiseProduct(primal_residual) - complementary_residual;
-
-        Eigen::MatrixXd Q_uu_reg = Q_uu;
-        Q_uu_reg = 0.5 * (Q_uu_reg + Q_uu_reg.transpose());
-        Q_uu_reg.noalias() += Q_yu.transpose() * YSinv * Q_yu;
-        Q_uu_reg.diagonal().array() += context.regularization_;
-
-        Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
-        if (ldlt.info() != Eigen::Success)
+        if (has_path_constraints)
         {
-          return false;
+          Eigen::VectorXd y = Eigen::VectorXd::Zero(total_dual_dim);
+          Eigen::VectorXd s = Eigen::VectorXd::Zero(total_dual_dim);
+          Eigen::VectorXd g = Eigen::VectorXd::Zero(total_dual_dim);
+          Eigen::MatrixXd Q_yx = Eigen::MatrixXd::Zero(total_dual_dim, state_dim);
+          Eigen::MatrixXd Q_yu = Eigen::MatrixXd::Zero(total_dual_dim, control_dim);
+
+          int offset = 0;
+          for (const auto &constraint_pair : constraint_set)
+          {
+            const std::string &constraint_name = constraint_pair.first;
+            const int dual_dim = constraint_pair.second->getDualDim();
+            y.segment(offset, dual_dim) = Y_[constraint_name][t];
+            s.segment(offset, dual_dim) = S_[constraint_name][t];
+            g.segment(offset, dual_dim) = G_[constraint_name][t];
+            Q_yx.block(offset, 0, dual_dim, state_dim) = G_x_[constraint_name][t];
+            Q_yu.block(offset, 0, dual_dim, control_dim) = G_u_[constraint_name][t];
+            offset += dual_dim;
+          }
+
+          Eigen::MatrixXd YSinv =
+              Eigen::MatrixXd::Zero(total_dual_dim, total_dual_dim);
+          for (int i = 0; i < total_dual_dim; ++i)
+          {
+            const double s_safe =
+                std::max(s(i), std::max(mu_ * 1e-3, EPS_SLACK));
+            YSinv(i, i) = clipPositiveBarrierRatio(y(i), s_safe);
+          }
+
+          const Eigen::VectorXd primal_residual = g + s;
+          const Eigen::VectorXd complementary_residual =
+              y.cwiseProduct(s).array() - mu_;
+          const Eigen::VectorXd rhat =
+              y.cwiseProduct(primal_residual) - complementary_residual;
+          Eigen::VectorXd S_inv_rhat(total_dual_dim);
+          for (int i = 0; i < total_dual_dim; ++i)
+          {
+            const double s_safe =
+                std::max(s(i), std::max(mu_ * 1e-3, EPS_SLACK));
+            S_inv_rhat(i) = clipSignedBarrierRatio(rhat(i), s_safe);
+          }
+
+          q[t].noalias() += Q_yx.transpose() * (y + S_inv_rhat);
+          r[t].noalias() += Q_yu.transpose() * (y + S_inv_rhat);
+          Q[t].noalias() += Q_yx.transpose() * YSinv * Q_yx;
+          M[t].noalias() += (Q_yu.transpose() * YSinv * Q_yx).transpose();
+          R[t].noalias() += Q_yu.transpose() * YSinv * Q_yu;
+          Q[t] = symmetrizeMatrix(Q[t]);
+          R[t] = symmetrizeMatrix(R[t]);
+
+          path_models[t].y = y;
+          path_models[t].s = s;
+          path_models[t].Q_yx = Q_yx;
+          path_models[t].Q_yu = Q_yu;
+          path_models[t].YSinv = YSinv;
+          path_models[t].primal_residual = primal_residual;
+          path_models[t].rhat = rhat;
+
+          inf_pr = std::max(inf_pr, primal_residual.lpNorm<Eigen::Infinity>());
+          inf_comp = std::max(
+              inf_comp, complementary_residual.lpNorm<Eigen::Infinity>());
         }
 
-        Eigen::VectorXd S_inv_rhat(total_dual_dim);
-        for (int i = 0; i < total_dual_dim; ++i) {
-          const double s_safe =
-              std::max(s(i), std::max(mu_ * 1e-3, EPS_SLACK));
-          S_inv_rhat(i) = clipSignedBarrierRatio(rhat(i), s_safe);
-        }
-        Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
-        bigRHS.col(0).noalias() = Q_u + Q_yu.transpose() * S_inv_rhat;
-        bigRHS.rightCols(state_dim).noalias() = Q_ux + Q_yu.transpose() * YSinv * Q_yx;
-
-        Eigen::MatrixXd kK = -ldlt.solve(bigRHS);
-
-        Eigen::VectorXd k_u = kK.col(0);
-        Eigen::MatrixXd K_u(control_dim, state_dim);
-        for (int col = 0; col < state_dim; col++)
-        {
-          K_u.col(col) = kK.col(col + 1);
-        }
-
-        k_u_[t] = k_u;
-        K_u_[t] = K_u;
-
-        Eigen::VectorXd k_y(total_dual_dim);
-        Eigen::VectorXd temp = Q_yu * k_u;
-        for (int i = 0; i < total_dual_dim; ++i) {
-          const double s_safe =
-              std::max(s(i), std::max(mu_ * 1e-3, EPS_SLACK));
-          k_y(i) =
-              clipSignedBarrierRatio(rhat(i) + y(i) * temp(i), s_safe);
-        }
-        Eigen::MatrixXd K_y =
-            (YSinv * (Q_yx + Q_yu * K_u))
-                .cwiseMax(-MAX_BARRIER_RATIO)
-                .cwiseMin(MAX_BARRIER_RATIO);
-        Eigen::VectorXd k_s = -primal_residual - temp;
-        Eigen::MatrixXd K_s = -Q_yx - Q_yu * K_u;
-
-        offset = 0;
-        for (const auto &constraint_pair : constraint_set)
-        {
-          const std::string &constraint_name = constraint_pair.first;
-          int dual_dim = constraint_pair.second->getDualDim();
-
-          k_y_[constraint_name][t] = k_y.segment(offset, dual_dim);
-          K_y_[constraint_name][t] = K_y.block(offset, 0, dual_dim, state_dim);
-          k_s_[constraint_name][t] = k_s.segment(offset, dual_dim);
-          K_s_[constraint_name][t] = K_s.block(offset, 0, dual_dim, state_dim);
-
-          offset += dual_dim;
-        }
-
-        Q_u.noalias() += Q_yu.transpose() * S_inv_rhat;
-        Q_x.noalias() += Q_yx.transpose() * S_inv_rhat;
-        Q_xx.noalias() += Q_yx.transpose() * YSinv * Q_yx;
-        Q_ux.noalias() += Q_yu.transpose() * YSinv * Q_yx;
-        Q_uu.noalias() += Q_yu.transpose() * YSinv * Q_yu;
-
-        dV_[0] += k_u.dot(Q_u);
-        dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
-
-        V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u +
-              K_u.transpose() * Q_uu * k_u;
-        V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u +
-               K_u.transpose() * Q_uu * K_u;
-        V_xx = 0.5 * (V_xx + V_xx.transpose());
-        k_lambda_[t] = V_x;
-        K_lambda_[t] = V_xx;
-
-        inf_du = std::max(inf_du, Q_u.lpNorm<Eigen::Infinity>());
-        inf_pr = std::max(inf_pr, primal_residual.lpNorm<Eigen::Infinity>());
-        inf_comp = std::max(inf_comp, complementary_residual.lpNorm<Eigen::Infinity>());
-        step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
+        R[t].diagonal().array() += context.regularization_;
       }
 
-      // Rollout linear policy to compute search directions for fraction-to-boundary
+      Eigen::VectorXd lambda_total;
+      Eigen::VectorXd lambda_delta;
+      if (!solveTerminalEqualityLQR(
+              Q, q, R, r, M, A_vec, B_vec, d_vec,
+              Eigen::VectorXd::Zero(state_dim), H_T, -h_T, mu_,
+              options.ipddp.jacobian_regularization_value,
+              options.ipddp.jacobian_regularization_exponent, &Lambda_T_eq_,
+              K_u_, k_u_, K_lambda_, k_lambda_, lambda_total, lambda_delta))
       {
-        std::vector<Eigen::MatrixXd> A_vec(horizon);
-        std::vector<Eigen::MatrixXd> B_vec(horizon);
-        std::vector<Eigen::VectorXd> d_vec(horizon, Eigen::VectorXd::Zero(state_dim));
+        return false;
+      }
+
+      dLambda_T_eq_ = lambda_delta;
+      for (int t = 0; t < horizon; ++t)
+      {
+        const Eigen::VectorXd Q_u =
+            r[t] + B_vec[t].transpose() * k_lambda_[t + 1];
+        inf_du = std::max(inf_du, Q_u.lpNorm<Eigen::Infinity>());
+        step_norm = std::max(step_norm, k_u_[t].lpNorm<Eigen::Infinity>());
+      }
+
+      rolloutLinearPolicy(A_vec, B_vec, d_vec, K_u_, k_u_, dX_, dU_);
+
+      if (has_path_constraints)
+      {
         for (int t = 0; t < horizon; ++t)
         {
-          A_vec[t] = F_x_[t];
-          B_vec[t] = F_u_[t];
-        }
-        rolloutLinearPolicy(A_vec, B_vec, d_vec, K_u_, k_u_, dX_, dU_);
-
-        // Compute dual/slack search directions from gains and dX_
-        for (const auto &constraint_pair : constraint_set)
-        {
-          const std::string &name = constraint_pair.first;
-          for (int t = 0; t < horizon; ++t)
+          const auto &model = path_models[t];
+          const Eigen::VectorXd temp = model.Q_yu * k_u_[t];
+          Eigen::VectorXd k_y(total_dual_dim);
+          for (int i = 0; i < total_dual_dim; ++i)
           {
-            dS_[name][t] = k_s_[name][t] + K_s_[name][t] * dX_[t];
-            dY_[name][t] = (k_y_[name][t] + K_y_[name][t] * dX_[t])
-                               .cwiseMax(-MAX_BARRIER_RATIO)
-                               .cwiseMin(MAX_BARRIER_RATIO);
+            const double s_safe =
+                std::max(model.s(i), std::max(mu_ * 1e-3, EPS_SLACK));
+            k_y(i) =
+                clipSignedBarrierRatio(model.rhat(i) + model.y(i) * temp(i),
+                                       s_safe);
+          }
+          Eigen::MatrixXd K_y =
+              (model.YSinv * (model.Q_yx + model.Q_yu * K_u_[t]))
+                  .cwiseMax(-MAX_BARRIER_RATIO)
+                  .cwiseMin(MAX_BARRIER_RATIO);
+          const Eigen::VectorXd k_s = -model.primal_residual - temp;
+          const Eigen::MatrixXd K_s = -model.Q_yx - model.Q_yu * K_u_[t];
+
+          int offset = 0;
+          for (const auto &constraint_pair : constraint_set)
+          {
+            const std::string &constraint_name = constraint_pair.first;
+            const int dual_dim = constraint_pair.second->getDualDim();
+            k_y_[constraint_name][t] = k_y.segment(offset, dual_dim);
+            K_y_[constraint_name][t] =
+                K_y.block(offset, 0, dual_dim, state_dim);
+            k_s_[constraint_name][t] = k_s.segment(offset, dual_dim);
+            K_s_[constraint_name][t] =
+                K_s.block(offset, 0, dual_dim, state_dim);
+            dS_[constraint_name][t] =
+                k_s_[constraint_name][t] + K_s_[constraint_name][t] * dX_[t];
+            dY_[constraint_name][t] =
+                (k_y_[constraint_name][t] +
+                 K_y_[constraint_name][t] * dX_[t])
+                    .cwiseMax(-MAX_BARRIER_RATIO)
+                    .cwiseMin(MAX_BARRIER_RATIO);
+            offset += dual_dim;
           }
         }
+      }
 
-        // Terminal inequality search directions
-        if (has_terminal_ineq)
+      if (has_terminal_ineq)
+      {
+        auto G_T_x =
+            evaluateTerminalInequalityJacobianMap(context, context.X_.back());
+        auto G_T_eval =
+            evaluateTerminalInequalityResidualMap(context, context.X_.back());
+        for (const auto &entry : getTerminalInequalityLayout(context))
         {
-          auto G_T_x = evaluateTerminalInequalityJacobianMap(context, context.X_.back());
-          auto G_T_eval = evaluateTerminalInequalityResidualMap(context, context.X_.back());
-          for (const auto &entry : getTerminalInequalityLayout(context))
+          const Eigen::VectorXd &g_T = G_T_eval.at(entry.name);
+          const Eigen::MatrixXd &Gtx = G_T_x.at(entry.name);
+          const Eigen::VectorXd &S_T = S_T_.at(entry.name);
+          const Eigen::VectorXd &Y_T = Y_T_.at(entry.name);
+          const Eigen::VectorXd r_p_T = g_T + S_T;
+          const Eigen::VectorXd r_d_T = S_T.cwiseProduct(Y_T).array() - mu_;
+          dS_T_[entry.name] = -r_p_T - Gtx * dX_.back();
+          Eigen::VectorXd dY_T = Eigen::VectorXd::Zero(entry.dim);
+          for (int i = 0; i < entry.dim; ++i)
           {
-            const Eigen::VectorXd &g_T = G_T_eval.at(entry.name);
-            const Eigen::MatrixXd &Gtx = G_T_x.at(entry.name);
-            const Eigen::VectorXd &S_T = S_T_.at(entry.name);
-            const Eigen::VectorXd &Y_T = Y_T_.at(entry.name);
-            const Eigen::VectorXd r_p_T = g_T + S_T;
-            const Eigen::VectorXd r_d_T = S_T.cwiseProduct(Y_T).array() - mu_;
-            dS_T_[entry.name] = -r_p_T - Gtx * dX_.back();
-            Eigen::VectorXd dY_T = Eigen::VectorXd::Zero(entry.dim);
-            for (int i = 0; i < entry.dim; ++i)
-            {
-              const double s_safe = std::max(S_T(i), std::max(mu_ * 1e-3, EPS_SLACK));
-              const double dual_ratio =
-                  std::clamp(Y_T(i) / s_safe, 0.0, MAX_BARRIER_RATIO);
-              const double affine =
-                  std::clamp(-r_d_T(i) / s_safe, -MAX_BARRIER_RATIO, MAX_BARRIER_RATIO);
-              dY_T(i) = std::clamp(
-                  affine - dual_ratio * dS_T_[entry.name](i),
-                  -MAX_BARRIER_RATIO, MAX_BARRIER_RATIO);
-            }
-            dY_T_[entry.name] = dY_T;
+            const double s_safe =
+                std::max(S_T(i), std::max(mu_ * 1e-3, EPS_SLACK));
+            const double dual_ratio =
+                std::clamp(Y_T(i) / s_safe, 0.0, MAX_BARRIER_RATIO);
+            const double affine =
+                std::clamp(-r_d_T(i) / s_safe, -MAX_BARRIER_RATIO,
+                           MAX_BARRIER_RATIO);
+            dY_T(i) = std::clamp(
+                affine - dual_ratio * dS_T_[entry.name](i),
+                -MAX_BARRIER_RATIO, MAX_BARRIER_RATIO);
           }
+          dY_T_[entry.name] = dY_T;
         }
       }
 
@@ -1356,6 +1352,221 @@ namespace cddp
       context.step_norm_ = step_norm;
       return true;
     }
+
+    k_lambda_.back() = V_x;
+    K_lambda_.back() = V_xx;
+    for (int t = horizon - 1; t >= 0; --t)
+    {
+      const Eigen::VectorXd &x = context.X_[t];
+      const Eigen::VectorXd &u = context.U_[t];
+
+      const Eigen::MatrixXd &A = F_x_[t];
+      const Eigen::MatrixXd &B = F_u_[t];
+
+      Eigen::VectorXd y = Eigen::VectorXd::Zero(total_dual_dim);
+      Eigen::VectorXd s = Eigen::VectorXd::Zero(total_dual_dim);
+      Eigen::VectorXd g = Eigen::VectorXd::Zero(total_dual_dim);
+      Eigen::MatrixXd Q_yx = Eigen::MatrixXd::Zero(total_dual_dim, state_dim);
+      Eigen::MatrixXd Q_yu = Eigen::MatrixXd::Zero(total_dual_dim, control_dim);
+
+      int offset = 0;
+      for (const auto &constraint_pair : constraint_set)
+      {
+        const std::string &constraint_name = constraint_pair.first;
+        int dual_dim = constraint_pair.second->getDualDim();
+
+        y.segment(offset, dual_dim) = Y_[constraint_name][t];
+        s.segment(offset, dual_dim) = S_[constraint_name][t];
+        g.segment(offset, dual_dim) = G_[constraint_name][t];
+        Q_yx.block(offset, 0, dual_dim, state_dim) = G_x_[constraint_name][t];
+        Q_yu.block(offset, 0, dual_dim, control_dim) = G_u_[constraint_name][t];
+
+        offset += dual_dim;
+      }
+
+      auto [l_x, l_u] = context.getObjective().getRunningCostGradients(x, u, t);
+      auto [l_xx, l_uu, l_ux] =
+          context.getObjective().getRunningCostHessians(x, u, t);
+
+      Eigen::VectorXd Q_x = l_x + Q_yx.transpose() * y + A.transpose() * V_x;
+      Eigen::VectorXd Q_u = l_u + Q_yu.transpose() * y + B.transpose() * V_x;
+      Eigen::MatrixXd Q_xx = l_xx + A.transpose() * V_xx * A;
+      Eigen::MatrixXd Q_ux = l_ux + B.transpose() * V_xx * A;
+      Eigen::MatrixXd Q_uu = l_uu + B.transpose() * V_xx * B;
+
+      if (!options.use_ilqr)
+      {
+        const auto &Fxx = F_xx_[t];
+        const auto &Fuu = F_uu_[t];
+        const auto &Fux = F_ux_[t];
+
+        for (int i = 0; i < state_dim; ++i)
+        {
+          Q_xx += V_x(i) * Fxx[i];
+          Q_ux += V_x(i) * Fux[i];
+          Q_uu += V_x(i) * Fuu[i];
+        }
+      }
+
+      Eigen::MatrixXd YSinv = Eigen::MatrixXd::Zero(total_dual_dim, total_dual_dim);
+      for (int i = 0; i < total_dual_dim; ++i)
+      {
+        const double s_safe =
+            std::max(s(i), std::max(mu_ * 1e-3, EPS_SLACK));
+        YSinv(i, i) = clipPositiveBarrierRatio(y(i), s_safe);
+      }
+
+      const Eigen::VectorXd primal_residual = g + s;
+      const Eigen::VectorXd complementary_residual =
+          y.cwiseProduct(s).array() - mu_;
+      const Eigen::VectorXd rhat =
+          y.cwiseProduct(primal_residual) - complementary_residual;
+
+      Eigen::MatrixXd Q_uu_reg = symmetrizeMatrix(Q_uu);
+      Q_uu_reg.noalias() += Q_yu.transpose() * YSinv * Q_yu;
+      Q_uu_reg.diagonal().array() += context.regularization_;
+
+      Eigen::LDLT<Eigen::MatrixXd> ldlt(Q_uu_reg);
+      if (ldlt.info() != Eigen::Success)
+      {
+        return false;
+      }
+
+      Eigen::VectorXd S_inv_rhat(total_dual_dim);
+      for (int i = 0; i < total_dual_dim; ++i)
+      {
+        const double s_safe =
+            std::max(s(i), std::max(mu_ * 1e-3, EPS_SLACK));
+        S_inv_rhat(i) = clipSignedBarrierRatio(rhat(i), s_safe);
+      }
+      Eigen::MatrixXd bigRHS(control_dim, 1 + state_dim);
+      bigRHS.col(0).noalias() = Q_u + Q_yu.transpose() * S_inv_rhat;
+      bigRHS.rightCols(state_dim).noalias() =
+          Q_ux + Q_yu.transpose() * YSinv * Q_yx;
+
+      Eigen::MatrixXd kK = -ldlt.solve(bigRHS);
+
+      Eigen::VectorXd k_u = kK.col(0);
+      Eigen::MatrixXd K_u(control_dim, state_dim);
+      for (int col = 0; col < state_dim; ++col)
+      {
+        K_u.col(col) = kK.col(col + 1);
+      }
+
+      k_u_[t] = k_u;
+      K_u_[t] = K_u;
+
+      Eigen::VectorXd k_y(total_dual_dim);
+      const Eigen::VectorXd temp = Q_yu * k_u;
+      for (int i = 0; i < total_dual_dim; ++i)
+      {
+        const double s_safe =
+            std::max(s(i), std::max(mu_ * 1e-3, EPS_SLACK));
+        k_y(i) =
+            clipSignedBarrierRatio(rhat(i) + y(i) * temp(i), s_safe);
+      }
+      Eigen::MatrixXd K_y =
+          (YSinv * (Q_yx + Q_yu * K_u))
+              .cwiseMax(-MAX_BARRIER_RATIO)
+              .cwiseMin(MAX_BARRIER_RATIO);
+      const Eigen::VectorXd k_s = -primal_residual - temp;
+      const Eigen::MatrixXd K_s = -Q_yx - Q_yu * K_u;
+
+      offset = 0;
+      for (const auto &constraint_pair : constraint_set)
+      {
+        const std::string &constraint_name = constraint_pair.first;
+        int dual_dim = constraint_pair.second->getDualDim();
+
+        k_y_[constraint_name][t] = k_y.segment(offset, dual_dim);
+        K_y_[constraint_name][t] = K_y.block(offset, 0, dual_dim, state_dim);
+        k_s_[constraint_name][t] = k_s.segment(offset, dual_dim);
+        K_s_[constraint_name][t] = K_s.block(offset, 0, dual_dim, state_dim);
+
+        offset += dual_dim;
+      }
+
+      Q_u.noalias() += Q_yu.transpose() * S_inv_rhat;
+      Q_x.noalias() += Q_yx.transpose() * S_inv_rhat;
+      Q_xx.noalias() += Q_yx.transpose() * YSinv * Q_yx;
+      Q_ux.noalias() += Q_yu.transpose() * YSinv * Q_yx;
+      Q_uu.noalias() += Q_yu.transpose() * YSinv * Q_yu;
+
+      dV_[0] += k_u.dot(Q_u);
+      dV_[1] += 0.5 * k_u.dot(Q_uu * k_u);
+
+      V_x = Q_x + K_u.transpose() * Q_u + Q_ux.transpose() * k_u +
+            K_u.transpose() * Q_uu * k_u;
+      V_xx = Q_xx + K_u.transpose() * Q_ux + Q_ux.transpose() * K_u +
+             K_u.transpose() * Q_uu * K_u;
+      V_xx = symmetrizeMatrix(V_xx);
+      k_lambda_[t] = V_x;
+      K_lambda_[t] = V_xx;
+
+      inf_du = std::max(inf_du, Q_u.lpNorm<Eigen::Infinity>());
+      inf_pr = std::max(inf_pr, primal_residual.lpNorm<Eigen::Infinity>());
+      inf_comp = std::max(inf_comp, complementary_residual.lpNorm<Eigen::Infinity>());
+      step_norm = std::max(step_norm, k_u.lpNorm<Eigen::Infinity>());
+    }
+
+    {
+      std::vector<Eigen::MatrixXd> A_vec(horizon);
+      std::vector<Eigen::MatrixXd> B_vec(horizon);
+      std::vector<Eigen::VectorXd> d_vec(horizon, Eigen::VectorXd::Zero(state_dim));
+      for (int t = 0; t < horizon; ++t)
+      {
+        A_vec[t] = F_x_[t];
+        B_vec[t] = F_u_[t];
+      }
+      rolloutLinearPolicy(A_vec, B_vec, d_vec, K_u_, k_u_, dX_, dU_);
+
+      for (const auto &constraint_pair : constraint_set)
+      {
+        const std::string &name = constraint_pair.first;
+        for (int t = 0; t < horizon; ++t)
+        {
+          dS_[name][t] = k_s_[name][t] + K_s_[name][t] * dX_[t];
+          dY_[name][t] = (k_y_[name][t] + K_y_[name][t] * dX_[t])
+                             .cwiseMax(-MAX_BARRIER_RATIO)
+                             .cwiseMin(MAX_BARRIER_RATIO);
+        }
+      }
+
+      if (has_terminal_ineq)
+      {
+        auto G_T_x = evaluateTerminalInequalityJacobianMap(context, context.X_.back());
+        auto G_T_eval = evaluateTerminalInequalityResidualMap(context, context.X_.back());
+        for (const auto &entry : getTerminalInequalityLayout(context))
+        {
+          const Eigen::VectorXd &g_T = G_T_eval.at(entry.name);
+          const Eigen::MatrixXd &Gtx = G_T_x.at(entry.name);
+          const Eigen::VectorXd &S_T = S_T_.at(entry.name);
+          const Eigen::VectorXd &Y_T = Y_T_.at(entry.name);
+          const Eigen::VectorXd r_p_T = g_T + S_T;
+          const Eigen::VectorXd r_d_T = S_T.cwiseProduct(Y_T).array() - mu_;
+          dS_T_[entry.name] = -r_p_T - Gtx * dX_.back();
+          Eigen::VectorXd dY_T = Eigen::VectorXd::Zero(entry.dim);
+          for (int i = 0; i < entry.dim; ++i)
+          {
+            const double s_safe = std::max(S_T(i), std::max(mu_ * 1e-3, EPS_SLACK));
+            const double dual_ratio =
+                std::clamp(Y_T(i) / s_safe, 0.0, MAX_BARRIER_RATIO);
+            const double affine =
+                std::clamp(-r_d_T(i) / s_safe, -MAX_BARRIER_RATIO, MAX_BARRIER_RATIO);
+            dY_T(i) = std::clamp(
+                affine - dual_ratio * dS_T_[entry.name](i),
+                -MAX_BARRIER_RATIO, MAX_BARRIER_RATIO);
+          }
+          dY_T_[entry.name] = dY_T;
+        }
+      }
+    }
+
+    context.inf_pr_ = inf_pr;
+    context.inf_du_ = inf_du;
+    context.inf_comp_ = inf_comp;
+    context.step_norm_ = step_norm;
+    return true;
   }
 
   ForwardPassResult IPDDPSolver::forwardPass(CDDP &context, double alpha)
