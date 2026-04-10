@@ -21,12 +21,23 @@ $$
 $$
 
 $$
+\quad \mathbf{h}(\mathbf{x}_N)=0,\;\mathbf{g}_N(\mathbf{x}_N)\leq 0
+$$
+
+$$
 \quad {\mathbf{x}}_{0} = \mathbf{x}{(t_0)} 
 $$
 
 $$
 \quad k = 0,1,\cdots N-1
 $$
+
+For interior-point solves, `IPDDP` supports path inequalities, terminal
+equalities, terminal inequalities, and mixed path/terminal constrained
+problems with warm-started multiplier and slack state. In the C++ API,
+terminal constraints are attached with `CDDP::addTerminalConstraint(...)`
+and should use the built-in `TerminalEqualityConstraint` or
+`TerminalInequalityConstraint` classes.
 
 ## Examples
 The maintained example surface is now split:
@@ -80,6 +91,10 @@ MPCC racing line tracking:
 The MPCC portfolio example is a lightweight kinematic contouring-control demo.
 Its vendored track data in `examples/data/` is derived from the
 [`alexliniger/MPCC`](https://github.com/alexliniger/MPCC) project.
+
+The portfolio currently emphasizes animated path-constrained examples. The
+terminal-constraint cases added to IPDDP are covered by the regression suite
+rather than by a dedicated gallery animation.
 
 ## Installation
 ### Dependencies

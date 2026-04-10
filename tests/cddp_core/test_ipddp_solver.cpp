@@ -41,6 +41,13 @@ public:
         return solver.computeScaledDualInfeasibility(context);
     }
 
+    static void updateBarrierParameters(IPDDPSolver &solver,
+                                        CDDP &context,
+                                        bool forward_pass_success)
+    {
+        solver.updateBarrierParameters(context, forward_pass_success);
+    }
+
     static const std::vector<FilterPoint> &filter(const IPDDPSolver &solver)
     {
         return solver.filter_;
@@ -1211,6 +1218,26 @@ TEST(IPDDPTest, TracksInitialViolationForPathOnlyProblems)
     const auto &filter = cddp::IPDDPSolverTestAccess::filter(solver);
     EXPECT_TRUE(filter.empty());
     EXPECT_GT(cddp::IPDDPSolverTestAccess::filterTheta(solver), 0.0);
+}
+
+TEST(IPDDPTest, BarrierResetTracksThetaForPathOnlyProblems)
+{
+    cddp::CDDPOptions options = makeIpddpRegressionOptions();
+    cddp::CDDP problem = makeScalarIntegratorProblem(
+        options, /*add_path_constraint=*/true, /*add_terminal_inequality=*/false);
+
+    cddp::IPDDPSolver solver;
+    solver.initialize(problem);
+
+    ASSERT_TRUE(cddp::IPDDPSolverTestAccess::filter(solver).empty());
+    cddp::IPDDPSolverTestAccess::updateBarrierParameters(
+        solver, problem, /*forward_pass_success=*/true);
+
+    const auto &filter = cddp::IPDDPSolverTestAccess::filter(solver);
+    const double violation_reference =
+        filter.empty() ? cddp::IPDDPSolverTestAccess::filterTheta(solver)
+                       : filter.back().constraint_violation;
+    EXPECT_GT(violation_reference, 0.0);
 }
 
 TEST(IPDDPTest, ScaledDualInfeasibilityIncludesStateStationarityWhenEnabled)

@@ -33,7 +33,6 @@ namespace cddp
   namespace
   {
     constexpr double kSlackInteriorOffset = 1e-4;
-    constexpr double kWarmstartStateMatchTolerance = 1e-6;
     constexpr double EPS_SLACK = 1e-10;
     constexpr double EPS_DUAL = 1e-10;
     constexpr double MAX_BARRIER_RATIO = 1e6;
@@ -2631,8 +2630,7 @@ namespace cddp
     if (reset_filter)
     {
       filter_.clear();
-      if (getTerminalEqualityDim(context) > 0 ||
-          !getTerminalInequalityLayout(context).empty())
+      if (has_terminal_eq || has_terminal_ineq)
       {
         acceptFilterEntry(phi_, filter_theta);
       }
