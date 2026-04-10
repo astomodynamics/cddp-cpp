@@ -544,6 +544,38 @@ TEST_F(CDDPCoreTest, IntegrationWithTrajectoryAndOptions) {
     EXPECT_EQ(solution.control_trajectory.size(), horizon);
 }
 
+TEST_F(CDDPCoreTest, SolveReinitializesStaleTrajectoryDimensions) {
+    cddp::CDDP::registerSolver("MockExternalSolver", cddp::createMockExternalSolver);
+
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
+                          std::make_unique<cddp::Unicycle>(timestep, "euler"),
+                          std::make_unique<cddp::QuadraticObjective>(
+                              Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              Eigen::MatrixXd::Identity(control_dim, control_dim),
+                              10.0 * Eigen::MatrixXd::Identity(state_dim, state_dim),
+                              goal_state, std::vector<Eigen::VectorXd>(), timestep),
+                          options);
+
+    cddp_solver.X_.assign(static_cast<size_t>(horizon + 1),
+                          Eigen::VectorXd::Zero(state_dim + 1));
+    cddp_solver.U_.assign(static_cast<size_t>(horizon),
+                          Eigen::VectorXd::Zero(control_dim + 1));
+
+    auto solution = cddp_solver.solve("MockExternalSolver");
+
+    EXPECT_EQ(solution.solver_name, "MockExternalSolver");
+    ASSERT_EQ(cddp_solver.X_.size(), static_cast<size_t>(horizon + 1));
+    ASSERT_EQ(cddp_solver.U_.size(), static_cast<size_t>(horizon));
+
+    for (const auto &state : cddp_solver.X_) {
+        EXPECT_EQ(state.size(), state_dim);
+    }
+    for (const auto &control : cddp_solver.U_) {
+        EXPECT_EQ(control.size(), control_dim);
+    }
+    EXPECT_TRUE(cddp_solver.X_.front().isApprox(initial_state));
+}
+
 TEST_F(CDDPCoreTest, SetReferenceStatesUpdatesObjectiveTerminalReference) {
     cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep,
                           std::make_unique<cddp::Unicycle>(timestep, "euler"),

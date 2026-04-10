@@ -5,6 +5,7 @@
 - a C++17 core library for trajectory optimization and MPC
 - `pycddp` Python bindings built with `pybind11`
 - a small animation-oriented Python portfolio for demos and regression checks
+- IPDDP support for path constraints plus terminal equality and terminal inequality constraints
 
 Use the navigation to get started with installation, local development, and
 the release workflow for PyPI and GitHub Pages.

@@ -25,6 +25,7 @@
 #include "cddp_core/dynamical_system.hpp"
 #include "cddp_core/objective.hpp"
 #include "cddp_core/constraint.hpp"
+#include "cddp_core/terminal_constraint.hpp"
 #include "cddp_core/barrier.hpp"
 #include "cddp_core/options.hpp"
 #include "cddp_core/cddp_core.hpp"

@@ -14,6 +14,11 @@ Matplotlib.
       reproducible workflows.
     </p>
     <p>
+      The gallery is intentionally path-focused. Terminal-equality and
+      terminal-inequality support in <code>IPDDP</code> is covered in the solver
+      regression suite rather than in a separate animation card.
+    </p>
+    <p>
       <a class="md-button md-button--primary" href="../python/">Python package guide</a>
       <a class="md-button" href="https://github.com/astomodynamics/cddp-cpp/tree/master/examples">Browse examples</a>
     </p>

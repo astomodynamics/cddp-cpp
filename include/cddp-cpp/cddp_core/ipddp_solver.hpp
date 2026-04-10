@@ -25,12 +25,16 @@
 
 namespace cddp
 {
+    class IPDDPSolverTestAccess;
 
     /**
      * @brief Interior Point Differential Dynamic Programming (IPDDP) solver.
      *
      * Inherits from CDDPSolverBase and overrides virtual hooks
      * for primal-dual interior point method with logarithmic barrier.
+     * Supports path constraints, terminal equality constraints, and
+     * terminal inequality constraints via a single-shooting formulation
+     * with explicit costate variables.
      */
     class IPDDPSolver : public CDDPSolverBase
     {
@@ -44,11 +48,15 @@ namespace cddp
         // === CDDPSolverBase virtual hook overrides ===
         void preIterationSetup(CDDP &context) override;
         bool backwardPass(CDDP &context) override;
+        bool checkEarlyConvergence(CDDP &context, int iter,
+                                   std::string &reason) override;
         ForwardPassResult forwardPass(CDDP &context, double alpha) override;
         void applyForwardPassResult(CDDP &context, const ForwardPassResult &result) override;
         bool checkConvergence(CDDP &context, double dJ, double dL, int iter,
                               std::string &reason) override;
         void postIterationUpdate(CDDP &context, bool forward_pass_success) override;
+        bool handleForwardPassFailure(CDDP &context,
+                                      std::string &termination_reason) override;
         void recordIterationHistory(const CDDP &context) override;
         void populateSolverSpecificSolution(CDDPSolution &solution,
                                             const CDDP &context) override;
@@ -56,6 +64,8 @@ namespace cddp
         void printSolutionSummary(const CDDPSolution &solution) const override;
 
     private:
+        friend class IPDDPSolverTestAccess;
+
         // Constraint derivatives
         std::map<std::string, std::vector<Eigen::MatrixXd>> G_x_; ///< State gradients
         std::map<std::string, std::vector<Eigen::MatrixXd>> G_u_; ///< Control gradients
@@ -67,6 +77,7 @@ namespace cddp
             G_ux_; ///< Constraint mixed hessians
 
         // Interior point variables
+        std::map<std::string, std::vector<Eigen::VectorXd>> G_raw_; ///< Raw constraint values
         std::map<std::string, std::vector<Eigen::VectorXd>> G_; ///< Constraint values
         std::map<std::string, std::vector<Eigen::VectorXd>> Y_; ///< Dual variables
         std::map<std::string, std::vector<Eigen::VectorXd>> S_; ///< Slack variables
@@ -77,42 +88,41 @@ namespace cddp
         std::map<std::string, std::vector<Eigen::VectorXd>> k_s_; ///< Slack feedforward
         std::map<std::string, std::vector<Eigen::MatrixXd>> K_s_; ///< Slack feedback
 
+        // Single-shooting costate variables and gains
+        std::vector<Eigen::VectorXd>
+            Lambda_; ///< Costate variables (Lagrange multipliers for dynamics)
+        std::vector<Eigen::VectorXd>
+            k_lambda_; ///< Feedforward gains for costate variables
+        std::vector<Eigen::MatrixXd>
+            K_lambda_; ///< Feedback gains for costate variables
+
+        // Terminal equality constraint variables
+        Eigen::VectorXd Lambda_T_eq_;  ///< Terminal equality multipliers
+        Eigen::VectorXd dLambda_T_eq_; ///< Terminal equality multiplier direction
+
+        // Terminal inequality constraint variables
+        std::map<std::string, Eigen::VectorXd> G_T_; ///< Terminal inequality values
+        std::map<std::string, Eigen::VectorXd> Y_T_; ///< Terminal inequality duals
+        std::map<std::string, Eigen::VectorXd> S_T_; ///< Terminal inequality slacks
+        std::map<std::string, Eigen::VectorXd> dY_T_; ///< Terminal inequality dual directions
+        std::map<std::string, Eigen::VectorXd> dS_T_; ///< Terminal inequality slack directions
+
+        // Search directions
+        std::vector<Eigen::VectorXd> dX_; ///< State search directions
+        std::vector<Eigen::VectorXd> dU_; ///< Control search directions
+        std::map<std::string, std::vector<Eigen::VectorXd>>
+            dY_; ///< Dual search directions
+        std::map<std::string, std::vector<Eigen::VectorXd>>
+            dS_; ///< Slack search directions
+
         // Barrier method parameters
         double mu_;                       ///< Barrier parameter
         std::vector<FilterPoint> filter_; ///< Filter for line search
-
-        // Pre-allocated workspace for performance optimization
-        struct Workspace {
-            // Backward pass workspace
-            std::vector<Eigen::MatrixXd> A_matrices;
-            std::vector<Eigen::MatrixXd> B_matrices;
-            std::vector<Eigen::MatrixXd> Q_xx_matrices;
-            std::vector<Eigen::MatrixXd> Q_ux_matrices;
-            std::vector<Eigen::MatrixXd> Q_uu_matrices;
-            std::vector<Eigen::VectorXd> Q_x_vectors;
-            std::vector<Eigen::VectorXd> Q_u_vectors;
-
-            // LDLT solver cache
-            std::vector<Eigen::LDLT<Eigen::MatrixXd>> ldlt_solvers;
-            std::vector<bool> ldlt_valid;
-
-            // Constraint workspace
-            Eigen::VectorXd y_combined;
-            Eigen::VectorXd s_combined;
-            Eigen::VectorXd g_combined;
-            Eigen::MatrixXd Q_yu_combined;
-            Eigen::MatrixXd Q_yx_combined;
-            Eigen::MatrixXd YSinv;
-            Eigen::MatrixXd bigRHS;
-
-            // Forward pass workspace
-            std::vector<Eigen::VectorXd> delta_x_vectors;
-
-            bool initialized = false;
-        } workspace_;
+        double phi_ = 0.0;               ///< Current filter merit value
+        double theta_ = 0.0;             ///< Current filter violation metric
+        double filter_theta_ = 0.0;      ///< Current unfloored filter violation metric
 
         // === Private helper methods ===
-        void precomputeDynamicsDerivatives(CDDP &context);
         void precomputeConstraintGradients(CDDP &context);
         void evaluateTrajectory(CDDP &context);
         void evaluateTrajectoryWarmStart(CDDP &context);
@@ -125,6 +135,40 @@ namespace cddp
         void initializeConstraintStorage(CDDP &context);
         double computeMaxConstraintViolation(const CDDP &context) const;
         double computeScaledDualInfeasibility(const CDDP &context) const;
+
+        // Filter and merit function methods
+        bool acceptFilterEntry(double merit_function, double constraint_violation);
+        bool isFilterAcceptable(double merit_function,
+                                double constraint_violation) const;
+
+        double computeTheta(
+            const CDDPOptions &options,
+            const std::map<std::string, std::vector<Eigen::VectorXd>> &constraints,
+            const std::map<std::string, std::vector<Eigen::VectorXd>> &slacks,
+            const std::map<std::string, Eigen::VectorXd> *terminal_constraints = nullptr,
+            const std::map<std::string, Eigen::VectorXd> *terminal_slacks = nullptr,
+            const Eigen::VectorXd *terminal_equality_residual = nullptr) const;
+
+        double computeBarrierMerit(
+            const CDDP &context,
+            const std::map<std::string, std::vector<Eigen::VectorXd>> &slacks,
+            double cost,
+            const std::map<std::string, Eigen::VectorXd> *terminal_slacks = nullptr,
+            const Eigen::VectorXd *terminal_equality_multipliers = nullptr,
+            const Eigen::VectorXd *terminal_equality_residual = nullptr) const;
+
+        std::pair<double, double> computePrimalAndComplementarity(
+            const CDDP &context,
+            const std::map<std::string, std::vector<Eigen::VectorXd>> &constraints,
+            const std::map<std::string, std::vector<Eigen::VectorXd>> &slacks,
+            const std::map<std::string, std::vector<Eigen::VectorXd>> &duals,
+            double mu,
+            const std::map<std::string, Eigen::VectorXd> *terminal_constraints = nullptr,
+            const std::map<std::string, Eigen::VectorXd> *terminal_slacks = nullptr,
+            const std::map<std::string, Eigen::VectorXd> *terminal_duals = nullptr,
+            const Eigen::VectorXd *terminal_equality_residual = nullptr) const;
+
+        std::pair<double, double> computeMaxStepSizes(const CDDP &context) const;
 
         // Legacy print helper (used by printIteration override)
         void printIterationLegacy(int iter, double objective, double inf_pr,

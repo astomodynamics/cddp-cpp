@@ -25,6 +25,327 @@
 
 #include "cddp.hpp"
 
+namespace cddp
+{
+class IPDDPSolverTestAccess
+{
+public:
+    static bool backwardPass(IPDDPSolver &solver, CDDP &context)
+    {
+        return solver.backwardPass(context);
+    }
+
+    static double scaledDualInfeasibility(const IPDDPSolver &solver,
+                                          const CDDP &context)
+    {
+        return solver.computeScaledDualInfeasibility(context);
+    }
+
+    static void updateBarrierParameters(IPDDPSolver &solver,
+                                        CDDP &context,
+                                        bool forward_pass_success)
+    {
+        solver.updateBarrierParameters(context, forward_pass_success);
+    }
+
+    static const std::vector<FilterPoint> &filter(const IPDDPSolver &solver)
+    {
+        return solver.filter_;
+    }
+
+    static double filterTheta(const IPDDPSolver &solver)
+    {
+        return solver.filter_theta_;
+    }
+
+    static const std::vector<Eigen::VectorXd> &
+    pathSlack(const IPDDPSolver &solver, const std::string &name)
+    {
+        return solver.S_.at(name);
+    }
+
+    static const std::vector<Eigen::VectorXd> &
+    pathDual(const IPDDPSolver &solver, const std::string &name)
+    {
+        return solver.Y_.at(name);
+    }
+
+    static const Eigen::VectorXd &
+    terminalSlack(const IPDDPSolver &solver, const std::string &name)
+    {
+        return solver.S_T_.at(name);
+    }
+
+    static const Eigen::VectorXd &
+    terminalDual(const IPDDPSolver &solver, const std::string &name)
+    {
+        return solver.Y_T_.at(name);
+    }
+
+    static const Eigen::VectorXd &
+    terminalEqualityMultiplier(const IPDDPSolver &solver)
+    {
+        return solver.Lambda_T_eq_;
+    }
+
+    static const std::vector<Eigen::VectorXd> &
+    controlFeedforward(const IPDDPSolver &solver)
+    {
+        return solver.k_u_;
+    }
+
+    static void setCostateTrajectory(IPDDPSolver &solver,
+                                     const std::vector<Eigen::VectorXd> &lambda)
+    {
+        solver.Lambda_ = lambda;
+    }
+
+    static void setPathInterior(IPDDPSolver &solver,
+                                const std::string &name,
+                                double slack_value,
+                                double dual_value)
+    {
+        for (auto &s : solver.S_.at(name))
+        {
+            s = Eigen::VectorXd::Constant(s.size(), slack_value);
+        }
+        for (auto &y : solver.Y_.at(name))
+        {
+            y = Eigen::VectorXd::Constant(y.size(), dual_value);
+        }
+    }
+
+    static void setTerminalInterior(IPDDPSolver &solver,
+                                    const std::string &name,
+                                    double slack_value,
+                                    double dual_value)
+    {
+        solver.S_T_.at(name) =
+            Eigen::VectorXd::Constant(solver.S_T_.at(name).size(), slack_value);
+        solver.Y_T_.at(name) =
+            Eigen::VectorXd::Constant(solver.Y_T_.at(name).size(), dual_value);
+    }
+
+    static void setTerminalEqualityMultiplier(IPDDPSolver &solver,
+                                              const Eigen::VectorXd &lambda)
+    {
+        solver.Lambda_T_eq_ = lambda;
+    }
+};
+} // namespace cddp
+
+namespace
+{
+cddp::CDDPOptions makeIpddpRegressionOptions()
+{
+    cddp::CDDPOptions options;
+    options.max_iterations = 20;
+    options.tolerance = 1e-6;
+    options.acceptable_tolerance = 1e-6;
+    options.enable_parallel = false;
+    options.num_threads = 1;
+    options.verbose = false;
+    options.debug = false;
+    options.regularization.initial_value = 1e-6;
+    options.ipddp.barrier.mu_initial = 1e-1;
+    options.ipddp.slack_var_init_scale = 1e-2;
+    options.ipddp.dual_var_init_scale = 1e-1;
+    return options;
+}
+
+cddp::CDDP makeScalarIntegratorProblem(const cddp::CDDPOptions &options,
+                                       bool add_path_constraint,
+                                       bool add_terminal_inequality)
+{
+    const int state_dim = 1;
+    const int control_dim = 1;
+    const int horizon = 4;
+    const double timestep = 1.0;
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Identity(state_dim, control_dim);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 1.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0;
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = 1e-2 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
+
+    cddp::CDDP problem(initial_state, goal_state, horizon, timestep);
+    problem.setDynamicalSystem(std::make_unique<cddp::LTISystem>(A, B, timestep));
+    problem.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+    problem.setOptions(options);
+
+    if (add_path_constraint)
+    {
+        Eigen::MatrixXd path_A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+        Eigen::VectorXd path_b(state_dim);
+        path_b << 0.25;
+        problem.addPathConstraint(
+            "PathUpperBound",
+            std::make_unique<cddp::LinearConstraint>(path_A, path_b));
+    }
+
+    if (add_terminal_inequality)
+    {
+        Eigen::MatrixXd terminal_A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+        Eigen::VectorXd terminal_b(state_dim);
+        terminal_b << 0.25;
+        problem.addTerminalConstraint(
+            "TerminalUpperBound",
+            std::make_unique<cddp::TerminalInequalityConstraint>(terminal_A, terminal_b));
+    }
+
+    std::vector<Eigen::VectorXd> X(horizon + 1, initial_state);
+    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    problem.setInitialTrajectory(X, U);
+    return problem;
+}
+
+cddp::CDDP makeScalarIntegratorTerminalEqualityProblem(
+    const cddp::CDDPOptions &options)
+{
+    const int state_dim = 1;
+    const int control_dim = 1;
+    const int horizon = 4;
+    const double timestep = 1.0;
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Identity(state_dim, control_dim);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 1.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0;
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = 1e-2 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
+
+    cddp::CDDP problem(initial_state, goal_state, horizon, timestep);
+    problem.setDynamicalSystem(std::make_unique<cddp::LTISystem>(A, B, timestep));
+    problem.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+    problem.setOptions(options);
+    problem.addTerminalConstraint(
+        "TerminalTarget",
+        std::make_unique<cddp::TerminalEqualityConstraint>(goal_state));
+
+    std::vector<Eigen::VectorXd> X(horizon + 1, initial_state);
+    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    problem.setInitialTrajectory(X, U);
+    return problem;
+}
+
+class UnsupportedTerminalConstraint final : public cddp::TerminalConstraint
+{
+public:
+    UnsupportedTerminalConstraint()
+        : cddp::TerminalConstraint("UnsupportedTerminalConstraint") {}
+
+    int getDualDim() const override
+    {
+        return 1;
+    }
+
+    Eigen::VectorXd evaluate(const Eigen::VectorXd &state,
+                             const Eigen::VectorXd & /*control*/,
+                             int /*index*/ = 0) const override
+    {
+        return state.head(1);
+    }
+
+    Eigen::VectorXd getLowerBound() const override
+    {
+        return Eigen::VectorXd::Zero(1);
+    }
+
+    Eigen::VectorXd getUpperBound() const override
+    {
+        return Eigen::VectorXd::Zero(1);
+    }
+
+    Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state,
+                                     const Eigen::VectorXd & /*control*/,
+                                     int /*index*/ = 0) const override
+    {
+        return Eigen::MatrixXd::Identity(1, state.size());
+    }
+
+    double computeViolation(const Eigen::VectorXd &state,
+                            const Eigen::VectorXd &control,
+                            int index = 0) const override
+    {
+        return computeViolationFromValue(evaluate(state, control, index));
+    }
+
+    double computeViolationFromValue(const Eigen::VectorXd &g) const override
+    {
+        return g.lpNorm<Eigen::Infinity>();
+    }
+};
+
+class QuadraticScalarSystem final : public cddp::DynamicalSystem
+{
+public:
+    QuadraticScalarSystem()
+        : cddp::DynamicalSystem(1, 1, 1.0, "euler") {}
+
+    Eigen::VectorXd getDiscreteDynamics(const Eigen::VectorXd &state,
+                                        const Eigen::VectorXd &control,
+                                        double /*time*/) const override
+    {
+        Eigen::VectorXd next_state(1);
+        next_state << state(0) + control(0) + 0.5 * state(0) * state(0);
+        return next_state;
+    }
+
+    Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state,
+                                     const Eigen::VectorXd & /*control*/,
+                                     double /*time*/) const override
+    {
+        Eigen::MatrixXd jacobian(1, 1);
+        jacobian << 1.0 + state(0);
+        return jacobian;
+    }
+
+    Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd & /*state*/,
+                                       const Eigen::VectorXd & /*control*/,
+                                       double /*time*/) const override
+    {
+        return Eigen::MatrixXd::Identity(1, 1);
+    }
+
+    std::vector<Eigen::MatrixXd> getStateHessian(
+        const Eigen::VectorXd & /*state*/,
+        const Eigen::VectorXd & /*control*/,
+        double /*time*/) const override
+    {
+        return {Eigen::MatrixXd::Identity(1, 1)};
+    }
+
+    std::vector<Eigen::MatrixXd> getControlHessian(
+        const Eigen::VectorXd & /*state*/,
+        const Eigen::VectorXd & /*control*/,
+        double /*time*/) const override
+    {
+        return {Eigen::MatrixXd::Zero(1, 1)};
+    }
+
+    std::vector<Eigen::MatrixXd> getCrossHessian(
+        const Eigen::VectorXd & /*state*/,
+        const Eigen::VectorXd & /*control*/,
+        double /*time*/) const override
+    {
+        return {Eigen::MatrixXd::Zero(1, 1)};
+    }
+};
+} // namespace
+
 TEST(IPDDPTest, SolvePendulum)
 {
     int state_dim = 2;
@@ -479,6 +800,7 @@ TEST(IPDDPTest, SolveCar)
         << "Algorithm should converge";
     EXPECT_GT(iterations_completed, 0) << "Should take at least one iteration";
     EXPECT_LT(final_objective, J) << "Final cost should be better than initial cost";
+    EXPECT_LT(final_objective, 1.91) << "Cold-start IPDDP should reach the low-cost parking solution";
 
     // =========================================================================
     // Test warm start capability
@@ -820,4 +1142,496 @@ TEST(IPDDPTest, SolveQuadrotor)
     EXPECT_TRUE(warm_status == "OptimalSolutionFound" || warm_status == "AcceptableSolutionFound") 
         << "Warm start should also converge";
     EXPECT_LE(warm_iterations, iterations_completed + 20) << "Warm start should not take significantly more iterations";
+}
+
+TEST(IPDDPTest, SolveWithTerminalInequalityOnly)
+{
+    const int state_dim = 1;
+    const int control_dim = 1;
+    const int horizon = 8;
+    const double timestep = 1.0;
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Identity(state_dim, control_dim);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 0.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 1.0;
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = 1e-2 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = 100.0 * Eigen::MatrixXd::Identity(state_dim, state_dim);
+
+    cddp::CDDPOptions options;
+    options.max_iterations = 60;
+    options.tolerance = 1e-6;
+    options.acceptable_tolerance = 1e-6;
+    options.enable_parallel = false;
+    options.num_threads = 1;
+    options.verbose = false;
+    options.debug = false;
+    options.regularization.initial_value = 1e-6;
+    options.ipddp.barrier.mu_initial = 1e-1;
+
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
+    cddp_solver.setDynamicalSystem(
+        std::make_unique<cddp::LTISystem>(A, B, timestep));
+    cddp_solver.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+    cddp_solver.setOptions(options);
+
+    Eigen::MatrixXd terminal_A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::VectorXd terminal_b = Eigen::VectorXd::Zero(state_dim);
+    cddp_solver.addTerminalConstraint(
+        "TerminalUpperBound",
+        std::make_unique<cddp::TerminalInequalityConstraint>(terminal_A, terminal_b));
+
+    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    X[0] = initial_state;
+    for (int t = 0; t < horizon; ++t)
+    {
+        X[t + 1] = A * X[t] + B * U[t];
+    }
+    cddp_solver.setInitialTrajectory(X, U);
+
+    const cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+
+    EXPECT_TRUE(solution.status_message == "OptimalSolutionFound" ||
+                solution.status_message == "AcceptableSolutionFound");
+    ASSERT_FALSE(solution.state_trajectory.empty());
+    const double terminal_state = solution.state_trajectory.back()(0);
+    EXPECT_LE(terminal_state, 1e-4);
+    EXPECT_NEAR(terminal_state, 0.0, 1e-3);
+}
+
+TEST(IPDDPTest, TracksInitialViolationForPathOnlyProblems)
+{
+    cddp::CDDPOptions options = makeIpddpRegressionOptions();
+    cddp::CDDP problem = makeScalarIntegratorProblem(
+        options, /*add_path_constraint=*/true, /*add_terminal_inequality=*/false);
+
+    cddp::IPDDPSolver solver;
+    solver.initialize(problem);
+
+    const auto &filter = cddp::IPDDPSolverTestAccess::filter(solver);
+    EXPECT_TRUE(filter.empty());
+    EXPECT_GT(cddp::IPDDPSolverTestAccess::filterTheta(solver), 0.0);
+}
+
+TEST(IPDDPTest, BarrierResetTracksThetaForPathOnlyProblems)
+{
+    cddp::CDDPOptions options = makeIpddpRegressionOptions();
+    cddp::CDDP problem = makeScalarIntegratorProblem(
+        options, /*add_path_constraint=*/true, /*add_terminal_inequality=*/false);
+
+    cddp::IPDDPSolver solver;
+    solver.initialize(problem);
+
+    ASSERT_TRUE(cddp::IPDDPSolverTestAccess::filter(solver).empty());
+    cddp::IPDDPSolverTestAccess::updateBarrierParameters(
+        solver, problem, /*forward_pass_success=*/true);
+
+    const auto &filter = cddp::IPDDPSolverTestAccess::filter(solver);
+    const double violation_reference =
+        filter.empty() ? cddp::IPDDPSolverTestAccess::filterTheta(solver)
+                       : filter.back().constraint_violation;
+    EXPECT_GT(violation_reference, 0.0);
+}
+
+TEST(IPDDPTest, ScaledDualInfeasibilityIncludesStateStationarityWhenEnabled)
+{
+    const int state_dim = 1;
+    const int control_dim = 1;
+    const int horizon = 1;
+    const double timestep = 1.0;
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Identity(state_dim, control_dim);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 1.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0;
+
+    auto make_problem = [&](bool check_state_stationarity) {
+        cddp::CDDPOptions options = makeIpddpRegressionOptions();
+        options.ipddp.check_state_stationarity = check_state_stationarity;
+
+        cddp::CDDP problem(initial_state, goal_state, horizon, timestep);
+        problem.setDynamicalSystem(
+            std::make_unique<cddp::LTISystem>(A, B, timestep));
+
+        Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+        Eigen::MatrixXd R = Eigen::MatrixXd::Zero(control_dim, control_dim);
+        Eigen::MatrixXd Qf = Eigen::MatrixXd::Zero(state_dim, state_dim);
+        problem.setObjective(std::make_unique<cddp::QuadraticObjective>(
+            Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+        problem.setOptions(options);
+
+        Eigen::MatrixXd path_A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+        Eigen::VectorXd path_b(state_dim);
+        path_b << 0.25;
+        problem.addPathConstraint(
+            "PathUpperBound",
+            std::make_unique<cddp::LinearConstraint>(path_A, path_b));
+
+        std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+        std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+        X[0] = initial_state;
+        X[1] = A * X[0] + B * U[0];
+        problem.setInitialTrajectory(X, U);
+        return problem;
+    };
+
+    cddp::CDDP problem_without = make_problem(false);
+    cddp::IPDDPSolver solver_without;
+    solver_without.initialize(problem_without);
+    ASSERT_TRUE(cddp::IPDDPSolverTestAccess::backwardPass(solver_without, problem_without));
+    const double dual_without =
+        cddp::IPDDPSolverTestAccess::scaledDualInfeasibility(solver_without, problem_without);
+
+    cddp::CDDP problem_with = make_problem(true);
+    cddp::IPDDPSolver solver_with;
+    solver_with.initialize(problem_with);
+    ASSERT_TRUE(cddp::IPDDPSolverTestAccess::backwardPass(solver_with, problem_with));
+    const double dual_with =
+        cddp::IPDDPSolverTestAccess::scaledDualInfeasibility(solver_with, problem_with);
+
+    EXPECT_NEAR(dual_without, problem_without.getCurrentDualInfeasibility(), 1e-12);
+    EXPECT_GT(dual_with, dual_without);
+}
+
+TEST(IPDDPTest, WarmStartPreservesPathDualSlackState)
+{
+    cddp::CDDPOptions options = makeIpddpRegressionOptions();
+    cddp::CDDP problem = makeScalarIntegratorProblem(
+        options, /*add_path_constraint=*/true, /*add_terminal_inequality=*/false);
+
+    cddp::IPDDPSolver solver;
+    solver.initialize(problem);
+    cddp::IPDDPSolverTestAccess::setPathInterior(
+        solver, "PathUpperBound", /*slack_value=*/0.42, /*dual_value=*/0.73);
+
+    options.warm_start = true;
+    problem.setOptions(options);
+    solver.initialize(problem);
+
+    const auto &slacks =
+        cddp::IPDDPSolverTestAccess::pathSlack(solver, "PathUpperBound");
+    const auto &duals =
+        cddp::IPDDPSolverTestAccess::pathDual(solver, "PathUpperBound");
+    for (const auto &slack : slacks)
+    {
+        ASSERT_EQ(slack.size(), 1);
+        EXPECT_NEAR(slack(0), 0.42, 1e-12);
+    }
+    for (const auto &dual : duals)
+    {
+        ASSERT_EQ(dual.size(), 1);
+        EXPECT_NEAR(dual(0), 0.73, 1e-12);
+    }
+}
+
+TEST(IPDDPTest, WarmStartPreservesTerminalInequalityInteriorState)
+{
+    cddp::CDDPOptions options = makeIpddpRegressionOptions();
+    cddp::CDDP problem = makeScalarIntegratorProblem(
+        options, /*add_path_constraint=*/false, /*add_terminal_inequality=*/true);
+
+    cddp::IPDDPSolver solver;
+    solver.initialize(problem);
+    cddp::IPDDPSolverTestAccess::setTerminalInterior(
+        solver, "TerminalUpperBound", /*slack_value=*/0.37, /*dual_value=*/0.61);
+
+    options.warm_start = true;
+    problem.setOptions(options);
+    solver.initialize(problem);
+
+    const Eigen::VectorXd &terminal_slack =
+        cddp::IPDDPSolverTestAccess::terminalSlack(solver, "TerminalUpperBound");
+    const Eigen::VectorXd &terminal_dual =
+        cddp::IPDDPSolverTestAccess::terminalDual(solver, "TerminalUpperBound");
+    ASSERT_EQ(terminal_slack.size(), 1);
+    ASSERT_EQ(terminal_dual.size(), 1);
+    EXPECT_NEAR(terminal_slack(0), 0.37, 1e-12);
+    EXPECT_NEAR(terminal_dual(0), 0.61, 1e-12);
+}
+
+TEST(IPDDPTest, WarmStartPreservesTerminalEqualityMultiplierState)
+{
+    cddp::CDDPOptions options = makeIpddpRegressionOptions();
+    cddp::CDDP problem = makeScalarIntegratorTerminalEqualityProblem(options);
+
+    cddp::IPDDPSolver solver;
+    solver.initialize(problem);
+    cddp::IPDDPSolverTestAccess::setTerminalEqualityMultiplier(
+        solver, Eigen::VectorXd::Constant(1, 0.53));
+
+    options.warm_start = true;
+    problem.setOptions(options);
+    solver.initialize(problem);
+
+    const Eigen::VectorXd &terminal_multiplier =
+        cddp::IPDDPSolverTestAccess::terminalEqualityMultiplier(solver);
+    ASSERT_EQ(terminal_multiplier.size(), 1);
+    EXPECT_NEAR(terminal_multiplier(0), 0.53, 1e-12);
+}
+
+TEST(IPDDPTest, SolveWithPathConstraintAndTerminalEquality)
+{
+    const int state_dim = 1;
+    const int control_dim = 1;
+    const int horizon = 8;
+    const double timestep = 1.0;
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Identity(state_dim, control_dim);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 1.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0;
+
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
+    cddp_solver.setDynamicalSystem(
+        std::make_unique<cddp::LTISystem>(A, B, timestep));
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = 1e-2 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    cddp_solver.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+
+    cddp::CDDPOptions options = makeIpddpRegressionOptions();
+    options.max_iterations = 100;
+    cddp_solver.setOptions(options);
+
+    Eigen::MatrixXd path_A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::VectorXd path_b(state_dim);
+    path_b << 10.0;
+    cddp_solver.addPathConstraint(
+        "LoosePathUpperBound",
+        std::make_unique<cddp::LinearConstraint>(path_A, path_b));
+    cddp_solver.addTerminalConstraint(
+        "TerminalTarget",
+        std::make_unique<cddp::TerminalEqualityConstraint>(goal_state));
+
+    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    X[0] = initial_state;
+    for (int t = 0; t < horizon; ++t)
+    {
+        X[t + 1] = A * X[t] + B * U[t];
+    }
+    cddp_solver.setInitialTrajectory(X, U);
+
+    const cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+
+    EXPECT_TRUE(solution.status_message == "OptimalSolutionFound" ||
+                solution.status_message == "AcceptableSolutionFound");
+    ASSERT_FALSE(solution.state_trajectory.empty());
+    const double terminal_residual =
+        (solution.state_trajectory.back() - goal_state).lpNorm<Eigen::Infinity>();
+    EXPECT_LE(terminal_residual, 1e-4);
+}
+
+TEST(IPDDPTest, RejectsUnsupportedTerminalConstraintType)
+{
+    cddp::CDDPOptions options = makeIpddpRegressionOptions();
+    cddp::CDDP problem = makeScalarIntegratorProblem(
+        options, /*add_path_constraint=*/false, /*add_terminal_inequality=*/false);
+    problem.addTerminalConstraint(
+        "UnsupportedTerminalConstraint",
+        std::make_unique<UnsupportedTerminalConstraint>());
+
+    cddp::IPDDPSolver solver;
+    EXPECT_THROW(
+        {
+            try
+            {
+                solver.initialize(problem);
+            }
+            catch (const std::runtime_error &error)
+            {
+                EXPECT_THAT(std::string(error.what()),
+                            ::testing::HasSubstr("unsupported type"));
+                throw;
+            }
+        },
+        std::runtime_error);
+}
+
+TEST(IPDDPTest, TerminalEqualityBackwardPassTracksStationarityResidual)
+{
+    const int state_dim = 1;
+    const int control_dim = 1;
+    const int horizon = 1;
+    const double timestep = 1.0;
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Identity(state_dim, control_dim);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 1.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0;
+
+    cddp::CDDPOptions options = makeIpddpRegressionOptions();
+    options.regularization.initial_value = 1e-12;
+
+    cddp::CDDP problem(initial_state, goal_state, horizon, timestep);
+    problem.setDynamicalSystem(
+        std::make_unique<cddp::LTISystem>(A, B, timestep));
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = 1e8 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    problem.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+    problem.setOptions(options);
+    problem.addTerminalConstraint(
+        "TerminalTarget",
+        std::make_unique<cddp::TerminalEqualityConstraint>(goal_state));
+
+    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    X[0] = initial_state;
+    X[1] = A * X[0] + B * U[0];
+    problem.setInitialTrajectory(X, U);
+
+    cddp::IPDDPSolver solver;
+    solver.initialize(problem);
+    ASSERT_TRUE(cddp::IPDDPSolverTestAccess::backwardPass(solver, problem));
+
+    EXPECT_GT(problem.getCurrentDualInfeasibility(), 1e-4);
+    EXPECT_LT(problem.getCurrentStepNorm(), 1e-6);
+}
+
+TEST(IPDDPTest, TerminalEqualityBackwardPassUsesSecondOrderDynamicsWhenEnabled)
+{
+    auto make_problem = [](bool use_ilqr) {
+        const int state_dim = 1;
+        const int control_dim = 1;
+        const int horizon = 2;
+        const double timestep = 1.0;
+
+        Eigen::VectorXd initial_state(state_dim);
+        initial_state << 1.0;
+        Eigen::VectorXd goal_state(state_dim);
+        goal_state << 0.0;
+
+        cddp::CDDPOptions options = makeIpddpRegressionOptions();
+        options.use_ilqr = use_ilqr;
+
+        cddp::CDDP problem(initial_state, goal_state, horizon, timestep);
+        problem.setDynamicalSystem(std::make_unique<QuadraticScalarSystem>());
+
+        Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+        Eigen::MatrixXd R = 1e-2 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+        Eigen::MatrixXd Qf = Eigen::MatrixXd::Zero(state_dim, state_dim);
+        problem.setObjective(std::make_unique<cddp::QuadraticObjective>(
+            Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+        problem.setOptions(options);
+        problem.addTerminalConstraint(
+            "TerminalTarget",
+            std::make_unique<cddp::TerminalEqualityConstraint>(goal_state));
+
+        std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+        std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+        X[0] = initial_state;
+        QuadraticScalarSystem system;
+        for (int t = 0; t < horizon; ++t)
+        {
+            X[t + 1] = system.getDiscreteDynamics(X[t], U[t], t * timestep);
+        }
+        problem.setInitialTrajectory(X, U);
+        return problem;
+    };
+
+    cddp::CDDP problem_ilqr = make_problem(true);
+    cddp::IPDDPSolver solver_ilqr;
+    solver_ilqr.initialize(problem_ilqr);
+    cddp::IPDDPSolverTestAccess::setCostateTrajectory(
+        solver_ilqr,
+        std::vector<Eigen::VectorXd>{Eigen::VectorXd::Zero(1),
+                                     Eigen::VectorXd::Constant(1, 0.8),
+                                     Eigen::VectorXd::Constant(1, 0.4)});
+    ASSERT_TRUE(cddp::IPDDPSolverTestAccess::backwardPass(solver_ilqr, problem_ilqr));
+
+    cddp::CDDP problem_ddp = make_problem(false);
+    cddp::IPDDPSolver solver_ddp;
+    solver_ddp.initialize(problem_ddp);
+    cddp::IPDDPSolverTestAccess::setCostateTrajectory(
+        solver_ddp,
+        std::vector<Eigen::VectorXd>{Eigen::VectorXd::Zero(1),
+                                     Eigen::VectorXd::Constant(1, 0.8),
+                                     Eigen::VectorXd::Constant(1, 0.4)});
+    ASSERT_TRUE(cddp::IPDDPSolverTestAccess::backwardPass(solver_ddp, problem_ddp));
+
+    const auto &k_ilqr = cddp::IPDDPSolverTestAccess::controlFeedforward(solver_ilqr);
+    const auto &k_ddp = cddp::IPDDPSolverTestAccess::controlFeedforward(solver_ddp);
+    ASSERT_GE(k_ilqr.size(), 1u);
+    ASSERT_GE(k_ddp.size(), 1u);
+    EXPECT_GT(std::abs(k_ddp[0](0) - k_ilqr[0](0)), 1e-8);
+}
+
+TEST(IPDDPTest, SolveWithTerminalEqualityOnly)
+{
+    const int state_dim = 1;
+    const int control_dim = 1;
+    const int horizon = 8;
+    const double timestep = 1.0;
+
+    Eigen::MatrixXd A = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    Eigen::MatrixXd B = Eigen::MatrixXd::Identity(state_dim, control_dim);
+
+    Eigen::VectorXd initial_state(state_dim);
+    initial_state << 1.0;
+    Eigen::VectorXd goal_state(state_dim);
+    goal_state << 0.0;
+
+    cddp::CDDP cddp_solver(initial_state, goal_state, horizon, timestep);
+    cddp_solver.setDynamicalSystem(
+        std::make_unique<cddp::LTISystem>(A, B, timestep));
+
+    Eigen::MatrixXd Q = Eigen::MatrixXd::Zero(state_dim, state_dim);
+    Eigen::MatrixXd R = 1e-2 * Eigen::MatrixXd::Identity(control_dim, control_dim);
+    Eigen::MatrixXd Qf = Eigen::MatrixXd::Identity(state_dim, state_dim);
+    cddp_solver.setObjective(std::make_unique<cddp::QuadraticObjective>(
+        Q, R, Qf, goal_state, std::vector<Eigen::VectorXd>(), timestep));
+
+    cddp::CDDPOptions options;
+    options.max_iterations = 100;
+    options.tolerance = 1e-6;
+    options.acceptable_tolerance = 1e-6;
+    options.enable_parallel = false;
+    options.num_threads = 1;
+    options.verbose = false;
+    options.debug = false;
+    options.regularization.initial_value = 1e-6;
+    cddp_solver.setOptions(options);
+
+    cddp_solver.addTerminalConstraint(
+        "TerminalTarget",
+        std::make_unique<cddp::TerminalEqualityConstraint>(goal_state));
+
+    std::vector<Eigen::VectorXd> X(horizon + 1, Eigen::VectorXd::Zero(state_dim));
+    std::vector<Eigen::VectorXd> U(horizon, Eigen::VectorXd::Zero(control_dim));
+    X[0] = initial_state;
+    for (int t = 0; t < horizon; ++t)
+    {
+        X[t + 1] = A * X[t] + B * U[t];
+    }
+    cddp_solver.setInitialTrajectory(X, U);
+
+    const cddp::CDDPSolution solution = cddp_solver.solve("IPDDP");
+
+    EXPECT_TRUE(solution.status_message == "OptimalSolutionFound" ||
+                solution.status_message == "AcceptableSolutionFound");
+    ASSERT_FALSE(solution.state_trajectory.empty());
+    const double terminal_residual =
+        (solution.state_trajectory.back() - goal_state).lpNorm<Eigen::Infinity>();
+    EXPECT_LE(terminal_residual, 1e-4);
 }

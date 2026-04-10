@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib
 import sys
 from pathlib import Path
 
@@ -67,3 +68,23 @@ def test_portfolio_animation_rejects_invalid_settings(tmp_path):
 
     with pytest.raises(ValueError, match="frame_step must be >= 1"):
         portfolio.save_animation(result, tmp_path / "bad.gif", frame_step=0)
+
+
+def test_mpcc_demo_supports_package_style_import():
+    package_portfolio = importlib.import_module("examples.python_portfolio_lib")
+
+    result = package_portfolio.solve_mpcc_demo(simulation_steps=1, horizon=12)
+
+    assert result.slug == "mpcc_racing_line"
+    assert result.solver_name == "IPDDP MPC"
+
+
+def test_mpcc_demo_rejects_nonpositive_steps():
+    with pytest.raises(ValueError, match="simulation_steps must be >= 1"):
+        portfolio.solve_mpcc_demo(simulation_steps=0)
+
+    package_mpcc = importlib.import_module("examples.ipddp_mpcc_rc")
+    track = portfolio._load_track_csv(portfolio._portfolio_track_path())
+
+    with pytest.raises(ValueError, match="simulation_steps must be >= 1"):
+        package_mpcc.run_ipddp_mpc(track=track, simulation_steps=0)

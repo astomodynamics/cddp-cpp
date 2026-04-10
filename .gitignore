@@ -16,6 +16,9 @@ neural_models/
 examples/c_generated_code/
 examples/*_acados_ocp.json
 
+# Generated demo output (gifs, json dumps)
+examples/out_ipddp_mpcc_rc/
+
 # PDF images
 pdf_images/
 

@@ -119,6 +119,9 @@ struct ForwardPassResult {
   bool success = false;
 
   double constraint_violation = 0.0;
+  double theta = 0.0;      // Filter violation metric
+  double inf_pr = 0.0;     // Primal infeasibility
+  double inf_comp = 0.0;   // Complementary infeasibility
 
   // Optional: Only relevant for certain solver strategies during their forward
   // pass

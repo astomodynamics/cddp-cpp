@@ -30,3 +30,17 @@ That lets the repository serve both as:
 
 - a source build for C++ consumers
 - the native backend for the `pycddp` wheel
+
+## Constraint coverage
+
+`IPDDP` is the interior-point single-shooting solver in the C++ API. The
+current implementation supports:
+
+- path inequality constraints
+- terminal equality constraints via `TerminalEqualityConstraint`
+- terminal inequality constraints via `TerminalInequalityConstraint`
+- mixed path and terminal constrained problems
+
+Attach terminal constraints on `CDDP` with `addTerminalConstraint(...)`. IPDDP
+rejects unsupported terminal-constraint subclasses instead of silently ignoring
+them.
