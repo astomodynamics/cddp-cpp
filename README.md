@@ -1,4 +1,8 @@
 # Constrained Differential Dynamic Programming (CDDP) solver in C++
+
+[![C++ CI](https://github.com/astomodynamics/cddp-cpp/actions/workflows/build.yaml/badge.svg)](https://github.com/astomodynamics/cddp-cpp/actions/workflows/build.yaml)
+[![PyPI version](https://img.shields.io/pypi/v/pycddp.svg)](https://pypi.org/project/pycddp/)
+[![Docs](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://astomodynamics.github.io/cddp-cpp/)
 <img src="docs/assets/cddp_in_cpp.png" width="800" alt="CDDP IN CPP">
 
 This repository contains a C++ implementation of constrained differential dynamic programming (CDDP) and related solvers for trajectory optimization and model predictive control.
