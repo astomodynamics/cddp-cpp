@@ -483,12 +483,8 @@ bool LogDDPSolver::backwardPass(CDDP &context) {
     const Eigen::VectorXd &x = context.X_[t];
     const Eigen::VectorXd &u = context.U_[t];
 
-    // Use pre-computed continuous-time dynamics Jacobians
-    const Eigen::MatrixXd &Fx = F_x_[t];
-    const Eigen::MatrixXd &Fu = F_u_[t];
-    const Eigen::MatrixXd &A =
-        timestep * Fx + Eigen::MatrixXd::Identity(state_dim, state_dim);
-    const Eigen::MatrixXd &B = timestep * Fu;
+    const Eigen::MatrixXd &A = F_x_[t];
+    const Eigen::MatrixXd &B = F_u_[t];
 
     // Cost derivatives at (x_t, u_t)
     auto [l_x, l_u] = context.getObjective().getRunningCostGradients(x, u, t);

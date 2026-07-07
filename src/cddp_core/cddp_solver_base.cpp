@@ -338,10 +338,8 @@ void CDDPSolverBase::precomputeDynamicsDerivatives(
     double time = t * context.getTimestep();
 
     auto [Fx, Fu] = context.getSystem().getJacobians(x, u, time);
-    // Convert to discrete time
-    F_x_[t] = context.getTimestep() * Fx;
-    F_x_[t].diagonal().array() += 1.0;
-    F_u_[t] = context.getTimestep() * Fu;
+    F_x_[t] = Fx;
+    F_u_[t] = Fu;
 
     if (!options.use_ilqr) {
       auto [Fxx, Fuu, Fux] = context.getSystem().getHessians(x, u, time);

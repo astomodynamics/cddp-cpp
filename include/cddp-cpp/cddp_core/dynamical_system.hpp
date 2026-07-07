@@ -18,8 +18,10 @@
 
 #include "cddp_core/helper.hpp"
 #include <Eigen/Dense>
-#include <autodiff/forward/dual.hpp> // Include autodiff (defines dual, dual2nd)
-#include <autodiff/forward/dual/eigen.hpp> // Include autodiff Eigen support
+#include <autodiff/forward/dual.hpp>
+#include <autodiff/forward/dual/eigen.hpp>
+#include <string>
+#include <tuple>
 #include <vector>
 
 namespace cddp {
@@ -66,25 +68,24 @@ public:
                                               const Eigen::VectorXd &control,
                                               double time) const;
 
-  // Jacobian of dynamics w.r.t state: df/dx
+  virtual VectorXdual2nd
+  getDiscreteDynamicsAutodiff(const VectorXdual2nd &state,
+                              const VectorXdual2nd &control, double time) const;
 
+  // Jacobian of continuous dynamics w.r.t state: df/dx
   virtual Eigen::MatrixXd getStateJacobian(const Eigen::VectorXd &state,
                                            const Eigen::VectorXd &control,
                                            double time) const;
 
-  // Jacobian of dynamics w.r.t control: df/du
+  // Jacobian of continuous dynamics w.r.t control: df/du
   virtual Eigen::MatrixXd getControlJacobian(const Eigen::VectorXd &state,
                                              const Eigen::VectorXd &control,
                                              double time) const;
 
-  // Jacobians of dynamics w.r.t state and control: df/dx, df/du
+  // Jacobians of discrete dynamics w.r.t state and control: dF/dx, dF/du.
   virtual std::tuple<Eigen::MatrixXd, Eigen::MatrixXd>
   getJacobians(const Eigen::VectorXd &state, const Eigen::VectorXd &control,
-               double time) const {
-    // This can now call the default implementations or overridden ones
-    return {getStateJacobian(state, control, time),
-            getControlJacobian(state, control, time)};
-  }
+               double time) const;
 
   // Hessian of dynamics w.r.t state: d^2f/dx^2
   // Tensor (state_dim x state_dim x state_dim), vector<MatrixXd> (size
@@ -136,6 +137,11 @@ protected:
   double timestep_;
   std::string integration_type_; // Integration type: Euler, Heun, RK3, RK4
 
+private:
+  // 0 = unknown, 1 = autodiff, -1 = finite differences.
+  mutable int discrete_autodiff_status_ = 0;
+
+protected:
   // Integration step functions
   Eigen::VectorXd euler_step(const Eigen::VectorXd &state,
                              const Eigen::VectorXd &control, double dt,

@@ -67,3 +67,41 @@ TEST(JacobianTest , Pendulum) {
     std::cout << "A = \n" << A << std::endl;
     std::cout << "B = \n" << B << std::endl;
 }
+
+TEST(JacobianTest, PendulumRK4GetJacobiansUsesDiscreteDynamics) {
+    const double length = 1.0;
+    const double mass = 1.0;
+    const double damping = 0.05;
+    const double timestep = 0.2;
+    cddp::Pendulum pendulum(timestep, length, mass, damping, "rk4");
+
+    Eigen::VectorXd state(2);
+    state << 0.7, -0.25;
+    Eigen::VectorXd control(1);
+    control << 0.3;
+
+    const auto [A, B] = pendulum.getJacobians(state, control, 0.0);
+
+    auto discrete_wrt_x = [&](const Eigen::VectorXd& x) {
+        return pendulum.getDiscreteDynamics(x, control, 0.0);
+    };
+    auto discrete_wrt_u = [&](const Eigen::VectorXd& u) {
+        return pendulum.getDiscreteDynamics(state, u, 0.0);
+    };
+
+    const Eigen::MatrixXd A_expected =
+        finite_difference_jacobian(discrete_wrt_x, state);
+    const Eigen::MatrixXd B_expected =
+        finite_difference_jacobian(discrete_wrt_u, control);
+
+    Eigen::MatrixXd A_euler =
+        Eigen::MatrixXd::Identity(state.size(), state.size()) +
+        timestep * pendulum.getStateJacobian(state, control, 0.0);
+    Eigen::MatrixXd B_euler =
+        timestep * pendulum.getControlJacobian(state, control, 0.0);
+
+    EXPECT_TRUE(A.isApprox(A_expected, 1e-10));
+    EXPECT_TRUE(B.isApprox(B_expected, 1e-10));
+    EXPECT_GT((A - A_euler).norm(), 1e-3);
+    EXPECT_GT((B - B_euler).norm(), 1e-3);
+}

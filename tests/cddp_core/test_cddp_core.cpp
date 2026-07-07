@@ -170,6 +170,38 @@ public:
     }
 };
 
+class FixedDiscreteJacobianSystem : public DynamicalSystem {
+public:
+    explicit FixedDiscreteJacobianSystem(double timestep)
+        : DynamicalSystem(2, 1, timestep, "rk4") {}
+
+    Eigen::VectorXd getContinuousDynamics(const Eigen::VectorXd &state,
+                                          const Eigen::VectorXd &control,
+                                          double time) const override {
+        return Eigen::VectorXd::Zero(2);
+    }
+
+    std::tuple<Eigen::MatrixXd, Eigen::MatrixXd>
+    getJacobians(const Eigen::VectorXd &state, const Eigen::VectorXd &control,
+                 double time) const override {
+        return {stateJacobian(), controlJacobian()};
+    }
+
+    static Eigen::MatrixXd stateJacobian() {
+        Eigen::MatrixXd A(2, 2);
+        A << 1.2, 0.3,
+             -0.4, 0.8;
+        return A;
+    }
+
+    static Eigen::MatrixXd controlJacobian() {
+        Eigen::MatrixXd B(2, 1);
+        B << 0.7,
+            -0.2;
+        return B;
+    }
+};
+
 class ThrowingPrecomputeSolver : public CDDPSolverBase {
 public:
     void initialize(CDDP &context) override {}
@@ -177,6 +209,9 @@ public:
     void runPrecomputeDynamicsDerivatives(CDDP &context, int min_horizon_for_parallel) {
         precomputeDynamicsDerivatives(context, min_horizon_for_parallel);
     }
+
+    const std::vector<Eigen::MatrixXd>& stateJacobians() const { return F_x_; }
+    const std::vector<Eigen::MatrixXd>& controlJacobians() const { return F_u_; }
 
     std::string getSolverName() const override {
         return "ThrowingPrecomputeSolver";
@@ -457,6 +492,37 @@ TEST_F(CDDPCoreTest, ParallelPrecomputeDynamicsDerivativesPropagatesExceptions) 
     EXPECT_THROW(
         solver.runPrecomputeDynamicsDerivatives(cddp_solver, 1),
         std::runtime_error);
+}
+
+TEST_F(CDDPCoreTest, PrecomputeDynamicsDerivativesKeepsDiscreteJacobians) {
+    Eigen::VectorXd local_initial_state = Eigen::VectorXd::Zero(2);
+    Eigen::VectorXd local_goal_state = Eigen::VectorXd::Zero(2);
+    cddp::CDDPOptions local_options = options;
+    local_options.use_ilqr = true;
+
+    cddp::CDDP cddp_solver(
+        local_initial_state, local_goal_state, 2, timestep,
+        std::make_unique<cddp::FixedDiscreteJacobianSystem>(timestep),
+        std::make_unique<cddp::QuadraticObjective>(
+            Eigen::MatrixXd::Identity(2, 2), Eigen::MatrixXd::Identity(1, 1),
+            Eigen::MatrixXd::Identity(2, 2), local_goal_state,
+            std::vector<Eigen::VectorXd>(), timestep),
+        local_options);
+
+    cddp_solver.X_.assign(3, Eigen::VectorXd::Zero(2));
+    cddp_solver.U_.assign(2, Eigen::VectorXd::Zero(1));
+
+    cddp::ThrowingPrecomputeSolver solver;
+    ASSERT_NO_THROW(solver.runPrecomputeDynamicsDerivatives(cddp_solver, 50));
+    ASSERT_EQ(solver.stateJacobians().size(), 2);
+    ASSERT_EQ(solver.controlJacobians().size(), 2);
+
+    for (int t = 0; t < 2; ++t) {
+        EXPECT_TRUE(solver.stateJacobians()[t].isApprox(
+            cddp::FixedDiscreteJacobianSystem::stateJacobian(), 1e-12));
+        EXPECT_TRUE(solver.controlJacobians()[t].isApprox(
+            cddp::FixedDiscreteJacobianSystem::controlJacobian(), 1e-12));
+    }
 }
 
 // Test solver precedence (external over built-in)

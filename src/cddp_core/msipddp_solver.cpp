@@ -1125,13 +1125,10 @@ namespace cddp
           d = f - context.X_[t + 1];
         }
 
-        const Eigen::MatrixXd &Fx = F_x_[t];
-        const Eigen::MatrixXd &Fu = F_u_[t];
-
         Eigen::MatrixXd &A = workspace_.A_matrices[t];
         Eigen::MatrixXd &B = workspace_.B_matrices[t];
-        A.noalias() = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep * Fx;
-        B.noalias() = timestep * Fu;
+        A = F_x_[t];
+        B = F_u_[t];
 
         auto [l_x, l_u] = context.getObjective().getRunningCostGradients(x, u, t);
         auto [l_xx, l_uu, l_ux] =
@@ -1235,13 +1232,10 @@ namespace cddp
           d = f - context.X_[t + 1];
         }
 
-        const Eigen::MatrixXd &Fx = F_x_[t];
-        const Eigen::MatrixXd &Fu = F_u_[t];
-
         Eigen::MatrixXd &A = workspace_.A_matrices[t];
         Eigen::MatrixXd &B = workspace_.B_matrices[t];
-        A.noalias() = Eigen::MatrixXd::Identity(state_dim, state_dim) + timestep * Fx;
-        B.noalias() = timestep * Fu;
+        A = F_x_[t];
+        B = F_u_[t];
 
         Eigen::VectorXd &y = workspace_.y_combined;
         Eigen::VectorXd &s = workspace_.s_combined;
@@ -1493,9 +1487,8 @@ namespace cddp
           {
             const auto [Fx, Fu] = context.getSystem().getJacobians(
                 context.X_[t], context.U_[t], t * context.getTimestep());
-            const double timestep = context.getTimestep();
-            Eigen::MatrixXd A = Eigen::MatrixXd::Identity(context.getStateDim(), context.getStateDim()) + timestep * Fx;
-            Eigen::MatrixXd B = timestep * Fu;
+            Eigen::MatrixXd A = Fx;
+            Eigen::MatrixXd B = Fu;
 
             result.state_trajectory[t + 1] = context.X_[t + 1] +
                                              (A + B * K_u_[t]) * delta_x +
@@ -1591,9 +1584,8 @@ namespace cddp
         {
           const auto [Fx, Fu] = context.getSystem().getJacobians(
               context.X_[t], context.U_[t], t * context.getTimestep());
-          const double timestep = context.getTimestep();
-          Eigen::MatrixXd A = Eigen::MatrixXd::Identity(context.getStateDim(), context.getStateDim()) + timestep * Fx;
-          Eigen::MatrixXd B = timestep * Fu;
+          Eigen::MatrixXd A = Fx;
+          Eigen::MatrixXd B = Fu;
 
           result.state_trajectory[t + 1] = context.X_[t + 1] +
                                            (A + B * K_u_[t]) * delta_x +
