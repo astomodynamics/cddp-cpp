@@ -93,8 +93,9 @@ VectorXdual2nd Pendulum::getContinuousDynamicsAutodiff(
     const double inertia = mass_ * length_ * length_;
 
     state_dot(STATE_THETA) = theta_dot;
-    // Corrected sign for gravity assumed (theta=0 down)
-    state_dot(STATE_THETA_DOT) = (torque - damping_ * theta_dot - mass_ * gravity_ * length_ * sin(theta)) / inertia; // Use ADL
+    state_dot(STATE_THETA_DOT) =
+        (torque - damping_ * theta_dot + mass_ * gravity_ * length_ * sin(theta)) /
+        inertia;
 
     return state_dot;
 }

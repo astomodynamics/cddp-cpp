@@ -113,9 +113,8 @@ bool CLDDPSolver::backwardPass(CDDP &context) {
     const auto [Fx, Fu] =
         context.getSystem().getJacobians(x, u, t * context.getTimestep());
 
-    A = context.getTimestep() * Fx;
-    A.diagonal().array() += 1.0;
-    B = context.getTimestep() * Fu;
+    A = Fx;
+    B = Fu;
 
     auto [l_x, l_u] = context.getObjective().getRunningCostGradients(x, u, t);
     auto [l_xx, l_uu, l_ux] =
