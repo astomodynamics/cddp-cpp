@@ -1,3 +1,5 @@
+
+
 # Constrained Differential Dynamic Programming (CDDP) solver in C++
 
 [![C++ CI](https://github.com/astomodynamics/cddp-cpp/actions/workflows/build.yaml/badge.svg)](https://github.com/astomodynamics/cddp-cpp/actions/workflows/build.yaml)
@@ -129,10 +131,9 @@ source using the steps below.
 ```bash
 git clone https://github.com/astomodynamics/cddp-cpp
 cd cddp-cpp
-mkdir build && cd build
-cmake ..
-make -j4
-make test
+cmake -S . -B build
+cmake --build build -j4
+ctest --test-dir build --output-on-failure
 ```
 
 ### Documentation
